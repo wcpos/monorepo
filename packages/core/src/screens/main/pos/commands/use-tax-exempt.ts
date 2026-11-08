@@ -89,7 +89,7 @@ export function useSetTaxExempt() {
 export function useRepairTaxExempt(
 	commitAtBoundary: (
 		...args: [...Parameters<TaxExemptDeps['commitAtBoundary']>, valid: () => boolean]
-	) => Promise<unknown>
+	) => ReturnType<TaxExemptDeps['commitAtBoundary']>
 ) {
 	const deps = useTaxExemptDeps();
 	return React.useCallback(

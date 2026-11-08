@@ -101,7 +101,7 @@ function setup(overrides: OrderPayload = {}) {
 		}),
 		actor: { userId: 1, registerId: null, sessionId: null },
 		localPatch,
-		commitAtBoundary: jest.fn(async () => undefined),
+		commitAtBoundary: jest.fn(async () => ({ kind: 'closed' as const })),
 		configForOrder: (payload) =>
 			createCartConfig({ ...config, vatExempt: wooMetaCarrier.vatExempt(payload.meta_data) }),
 		serverOwnsMoney: () => false,

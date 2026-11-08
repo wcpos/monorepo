@@ -15,7 +15,7 @@ import { useBoundaryCommit } from './use-boundary-commit';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { row } from '../checkout/payments/device/fixtures.test-utils';
 import { settleCartWrite } from './settle-cart-write';
-import { commitAtBoundary } from './boundary-commit';
+import { commitAtBoundary, retryable } from './boundary-commit';
 import { completeSale } from '../checkout/sale-completion';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
@@ -80,8 +80,14 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('./boundary-commit', () => ({
+	...jest.requireActual('./boundary-commit'),
 	commitAtBoundary: jest.fn(async (ctx, { order, coupons, write }) => {
-		if (!sessionOpen) return { deny: { reasonKey: 'pos_checkout.open_register_first' } };
+		if (!sessionOpen)
+			return {
+				kind: 'refused',
+				refusal: { deny: { reasonKey: 'pos_checkout.open_register_first' } },
+				retry: false,
+			};
 		const { settlePayload } = jest.requireActual('./settle-payload');
 		await write((payload: OrderPayload) => {
 			const outcome = settlePayload({
@@ -92,6 +98,7 @@ jest.mock('./boundary-commit', () => ({
 			});
 			return outcome.kind === 'boundary' ? { ...outcome.changes, status: 'completed' } : {};
 		});
+		return { kind: 'closed' };
 	}),
 }));
 const mockComplete = jest.fn();
@@ -697,7 +704,11 @@ it.each([
 				},
 			],
 		});
-		jest.mocked(commitAtBoundary).mockResolvedValueOnce({ deny: { reasonKey } });
+		jest.mocked(commitAtBoundary).mockResolvedValueOnce({
+			kind: 'refused',
+			refusal: { deny: { reasonKey } },
+			retry: retryable(reasonKey),
+		});
 		orders.next({ ready: true, hits: [{ record: a }] });
 		const view = render(<SettlementCoordinatorProvider />);
 		try {
@@ -841,7 +852,7 @@ it('both boundary hosts hand their completion the outcome unchanged', async () =
 });
 
 it('passes the coupon reference validity check through to the boundary writer', async () => {
-	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => undefined);
+	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => ({ kind: 'closed' }));
 	context.coupons = new Map([
 		['summer', { code: 'summer', discount_type: 'percent', amount: '10' }],
 	]);
@@ -935,7 +946,7 @@ it('passes the context lookup to replay', async () => {
 });
 
 it('dispatches the hook repair and gives it the shared system boundary commit', async () => {
-	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => undefined);
+	jest.mocked(commitAtBoundary).mockImplementationOnce(async () => ({ kind: 'closed' }));
 	const a = record({
 		meta_data: [{ key: 'is_vat_exempt', value: 'yes' }],
 		line_items: [{ total_tax: '1' }],
@@ -992,7 +1003,7 @@ it.each([false, true])(
 				missing: { deny: { reasonKey: 'missing' } },
 				...(override && { taxStatusFor }),
 			};
-			jest.mocked(commitAtBoundary).mockImplementationOnce(async () => undefined);
+			jest.mocked(commitAtBoundary).mockImplementationOnce(async () => ({ kind: 'closed' }));
 			const systemCommit = jest.mocked(useRepairTaxExempt).mock.calls[0][0];
 			await enqueueOrderMutation(a.uuid, (queue) =>
 				systemCommit(a as CurrentOrderRecord, queue, coupons, () => true)

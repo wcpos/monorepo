@@ -24,7 +24,7 @@ import { completeSale, type SaleContext } from '../checkout/sale-completion';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { enqueueCartAction } from '../hooks/enqueue-cart-action';
 import { settleCartWrite } from './settle-cart-write';
-import { commitAtBoundary } from './boundary-commit';
+import { type BoundaryReason, commitAtBoundary, retryable } from './boundary-commit';
 import { createSettlementCoordinator } from './settlement-coordinator';
 
 import type { CartConfigInputs } from './cart-config-for-order';
@@ -234,7 +234,7 @@ describe('an answered close', () => {
 		Object.assign(order.payload, { id: 42 });
 		answeredWithoutMirror();
 		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('refreshed');
-		expect(await run(order)).toBeUndefined();
+		expect(await run(order)).toEqual({ kind: 'closed' });
 		expect(order.payload.status).toBe('pos-partial');
 		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 		expect(rows('settlement.boundary-not-closed')).toEqual([]);
@@ -246,7 +246,7 @@ describe('an answered close', () => {
 		Object.assign(order.payload, { id: 42 });
 		answeredWithoutMirror();
 		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('timed-out');
-		expect(await run(order)).toBeUndefined();
+		expect(await run(order)).toEqual({ kind: 'closed' });
 		expect((await pendingCompletions(ctx.storeDB))[order.uuid]).toMatchObject({
 			awaitingAdoption: true,
 		});
@@ -259,7 +259,7 @@ describe('an answered close', () => {
 		Object.assign(order.payload, { id: 42 });
 		answeredWithoutMirror({ cause: new Error('mirror_failed') });
 		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('timed-out');
-		await expect(run(order)).resolves.toBeUndefined();
+		await expect(run(order)).resolves.toEqual({ kind: 'closed' });
 		expect((await pendingCompletions(ctx.storeDB))[order.uuid]).toMatchObject({
 			awaitingAdoption: true,
 		});
@@ -269,7 +269,10 @@ describe('an answered close', () => {
 	it('a close the store answers outstanding logs the not-closed row and keeps the attempt', async () => {
 		const order = orderFor();
 		closeSale.close.mockImplementationOnce(async () => ({ kind: 'outstanding', order: null }));
-		expect(await run(order)).toEqual({ kind: 'outstanding', order: null });
+		expect(await run(order)).toEqual({
+			kind: 'unclosed',
+			close: { kind: 'outstanding', order: null },
+		});
 		expect(getLogger(['test']).debug).toHaveBeenCalledWith('settlement.boundary-not-closed', {
 			context: { orderId: order.uuid, outcome: 'outstanding' },
 		});
@@ -379,7 +382,7 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 				{ order, queue, write: (changes) => write({ document: order, changes }) }
 			)
 		);
-		expect(outcome).toBe('superseded');
+		expect(outcome).toEqual({ kind: 'superseded', retry: false });
 		expect(order.payload.total).toBe('10');
 		expect(complete).not.toHaveBeenCalled();
 		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
@@ -480,6 +483,7 @@ it.each(['amount', 'status', 'refund'])(
 					)
 				);
 			else Object.assign(order.payload, settlementPatch(result));
+			return undefined; // the coordinator does not act on this outcome here
 		});
 		const observe = jest.fn();
 		const coordinator = createSettlementCoordinator({
@@ -504,7 +508,7 @@ it.each(['amount', 'status', 'refund'])(
 			await enqueueOrderMutation(order.uuid, async () => {});
 			await new Promise((resolve) => setTimeout(resolve, 0));
 			expect(observe).not.toHaveBeenCalled();
-			expect(outcomes).toEqual(['superseded']);
+			expect(outcomes).toEqual([{ kind: 'superseded', retry: false }]);
 			expect(complete).not.toHaveBeenCalled();
 			expect(settle).toHaveBeenCalledTimes(2);
 			expect(order.payload).toMatchObject({ status: 'pos-partial', total: '4' });
@@ -591,7 +595,7 @@ it('supersedes coupon completion when references change during the guard window'
 			}
 		)
 	);
-	expect(outcome).toBe('superseded');
+	expect(outcome).toEqual({ kind: 'superseded', retry: false });
 	expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
 	expect(complete).not.toHaveBeenCalled();
 	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
@@ -658,7 +662,7 @@ it.each(['product', 'variation', 'read-once', 'read-twice'] as const)(
 			)
 		);
 		const reason = scenario === 'read-twice' ? 'catalog_changed' : 'pos_products.out_of_stock';
-		expect(outcome).toEqual({ superseded: true, reason });
+		expect(outcome).toEqual({ kind: 'superseded', reason, retry: true });
 		expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
 		expect(complete).not.toHaveBeenCalled();
 		expect(getLogger(['test']).warn).toHaveBeenCalledWith(
@@ -726,7 +730,11 @@ it.each(['none', 'choose'] as const)(
 			)
 		);
 		if (resolved === 'choose') {
-			expect(outcome).toMatchObject({ deny: { reasonKey: 'pos_checkout.choose_register_first' } });
+			expect(outcome).toMatchObject({
+				kind: 'refused',
+				refusal: { deny: { reasonKey: 'pos_checkout.choose_register_first' } },
+				retry: false,
+			});
 			expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
 			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 		} else expect(order.payload.status).toBe('completed');
@@ -789,7 +797,7 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 				return { registerId: 'register', sessionId: 'session' };
 			});
 			const outcome = await enqueueOrderMutation(order.uuid, (queue) => commit(queue));
-			expect(outcome).toBe('superseded');
+			expect(outcome).toEqual({ kind: 'superseded', retry: false });
 		}
 		expect(order.payload).toMatchObject({
 			...data,
@@ -854,7 +862,11 @@ it.each(['stock', 'predicate', 'unchanged'])(
 		);
 		expect(complete).toHaveBeenCalledTimes(change === 'unchanged' ? 1 : 0);
 		if (change === 'stock')
-			expect(outcome).toEqual({ superseded: true, reason: 'pos_products.out_of_stock' });
+			expect(outcome).toEqual({
+				kind: 'superseded',
+				reason: 'pos_products.out_of_stock',
+				retry: true,
+			});
 		// No counter-release API exists and the resident resolver cannot await allocation.
 		expect(nextSaleCounter).toHaveBeenCalledTimes(1);
 	}
@@ -974,12 +986,17 @@ it.each([
 						}
 					)
 				);
+				return undefined; // the coordinator does not act on this outcome here
 			},
 		});
 		try {
 			await new Promise((resolve) => setTimeout(resolve, 20));
 			expect(outcomes).toEqual([
-				{ superseded: true, reason: change === 'catalog' ? 'catalog_changed' : 'in_checkout' },
+				{
+					kind: 'superseded',
+					reason: change === 'catalog' ? 'catalog_changed' : 'in_checkout',
+					retry: true,
+				},
 			]);
 			expect(order.payload).toMatchObject({
 				status: 'pos-partial',
@@ -1037,10 +1054,11 @@ it.each(['register_changed', 'session_changed', 'session_replaced', 'unchanged']
 		const unchanged = change === 'unchanged';
 		expect(outcome).toEqual(
 			unchanged
-				? undefined
+				? { kind: 'closed' }
 				: {
-						superseded: true,
+						kind: 'superseded',
 						reason: change === 'register_changed' ? change : 'session_changed',
+						retry: true,
 					}
 		);
 		expect(order.payload).toMatchObject({
@@ -1049,4 +1067,23 @@ it.each(['register_changed', 'session_changed', 'session_replaced', 'unchanged']
 		});
 		expect(complete).toHaveBeenCalledTimes(unchanged ? 1 : 0);
 	}
+);
+
+// Typed by BoundaryReason: a new reason does not compile here until its retry decision is written.
+const RETRY_DECISIONS: Record<BoundaryReason, boolean> = {
+	catalog_changed: true,
+	register_changed: true,
+	session_changed: true,
+	in_checkout: true,
+	'pos_cart.only_n_available': true,
+	'pos_products.out_of_stock': true,
+	'pos_checkout.choose_register_first': false,
+	'pos_checkout.open_register_first': false,
+};
+it.each(Object.entries(RETRY_DECISIONS))('%s retries on new inputs: %s', (reason, retry) => {
+	expect(retryable(reason)).toBe(retry);
+});
+it.each(['actions.hook_failed', 'pos_checkout.order_changed_retry', 'toString'])(
+	'a refusal reason the table does not name (%s) is never retried',
+	(reason) => expect(retryable(reason)).toBe(false)
 );
