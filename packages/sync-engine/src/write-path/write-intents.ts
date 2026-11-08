@@ -169,6 +169,7 @@ function storablePayload(
 	return toPlainValue(sanitizeOutboundPayload(collectionName, payload)) as Record<string, unknown>;
 }
 
+type RenewStage = 'before-enqueue' | 'before-dirty-mark';
 // Avoid burning the stale-placement budget while another local writer finishes its enqueue.
 const WRITER_ADMISSION_BACKOFF_MS = 20;
 const queues = new WeakMap<object, RecordMutationQueue>();
@@ -362,11 +363,14 @@ export async function enqueueWriteIntent(input: {
 		return deadLetters.length;
 	};
 
-	const voidInProgress = () =>
-		Object.assign(new Error('write: void-in-progress'), {
+	const refusal = <R extends string>(reason: R, stage?: RenewStage) =>
+		Object.assign(new Error(`write: ${reason}${stage ? ` (${stage})` : ''}`), {
 			status: 428 as const,
-			reason: 'void-in-progress' as const,
+			reason,
+			...(stage ? { stage } : {}),
 		});
+	const voidInProgress = (stage?: RenewStage) => refusal('void-in-progress', stage);
+	const writerAdmissionLapsed = (stage: RenewStage) => refusal('writer-admission-lapsed', stage);
 	const fence = async (token: string) => {
 		if (!(await queue.fenceForVoid(name, recordId, token, nowMs()))) throw voidInProgress();
 	};
@@ -677,16 +681,22 @@ export async function enqueueWriteIntent(input: {
 		}
 		let committed = false;
 		let writeFailed = false;
-		const renew = async () => {
-			if (!(await queue.renewWriter(name, recordId, mutation.mutationId, nowMs())))
-				throw voidInProgress();
+		// Our own expired row means no other holder took it, so that alone proves a
+		// lapse. Anything else stays void-in-progress: a void can run and clear its
+		// fence before this writer looks, so an absent row proves nothing.
+		const renew = async (stage: RenewStage) => {
+			const at = nowMs();
+			if (await queue.renewWriter(name, recordId, mutation.mutationId, at)) return;
+			if (await queue.writerHoldLapsed(name, recordId, mutation.mutationId, at))
+				throw writerAdmissionLapsed(stage);
+			throw voidInProgress(stage);
 		};
 		try {
 			const freshDoc = await collection.findOne(recordId).exec();
 			if (JSON.stringify(await liveRecordRows(await queue.pending())) !== queueSnapshot) continue;
 			if (doc && !freshDoc) throw voidInProgress();
 			if (JSON.stringify(freshDoc?.toJSON()) !== residentSnapshot) continue;
-			await renew();
+			await renew('before-enqueue');
 			if (prior) {
 				const operation = placement.kind === 'coalesce' ? placement.operation : mutation.operation;
 				// Re-materialize the coalesced SNAPSHOT (intent payloads are partial):
@@ -768,7 +778,7 @@ export async function enqueueWriteIntent(input: {
 			// entirely.
 			if (doc) {
 				try {
-					await renew();
+					await renew('before-dirty-mark');
 					await doc.incrementalModify((data) => {
 						const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
 						const pending = (

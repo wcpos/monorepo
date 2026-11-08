@@ -502,3 +502,8 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: {} }),
 	useStoreSession: () => ({}),
 }));
+
+jest.mock('../hooks/use-coupon-context', () => ({
+	...jest.requireActual('../hooks/use-coupon-context'),
+	readCatalogTaxStatuses: async () => () => undefined,
+}));

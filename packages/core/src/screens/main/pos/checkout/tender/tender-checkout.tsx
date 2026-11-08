@@ -78,10 +78,6 @@ export function TenderCheckout({ order }: Props) {
 			finishSale();
 			return;
 		}
-		if (flow.state.splitView) {
-			flow.dispatch({ type: 'close-split' });
-			return;
-		}
 		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;

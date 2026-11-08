@@ -28,6 +28,7 @@ export type OrderSaveState =
 	  };
 
 export interface CheckoutModeSnapshot {
+	readonly allocations: ReadonlyMap<string, Record<string, Record<TenderLineId, number>>>;
 	readonly linesPaidBy: ReadonlyMap<string, Record<TenderLineId, string[]>>;
 	readonly tenderPlans: ReadonlyMap<string, TenderPlan>;
 	readonly tenderMethods: ReadonlyMap<string, string>;
@@ -38,6 +39,7 @@ export interface CheckoutModeSnapshot {
 }
 
 let snapshot: CheckoutModeSnapshot = {
+	allocations: new Map(),
 	tenderMethods: new Map(),
 	tenderPlans: new Map(),
 	linesPaidBy: new Map(),
@@ -149,11 +151,25 @@ export function setLinesPaidBy(uuid: string, paidBy: Record<TenderLineId, string
 	else linesPaidBy.set(uuid, paidBy);
 	publish({ ...snapshot, linesPaidBy });
 }
+export function setAllocations(
+	uuid: string,
+	allocations: Record<string, Record<TenderLineId, number>> | null
+) {
+	const next = new Map(snapshot.allocations);
+	if (allocations === null) next.delete(uuid);
+	else next.set(uuid, allocations);
+	publish({ ...snapshot, allocations: next });
+}
 export function useTenderMethod(uuid: string) {
 	return useCheckoutMode().tenderMethods.get(uuid) ?? null;
 }
+/** Subscribed, so the pane re-renders when a payment's allocation lands or is dropped. */
+export function useAllocations(uuid: string) {
+	return useCheckoutMode().allocations.get(uuid) ?? null;
+}
 export function leaveCheckout(uuid: string) {
 	setLinesPaidBy(uuid, null);
+	setAllocations(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	if (!snapshot.checkoutOrders.has(uuid)) return;
@@ -190,6 +206,7 @@ export function finishReceipt(uuid: string) {
 	if (snapshot.checkoutOrders.has(uuid)) finishedBeforeCompletion.add(uuid);
 	leaveCheckout(uuid);
 	setLinesPaidBy(uuid, null);
+	setAllocations(uuid, null);
 	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	receiptPrintAttempts.delete(uuid);
@@ -247,6 +264,7 @@ export function resetCheckoutMode() {
 	publishHeadlessPrints(new Set());
 	publish({
 		tenderMethods: new Map(),
+		allocations: new Map(),
 		tenderPlans: new Map(),
 		linesPaidBy: new Map(),
 		saveStates: new Map(),

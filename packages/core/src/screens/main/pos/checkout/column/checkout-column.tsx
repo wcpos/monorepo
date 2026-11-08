@@ -33,8 +33,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 	const t = useT();
 	const leave = React.useCallback(() => leaveCheckout(order.uuid), [order.uuid]);
 	const back = React.useCallback(() => {
-		if (flow.state.splitView) flow.dispatch({ type: 'close-split' });
-		else if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
+		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
 		else leave();
 	}, [flow, leave]);
 	useCheckoutBack(back);

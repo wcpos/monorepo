@@ -197,7 +197,6 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		plan: null,
 		planLegs: [],
 		planLabel: null,
-		planMore: false,
 		lines: [],
 		linesPaidBy: {},
 		balanceMinor: 9295,
@@ -431,7 +430,6 @@ it('leaves checkout from the offline state, keeping nothing but the order', () =
 	});
 	mockFlow = makeFlow({
 		online: false,
-		state: { ...initialTenderState, splitView: true },
 		tiles: [offline('pos_cash'), offline('other')],
 	});
 	mountColumn();

@@ -13,6 +13,7 @@ export { decodeHidPosReport, type HidPosDecodeOptions, type HidPosResult } from 
 export { dedupeScans, SCAN_DEDUP_WINDOW_MS } from './scan-dedup';
 export {
 	createScanSession,
+	DEFAULT_COOLDOWN_MS,
 	hasValidRetailCheckDigit,
 	normalizeRetailCode,
 	type ScanSession,

@@ -234,7 +234,6 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		plan: null,
 		planLegs: [],
 		planLabel: null,
-		planMore: false,
 		lines: [],
 		linesPaidBy: {},
 		balanceMinor: 9295,
@@ -432,7 +431,6 @@ describe('TenderCheckout', () => {
 			enterCheckout('order-1');
 			mockFlow = makeFlow({
 				online: false,
-				state: { ...initialTenderState, splitView: true },
 				tiles: [offline('pos_cash'), offline('other')],
 			});
 			render(<TenderCheckout order={order} />);

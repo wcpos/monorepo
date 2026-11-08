@@ -6,9 +6,15 @@ export type TenderLineId = string | number;
 
 export type TenderPlan =
 	| { kind: 'even'; ways: number; from: number }
-	| { kind: 'fixed'; firstMinor: number; title: string | null; from: number }
-	| { kind: 'items'; lineIds: TenderLineId[]; firstMinor: number; ways: number; from: number };
-export type SplitTab = 'even' | 'amount' | 'percent' | 'item';
+	| { kind: 'fixed'; firstMinor: number; title: string | null; thenWays?: number; from: number }
+	| {
+			kind: 'items';
+			lineIds: TenderLineId[];
+			units?: Record<TenderLineId, number>;
+			firstMinor: number;
+			ways: number;
+			from: number;
+	  };
 
 export interface TenderState {
 	tab: TenderTab;
@@ -22,10 +28,16 @@ export interface TenderState {
 	/** False until the cashier has touched the keypad since the entry was pre-filled. */
 	entryDirty: boolean;
 	plan: TenderPlan | null;
-	splitView: boolean;
-	splitTab: SplitTab;
-	pickedLineIds: TenderLineId[];
+	/** The Split chip: the pane offers the split helpers and the pick list. */
+	splitOn: boolean;
+	/** `Share` is choosing how many ways THIS payment's picked lines are shared. */
+	shareOpen: boolean;
 	linesPaidBy: Record<TenderLineId, string[]>;
+	picked: Record<TenderLineId, number>;
+	extraMinor: number | null;
+	entryMode: 'money' | 'percent';
+	pickerOpen: boolean;
+	doneOpen: boolean;
 }
 
 /** '0'..'9' plus the two edit keys. There is deliberately no decimal key: digits shift in from the right. */
@@ -45,6 +57,13 @@ export type TenderAction =
 	| { type: 'tender-started' }
 	| { type: 'key'; key: TenderKey }
 	| { type: 'set-entry'; minor: number }
+	| { type: 'pick-units'; lineId: TenderLineId; units: number }
+	| { type: 'arm-extra' }
+	| { type: 'set-entry-mode'; mode: 'money' | 'percent' }
+	| { type: 'toggle-picker' }
+	| { type: 'toggle-done' }
+	| { type: 'toggle-share' }
+	| { type: 'split-on' }
 	| { type: 'back' }
 	| {
 			type: 'tender-recorded';
@@ -52,18 +71,24 @@ export type TenderAction =
 			/** The order's balance once this row counts, so the next leg can be pre-typed. */
 			balanceMinor: number;
 	  }
-	| { type: 'open-split' }
-	| { type: 'close-split' }
-	| { type: 'set-split-tab'; tab: SplitTab }
-	| { type: 'toggle-split-line'; lineId: TenderLineId }
 	| { type: 'set-plan'; plan: TenderPlan; balanceMinor: number }
-	| { type: 'clear-plan'; balanceMinor: number }
+	/** `keepSplit`: `Change split` drops the plan but leaves the Split chip on. */
+	| { type: 'clear-plan'; balanceMinor: number; keepSplit?: true }
 	| { type: 'arm-custom' }
 	| { type: 'request-cancel' }
 	| { type: 'reset' };
 /** $9,999,999.99 at two decimals — a till will never legitimately take more, and it stops a stuck key running the display off the screen. */
 export const MAX_TENDER_MINOR = 999999999;
+const emptyPickedEntry = {
+	picked: {},
+	extraMinor: null,
+	entryMode: 'money' as const,
+	pickerOpen: false,
+	doneOpen: false,
+	shareOpen: false,
+};
 export const initialTenderState: TenderState = {
+	...emptyPickedEntry,
 	tab: 'payments',
 	view: 'select',
 	methodId: null,
@@ -72,9 +97,7 @@ export const initialTenderState: TenderState = {
 	entryMinor: 0,
 	entryDirty: false,
 	plan: null,
-	splitView: false,
-	splitTab: 'even',
-	pickedLineIds: [],
+	splitOn: false,
 	linesPaidBy: {},
 };
 
@@ -97,7 +120,7 @@ export function initTenderState({
 export function tenderReducer(state: TenderState, action: TenderAction): TenderState {
 	switch (action.type) {
 		case 'set-tab':
-			return { ...state, tab: action.tab, splitView: action.tab === 'payments' && state.splitView };
+			return { ...state, tab: action.tab };
 		case 'pick-method':
 			return {
 				...state,
@@ -112,36 +135,64 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 			return { ...state, transport: action.transport };
 		case 'pick-reader':
 			return { ...state, readerId: action.readerId };
+		case 'pick-units': {
+			const picked = { ...state.picked };
+			if (action.units <= 0) delete picked[action.lineId];
+			else picked[action.lineId] = action.units;
+			// The picks are the entry again until the cashier types over them (the flow derives it).
+			return { ...state, picked, entryDirty: false };
+		}
+		case 'arm-extra':
+			return state.view === 'amount'
+				? { ...state, extraMinor: 0, entryMinor: 0, entryDirty: false }
+				: state;
+		case 'set-entry-mode':
+			return { ...state, entryMode: action.mode, entryMinor: 0, entryDirty: false };
+		case 'toggle-picker':
+			return { ...state, pickerOpen: !state.pickerOpen };
+		case 'toggle-done':
+			return { ...state, doneOpen: !state.doneOpen };
+		case 'toggle-share':
+			return { ...state, shareOpen: !state.shareOpen };
+		case 'split-on':
+			return { ...state, splitOn: true };
 		case 'key': {
 			if (state.view !== 'amount') {
 				return state;
 			}
+			const field = state.extraMinor !== null ? 'extraMinor' : 'entryMinor';
+			const current = state.extraMinor ?? state.entryMinor;
 			if (action.key === 'backspace') {
-				return { ...state, entryMinor: Math.floor(state.entryMinor / 10), entryDirty: true };
+				return { ...state, [field]: Math.floor(current / 10), entryDirty: true };
 			}
 			if (action.key === 'clear') {
-				return { ...state, entryMinor: 0, entryDirty: true };
+				return { ...state, [field]: 0, entryDirty: true };
 			}
 			const digit = Number(action.key);
 			if (!state.entryDirty) {
-				return { ...state, entryMinor: digit, entryDirty: true };
+				return { ...state, [field]: digit, entryDirty: true };
 			}
-			const entryMinor = state.entryMinor * 10 + digit;
-			return entryMinor > MAX_TENDER_MINOR ? state : { ...state, entryMinor };
+			const entryMinor = current * 10 + digit;
+			return entryMinor > MAX_TENDER_MINOR ? state : { ...state, [field]: entryMinor };
 		}
 		case 'set-entry':
 			return {
 				...state,
-				entryMinor: Math.max(0, Math.min(action.minor, MAX_TENDER_MINOR)),
+				[state.extraMinor !== null ? 'extraMinor' : 'entryMinor']: Math.max(
+					0,
+					Math.min(action.minor, MAX_TENDER_MINOR)
+				),
 				entryDirty: true,
 			};
 		case 'tender-started':
 			// A leg is being recorded: the method stays chosen for the next one; the entry
 			// clears until `tender-recorded` pre-types the next planned leg.
-			return { ...state, entryMinor: 0, entryDirty: false, splitView: false };
+			return { ...state, ...emptyPickedEntry, entryMinor: 0, entryDirty: false };
 		case 'back':
 			return {
 				...state,
+				...emptyPickedEntry,
+				splitOn: false,
 				view: 'select',
 				methodId: null,
 				readerId: null,
@@ -173,40 +224,22 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 			return {
 				...state,
 				view: state.methodId ? 'amount' : 'select',
+				picked: {},
+				extraMinor: null,
+				entryMode: 'money',
+				shareOpen: false,
 				entryMinor,
 				entryDirty: false,
-				splitView: false,
-				pickedLineIds: [],
+				splitOn: state.splitOn && action.balanceMinor > 0,
 				linesPaidBy,
 			};
 		}
-		case 'open-split':
-			return {
-				...state,
-				splitView: true,
-				pickedLineIds:
-					state.plan?.kind === 'items'
-						? state.plan.lineIds.filter((id) => !state.linesPaidBy[id])
-						: state.pickedLineIds,
-			};
-		case 'close-split':
-			return { ...state, splitView: false };
-		case 'set-split-tab':
-			return { ...state, splitTab: action.tab };
-		case 'toggle-split-line':
-			if (state.linesPaidBy[action.lineId]) return state;
-			return {
-				...state,
-				pickedLineIds: state.pickedLineIds.includes(action.lineId)
-					? state.pickedLineIds.filter((id) => id !== action.lineId)
-					: [...state.pickedLineIds, action.lineId],
-			};
 		case 'set-plan':
 			return {
 				...state,
+				...emptyPickedEntry,
 				plan: action.plan,
-				splitView: false,
-				pickedLineIds: [],
+				splitOn: true,
 				entryMinor:
 					state.view === 'amount'
 						? planLegs(action.plan, [], action.balanceMinor).thisPaymentMinor
@@ -217,14 +250,15 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 		case 'arm-custom':
 			return {
 				...state,
+				...emptyPickedEntry,
 				plan: null,
-				splitView: false,
+				splitOn: action.type === 'clear-plan' && action.keepSplit === true,
 				view: action.type === 'arm-custom' ? 'amount' : state.view,
 				entryMinor: action.type === 'clear-plan' ? action.balanceMinor : 0,
 				entryDirty: false,
 			};
 		case 'request-cancel':
-			return { ...state, view: 'cancel', splitView: false };
+			return { ...state, view: 'cancel' };
 		case 'reset':
 			return initialTenderState;
 	}
@@ -278,6 +312,44 @@ export function evenSplitShareMinor(balanceMinor: number, ways: number): number 
 	return wholeShare + (remainder * 2 >= ways ? 1 : 0);
 }
 
+/** Floor each unit's share; the line's last unit carries the remainder cents. */
+export function unitsMinor(lineTotalMinor: number, quantity: number, units: number): number {
+	if (quantity <= 0) return 0;
+	const clamped = Math.max(0, Math.min(units, quantity));
+	return clamped === quantity ? lineTotalMinor : clamped * Math.floor(lineTotalMinor / quantity);
+}
+
+/** Round a percentage half-up to minor units, never outside the remaining balance. */
+export function percentOfMinor(balanceMinor: number, percent: number): number {
+	return Math.max(0, Math.min(balanceMinor, Math.round((balanceMinor * percent) / 100)));
+}
+
+/** Picking every unpaid unit carries any stray rounding cents into the last payment. */
+export function heroForPicked(
+	pickedMinor: number,
+	balanceMinor: number,
+	allUnpaidPicked: boolean
+): number {
+	return allUnpaidPicked ? balanceMinor : pickedMinor;
+}
+
+/** Sum live payment allocations and list each contributing method once in ledger order. */
+export function paidUnitsByLine(
+	allocations: Record<string, Record<TenderLineId, number>>,
+	liveRows: { id: string; title: string }[]
+): Record<TenderLineId, { units: number; methods: string[] }> {
+	const paid = new Map<TenderLineId, { units: number; methods: string[] }>();
+	for (const row of liveRows) {
+		for (const [id, units] of Object.entries(allocations[row.id] ?? {})) {
+			const line = paid.get(id) ?? { units: 0, methods: [] };
+			line.units += units;
+			if (!line.methods.includes(row.title)) line.methods.push(row.title);
+			paid.set(id, line);
+		}
+	}
+	return Object.fromEntries(paid);
+}
+
 /** Completion is derived from payment rows, never an extra counter in the reducer. */
 export function activePlan(
 	plan: TenderPlan | null,
@@ -285,7 +357,11 @@ export function activePlan(
 	balanceMinor: number
 ): TenderPlan | null {
 	if (!plan || balanceMinor === 0) return null;
-	if (plan.kind !== 'items' && taken >= (plan.kind === 'even' ? plan.ways : 2)) return null;
+	if (
+		plan.kind !== 'items' &&
+		taken >= (plan.kind === 'even' ? plan.ways : 1 + (plan.thenWays ?? 1))
+	)
+		return null;
 	return plan;
 }
 
@@ -309,8 +385,9 @@ export function planLegs(
 			? Math.min(balanceMinor, Math.max(0, plan.firstMinor - groupPaid))
 			: balanceMinor;
 	const rest = plan.kind === 'items' && groupLeft === 0;
-	const ways = plan.kind === 'fixed' ? 2 : Math.max(plan.ways, taken + 1);
-	const left = plan.kind === 'fixed' || rest ? 1 : Math.max(1, ways - taken);
+	const ways = plan.kind === 'fixed' ? 1 + (plan.thenWays ?? 1) : Math.max(plan.ways, taken + 1);
+	const firstFixed = plan.kind === 'fixed' && taken === 0;
+	const left = firstFixed || rest ? 1 : Math.max(1, ways - taken);
 	const amount = rest ? balanceMinor : groupLeft;
 	const each =
 		plan.kind === 'fixed' && taken === 0
@@ -318,11 +395,19 @@ export function planLegs(
 			: evenSplitShareMinor(amount, left);
 	let remaining = amount;
 	for (let i = 0; i < left; i++) {
-		const minor = Math.min(remaining, i === left - 1 && plan.kind !== 'fixed' ? remaining : each);
+		const minor = Math.min(remaining, i === left - 1 && !firstFixed ? remaining : each);
 		legs.push({ minor, state: i === 0 ? 'now' : 'todo' });
 		remaining -= minor;
 	}
-	if (plan.kind === 'fixed' && remaining > 0) legs.push({ minor: remaining, state: 'todo' });
+	if (firstFixed && remaining > 0) {
+		const thenWays = plan.thenWays ?? 1;
+		const share = evenSplitShareMinor(remaining, thenWays);
+		for (let i = 0; i < thenWays; i++) {
+			const minor = Math.min(remaining, i === thenWays - 1 ? remaining : share);
+			legs.push({ minor, state: 'todo' });
+			remaining -= minor;
+		}
+	}
 	if (plan.kind === 'items' && !rest && balanceMinor > groupLeft)
 		legs.push({ minor: balanceMinor - groupLeft, state: 'rest' });
 	const title = plan.kind === 'fixed' && taken === 0 ? plan.title : null;
