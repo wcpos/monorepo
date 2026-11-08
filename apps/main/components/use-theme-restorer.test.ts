@@ -1,7 +1,8 @@
 /**
  * The restorer applies the store's saved theme on every store change, `system`
  * and an unset theme included, so a store switch never inherits the previous
- * store's theme.
+ * store's theme. A name Uniwind has not registered falls back to `system`,
+ * since `setTheme` throws on one.
  */
 import { renderHook } from '@testing-library/react-native';
 import { Uniwind } from 'uniwind';
@@ -50,6 +51,13 @@ describe('useThemeRestorer', () => {
 
 		withStore({});
 		await rerender({});
+
+		expect(setTheme).toHaveBeenLastCalledWith('system');
+	});
+
+	it("applies 'system' for a theme name Uniwind does not know", async () => {
+		withStore({ theme: 'sepia' });
+		await renderHook(() => useThemeRestorer());
 
 		expect(setTheme).toHaveBeenLastCalledWith('system');
 	});

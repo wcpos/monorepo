@@ -16,6 +16,8 @@ export const THEMES = [
 	'market',
 ] as const;
 export type ThemeName = (typeof THEMES)[number];
+export const isThemeName = (theme: string | undefined): theme is ThemeName =>
+	(THEMES as readonly string[]).includes(theme ?? '');
 
 export const TYPE_SETS = {
 	system: SYSTEM_TYPE,

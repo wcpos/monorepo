@@ -4,6 +4,7 @@ import {
 	hasDarkRail,
 	iconSetForTheme,
 	isLightTheme,
+	isThemeName,
 	THEME_ICON_SET,
 	THEME_TRAITS,
 	THEME_TYPE,
@@ -118,3 +119,12 @@ it.each(THEMES)(
 		expect(THEME_TRAITS[theme].linkUnderline).toBe(['bold', 'paper', 'monochrome'].includes(theme));
 	}
 );
+
+describe('isThemeName', () => {
+	it('accepts every drawn theme and refuses system, unset and unknown names', () => {
+		for (const theme of THEMES) expect(isThemeName(theme)).toBe(true);
+		expect(isThemeName('system')).toBe(false);
+		expect(isThemeName(undefined)).toBe(false);
+		expect(isThemeName('sepia')).toBe(false);
+	});
+});

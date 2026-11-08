@@ -1,7 +1,8 @@
 import * as React from 'react';
 
-import { type ThemeName, Uniwind } from 'uniwind';
+import { Uniwind } from 'uniwind';
 
+import { isThemeName } from '@wcpos/components/lib/themes';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 
 /**
@@ -21,10 +22,11 @@ export function useThemeRestorer() {
 
 	// External mutation belongs in a pre-paint effect; read store.theme directly.
 	// `system` (or no saved theme) is applied too: on a store switch, skipping it
-	// would leave the previous store's theme on screen.
+	// would leave the previous store's theme on screen. An unknown name also falls
+	// back to `system`, because Uniwind throws on a theme it has not registered.
 	React.useLayoutEffect(() => {
 		if (!store) return;
-		Uniwind.setTheme((store.theme ?? 'system') as ThemeName | 'system');
+		Uniwind.setTheme(isThemeName(store.theme) ? store.theme : 'system');
 	}, [store]);
 
 	return { isThemeReady, hasStore: !!store };
