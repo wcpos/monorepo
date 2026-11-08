@@ -612,6 +612,12 @@ export const STORE_REQUEST = /(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(
  * while it runs, so start-only counting would declare quiet under it. A request that
  * was already in flight when this attached never shows a start either, but its
  * finish does, and that finish resets the quiet timer.
+ *
+ * `idleMainThread` also requires no Long Task (> 50 ms, Chromium) on the page's main
+ * thread for the same `quietMs`. On 2026-11-08 (run 42523563380) the boot pulls had
+ * finished, then a CPU-bound boot phase kept the main thread busy through 6.5 s of
+ * network silence; silence alone read that as settled and the measured search queued
+ * behind the phase (settle-idle.unit.spec.ts).
  */
 export async function waitForStoreQuiescence(
 	page: Page,
@@ -620,7 +626,14 @@ export async function waitForStoreQuiescence(
 		capMs = 30_000,
 		matcher = STORE_REQUEST,
 		pollMs = 250,
-	}: { quietMs?: number; capMs?: number; matcher?: RegExp; pollMs?: number } = {}
+		idleMainThread = false,
+	}: {
+		quietMs?: number;
+		capMs?: number;
+		matcher?: RegExp;
+		pollMs?: number;
+		idleMainThread?: boolean;
+	} = {}
 ): Promise<boolean> {
 	let lastActivity = Date.now();
 	let inFlight = 0;
@@ -639,16 +652,56 @@ export async function waitForStoreQuiescence(
 	page.on('requestfailed', onSettled);
 	try {
 		const start = Date.now();
-		while (inFlight > 0 || Date.now() - lastActivity < quietMs) {
+		for (;;) {
+			if (idleMainThread) {
+				// A probe that cannot answer before the cap (a page stuck in one task) is busy too.
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				const end = await Promise.race([
+					readLastLongTaskEnd(page).catch(() => null),
+					new Promise<null>((resolve) => {
+						timer = setTimeout(() => resolve(null), Math.max(0, capMs - (Date.now() - start)));
+					}),
+				]).finally(() => clearTimeout(timer));
+				lastActivity = end === null ? Date.now() : Math.max(lastActivity, end);
+			}
+			if (inFlight === 0 && Date.now() - lastActivity >= quietMs) return true;
 			if (Date.now() - start >= capMs) return false;
 			await page.waitForTimeout(pollMs);
 		}
-		return true;
 	} finally {
 		page.off('request', onRequest);
 		page.off('requestfinished', onSettled);
 		page.off('requestfailed', onSettled);
 	}
+}
+
+/**
+ * Wall-clock end (epoch ms) of the page's latest Long Task, 0 when none yet, or `null`
+ * when the observer was missing (first call, or the page navigated) and was installed
+ * now; the caller counts `null` as activity. `takeRecords()` folds in entries whose
+ * observer callback has not run yet, so a task that ended just before this probe counts.
+ */
+function readLastLongTaskEnd(page: Page): Promise<number | null> {
+	return page.evaluate(() => {
+		const g = globalThis as {
+			__wcposE2eLastLongTaskEnd?: number;
+			__wcposE2eLongTaskObserver?: PerformanceObserver;
+		};
+		const fold = (entries: PerformanceEntryList) => {
+			for (const entry of entries) {
+				const end = performance.timeOrigin + entry.startTime + entry.duration;
+				g.__wcposE2eLastLongTaskEnd = Math.max(g.__wcposE2eLastLongTaskEnd ?? 0, end);
+			}
+		};
+		if (typeof g.__wcposE2eLastLongTaskEnd === 'number' && g.__wcposE2eLongTaskObserver) {
+			fold(g.__wcposE2eLongTaskObserver.takeRecords());
+			return g.__wcposE2eLastLongTaskEnd;
+		}
+		g.__wcposE2eLastLongTaskEnd = 0;
+		g.__wcposE2eLongTaskObserver = new PerformanceObserver((list) => fold(list.getEntries()));
+		g.__wcposE2eLongTaskObserver.observe({ type: 'longtask', buffered: true });
+		return null;
+	});
 }
 
 const ENGINE_LEDGER_PREFIX = 'WCPOS_E2E_ENGINE ';
@@ -691,11 +744,17 @@ function recordCadenceStart(page: Page): void {
  * The require plane serves one request at a time and never preempts, so an interaction
  * measured before this point measures the queued startup sync, not the interaction.
  * Needs a bundle built with `EXPO_PUBLIC_WCPOS_E2E=1`; without it the ledger is silent.
+ *
+ * Both paths then also wait for 1.5 s of network silence AND an idle main thread (no
+ * Long Task). On 2026-11-08 main's push runs read "settled" while a CPU-bound boot phase
+ * after the pulls still held the main thread; network silence alone could not see it,
+ * and the search typed into it waited behind the rest of the boot (#3298).
  */
 export async function waitForCadenceStart(page: Page, timeout = 60_000): Promise<void> {
+	const startedAt = Date.now();
 	// A production bundle (the main-push E2E target, or a local `build:web`) carries no
-	// ledger, so no line can come: fall back to network silence, the pre-ledger settle
-	// check, and say so (lib/e2e-engine-ledger.ts sets the marker when the ledger is on).
+	// ledger, so no line can come: fall back to network silence plus an idle main thread,
+	// and say so (lib/e2e-engine-ledger.ts sets the marker when the ledger is on).
 	// The fallback gets the SAME allowance as the ledger path (60 s), so a slow startup
 	// drain reads the same on a production bundle as on a ledger one. On 2026-11-02 the
 	// two paths disagreed: PR runs (ledger, 60 s) passed search-walk and search-latency,
@@ -711,11 +770,11 @@ export async function waitForCadenceStart(page: Page, timeout = 60_000): Promise
 		.catch(() => false);
 	if (!ledgerOn) {
 		console.log(
-			'WCPOS_E2E cadence.start unavailable: no engine ledger in this bundle, waiting for network silence instead'
+			'WCPOS_E2E cadence.start unavailable: no engine ledger in this bundle, waiting for network silence and an idle main thread instead'
 		);
 		expect(
-			await waitForStoreQuiescence(page, { quietMs: 1_500, capMs: timeout }),
-			'store traffic did not settle before the measured interaction'
+			await waitForStoreQuiescence(page, { quietMs: 1_500, capMs: timeout, idleMainThread: true }),
+			'store traffic or the main thread did not settle before the measured interaction'
 		).toBe(true);
 		return;
 	}
@@ -743,6 +802,11 @@ export async function waitForCadenceStart(page: Page, timeout = 60_000): Promise
 	} finally {
 		clearTimeout(timer);
 	}
+	const capMs = Math.max(0, timeout - (Date.now() - startedAt));
+	expect(
+		await waitForStoreQuiescence(page, { quietMs: 1_500, capMs, idleMainThread: true }),
+		`cadence.start came, but store traffic or the main thread did not settle within the remaining ${capMs} ms of ${timeout} ms`
+	).toBe(true);
 }
 
 /**
