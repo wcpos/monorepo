@@ -144,7 +144,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, select: (doc: unknown) => unknown) => select(doc),
 }));
-jest.mock('./movement-sheet', () => ({
+jest.mock('../../components/register-count/register-amount', () => ({
 	RegisterAmount: ({
 		value,
 		onChangeText,

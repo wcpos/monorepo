@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
@@ -26,7 +26,6 @@ import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
-import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
@@ -36,10 +35,10 @@ import { recordRegisterFact, useRegisterActor } from '../../../../services/regis
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
-import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { ApproveSheet } from './approve-sheet';
 import { RefusedCloseNotice } from './refused-close-notice';
-import { RegisterAmount } from './movement-sheet';
+import { DenominationTile, RegisterAmount } from '../../components/register-count';
 import { denominations } from '../../../../services/register-session/count-denominations';
 import {
 	countDecision,
@@ -53,56 +52,6 @@ import {
 } from '../../../../services/register-session/count-money';
 
 import type { ClosureCount } from './closure-written';
-
-export function DenominationTile({
-	currencyOptions,
-	value,
-	pieces,
-	add,
-}: {
-	currencyOptions?: CurrencyFormatOptions;
-	value: string;
-	pieces: number;
-	add: (pieces: number) => void;
-}) {
-	const { format } = useCurrencyFormat(currencyOptions);
-	const held = React.useRef(false);
-	const timer = React.useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-	const stop = () => clearInterval(timer.current);
-	// A held tile must stop ticking when the fold or count view unmounts.
-	React.useEffect(() => () => clearInterval(timer.current), []);
-	return (
-		<Tile
-			testID={`den-tile-${value}`}
-			badge={pieces}
-			accessibilityLabel={format(Number(value))}
-			// Web otherwise adds its default 50 ms press-in delay to the hold duration.
-			{...(Platform.OS === 'web' ? { delayPressIn: 0 } : {})}
-			delayLongPress={400}
-			onPressIn={() => {
-				held.current = false;
-			}}
-			onLongPress={() => {
-				held.current = true;
-				add(10);
-				timer.current = setInterval(() => add(10), 150);
-			}}
-			onPressOut={stop}
-			onPress={() => {
-				if (!held.current) add(1);
-			}}
-		>
-			<Text
-				variant="key"
-				className="max-w-full tabular-nums"
-				numberOfLines={1}
-				adjustsFontSizeToFit
-			>
-				{format(Number(value))}
-			</Text>
-		</Tile>
-	);
-}
 
 export function RegisterCount({
 	description,
