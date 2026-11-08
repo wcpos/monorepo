@@ -4,7 +4,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
-import { useUnreadErrorCount } from './logs-badge';
+import { useUnreadErrorCount } from './use-unread-error-count';
 
 const mockCount = jest.fn();
 const mockAddState = jest.fn();
@@ -12,8 +12,6 @@ const mockStoreDB = { addState: mockAddState, collections: { logs: { count: mock
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ storeDB: mockStoreDB }),
 }));
-
-jest.mock('@wcpos/components/badge', () => ({ Badge: () => null }));
 
 describe('useUnreadErrorCount', () => {
 	beforeEach(() => {

@@ -1,7 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
-import { Badge } from '@wcpos/components/badge';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Dialog, DialogContent, DialogTrigger } from '@wcpos/components/dialog';
 
@@ -39,29 +37,16 @@ export function NotificationBell({
 
 	return (
 		<Dialog open={isOpen} onOpenChange={handleOpenChange}>
-			<View>
-				<DialogTrigger asChild>
-					<IconButton
-						name="notifications"
-						variant={bare ? 'bare' : undefined}
-						testID={testID}
-						accessibilityLabel={t('common.notifications')}
-					/>
-				</DialogTrigger>
-				{/* Always mounted: the badge has to be there to show the first one arrive. */}
-				{/* Over the glyph, not the button: the offsets are the drawer's (`-top-1 -right-0.5`
-				    from the icon box), so the badge sits on the bell's shoulder as the logs badge sits
-				    on Store health's. Measured from the 44 button it floated 13 further up and out. A
-				    centred box the icon's size (`size-4.5`, Icon's default, which `IconButton` never
-				    overrides) holds for the title bar's strip-high button. */}
-				<View pointerEvents="none" className="absolute inset-0 items-center justify-center">
-					<View className="relative size-4.5">
-						<View className="absolute -top-1 -right-0.5">
-							<Badge count={unreadCount} max={99} variant="bad" size="sm" />
-						</View>
-					</View>
-				</View>
-			</View>
+			{/* The count is the glyph's (`IconButton count`): always mounted, so the first arrival is seen. */}
+			<DialogTrigger asChild>
+				<IconButton
+					name="notifications"
+					variant={bare ? 'bare' : undefined}
+					count={unreadCount}
+					testID={testID}
+					accessibilityLabel={t('common.notifications')}
+				/>
+			</DialogTrigger>
 			<DialogContent side={side} size="lg" portalHost={portalHost} testID="notifications-sheet">
 				{isOpen && <NotificationPanelContent />}
 			</DialogContent>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import { TONE } from '../lib/tone';
 import { Icon, type IconName, IconSetProvider } from './index';
@@ -11,7 +11,37 @@ jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: false, isElectron
 const { Platform: mockPlatform } = jest.requireMock('@wcpos/utils/platform');
 const mockUseCSSVariable = jest.fn((_name: string) => '#123456');
 jest.mock('uniwind', () => ({ useCSSVariable: (name: string) => mockUseCSSVariable(name) }));
-jest.mock('../text', () => ({ TextClassContext: React.createContext('') }));
+jest.mock('../text', () => ({
+	TextClassContext: React.createContext(''),
+	Text: ({ children }: any) =>
+		React.createElement('span', { 'data-testid': 'badge-text' }, children),
+}));
+// Jest does not compile Uniwind: expose the classes and pointer events the count box carries.
+jest.mock('react-native', () => {
+	const actual = jest.requireActual('react-native');
+	return {
+		...actual,
+		View: ({ className, pointerEvents, children }: any) =>
+			React.createElement(
+				'div',
+				{ 'data-class': className, 'data-pointer-events': pointerEvents },
+				children
+			),
+	};
+});
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: ({ children }: any) => React.createElement('div', null, children) },
+	ReduceMotion: { System: 'system' },
+	Easing: { bezier: () => 'ease', linear: 'linear' },
+	Extrapolation: { CLAMP: 'clamp' },
+	interpolate: (value: number) => value,
+	useAnimatedStyle: () => ({}),
+	useSharedValue: (value: number) => jest.requireActual('react').useRef({ value }).current,
+	withSequence: (...steps: number[]) => steps.at(-1),
+	withSpring: (value: number) => value,
+	withTiming: (value: number) => value,
+}));
 jest.mock('../loader', () => ({
 	Loader: () => null,
 	Spin: ({ active, children }: any) =>
@@ -112,3 +142,32 @@ it.each(Object.keys(TONE) as (keyof typeof TONE)[])(
 		);
 	}
 );
+
+// The count is measured from the glyph's own box (icon LEDGER line 8): the outer box carries the
+// glyph's size class, so the badge's `-top-1 -right-0.5` lands on the same shoulder whatever the
+// parent, a 44 button or a 48 drawer row (Paul, 2026-11-08: "too high, it does not look like the
+// badge on the logs icon").
+it('count puts the badge on a box the glyph size, pointer-less', () => {
+	const { container } = render(<Icon name="health" size="xl" count={3} />);
+	const outer = container.firstElementChild as HTMLElement;
+	expect(outer.dataset.class?.split(' ')).toEqual(['relative', 'size-6']);
+	expect(outer.children[0]?.getAttribute('data-class')).toContain('size-6');
+	expect(outer.children[0]?.querySelector('svg')).not.toBeNull();
+	const shoulder = outer.children[1] as HTMLElement;
+	expect(shoulder.dataset.class).toBe('absolute -top-1 -right-0.5');
+	expect(shoulder.dataset.pointerEvents).toBe('none');
+	expect(screen.getByTestId('badge-text').textContent).toBe('3');
+});
+
+it('count past max reads N+, and 0 draws no badge text', () => {
+	const { rerender } = render(<Icon name="notifications" count={120} />);
+	expect(screen.getByTestId('badge-text').textContent).toBe('99+');
+	rerender(<Icon name="notifications" count={0} />);
+	expect(screen.queryByTestId('badge-text')).toBeNull();
+});
+
+it('no count mounts no extra box', () => {
+	const { container } = render(<Icon name="check" />);
+	expect(container.querySelectorAll('[data-class]')).toHaveLength(1);
+	expect(container.querySelector('svg')?.parentElement).toBe(container.firstElementChild);
+});

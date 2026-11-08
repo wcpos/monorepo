@@ -16,6 +16,11 @@ export type NavItemProps = Omit<PressableSurfaceProps, 'children' | 'wash' | 'ro
 	label?: string | React.ReactElement;
 	/** Trailing, after the label (a count, a dot). */
 	badge?: React.ReactNode;
+	/**
+	 * A count on the icon's shoulder (Store health's unread errors). `badge` stays the trailing
+	 * slot after the label. A string icon only: an element icon paints itself.
+	 */
+	count?: number;
 	chevron?: boolean;
 	/** `row` (40, `rounded-md`) in an area's page list; `drawer` (48, `rounded-lg`) in the drawer. */
 	size?: NavItemSize;
@@ -38,6 +43,7 @@ export function NavItem({
 	icon,
 	label,
 	badge,
+	count,
 	chevron = false,
 	size = 'row',
 	className,
@@ -69,7 +75,11 @@ export function NavItem({
 			{...props}
 		>
 			<TextClassContext.Provider value={tint}>
-				{typeof icon === 'string' ? <Icon name={icon} size={drawer ? 'xl' : 'sm'} /> : icon}
+				{typeof icon === 'string' ? (
+					<Icon name={icon} size={drawer ? 'xl' : 'sm'} count={count} />
+				) : (
+					icon
+				)}
 				{label && typeof label !== 'string' ? (
 					<View className="min-w-0 flex-1">{label}</View>
 				) : label ? (
