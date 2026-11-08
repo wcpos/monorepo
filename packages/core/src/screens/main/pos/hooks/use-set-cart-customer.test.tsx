@@ -192,7 +192,7 @@ afterEach(() => expectSettledWrites(localPatch));
 
 jest.mock('./use-cart-config', () => jest.requireActual('../../../../../jest/cart-write'));
 
-it('settles the target post-edit address, not the rendered order, without repricing products', async () => {
+it('settles the target post-edit address, not the rendered order, and re-taxes the lines', async () => {
 	const { cartConfigForOrder } = jest.requireActual('../commands/cart-config-for-order');
 	const { settleAggregate, snapshotFromOrderJSON } = jest.requireActual('@wcpos/order-math');
 	const configForOrder = jest.fn((payload) =>
@@ -206,7 +206,7 @@ it('settles the target post-edit address, not the rendered order, without repric
 			order: payload,
 		})
 	);
-	jest.requireMock('./use-cart-config').useCartConfigReader.mockReturnValueOnce(configForOrder);
+	jest.requireMock('./use-cart-config').useCartConfigReader.mockReturnValue(configForOrder);
 	const product = {
 		product_id: 1,
 		quantity: 1,
@@ -246,16 +246,177 @@ it('settles the target post-edit address, not the rendered order, without repric
 	const { data } = localPatch.mock.calls[0][0];
 	expect(data).toMatchObject({
 		billing: { country: 'NZ' },
-		total: '23',
-		total_tax: '3',
+		total: '24',
+		total_tax: '4',
 		shipping_tax: '2',
+		line_items: [{ total: '10', subtotal: '10', total_tax: '2', subtotal_tax: '2' }],
 	});
+	const retaxed = { ...after, line_items: data.line_items };
 	expect(data).toMatchObject(
-		settleAggregate(snapshotFromOrderJSON(after), configForOrder(after)).patch
+		settleAggregate(snapshotFromOrderJSON(retaxed), configForOrder(retaxed)).patch
 	);
-	expect(data).not.toHaveProperty('line_items');
 });
 
 jest.mock('../commands/use-boundary-commit', () => ({
 	useBoundaryCommit: () => jest.fn(),
 }));
+
+const mockReport = jest.fn();
+const mockReadTaxStatuses = jest.fn();
+const mockExtraWarnings = jest.fn((): unknown[] => []);
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => ({ engine: 'engine' }),
+}));
+jest.mock('./use-coupon-context', () => ({
+	readCatalogTaxStatuses: (...args: unknown[]) => mockReadTaxStatuses(...args),
+}));
+jest.mock('../contexts/order-engine-warnings', () => ({
+	useReportEngineWarnings: () => mockReport,
+}));
+// Real retax; a test may append a warning, which the real engine never emits.
+jest.mock('../commands/retax-for-customer-write', () => {
+	const actual = jest.requireActual('../commands/retax-for-customer-write');
+	return {
+		retaxForCustomerWrite: (...args: Parameters<typeof actual.retaxForCustomerWrite>) => {
+			const result = actual.retaxForCustomerWrite(...args);
+			return { ...result, warnings: [...result.warnings, ...mockExtraWarnings()] };
+		},
+	};
+});
+beforeEach(() => mockReadTaxStatuses.mockResolvedValue(() => undefined));
+afterEach(() =>
+	jest.requireMock('./use-cart-config').useCartConfigReader.mockImplementation(() => () => config)
+);
+
+describe('the lines follow the rates of the address written (#1875)', () => {
+	const { cartConfigForOrder } = jest.requireActual('../commands/cart-config-for-order');
+	const reader = (payload: unknown) =>
+		cartConfigForOrder({
+			settings: { ...config, calcTaxes: true, priceNumDecimals: 2, taxBasedOn: 'shipping' },
+			rates: [
+				{ id: 1, country: 'AU', rate: '10', class: 'standard', shipping: true, priority: 1 },
+				{ id: 2, country: 'NZ', rate: '15', class: 'standard', shipping: true, priority: 1 },
+			],
+			baseLocation: { country: 'AU' },
+			order: payload,
+		});
+	const line = {
+		product_id: 1,
+		quantity: 1,
+		subtotal: '100',
+		total: '100',
+		subtotal_tax: '10',
+		total_tax: '10',
+		taxes: [{ id: 1, total: '10', subtotal: '10' }],
+	};
+	const au = { first_name: 'Ada', country: 'AU' };
+	const nz = { first_name: 'Ada', country: 'NZ' };
+	type Plain = Record<string, unknown>;
+	const record = (payload: object = {}) => {
+		const target = {
+			uuid: 'order-uuid',
+			payload: { status: 'pos-open', billing: au, shipping: au, line_items: [line], ...payload },
+			getLatest: () => target,
+		};
+		return target as never;
+	};
+	const setCustomer = async (target: never, fields: { billing: Plain; shipping: Plain }) => {
+		jest.requireMock('./use-cart-config').useCartConfigReader.mockReturnValue(reader);
+		const { result } = renderHook(() => useSetCartCustomer());
+		let outcome: unknown;
+		await act(async () => {
+			outcome = await result.current(target, { customerId: 9, ...fields, taxIds: null });
+		});
+		return outcome;
+	};
+	const nzLine = expect.objectContaining({ total: '100', subtotal: '100', total_tax: '15' });
+
+	it('one write carries the address, the re-taxed lines and the aggregate at the new rate', async () => {
+		await setCustomer(record(), { billing: nz, shipping: nz });
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		const { data } = localPatch.mock.calls[0][0];
+		expect(data).toMatchObject({ billing: nz, shipping: nz, total: '115', total_tax: '15' });
+		expect(data.line_items).toEqual([nzLine]);
+		expect(data.tax_lines).toEqual([expect.objectContaining({ rate_id: 2, tax_total: '15' })]);
+	});
+
+	it('a hook that rewrites the shipping country sets the rate, not the form', async () => {
+		registerActionHook(
+			'cart.customer.set',
+			async (_ctx, e, next) => next({ ...e, payload: { ...e.payload, shipping: nz } }),
+			{ id: 'test.rewriter', tier: 'extension' }
+		);
+		await setCustomer(record(), { billing: au, shipping: au });
+		const { data } = localPatch.mock.calls[0][0];
+		expect(data).toMatchObject({ shipping: nz, total_tax: '15' });
+		expect(data.line_items).toEqual([nzLine]);
+	});
+
+	it('a couponed order takes the re-taxed lines and leaves its aggregate to the continuation', async () => {
+		await setCustomer(record({ coupon_lines: [{ code: 'save', discount: '0' }] }), {
+			billing: nz,
+			shipping: nz,
+		});
+		const { data } = localPatch.mock.calls[0][0];
+		expect(data.line_items).toEqual([nzLine]);
+		expect(data).not.toHaveProperty('total_tax');
+	});
+
+	it('a closed order is not written and keeps its lines', async () => {
+		const target = record({ status: 'completed' }) as { payload: { line_items: unknown[] } };
+		await setCustomer(target as never, { billing: nz, shipping: nz });
+		expect(localPatch).not.toHaveBeenCalled();
+		expect(target.payload.line_items).toEqual([line]);
+	});
+
+	it('reads the catalog inside its slot, so a later mutation runs after its write', async () => {
+		const { enqueueOrderMutation } =
+			jest.requireActual<typeof import('./order-mutation-queue')>('./order-mutation-queue');
+		const events: string[] = [];
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		mockReadTaxStatuses.mockImplementationOnce(async () => {
+			await gate;
+			return () => undefined;
+		});
+		localPatch.mockImplementation(async () => {
+			events.push('patch');
+			return { uuid: 'order-uuid' };
+		});
+		jest.requireMock('./use-cart-config').useCartConfigReader.mockReturnValue(reader);
+		const { result } = renderHook(() => useSetCartCustomer());
+		await act(async () => {
+			const first = result.current(record(), { billing: nz, shipping: nz, taxIds: null });
+			const second = enqueueOrderMutation('order-uuid', async () => void events.push('second'));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			expect(events).toEqual([]);
+			release();
+			await Promise.all([first, second]);
+		});
+		expect(events).toEqual(['patch', 'second']);
+	});
+
+	it('reports the last run of the write once, even when its data ran twice', async () => {
+		const cartWrite = jest.requireActual('../../../../../jest/cart-write');
+		const resolve = cartWrite.resolveCartWrite;
+		const twice = jest
+			.spyOn(cartWrite, 'resolveCartWrite')
+			.mockImplementation((mock) => (input: { document: { payload: object }; changes: never }) => {
+				(input.changes as (p: object) => object)({ status: 'pos-open', ...input.document.payload });
+				return resolve(mock)(input);
+			});
+		mockExtraWarnings
+			.mockReturnValueOnce([{ kind: 'stale-run' }])
+			.mockReturnValueOnce([{ kind: 'last-run' }]);
+		await setCustomer(record(), { billing: nz, shipping: nz });
+		twice.mockRestore();
+		expect(mockExtraWarnings).toHaveBeenCalledTimes(2);
+		expect(mockReport).toHaveBeenCalledTimes(1);
+		expect(mockReport).toHaveBeenCalledWith([{ kind: 'last-run' }], {
+			orderId: 'order-uuid',
+			site: 'useSetCartCustomer',
+		});
+		expect(localPatch.mock.calls[0][0].data.line_items).toEqual([nzLine]);
+	});
+});

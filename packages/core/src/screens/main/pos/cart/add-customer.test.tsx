@@ -366,3 +366,8 @@ jest.mock('../../components/customer/tax-ids-form', () => ({
 	useNewTaxIdRow: () => () => ({ type: 'eu_vat', value: '', country: '' }),
 	taxIdsFormSchema: {},
 }));
+
+jest.mock('../hooks/use-coupon-context', () => ({
+	...jest.requireActual('../hooks/use-coupon-context'),
+	readCatalogTaxStatuses: async () => () => undefined,
+}));
