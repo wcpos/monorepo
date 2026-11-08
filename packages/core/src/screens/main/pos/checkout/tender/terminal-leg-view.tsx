@@ -187,7 +187,7 @@ export function TerminalLegView({
 				{leg.orderNumber ? (
 					<Text variant="help">
 						{t('common.order')} #{leg.orderNumber} ·{' '}
-						{t('coupons.items_summary', { n: flow.lines.length })}
+						{t('coupons.items_summary', { n: flow.split.lines.length })}
 					</Text>
 				) : null}
 				<Text variant="help" decodeHtml>

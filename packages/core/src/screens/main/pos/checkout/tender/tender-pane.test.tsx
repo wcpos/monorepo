@@ -12,10 +12,11 @@ import { createSimulatedDriver } from '../../../../../services/payment-drivers/s
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { initialTenderState, tenderReducer } from './tender-state';
 import { gatesCheckout } from './checkout-body';
-import { withFigures } from './tender-figures.test-utils';
+import { splitWith, withFigures } from './tender-figures.test-utils';
 import { TenderPane, UnansweredGate } from './tender-pane';
 import { LedgerLines } from './ledger-pane';
 
+import type { SplitView } from './split-view';
 import type { TenderFlow } from './use-tender-flow';
 
 const mockPush = jest.fn();
@@ -234,13 +235,7 @@ function makeFlow(count = 1): TenderFlow {
 		balanceMinor: 9295,
 		plan: null,
 		planLabel: null,
-		lines: [],
-		picked: {},
-		splitOn: false,
-		allocations: {},
 		discountMinor: 0,
-		paidUnits: {},
-		unpaidUnits: () => 0,
 		rows: [],
 		liveRows: [],
 		retainedRows: [],
@@ -1040,7 +1035,14 @@ describe('split V1: the pane builds each payment', () => {
 		({ id, method_id, amount, status: 'captured', kind: 'cash' }) as TenderFlow['rows'][number];
 	// A plan given with the flow is the reducer's: the figures derive its legs and numbering.
 	const splitFlow = (
-		over: Partial<Omit<TenderFlow, 'state' | 'figures'>> = {},
+		{
+			picked = {},
+			paidUnits = {},
+			allocations = {},
+			splitOn = true,
+			...over
+		}: Partial<Omit<TenderFlow, 'state' | 'figures' | 'split'>> &
+			Partial<Pick<SplitView, 'picked' | 'paidUnits' | 'allocations' | 'splitOn'>> = {},
 		state: Partial<TenderFlow['state']> = {}
 	): TenderFlow =>
 		withFigures({
@@ -1048,9 +1050,7 @@ describe('split V1: the pane builds each payment', () => {
 			saveState: null,
 			totalMinor: 18250,
 			balanceMinor: 18250,
-			lines,
-			unpaidUnits: (id) => lines.find((line) => line.id === id)?.quantity ?? 0,
-			splitOn: true,
+			split: splitWith({ lines, picked, paidUnits, allocations, splitOn }),
 			...over,
 			state: {
 				...initialTenderState,
@@ -1182,8 +1182,7 @@ describe('split V1: the pane builds each payment', () => {
 
 	it('on a phone, Pick items puts the lines in the keypad’s place, and Back to keypad restores it', () => {
 		const paid = { l2: { units: 1, methods: ['Card'] } };
-		const unpaidUnits = (id: string | number) => (id === 'l2' ? 2 : 4);
-		const flow = splitFlow({ paidUnits: paid, unpaidUnits });
+		const flow = splitFlow({ paidUnits: paid });
 		const { rerender } = render(
 			<DeviceScope phone>
 				<TenderPane flow={flow} format={String} />
@@ -1193,10 +1192,7 @@ describe('split V1: the pane builds each payment', () => {
 		expect(screen.queryByTestId('checkout-pick-list')).toBeNull();
 		fireEvent.click(screen.getByTestId('checkout-pick-items'));
 		expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'toggle-picker' });
-		const open = splitFlow(
-			{ paidUnits: paid, unpaidUnits, picked: { l1: 2 } },
-			{ pickerOpen: true }
-		);
+		const open = splitFlow({ paidUnits: paid, picked: { l1: 2 } }, { pickerOpen: true });
 		rerender(
 			<DeviceScope phone>
 				<TenderPane flow={open} format={String} />

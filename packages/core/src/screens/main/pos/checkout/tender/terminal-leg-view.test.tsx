@@ -8,6 +8,7 @@ import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import { TerminalLegView } from './terminal-leg-view';
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
+import { splitWith } from './tender-figures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 
@@ -193,7 +194,7 @@ function renderLeg(changes: Partial<TerminalLegState> = {}, extra: Partial<Tende
 	const flow = {
 		terminalLeg: { ...base, ...changes },
 		dp: 2,
-		lines: [],
+		split: splitWith(),
 		tiles: [],
 		cancelTerminalLeg: jest.fn(),
 		releaseTerminalLeg: jest.fn(),
@@ -315,7 +316,7 @@ it.each([
 	};
 	render(
 		<TerminalLegView
-			flow={{ terminalLeg: leg, tiles: [], lines: [], dp: 2 } as unknown as TenderFlow}
+			flow={{ terminalLeg: leg, tiles: [], split: splitWith(), dp: 2 } as unknown as TenderFlow}
 			format={String}
 		/>
 	);
@@ -464,10 +465,12 @@ it('uses the flow order number, line count (not quantities), and plan label', ()
 		{
 			plan: { kind: 'even', ways: 3, from: 0 },
 			planLabel: 'Payment 2 of 3',
-			lines: [
-				{ id: 1, name: 'First', quantity: 4, totalMinor: 100 },
-				{ id: 2, name: 'Second', quantity: 2, totalMinor: 200 },
-			],
+			split: splitWith({
+				lines: [
+					{ id: 1, name: 'First', quantity: 4, totalMinor: 100 },
+					{ id: 2, name: 'Second', quantity: 2, totalMinor: 200 },
+				],
+			}),
 		}
 	);
 	expect(screen.getByTestId('checkout-terminal-leg').textContent).toContain(

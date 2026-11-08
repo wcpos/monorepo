@@ -411,9 +411,9 @@ it('loops item groups and keeps the group plan once it is paid', () => {
 		tenderReducer(state, {
 			type: 'tender-recorded',
 			balanceMinor: 1500 - amounts.reduce((sum, a) => sum + a, 0),
-			rowsSinceFrom: amounts.map((amountMinor) => ({
-				amountMinor,
-				title: amountMinor === 100 ? 'Card' : 'SumUp',
+			rowsSinceFrom: amounts.map((minor) => ({
+				minor,
+				title: minor === 100 ? 'Card' : 'SumUp',
 			})),
 		});
 	const done = record([100, 450, 450]);

@@ -6,6 +6,7 @@ import { render, screen, within } from '@testing-library/react';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { BalanceHeadline, LedgerLegs, LedgerLines } from './ledger-pane';
+import { splitWith } from './tender-figures.test-utils';
 
 import type { LedgerView } from './use-ledger-view';
 
@@ -88,9 +89,7 @@ const view: LedgerView = {
 	totalMinor: 3000,
 	paidMinor: 2000,
 	balanceMinor: 1000,
-	allocations: {},
-	lines: [],
-	paidUnits: {},
+	split: splitWith(),
 };
 const format = (minor: number) => `£${minor / 100}`;
 it('lists the legs without a bar or timeline: event times, Next, and cash-only change', () => {
@@ -115,11 +114,13 @@ it('lists what each payment paid for, and keeps a cancelled one struck through a
 			view={{
 				...view,
 				rows: [row, { ...row, id: 'void', status: 'voided' }],
-				allocations: { cash: { fw: 1, burger: 1 }, void: { fw: 1 } },
-				lines: [
-					{ id: 'fw', name: 'Flat white', quantity: 2, totalMinor: 900 },
-					{ id: 'burger', name: 'Burger', quantity: 3, totalMinor: 5550 },
-				],
+				split: splitWith({
+					allocations: { cash: { fw: 1, burger: 1 }, void: { fw: 1 } },
+					lines: [
+						{ id: 'fw', name: 'Flat white', quantity: 2, totalMinor: 900 },
+						{ id: 'burger', name: 'Burger', quantity: 3, totalMinor: 5550 },
+					],
+				}),
 			}}
 			format={format}
 		/>

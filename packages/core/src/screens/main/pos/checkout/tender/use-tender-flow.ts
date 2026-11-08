@@ -9,7 +9,6 @@ import {
 	activeAwaitingCustomer,
 	type AwaitingCustomerStamp,
 	calculateCartLine,
-	countsTowardPaid,
 	type DeclaredValues,
 	derive,
 	fromMinor,
@@ -92,9 +91,6 @@ import {
 	setSplitOn,
 	setTenderMethod,
 	setTenderPlan,
-	useAllocations,
-	usePickedUnits,
-	useSplitOn,
 	useTenderMethod,
 } from '../checkout-mode';
 import { useOrderSaveState } from '../use-order-save-state';
@@ -121,17 +117,21 @@ import {
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
-import { tenderLines } from './use-ledger-view';
+import {
+	mergedAllocations,
+	rowsSince,
+	type SplitView,
+	splitView,
+	useSplitStore,
+} from './split-view';
 import { type RememberedReader, useRememberedReader } from './remembered-readers';
 import { disabledReasonText, failureReasonLabel, providerErrorMessage } from './labels';
 import {
 	activePlan,
 	initTenderState,
-	paidUnitsByLine,
 	planLegs,
 	type TenderAction,
 	type TenderFlowAction,
-	type TenderLineId,
 	tenderReducer,
 	type TenderState,
 } from './tender-state';
@@ -192,17 +192,10 @@ export interface TenderFlow {
 	figures: TenderFigures;
 	plan: TenderState['plan'];
 	planLabel: string | null;
-	lines: { id: TenderLineId; name: string; quantity: number; totalMinor: number }[];
-	/** THIS payment's picked units per line (checkout store, shared with the bill). */
-	picked: Record<TenderLineId, number>;
-	/** The Split chip is on (checkout store): the bill picks and the helpers offer the split. */
-	splitOn: boolean;
-	allocations: Record<string, Record<TenderLineId, number>>;
-	/** Units of each line the live payments covered, with their methods (`paidUnitsByLine`). */
-	paidUnits: ReturnType<typeof paidUnitsByLine>;
+	/** The split as the bill reads it too (`splitView`): lines, picks, the Split chip, paid units. */
+	split: SplitView;
 	/** The order's discount (`discount_total`): picked prices already include it. */
 	discountMinor: number;
-	unpaidUnits: (lineId: TenderLineId) => number;
 
 	/** The order's ledger rows, in ledger order. */
 	rows: PaymentRow[];
@@ -290,7 +283,6 @@ type LandOptions = {
 	press?: boolean;
 };
 
-const NO_PICKS: Record<TenderLineId, number> = {};
 const SPLIT_OFF: string[] = ['arm-custom', 'back', 'reset'];
 const CLEARS_PICKS = [...SPLIT_OFF, 'tender-started', 'tender-recorded', 'set-plan', 'clear-plan'];
 /** The picks and the Split chip live in the checkout store (the bill reads them); each action that reset them in the reducer resets them there. */
@@ -315,17 +307,11 @@ export function useTenderFlow(
 	const ctx = useSaleContext();
 	const { ctx: actionCtx, actor: actionActor } = useActionContext();
 	const storedMethodId = useTenderMethod(order.uuid);
-	const storeAllocations = useAllocations(order.uuid);
-	const picked = usePickedUnits(order.uuid) ?? NO_PICKS;
-	const splitOn = useSplitOn(order.uuid);
+	const splitStore = useSplitStore(order.uuid);
+	const { picked } = splitStore;
 	const saveState = useOrderSaveState(order.uuid);
 	const { running, busy, exclusive, busyNow } = useExclusive<TenderCommand>();
 	const payload = useRecordField(order, (record) => record.payload);
-	// The order's saved units (a completed sale reopened, a restart) under this till's live ones.
-	const allocations = React.useMemo(
-		() => ({ ...readPaidUnits(payload.meta_data), ...(storeAllocations ?? {}) }),
-		[payload.meta_data, storeAllocations]
-	);
 	const { store, wpCredentials, storeDB } = useStoreSession();
 	const http = useRestHttpClient();
 	const [gated, setGated] = React.useState(false);
@@ -374,6 +360,7 @@ export function useTenderFlow(
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const { confirm, dialog: confirmDialog, open: confirming } = useConfirm({ portalHost });
 	const { methods, byId } = usePaymentMethods();
+	const titleOf = React.useCallback((id: string) => byId.get(id)?.title ?? id, [byId]);
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 	const { recordLedger, writeLedgerChanges } = useOrderLedgerWrite();
@@ -417,14 +404,7 @@ export function useTenderFlow(
 		const methodId = stored?.id ?? first?.id ?? null;
 		const initial = initTenderState({ methodId, balanceMinor });
 		const storedPlan = getCheckoutModeSnapshot().tenderPlans.get(order.uuid) ?? null;
-		// The legs taken are the money `derive()` counts (ADR 0040 D6): an authorization is a hold.
-		const planRows = rows
-			.slice(storedPlan?.from ?? rows.length)
-			.filter(countsTowardPaid)
-			.map((row) => ({
-				minor: toMinor(row.amount, dp),
-				title: byId.get(row.method_id)?.title ?? row.method_id,
-			}));
+		const planRows = rowsSince(storedPlan, rows, dp, titleOf);
 		// The active view of the plan decides only what the keypad shows (legs, entry prefill).
 		const plan = activePlan(storedPlan, planRows.length, balanceMinor);
 		const { readers, lockToDefault, only } = selectableReaders(
@@ -591,26 +571,13 @@ export function useTenderFlow(
 		[reducerDispatch]
 	);
 	const { readers, lockToDefault, only } = selectableReaders(method, readersInUse, order.uuid);
-	const lines = tenderLines(payload.line_items, dp);
-	const paidUnits = paidUnitsByLine(
-		allocations,
-		liveRows.map((row) => ({ id: row.id, title: byId.get(row.method_id)?.title ?? row.method_id }))
-	);
-	const figures = tenderFigures({
-		dp,
-		balanceMinor,
-		rows,
-		titleOf: (id) => byId.get(id)?.title ?? id,
-		method,
-		state,
-		lines,
-		picked,
-		paidUnits,
-	});
+	// Every split fact, once per render: the pane, the takes and the bill read the same numbers.
+	const split = splitView({ payload, rows, dp, titleOf, store: splitStore, plan: state.plan });
+	const { rowsSinceFrom, legUnits } = split;
+	const figures = tenderFigures({ dp, balanceMinor, rows, method, state, split });
 	const {
 		fixedAmount,
 		plan,
-		rowsSinceFrom,
 		label,
 		thisPaymentMinor,
 		percentMinor,
@@ -618,10 +585,9 @@ export function useTenderFlow(
 		enteredLegMinor,
 		entryAppliedMinor,
 	} = figures;
-	const unpaidUnits = (lineId: TenderLineId) => figures.unpaidUnits[String(lineId)] ?? 0;
 	const itemTitle =
 		plan?.kind === 'items'
-			? lines
+			? split.lines
 					.filter((line) => String(line.id) in plan.units)
 					.map((line) => line.name)
 					.join(' + ')
@@ -642,20 +608,6 @@ export function useTenderFlow(
 							ways: billWays,
 						})
 					: t('pos_checkout.payment_n_of', { n: billN, ways: billWays });
-	// The units THIS payment records. A shared item payment allocates the whole group's units to
-	// the group's first leg; the later legs pay the rest of the group's money and carry none, or
-	// the units would count as paid once per leg.
-	const groupAllocated =
-		state.plan?.kind === 'items' &&
-		rows
-			.slice(state.plan.from)
-			.some((row) => isLivePaymentStatus(row.status) && allocations[row.id]);
-	const legUnits =
-		Object.keys(picked).length > 0
-			? picked
-			: state.plan?.kind === 'items' && !groupAllocated
-				? state.plan.units
-				: null;
 
 	const dispatch = React.useCallback<React.Dispatch<TenderFlowAction>>(
 		(action) => {
@@ -783,10 +735,9 @@ export function useTenderFlow(
 				ledger.filter(({ status }) => isLivePaymentStatus(status)).map(({ id }) => id)
 			);
 			const stored = Object.fromEntries(
-				Object.entries({
-					...readPaidUnits(meta),
-					...(getCheckoutModeSnapshot().allocations.get(order.uuid) ?? {}),
-				}).filter(([id]) => live.has(id))
+				Object.entries(
+					mergedAllocations(meta, getCheckoutModeSnapshot().allocations.get(order.uuid) ?? null)
+				).filter(([id]) => live.has(id))
 			);
 			// The completing leg can be journaled before its row exists in the ledger.
 			return paymentId && legUnits ? { ...stored, [paymentId]: legUnits } : stored;
@@ -872,15 +823,7 @@ export function useTenderFlow(
 			const action: TenderAction = {
 				type: 'tender-recorded',
 				balanceMinor: toMinor(balance, dp),
-				// The legs the plan has taken: the money `derive()` counts, so an offline device
-				// authorization (a hold) never advances it.
-				rowsSinceFrom: latest
-					.slice(state.plan?.from ?? latest.length)
-					.filter(countsTowardPaid)
-					.map((candidate) => ({
-						amountMinor: toMinor(candidate.amount, dp),
-						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
-					})),
+				rowsSinceFrom: rowsSince(state.plan, latest, dp, titleOf),
 			};
 			reducerDispatch(action);
 			// Stored until the sale is paid, whatever the leg count: a remount before the last leg
@@ -893,7 +836,7 @@ export function useTenderFlow(
 			// carries them), so a reload or another till mid-split keeps the paid marks.
 			if (action.balanceMinor > 0) void stampPaidUnits(latest);
 		},
-		[order, state, dp, byId, actor, orderContext, reducerDispatch, stampPaidUnits]
+		[order, state, dp, titleOf, actor, orderContext, reducerDispatch, stampPaidUnits]
 	);
 
 	/** Every answer lands through one table (`landAnswer`), then says what it means. */
@@ -1978,13 +1921,7 @@ export function useTenderFlow(
 			reducerDispatch({
 				type: 'tender-recorded',
 				balanceMinor: toMinor(balance, dp),
-				rowsSinceFrom: latest
-					.slice(state.plan?.from ?? latest.length)
-					.filter(countsTowardPaid)
-					.map((candidate) => ({
-						amountMinor: toMinor(candidate.amount, dp),
-						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
-					})),
+				rowsSinceFrom: rowsSince(state.plan, latest, dp, titleOf),
 			});
 		}
 		logger.info(t('pos_checkout.payment_cancelled'), {
@@ -2024,13 +1961,8 @@ export function useTenderFlow(
 			figures,
 			plan,
 			planLabel,
-			lines,
-			picked,
-			splitOn,
-			allocations,
+			split,
 			discountMinor: toMinor(payload.discount_total ?? '0', dp),
-			paidUnits,
-			unpaidUnits,
 			rows,
 			liveRows,
 			retainedRows,
@@ -2061,15 +1993,10 @@ export function useTenderFlow(
 		}),
 		[
 			plan,
-			picked,
-			splitOn,
+			split,
 			payload.discount_total,
-			allocations,
 			figures,
 			planLabel,
-			lines,
-			paidUnits,
-			unpaidUnits,
 			remembered,
 			remember,
 			terminalLeg,
