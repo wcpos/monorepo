@@ -570,11 +570,15 @@ jobs:
       # and it keeps dev-mode LogBox overlays from sitting above the app where
       # they would swallow Maestro taps. `--offline` skips Expo API calls the
       # server does not need.
+      # EXPO_NO_METRO_LAZY: a production-mode lazy bundle makes every `import()`
+      # fetch a chunk, native has no `location` to build the chunk URL from, so
+      # Expo throws; shipped builds are not lazy either, so this matches them.
       - name: 📦 Start Metro and pre-compile the bundle
         working-directory: apps/main
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
           EXPO_PUBLIC_WCPOS_E2E: '1'
+          EXPO_NO_METRO_LAZY: '1'
         run: |
           # This checkout is immutable during CI. Reuse its exact runtime: the
           # dev launcher issues two serialized manifest requests per relaunch,
@@ -598,8 +602,15 @@ jobs:
           # (hermes bytecode, react-compiler, routerRoot) that key Metro's
           # cache — a guessed URL would compile a variant the client never
           # requests. Verified locally 2026-08-28 against this exact tree.
-          BUNDLE_URL=$(curl -sf -H "expo-platform: android" http://localhost:8081/ | jq -r '.launchAsset.url')
+          # The Forwarded header is what the dev client sends. Without it Expo answers
+          # with an absolute 127.0.0.1 URL; with it, a relative one the client resolves
+          # against localhost. The host is part of the bundle cache's key
+          # (apps/main/metro/bundle-serializer-cache.js), so warming the wrong host
+          # leaves the device a full serialise, which blocks Metro past the client's
+          # 60 s limit (#3345).
+          BUNDLE_URL=$(curl -sf -H "expo-platform: android" -H 'Forwarded: host="localhost:8081";proto=http' http://localhost:8081/ | jq -r '.launchAsset.url')
           [ -n "$BUNDLE_URL" ] && [ "$BUNDLE_URL" != "null" ] || { echo "::error::manifest had no launchAsset URL"; tail -50 /tmp/metro.log; exit 1; }
+          case "$BUNDLE_URL" in http*) ;; *) BUNDLE_URL="http://localhost:8081/$BUNDLE_URL" ;; esac
           curl -sf --max-time 900 -o /dev/null "$BUNDLE_URL" \
             || { echo "::error::Android bundle pre-compile failed"; tail -80 /tmp/metro.log; exit 1; }
           # Latency of a WARM manifest and a WARM bundle on this runner. The
@@ -1112,6 +1123,7 @@ jobs:
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
           EXPO_PUBLIC_WCPOS_E2E: '1'
+          EXPO_NO_METRO_LAZY: '1'
         run: |
           # This checkout is immutable during CI. Reuse its exact runtime instead
           # of recomputing the fingerprint inside every 10 s launcher request.
@@ -1129,8 +1141,9 @@ jobs:
           done
           # Manifest-driven pre-warm — see the Android job's twin step for why
           # a hand-built bundle URL is wrong twice over.
-          BUNDLE_URL=$(curl -sf -H "expo-platform: ios" http://localhost:8081/ | jq -r '.launchAsset.url')
+          BUNDLE_URL=$(curl -sf -H "expo-platform: ios" -H 'Forwarded: host="localhost:8081";proto=http' http://localhost:8081/ | jq -r '.launchAsset.url')
           [ -n "$BUNDLE_URL" ] && [ "$BUNDLE_URL" != "null" ] || { echo "::error::manifest had no launchAsset URL"; tail -50 /tmp/metro.log; exit 1; }
+          case "$BUNDLE_URL" in http*) ;; *) BUNDLE_URL="http://localhost:8081/$BUNDLE_URL" ;; esac
           curl -sf --max-time 900 -o /dev/null "$BUNDLE_URL" \
             || { echo "::error::iOS bundle pre-compile failed"; tail -80 /tmp/metro.log; exit 1; }
           # Latency of a WARM manifest and a WARM bundle on this runner. The

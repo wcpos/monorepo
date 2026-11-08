@@ -881,6 +881,55 @@ test('native E2E concurrency isolates pull requests and supersedes stale main pu
 	assert.notEqual(concurrency.group, '${{ github.workflow }}');
 });
 
+test('native E2E Metro serves a non-lazy bundle on both platforms', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	// A production-mode lazy bundle throws on native when import() fetches a chunk.
+	const metroSteps = Object.values(workflow.jobs)
+		.flatMap((job) => job.steps ?? [])
+		.filter((step) => typeof step.run === 'string' && step.run.includes('expo start'));
+
+	assert.equal(metroSteps.length, 2);
+	for (const step of metroSteps) {
+		assert.equal(step.env?.EXPO_NO_METRO_LAZY, '1', step.name);
+	}
+});
+
+test("native E2E pre-warm requests the device's bundle URL on both platforms", () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	// The bundle cache keys on the URL's host: warm the one the dev client asks for (#3345).
+	const runs = Object.values(workflow.jobs)
+		.flatMap((job) => (job.steps ?? []).map((step) => step.run ?? ''))
+		.join('\n');
+
+	for (const platform of ['android', 'ios']) {
+		assert.ok(
+			runs.includes(
+				`BUNDLE_URL=$(curl -sf -H "expo-platform: ${platform}" -H 'Forwarded: host="localhost:8081";proto=http' http://localhost:8081/ | jq -r '.launchAsset.url')`
+			),
+			platform
+		);
+	}
+	const relativeUrl =
+		'case "$BUNDLE_URL" in http*) ;; *) BUNDLE_URL="http://localhost:8081/$BUNDLE_URL" ;; esac';
+	assert.equal(runs.split(relativeUrl).length - 1, 2);
+});
+
+test('native E2E flows 01 and 02 connect to the store the main lane seeds', () => {
+	// A flow's env wins over `-e`, so the store is pinned in the flow file. It has to be
+	// the one e2e-native.yml seeds for main (dev-pro), or the seeded product belongs to
+	// another store and the run fails on data that was never there. dev-next is the
+	// retired `next` lane and still runs its frozen plugin (#3206).
+	const workflow = readWorkflow('e2e-native.yml');
+	assert.match(workflow.env.E2E_STORE_URL, /'https:\/\/dev-pro\.wcpos\.com'/);
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const documents = parseAllDocuments(
+			readFileSync(path.join(ROOT, 'apps', 'main', '.maestro', 'flows', filename), 'utf8')
+		);
+		const { env } = documents[0].toJS();
+		assert.equal(env.STORE_URL, 'https://dev-pro.wcpos.com', filename);
+	}
+});
+
 test('native E2E reports logger and direct console errors on both platforms', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-errors-'));
