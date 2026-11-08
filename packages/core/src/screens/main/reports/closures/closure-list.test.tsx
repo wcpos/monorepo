@@ -209,6 +209,21 @@ it('shows only Unsynced before Corrected, and puts the drawer result last', () =
 		'£24.00 counted · £1.00 over'
 	);
 });
+// Pins the figure each list surface shows: the RECORDED (written) variance, not counted less
+// expected (Exact here). Moving one to settled is a ruling, not a refactor.
+it.each([
+	['row', 'closure-result-1', 'Short'],
+	['day heading', 'closure-day-2026-09-17', '£10.00 counted · £2.00 short'],
+	['stats', 'closure-stat-discrepancy', '−£2.00'],
+])('the %s shows the RECORDED result', (_, testID, text) => {
+	const recorded = {
+		business_day: '2026-09-17',
+		counted: { cash: '10' },
+		variance: { cash: '-2' },
+	};
+	render(<ClosureList rows={[row('1', recorded)]} />);
+	expect(screen.getByTestId(testID).textContent).toContain(text);
+});
 // Revert: filter on the opener/any sale cashier instead of the recorded closer.
 it('filters by the closer', () => {
 	const rows = [row('1', { closed_by: 7 }), row('2', { closed_by: 8 })];
