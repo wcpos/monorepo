@@ -33,6 +33,8 @@ case "$url" in
 	https://cdn.jsdelivr.net/gh/wcpos/web-bundle@1.11/build/metadata.json) key=1.11 ;;
 	https://cdn.jsdelivr.net/gh/wcpos/web-bundle@2.0/build/metadata.json) key=2.0 ;;
 	'https://cdn.wcpos.com/manifest?ref=2.0&plugin=2.0.0&worker=17.6.0') key=manifest ;;
+	https://cdn.wcpos.com/versions.json) key=versions ;;
+	https://updates.wcpos.com/web-bundle/2.0/bundle.json) key=mirror ;;
 	*) exit 64 ;;
 esac
 printf '%s\n' "$url" >> "$MOCK_DIR/requests"
@@ -57,13 +59,14 @@ export MOCK_DIR="$tmpdir/fixtures"
 reset_case() {
 	rm -rf "$MOCK_DIR"; mkdir -p "$MOCK_DIR"
 	local key
-	for key in 1.11 2.0 manifest; do
+	for key in 1.11 2.0 manifest versions mirror; do
 		mkdir -p "$MOCK_DIR/$key/1"
 		printf 200 > "$MOCK_DIR/$key/1/status"
 		printf 0 > "$MOCK_DIR/$key/1/exit"
 		printf 'HTTP/2 200\r\nX-Jsd-Version: %s.9\r\n\r\n' "$key" > "$MOCK_DIR/$key/1/headers"
 		printf '{"build_id":"build-123"}' > "$MOCK_DIR/$key/1/body"
 	done
+	printf '{"lanes":{"2.0":{"current":"build-123","previous":"build-122"}}}' > "$MOCK_DIR/versions/1/body"
 	printf '[]' > "$MOCK_DIR/issues"
 	: > "$MOCK_DIR/gh-calls"
 	: > "$MOCK_DIR/requests"
@@ -85,7 +88,7 @@ run_probe() {
 	) > "$tmpdir/out" 2> "$tmpdir/err" || status=$?
 	expect_eq "probe exit status" "$want" "$status"
 	expect_eq "probe writes only the expected stderr" "${EXPECT_STDERR:-}" "$(cat "$tmpdir/err")"
-	expect_eq "one verdict per URL" 3 "$(grep -Ec '^(OK|FAIL) ' "$tmpdir/out" || true)"
+	expect_eq "one verdict per URL" 4 "$(grep -Ec '^(OK|FAIL) ' "$tmpdir/out" || true)"
 }
 size_failure() {
 	printf 403 > "$MOCK_DIR/1.11/1/status"
@@ -97,9 +100,53 @@ open_issue() {
 
 reset_case
 run_probe 0
-expect_eq "all probes OK" 3 "$(grep -c '^OK ' "$tmpdir/out")"
+expect_eq "all probes OK" 4 "$(grep -c '^OK ' "$tmpdir/out")"
 expect_eq "no gh outside Actions" "" "$(cat "$MOCK_DIR/gh-calls")"
-expect_eq "one request per healthy URL" 3 "$(wc -l < "$MOCK_DIR/requests" | tr -d ' ')"
+expect_eq "one request per healthy URL" 5 "$(wc -l < "$MOCK_DIR/requests" | tr -d ' ')"
+contains "healthy run fetches versions exactly once" 'https://cdn.wcpos.com/versions.json' "$MOCK_DIR/requests"
+
+reset_case
+printf 404 > "$MOCK_DIR/mirror/1/status"
+run_probe 1 actions
+contains "mirror 404 fails" 'FAIL mirror 2.0: HTTP 404' "$tmpdir/out"
+contains "mirror failure creates the same outage issue" 'issue create --repo wcpos/monorepo --title CDN probe failing' "$MOCK_DIR/gh-calls"
+contains "issue includes mirror failure" 'FAIL mirror 2.0: HTTP 404' "$MOCK_DIR/gh-calls"
+expect_eq "mirror failure retried once" 2 "$(cat "$MOCK_DIR/mirror/count" 2>/dev/null || true)"
+
+reset_case
+printf '{"build_id":"build-122"}' > "$MOCK_DIR/mirror/1/body"
+run_probe 0
+contains "previous mirror build is allowed" 'OK mirror 2.0' "$tmpdir/out"
+
+reset_case
+printf '{"build_id":"build-999"}' > "$MOCK_DIR/mirror/1/body"
+run_probe 1
+contains "stale mirror build fails" 'FAIL mirror 2.0: build_id build-999 is neither current nor previous of lane 2.0 (build-123 build-122)' "$tmpdir/out"
+
+reset_case
+printf '{"build_id":"build-123 build-122"}' > "$MOCK_DIR/mirror/1/body"
+run_probe 1
+contains "a build_id spanning both ids is not a match" 'FAIL mirror 2.0: build_id build-123 build-122 is neither current nor previous' "$tmpdir/out"
+
+reset_case
+printf '{}' > "$MOCK_DIR/versions/1/body"
+run_probe 1
+contains "a 200 that names no builds fails the mirror line" 'FAIL mirror 2.0: build_id build-123 is neither current nor previous of lane 2.0 (versions.json names no builds)' "$tmpdir/out"
+
+reset_case
+printf 500 > "$MOCK_DIR/versions/1/status"
+printf '{"build_id":"build-999"}' > "$MOCK_DIR/mirror/1/body"
+run_probe 0
+contains "unavailable versions skips comparison" 'OK mirror 2.0' "$tmpdir/out"
+expect_eq "versions failure adds no FAIL line" 0 "$(grep -c '^FAIL ' "$tmpdir/out" || true)"
+contains "failed versions fetch is not retried" 'https://cdn.wcpos.com/versions.json' "$MOCK_DIR/requests"
+
+for body in '{}' '{"build_id":""}' '{"build_id":123}' 'not json'; do
+	reset_case
+	printf '%s' "$body" > "$MOCK_DIR/mirror/1/body"
+	run_probe 1
+	contains "invalid mirror build fails" 'FAIL mirror 2.0: invalid JSON or missing non-empty build_id' "$tmpdir/out"
+done
 
 reset_case
 run_probe 0 standalone
