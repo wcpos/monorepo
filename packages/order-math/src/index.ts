@@ -64,7 +64,10 @@ export type {
 // ===== Payments contract v1 (wcpos/roadmap#97) =====
 export {
 	allowedOrderStatuses,
+	availableForRefund,
 	countsTowardPaid,
+	hasRefundableMoney,
+	netRefundable,
 	derive,
 	isCompletingStatus,
 	hasSaleProvenance,

@@ -10,6 +10,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { hasRefundableMoney, netRefundable, readLedger } from '@wcpos/order-math';
 import {
 	awaitWriteOutcome,
 	type EngineRecord,
@@ -38,12 +39,21 @@ export function useOrderActions(
 ) {
 	const router = useRouter();
 	const status = useRecordField(order, ({ payload }) => payload.status);
+	const hasRefundablePayment = useRecordField(order, ({ payload }) => {
+		const rows = readLedger(payload.meta_data);
+		return (
+			hasRefundableMoney(rows) &&
+			netRefundable(payload.total ?? '0', payload.refunds ?? [], rows) > 0
+		);
+	});
 	const [deleteOpen, setDeleteOpen] = React.useState(false);
 	const t = useT();
 	const orderID = useRecordField(order, ({ payload }) => payload.id);
 	const runtime = useQueryRuntime();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
-	const canRefund = !!orderID && !!status && REFUNDABLE_STATUSES.includes(status);
+	// Money taken makes any status refundable; checkout's cancel refusal sends the cashier here.
+	const canRefund =
+		!!orderID && ((!!status && REFUNDABLE_STATUSES.includes(status)) || hasRefundablePayment);
 
 	const sync = React.useCallback(() => {
 		if (!orderID) return;

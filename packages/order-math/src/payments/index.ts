@@ -15,6 +15,7 @@ export {
 	withMetaReplaced,
 	readCompletions,
 } from './provenance';
+export { availableForRefund, hasRefundableMoney, netRefundable } from './derive';
 export { allowedOrderStatuses, countsTowardPaid, derive, isCompletingStatus } from './derive';
 export {
 	readLedger,

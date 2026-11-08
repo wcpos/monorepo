@@ -282,6 +282,7 @@ const meta = [
 ];
 const payload = {
 	status: 'pos-open',
+	total: '100',
 	meta_data: meta,
 	currency: 'USD',
 	transaction_id: '',

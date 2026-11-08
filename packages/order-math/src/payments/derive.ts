@@ -15,14 +15,63 @@ export function countsTowardPaid(row: Pick<PaymentRow, 'status'>): boolean {
 	return COUNTING_STATUSES.has(row.status);
 }
 
-/** Captured money was taken: the exits are completing the sale or a refund, never Cancelled. */
+/** Server ledger amounts have six decimal places, independent of currency display precision. */
+function toMicro(value: string): number {
+	const numeric = Number(value);
+	return Number.isFinite(numeric) ? Math.round(numeric * 1e6) : 0;
+}
+
+/** Remaining major currency units after pending and succeeded allocations, compared in micro-units. */
+export function availableForRefund(row: PaymentRow): number {
+	const allocated = (Array.isArray(row.refunds) ? row.refunds : [])
+		.filter((entry) => entry?.status === 'pending' || entry?.status === 'succeeded')
+		.reduce((sum, entry) => sum + toMicro(entry.amount), 0);
+	return Math.max(0, toMicro(row.amount) - allocated) / 1e6;
+}
+
+/** Whether any paid row still has refundable money at the server's six-decimal precision. */
+export function hasRefundableMoney(rows: readonly PaymentRow[]): boolean {
+	return rows.some((row) => countsTowardPaid(row) && availableForRefund(row) > 0);
+}
+
+/** Bound by order remainder and captured money; only succeeded allocations are in Woo's history. */
+export function netRefundable(
+	orderTotal: string,
+	wooRefunds: readonly { total?: string | null }[],
+	rows: readonly PaymentRow[]
+): number {
+	const refunded = wooRefunds.reduce(
+		(sum, refund) => sum + Math.abs(toMicro(refund.total ?? '0')),
+		0
+	);
+	const captured = rows.filter(countsTowardPaid);
+	let available = captured.reduce((sum, row) => sum + toMicro(String(availableForRefund(row))), 0);
+	const succeededAllocated = captured
+		.flatMap((row) => (Array.isArray(row.refunds) ? row.refunds : []))
+		.filter((entry) => entry?.status === 'succeeded')
+		.reduce((sum, entry) => sum + toMicro(entry.amount), 0);
+	const unallocated = Math.max(0, refunded - succeededAllocated);
+	available = Math.max(0, available - unallocated);
+	const remaining = Math.abs(toMicro(orderTotal)) - refunded;
+	// Only captured rows bound the money: a ledger of failed or authorized rows (an online-paid order whose
+	// POS attempt was refused) keeps the order-total bound, or Refund would open on a 0 maximum.
+	return Math.max(0, captured.length ? Math.min(remaining, available) : remaining) / 1e6;
+}
+
+/** Hide Cancelled while captured money remains after refund allocations and unallocated Woo refunds. */
 export function allowedOrderStatuses(
 	base: readonly string[],
 	currentStatus: string,
-	rows: readonly PaymentRow[]
+	order: {
+		total?: string | null;
+		refunds?: readonly { total?: string | null }[] | null;
+		rows: readonly PaymentRow[];
+	}
 ): string[] {
-	const paid = rows.some(countsTowardPaid);
-	return base.filter((status) => status !== 'cancelled' || !paid || status === currentStatus);
+	const { total, refunds, rows } = order;
+	const refundable =
+		hasRefundableMoney(rows) && netRefundable(total ?? '0', refunds ?? [], rows) > 0;
+	return base.filter((status) => status !== 'cancelled' || !refundable || status === currentStatus);
 }
 
 /** Σ succeeded refund allocations over every row (wire rows may omit `refunds`). */

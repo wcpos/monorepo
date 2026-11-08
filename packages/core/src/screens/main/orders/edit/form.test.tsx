@@ -215,6 +215,8 @@ jest.mock('../../hooks/use-guest-customer', () => ({
 const orderPayload = {
 	id: 50,
 	status: 'pending',
+	total: '100',
+	refunds: [] as { total: string }[],
 	customer_id: 1,
 	billing: { first_name: 'Previous' },
 	shipping: { first_name: 'Previous' },
@@ -299,6 +301,8 @@ beforeEach(() => {
 	mockStatus = 'on-hold';
 	orderPayload.status = 'pending';
 	orderPayload.meta_data = [];
+	orderPayload.total = '100';
+	orderPayload.refunds = [];
 	draft = { ...orderPayload };
 	capturedChange = undefined;
 	modalActions.clear();
@@ -586,6 +590,29 @@ describe('EditOrderForm Update status', () => {
 		render(<EditOrderForm order={order} />);
 		const [picker] = mockFormSelect.mock.calls.find(([props]) => props.name === 'status')!;
 		expect(picker).toEqual(expect.objectContaining({ name: 'status', allowed, disabled }));
+	});
+
+	it('offers Cancelled after the captured row is fully refunded', () => {
+		const ledger = JSON.parse(capturedMeta[0].value);
+		ledger.payments[0].refunds = [
+			{ id: 1, amount: '16.83', status: 'succeeded', provider_ref: null },
+		];
+		orderPayload.meta_data = [{ key: '_wcpos_payments', value: JSON.stringify(ledger) }];
+		render(<EditOrderForm order={order} />);
+		const [picker] = mockFormSelect.mock.calls.find(([props]) => props.name === 'status')!;
+		expect(picker.allowed).toContain('cancelled');
+	});
+
+	it('offers Cancelled after an unallocated Woo refund exhausts the captured money', () => {
+		const ledger = JSON.parse(capturedMeta[0].value);
+		ledger.payments[0].amount = '20';
+		orderPayload.status = 'pos-open';
+		orderPayload.total = '100';
+		orderPayload.refunds = [{ total: '-20' }];
+		orderPayload.meta_data = [{ key: '_wcpos_payments', value: JSON.stringify(ledger) }];
+		render(<EditOrderForm order={order} />);
+		const [picker] = mockFormSelect.mock.calls.find(([props]) => props.name === 'status')!;
+		expect(picker.allowed).toContain('cancelled');
 	});
 
 	it('does not save Cancelled when a payment lands after it was picked', async () => {
