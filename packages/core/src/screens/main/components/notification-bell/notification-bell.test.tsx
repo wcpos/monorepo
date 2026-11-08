@@ -15,15 +15,26 @@ jest.mock('../../../../contexts/novu', () => ({
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../pos/contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 jest.mock('./notification-panel', () => ({ NotificationPanelContent: () => mockPanel() }));
-function passthrough({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
-	return <div data-testid={testID}>{children}</div>;
+function passthrough({
+	children,
+	testID,
+	className,
+	pointerEvents,
+}: React.PropsWithChildren<{ testID?: string; className?: string; pointerEvents?: string }>) {
+	return (
+		<div data-testid={testID} className={className} data-pointer-events={pointerEvents}>
+			{children}
+		</div>
+	);
 }
 function opener({ onPress, testID }: { onPress?: () => void; testID?: string }) {
 	return <button data-testid={testID} onClick={onPress} />;
 }
 jest.mock('react-native', () => ({ View: passthrough }));
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: opener }));
-jest.mock('@wcpos/components/badge', () => ({ Badge: () => null }));
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ count }: { count: number }) => <span data-testid="badge">{count}</span>,
+}));
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({
 		children,
@@ -71,4 +82,23 @@ it('opens the sheet and marks seen from the opener', () => {
 	expect(sheet.getAttribute('data-side')).toBe('right');
 	expect(sheet.getAttribute('data-size')).toBe('lg');
 	expect(sheet.getAttribute('data-host')).toBe('pos');
+});
+
+// The badge's offsets are the drawer's, measured from the icon box (`drawer-content/index.tsx`
+// centres a `size-6` box over Store health's `xl` glyph and `LogsBadge` sits at `-top-1 -right-0.5`
+// in it). The bell's button is 44 (`size-ctl`) around an 18 glyph, so the same offsets from the
+// button put the badge 13 further up and out than the logs badge (Paul, 2026-11-08: "too high").
+it('anchors the badge to a centred glyph-sized box, not the button', () => {
+	render(<NotificationBell testID="page-bar-bell" />);
+	const badge = screen.getByTestId('badge');
+	const offset = badge.parentElement!;
+	expect(offset.className).toBe('absolute -top-1 -right-0.5');
+	const glyphBox = offset.parentElement!;
+	expect(glyphBox.className).toBe('relative size-4.5');
+	const overlay = glyphBox.parentElement!;
+	expect(overlay.className).toBe('absolute inset-0 items-center justify-center');
+	// The overlay covers the whole button and is drawn over it: without `none` the bell is dead.
+	expect(overlay.getAttribute('data-pointer-events')).toBe('none');
+	// The overlay and the opener share the button's frame.
+	expect(overlay.parentElement).toBe(screen.getByTestId('page-bar-bell').parentElement);
 });

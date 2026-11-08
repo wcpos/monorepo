@@ -49,8 +49,17 @@ export function NotificationBell({
 					/>
 				</DialogTrigger>
 				{/* Always mounted: the badge has to be there to show the first one arrive. */}
-				<View pointerEvents="none" className="absolute -top-1 -right-0.5">
-					<Badge count={unreadCount} max={99} variant="bad" size="sm" />
+				{/* Over the glyph, not the button: the offsets are the drawer's (`-top-1 -right-0.5`
+				    from the icon box), so the badge sits on the bell's shoulder as the logs badge sits
+				    on Store health's. Measured from the 44 button it floated 13 further up and out. A
+				    centred box the icon's size (`size-4.5`, Icon's default, which `IconButton` never
+				    overrides) holds for the title bar's strip-high button. */}
+				<View pointerEvents="none" className="absolute inset-0 items-center justify-center">
+					<View className="relative size-4.5">
+						<View className="absolute -top-1 -right-0.5">
+							<Badge count={unreadCount} max={99} variant="bad" size="sm" />
+						</View>
+					</View>
 				</View>
 			</View>
 			<DialogContent side={side} size="lg" portalHost={portalHost} testID="notifications-sheet">
