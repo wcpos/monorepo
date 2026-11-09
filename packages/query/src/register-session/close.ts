@@ -53,11 +53,11 @@ export async function closeRegister(ctx: CloseContext, sessionId: string, count:
 	const actorName = (id: number | null | undefined) =>
 		(id === credentials.id ? credentials : cashiers.find((row) => row.id === id))?.display_name ??
 		'';
+	const accounting = await settleSessionAccounting(ctx.engine, closed);
+	// Read after the accounting's wait, so a movement a refresh stored during it is in the closure.
 	const movements = await registerCollections(storeDB)
 		.cash_movements.find({ selector: { session_id: sessionId } })
 		.exec();
-	// The accounting is read last, so nothing the other reads waited on is missing from it.
-	const accounting = await settleSessionAccounting(ctx.engine, closed);
 	const closure = await writeClosure({
 		storeDB,
 		userDB,

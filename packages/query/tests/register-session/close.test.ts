@@ -255,10 +255,23 @@ it('waits for a missing refund parent, then closes with the refund on its tender
 	// The session is closed, but its closure waits for the parent.
 	expect((await session()).status).toBe('closed');
 	expect(await closureRow()).toBeNull();
+	// A refresh stores a movement while the close waits: the closure records it.
+	await storeDB.cash_movements.insert({
+		id: 'late',
+		session_id: 's1',
+		type: 'paid_in',
+		amount: '5',
+		reason: '',
+		created_by: 7,
+		created_at_gmt: '2026-10-28T15:30:00.000Z',
+		sync_status: 'synced',
+		sync_attempts: 0,
+	});
 	await engineDB.collections.orders.insert(parent);
 	arrive();
 	const closure = await closing;
-	expect(closure.till_expected).toEqual({ cash: '100.0000', stripe: '-20.0000' });
+	expect(closure.till_expected).toEqual({ cash: '105.0000', stripe: '-20.0000' });
+	expect(closure.movement_ids).toEqual(['late']);
 	expect(engine.demandEvents).toContain('release:targeted-records');
 });
 
