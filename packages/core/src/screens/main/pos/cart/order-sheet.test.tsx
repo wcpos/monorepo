@@ -147,8 +147,8 @@ it('renders Sync order on the existing save-to-server-button', async () => {
 });
 
 // Use the real foot and sheet; only the native primitives and data dependencies are doubled.
-jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ sessionsOn: false, session: null, overdue: false }),
+jest.mock('../../../../services/register-session/use-register-status', () => ({
+	useRegisterStatus: () => ({ sessionsOn: false, session: null, overdue: false }),
 }));
 jest.mock('./note-row', () => ({ NoteRow: () => null }));
 jest.mock('./buttons/pay', () => ({ PayButton: () => <button data-testid="checkout-button" /> }));

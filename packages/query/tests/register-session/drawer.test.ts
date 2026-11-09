@@ -18,6 +18,7 @@ import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/reg
 import {
 	type DrawerContext,
 	observeRegisterDrawer,
+	observeRegisterStatus,
 	type RegisterDrawer,
 } from '../../src/register-session/drawer';
 import {
@@ -204,9 +205,26 @@ describe('the current session', () => {
 		expect(settled.lastClosure?.id).toBe('s1');
 	});
 
+	it('the status read applies the same rule', async () => {
+		await insert({ status: 'closed', sync_status: 'pending', closure_id: 's1' });
+		const status = await firstValueFrom(
+			observeRegisterStatus(storeDB, 'A').pipe(filter(Boolean), timeout(3000))
+		);
+		expect(status.session?.id).toBe('s1');
+		await storeDB.closures.insert(closure('s1', 'pending'));
+		const written = await firstValueFrom(
+			observeRegisterStatus(storeDB, 'A').pipe(
+				filter((value) => value !== null && value.session === null),
+				timeout(3000)
+			)
+		);
+		expect(written?.session).toBeNull();
+	});
+
 	it('is one stream per register', () => {
 		expect(observeRegisterDrawer(ctx, 'A')).toBe(observeRegisterDrawer(ctx, 'A'));
 		expect(observeRegisterDrawer(ctx, 'A')).not.toBe(observeRegisterDrawer(ctx, 'B'));
+		expect(observeRegisterStatus(storeDB, 'A')).toBe(observeRegisterStatus(storeDB, 'A'));
 	});
 });
 

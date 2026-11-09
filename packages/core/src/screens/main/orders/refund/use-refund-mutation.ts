@@ -6,7 +6,7 @@ import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { refreshOrderRefunds, refreshRecordByWooId } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
-import { useRegisterSession } from '../../../../services/register-session/use-register-session';
+import { useRegisterStatus } from '../../../../services/register-session/use-register-status';
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { StorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
@@ -84,7 +84,7 @@ export function createRefundIdempotencyKey(orderId: number) {
  */
 export function useRefundMutation() {
 	const http = useRestHttpClient();
-	const { binding, session } = useRegisterSession();
+	const { registerId, session } = useRegisterStatus();
 	const sessionId =
 		session?.status === 'open' || session?.status === 'counting' ? session.id : null;
 	const runtime = useQueryRuntime();
@@ -110,7 +110,7 @@ export function useRefundMutation() {
 				reason,
 				lineItems,
 				refundDestination,
-				registerId: binding.registerId,
+				registerId,
 				sessionId,
 			});
 
@@ -165,6 +165,6 @@ export function useRefundMutation() {
 
 			return response?.data;
 		},
-		[binding.registerId, blockIfDegraded, http, runtime, sessionId]
+		[registerId, blockIfDegraded, http, runtime, sessionId]
 	);
 }

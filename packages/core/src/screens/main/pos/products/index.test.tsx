@@ -76,8 +76,8 @@ jest.mock('@wcpos/components/skeleton', () => ({
 	skeletonCount: () => 3,
 	SKELETON_MAX_ROWS: 12,
 }));
-jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ session: mockSession, sessionsOn: mockSessionsOn }),
+jest.mock('../../../../services/register-session/use-register-status', () => ({
+	useRegisterStatus: () => ({ session: mockSession, sessionsOn: mockSessionsOn }),
 }));
 jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');

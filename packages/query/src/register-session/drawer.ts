@@ -202,3 +202,19 @@ export function observeRegisterDrawer(
 		);
 	});
 }
+
+/** The register's current session alone, by the same rule, for a surface that reads its status. */
+export function observeRegisterStatus(storeDB: StoreDB, registerId: string) {
+	return sharedRead(storeDB, `status:${registerId}`, [], () =>
+		combineLatest([
+			observeRegisterSessions(storeDB, registerId),
+			observeRegisterClosures(storeDB, registerId),
+		]).pipe(
+			map(([rows, closures]) =>
+				rows && closures
+					? { session: currentSession(rows, closures), isCurrent: rows.isCurrent }
+					: null
+			)
+		)
+	);
+}
