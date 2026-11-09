@@ -92,6 +92,25 @@ it.each([
 		expect(doc.getLatest()).toMatchObject({ status: from, sync_status: 'synced' });
 	}
 });
+// Check the status before the write instead of inside it: a refresh that closes the row after the
+// read is overwritten by the count.
+it('checks the status the write sees, not the one read before it', async () => {
+	const doc = await openSession(db, input);
+	const stale = await db.register_sessions.findOne(doc.id).exec();
+	await doc.incrementalPatch({ status: 'closed', sync_status: 'synced' });
+	jest
+		.spyOn(db.register_sessions, 'findOne')
+		.mockReturnValueOnce({ exec: async () => stale } as never);
+	await expect(startCounting(db, doc.id)).rejects.toEqual(
+		expect.objectContaining({
+			name: 'IllegalSessionTransitionError',
+			from: 'closed',
+			to: 'counting',
+		})
+	);
+	expect(doc.getLatest()).toMatchObject({ status: 'closed', sync_status: 'synced' });
+});
+
 it('void inserts a write-once reversal and marks its target', async () => {
 	const session = await openSession(db, input);
 	const row = await recordMovement(db, {

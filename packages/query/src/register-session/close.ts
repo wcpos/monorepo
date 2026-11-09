@@ -47,7 +47,6 @@ export async function closeRegister(ctx: CloseContext, sessionId: string, count:
 					closedBy: credentials.id,
 					timezone: ctx.timezone,
 				});
-	const accounting = await settleSessionAccounting(ctx.engine, closed);
 	const cashiers: { id?: number; display_name?: string }[] = await firstValueFrom(
 		observeSiteCredentials(ctx.site).pipe(filter((value) => value !== PENDING_USER_DB_READ))
 	);
@@ -57,6 +56,8 @@ export async function closeRegister(ctx: CloseContext, sessionId: string, count:
 	const movements = await registerCollections(storeDB)
 		.cash_movements.find({ selector: { session_id: sessionId } })
 		.exec();
+	// The accounting is read last, so nothing the other reads waited on is missing from it.
+	const accounting = await settleSessionAccounting(ctx.engine, closed);
 	const closure = await writeClosure({
 		storeDB,
 		userDB,

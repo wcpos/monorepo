@@ -166,17 +166,21 @@ async function transition(
 ) {
 	const row = await sessions.findOne(id).exec();
 	if (!row) throw new RegisterSessionRequiredError();
-	if (!ALLOWED_FROM[status].includes(row.status))
-		throw new IllegalSessionTransitionError(row.status, status);
 	const at = new Date().toISOString();
-	return row.incrementalPatch({
-		...pending,
-		...extra,
-		status,
-		pending_status: status,
-		status_at: at,
-		...(status === 'counting' ? { counting_started_at_gmt: at } : {}),
-		...(status === 'closed' ? { closed_at_gmt: at } : {}),
+	// Checked inside the write: a refresh landing after the read is the status the move sees.
+	return row.incrementalModify((data) => {
+		if (!ALLOWED_FROM[status].includes(data.status))
+			throw new IllegalSessionTransitionError(data.status, status);
+		return {
+			...data,
+			...pending,
+			...extra,
+			status,
+			pending_status: status,
+			status_at: at,
+			...(status === 'counting' ? { counting_started_at_gmt: at } : {}),
+			...(status === 'closed' ? { closed_at_gmt: at } : {}),
+		};
 	});
 }
 export const startCounting = (storeDB: RegisterStoreDatabase, id: string) =>
