@@ -930,6 +930,29 @@ test('native E2E flows 01 and 02 connect to the store the main lane seeds', () =
 	}
 });
 
+test('native E2E probes the store before the flows and after a failure on both platforms', () => {
+	// A cart add is a local write that queues behind the engine's catalogue applies, which
+	// stretch with the store's response times: on 2026-11-08 flow 04 waited 30 s for
+	// `cart-subtotal` on both phones while dev-pro answered in 4–8 s, and the red read as an
+	// app regression for a day. deploy.yml has carried this probe since August; the native
+	// lane says the same thing in the same voice, and never gates on it (#3206).
+	const workflow = readWorkflow('e2e-native.yml');
+	for (const jobName of ['android', 'ios']) {
+		const steps = workflow.jobs[jobName].steps;
+		const before = steps.find(({ name }) => name === '🩺 Probe store health before the flows');
+		const after = steps.find(({ name }) => name === '🩺 Probe store health after a failure');
+		assert.ok(before, `${jobName}: no pre-flow probe`);
+		assert.ok(after, `${jobName}: no post-failure probe`);
+		for (const step of [before, after]) {
+			assert.match(step.run, /probe-store-health\.mjs "\$E2E_STORE_URL"/, jobName);
+			assert.equal(step['continue-on-error'], true, `${jobName}: the probe reports, never gates`);
+		}
+		assert.equal(after.if, 'failure()', jobName);
+		const maestro = steps.findIndex(({ name }) => /Run Maestro suite/.test(name ?? ''));
+		assert.ok(steps.indexOf(before) < maestro && maestro < steps.indexOf(after), jobName);
+	}
+});
+
 test('native E2E reports logger and direct console errors on both platforms', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-errors-'));
