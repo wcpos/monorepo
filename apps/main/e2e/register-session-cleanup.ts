@@ -89,9 +89,22 @@ export function countedFromExpected(expected: Record<string, string>): Record<st
 	return counted;
 }
 
+/** A refusal the store answered: its message holds the step, status and body, never a URL. */
+class StoreRefusal extends Error {}
+
+/**
+ * What a failure may print. A request that THREW is withheld: on a query-auth store its message
+ * carries the URL, and the URL carries the JWT (as `deleteSearchProbe` in search-probe.ts).
+ */
+export function failureText(error: unknown): string {
+	return error instanceof StoreRefusal
+		? error.message
+		: 'request threw (message withheld: a query-auth URL carries the JWT)';
+}
+
 async function ok(response: Promise<SessionResponse>, step: string): Promise<unknown> {
 	const { status, body } = await response;
-	if (status >= 300) throw new Error(`${step}: HTTP ${status} ${JSON.stringify(body)}`);
+	if (status >= 300) throw new StoreRefusal(`${step}: HTTP ${status} ${JSON.stringify(body)}`);
 	return body;
 }
 
@@ -101,7 +114,7 @@ async function closeSession(transport: SessionTransport, row: SessionRow, at: st
 		expected?: Record<string, string>;
 	};
 	if (!detail?.expected)
-		throw new Error('detail serves no expected figures (no reports capability)');
+		throw new StoreRefusal('detail serves no expected figures (no reports capability)');
 	if (row.status === 'open')
 		await ok(transport.post(`${route}/status`, { status: 'counting', at }), 'counting');
 	const counted = countedFromExpected(detail.expected);
@@ -153,35 +166,45 @@ export async function closeOpenRegisterSessions(
 			);
 		} catch (error) {
 			result.failed.push(row.id);
-			console.warn(
-				`${LOG} session ${row.id} not closed: ${error instanceof Error ? error.message : String(error)}`
-			);
+			console.warn(`${LOG} session ${row.id} not closed: ${failureText(error)}`);
 		}
 	}
 	return result;
 }
 
-/** The transport over a Playwright request context and a resolved store credential. */
-function requestTransport(
+/**
+ * The transport over a Playwright request context and a resolved store credential. Each request
+ * tries the pretty `/wp-json/` path and, on its 404, the plain `?rest_route=` spelling.
+ */
+export function requestTransport(
 	request: APIRequestContext,
 	storeUrl: string,
 	auth: StoreRequestAuth
 ): SessionTransport {
-	const url = (route: string) => `${storeUrl.replace(/\/+$/, '')}/wp-json/${route}`;
-	const answer = async (response: APIResponse) => ({
-		status: response.status(),
-		body: await response.json().catch(() => null),
-	});
+	const base = storeUrl.replace(/\/+$/, '');
+	const send = async (
+		route: string,
+		call: (url: string, permalink: Record<string, string>) => Promise<APIResponse>
+	) => {
+		const pretty = await call(`${base}/wp-json/${route}`, {});
+		const response =
+			pretty.status() === 404
+				? await call(`${base}/index.php`, { rest_route: `/${route}` })
+				: pretty;
+		return { status: response.status(), body: await response.json().catch(() => null) };
+	};
 	return {
-		get: async (route, params = {}) =>
-			answer(
-				await request.get(url(route), {
+		get: (route, params = {}) =>
+			send(route, (url, permalink) =>
+				request.get(url, {
 					headers: auth.headers,
-					params: { ...auth.params, ...params },
+					params: { ...auth.params, ...params, ...permalink },
 				})
 			),
-		post: async (route, data) =>
-			answer(await request.post(url(route), { headers: auth.headers, params: auth.params, data })),
+		post: (route, data) =>
+			send(route, (url, permalink) =>
+				request.post(url, { headers: auth.headers, params: { ...auth.params, ...permalink }, data })
+			),
 	};
 }
 
@@ -195,30 +218,31 @@ export interface StoreLogin {
 
 /** For each store: log in as `username`, then close the stale sessions `openers` opened. */
 export async function closeStaleRegisterSessions(stores: readonly StoreLogin[]): Promise<void> {
-	const warn = (where: string, error: unknown) =>
-		console.warn(`${LOG} ${where}: ${error instanceof Error ? error.message : String(error)}`);
+	const warn = (where: string, text: string) => console.warn(`${LOG} ${where}: ${text}`);
 	let request: APIRequestContext | null = null;
 	try {
 		request = await playwrightRequest.newContext({ timeout: REQUEST_TIMEOUT_MS });
 		for (const { storeUrl, username, password, openers } of stores) {
+			// The login builds its own messages and never puts the token in one.
+			const login = await storeLoginAuthorization(
+				request,
+				storeUrl,
+				username,
+				password,
+				'cashier'
+			).catch((error: Error) => warn(storeUrl, error.message));
+			if (!login) continue;
 			try {
-				const login = await storeLoginAuthorization(
-					request,
-					storeUrl,
-					username,
-					password,
-					'cashier'
-				);
 				await closeOpenRegisterSessions(
 					requestTransport(request, storeUrl, storeRequestOptions(login)),
 					openers
 				);
 			} catch (error) {
-				warn(storeUrl, error);
+				warn(storeUrl, failureText(error));
 			}
 		}
 	} catch (error) {
-		warn('cleanup', error);
+		warn('cleanup', failureText(error));
 	} finally {
 		await request?.dispose().catch(() => undefined);
 	}

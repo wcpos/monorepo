@@ -2,9 +2,12 @@ import { expect, test } from './test';
 import {
 	closeOpenRegisterSessions,
 	countedFromExpected,
+	requestTransport,
 	type SessionResponse,
 	type SessionTransport,
 } from './register-session-cleanup';
+
+import type { APIRequestContext } from '@playwright/test';
 
 /**
  * Unit tests for the register-session teardown over a mocked transport. These touch no
@@ -161,5 +164,76 @@ test.describe('register-session-cleanup', () => {
 		});
 		expect(countedFromExpected({ card: '3.0000' })).toEqual({ cash: '0', card: '3.0000' });
 		expect(countedFromExpected({ cash: '-2.0000' })).toEqual({ cash: '0' });
+	});
+	test('a request that throws is logged without its message, which can carry the JWT', async () => {
+		const store = mockStore([session('a')]);
+		const warnings: string[] = [];
+		const warn = console.warn;
+		console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+		try {
+			const result = await closeOpenRegisterSessions(
+				{
+					...store.transport,
+					get: (route, params) =>
+						route === 'wcpos/v2/sessions/a'
+							? Promise.reject(
+									new Error(`GET ${route}?authorization=Bearer%20secret-jwt timed out`)
+								)
+							: store.transport.get(route, params),
+				},
+				['e2e-cashier-1'],
+				NOW
+			);
+			expect(result.failed).toEqual(['a']);
+		} finally {
+			console.warn = warn;
+		}
+		expect(warnings.join('\n')).toContain('session a not closed: request threw');
+		expect(warnings.join('\n')).not.toContain('secret-jwt');
+	});
+
+	test('the transport retries a 404 on the plain ?rest_route= permalink, keeping auth and body', async () => {
+		const sent: { method: string; url: string; params: unknown; data?: unknown }[] = [];
+		const fake = (method: string) => async (url: string, options: Record<string, unknown>) => {
+			sent.push({ method, url, params: options.params, data: options.data });
+			const status = url.includes('/wp-json/') ? 404 : 200;
+			return { status: () => status, json: async () => ({ ok: url }) };
+		};
+		const request = { get: fake('GET'), post: fake('POST') } as unknown as APIRequestContext;
+		const transport = requestTransport(request, 'https://shop.test/', {
+			headers: { 'X-WCPOS': '1' },
+			params: { authorization: 'token' },
+		});
+		expect(await transport.get('wcpos/v2/sessions', { status: 'open' })).toEqual({
+			status: 200,
+			body: { ok: 'https://shop.test/index.php' },
+		});
+		await transport.post('wcpos/v2/sessions/a/status', { status: 'counting' });
+		expect(sent).toEqual([
+			{
+				method: 'GET',
+				url: 'https://shop.test/wp-json/wcpos/v2/sessions',
+				params: { authorization: 'token', status: 'open' },
+				data: undefined,
+			},
+			{
+				method: 'GET',
+				url: 'https://shop.test/index.php',
+				params: { authorization: 'token', status: 'open', rest_route: '/wcpos/v2/sessions' },
+				data: undefined,
+			},
+			{
+				method: 'POST',
+				url: 'https://shop.test/wp-json/wcpos/v2/sessions/a/status',
+				params: { authorization: 'token' },
+				data: { status: 'counting' },
+			},
+			{
+				method: 'POST',
+				url: 'https://shop.test/index.php',
+				params: { authorization: 'token', rest_route: '/wcpos/v2/sessions/a/status' },
+				data: { status: 'counting' },
+			},
+		]);
 	});
 });
