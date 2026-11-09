@@ -15,7 +15,9 @@ const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Listing touches no store, but the config builds the free projects only when one is named.
 const DUMMY_STORE = 'https://quarantine-check.invalid';
 const key = (project, file, title) => [project, file, title].join('\u0000');
-const describe = (e) => `[${e.group}] ${e.project} ${e.file} › ${e.title}`;
+// A `trunkOnly` entry is fixme'd on the trunk run only (e2e/quarantine.ts); PR runs keep it.
+const describe = (e) =>
+	`[${e.group}${e.trunkOnly ? ', trunk run only' : ''}] ${e.project} ${e.file} › ${e.title}`;
 
 // Top-level suites are files; their titles are paths relative to testDir (the gate's
 // titlePath[0]), not part of an entry's title.
