@@ -60,11 +60,13 @@ export function PropertyRow(props: RowProps) {
 			data-indent={props.indent || undefined}
 		>
 			{props.label !== undefined && <span id={item && `${item}-form-item`}>{props.label}</span>}
-			{mark}
+			{props.label !== undefined && mark}
 			{props.help ? <span>{props.help}</span> : null}
 			{/* The row is the form item: the suite's FormItem, if any, is what its controls adopt. */}
 			<FormItem {...(FormItem === React.Fragment ? {} : { nativeID: item })}>
 				{value}
+				{/* No key to sit beside: the mark leads the trailing slot, as the real row's does. */}
+				{props.label === undefined && mark}
 				{props.locked ? <span>{props.locked.where}</span> : props.verb}
 				{props.locked?.href ? <a href={props.locked.href}>Open</a> : null}
 				{props.control}

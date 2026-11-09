@@ -79,6 +79,13 @@ const both: [string, Module][] = [
 	['fake', fake],
 ];
 
+/** Each node comes after the one before it in the document. */
+const inOrder = (...nodes: Node[]) =>
+	nodes.every(
+		(node, i) =>
+			i === 0 || !!(nodes[i - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
+	);
+
 function Save({ name }: { name: string }) {
 	const markSaved = useMarkSaved();
 	return <button onClick={() => markSaved([name])}>{`save ${name}`}</button>;
@@ -161,7 +168,26 @@ describe.each(both)('%s property row', (_name, m) => {
 		expect(screen.queryByTestId('saved-tax_class')).toBeNull();
 		fireEvent.click(screen.getByText('save tax_class'));
 		expect(screen.getByTestId('saved-tax_class')).toBeTruthy();
-		expect(screen.getByTestId('line-row-tax')).toHaveTextContent(/^Tax.*Standard.*Edit$/);
-		expect(screen.getByTestId('verb')).toBeTruthy();
+		const mark = screen.getByTestId('saved-tax_class');
+		expect(inOrder(screen.getByText('Tax'), mark, screen.getByText('Standard'))).toBe(true);
+		expect(inOrder(mark, screen.getByTestId('verb'))).toBe(true);
+	});
+
+	it('marks a row without a key after its value, before the verb', () => {
+		render(
+			<SavedFieldProvider>
+				<Save name="meta" />
+				<m.PropertyRow
+					prefix="line"
+					id="meta"
+					verb={<m.PropertyVerb testID="verb">Remove</m.PropertyVerb>}
+				>
+					Colour
+				</m.PropertyRow>
+			</SavedFieldProvider>
+		);
+		fireEvent.click(screen.getByText('save meta'));
+		const mark = screen.getByTestId('saved-meta');
+		expect(inOrder(screen.getByText('Colour'), mark, screen.getByTestId('verb'))).toBe(true);
 	});
 });
