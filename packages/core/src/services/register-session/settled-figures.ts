@@ -95,3 +95,15 @@ export function deriveSettled(recorded: RecordedFigures, corrections: readonly C
 	}
 	return { settled, touched };
 }
+
+/**
+ * A closure row as the surfaces show it: settled, after the corrections it carries (ledger
+ * closures line 35). A row without them is as recorded, and so is a blind view, which carries no
+ * expected figures for a settled result to subtract.
+ */
+export function settledRow<R extends RecordedFigures & { corrections?: readonly Correction[] }>(
+	row: R
+): R {
+	if (!row.corrections?.length || !row.expected) return row;
+	return { ...row, ...deriveSettled(row, row.corrections).settled };
+}

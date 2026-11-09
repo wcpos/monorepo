@@ -7,6 +7,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ClosureRow } from '@wcpos/database';
 
 import { useStoreDay } from '../../../../hooks/use-store-day';
+import { closureResult } from '../../../../services/register-session/closure-result';
 import { deriveSettled } from '../../../../services/register-session/settled-figures';
 import { ClosureList } from './closure-list';
 import { selectClosureRows } from './use-closure-rows';
@@ -209,8 +210,8 @@ it('shows only Unsynced before Corrected, and puts the drawer result last', () =
 		'£24.00 counted · £1.00 over'
 	);
 });
-// Pins the figure each list surface shows: the RECORDED (written) variance, not counted less
-// expected (Exact here). Moving one to settled is a ruling, not a refactor.
+// Pins the figure each list surface shows for a closure with no corrections: the RECORDED
+// (written) variance, not counted less expected (Exact here).
 it.each([
 	['row', 'closure-result-1', 'Short'],
 	['day heading', 'closure-day-2026-09-17', '£10.00 counted · £2.00 short'],
@@ -222,6 +223,37 @@ it.each([
 		variance: { cash: '-2' },
 	};
 	render(<ClosureList rows={[row('1', recorded)]} />);
+	expect(screen.getByTestId(testID).textContent).toContain(text);
+});
+// A recount took the drawer from £8 to £11 counted. Paul 2026-11-09: settled everywhere, the
+// Corrected badge kept; the detail's result is closureResult({ settled }), £1.00 over.
+it.each([
+	['row', 'closure-result-1', 'Over'],
+	['row counted', 'closure-counted-1', '£11.00'],
+	['row badge', 'closure-badge-1', 'Corrected'],
+	['day heading', 'closure-day-2026-09-17', '£11.00 counted · £1.00 over'],
+	['stats', 'closure-stat-discrepancy', '£1.00'],
+])('the %s of a recounted closure shows the SETTLED result the detail shows', (_, testID, text) => {
+	const recount = {
+		id: 1,
+		type: 'recount' as const,
+		created_at: '2026-09-17T02:00:00Z',
+		actor: { id: 1, name: 'Sam' },
+		approver: null,
+		reason: 'Miscount',
+		figures: { counted: { cash: '11' } },
+	};
+	const corrected = row('1', {
+		business_day: '2026-09-17',
+		synced_rows_at: 'now',
+		corrections_count: 1,
+		corrections: [recount],
+	} as Partial<ClosureRow>);
+	expect(closureResult({ settled: deriveSettled(corrected, [recount]).settled }, 4)).toMatchObject({
+		minor: 10000,
+		kind: 'over',
+	});
+	render(<ClosureList rows={[corrected]} />);
 	expect(screen.getByTestId(testID).textContent).toContain(text);
 });
 // Revert: filter on the opener/any sale cashier instead of the recorded closer.

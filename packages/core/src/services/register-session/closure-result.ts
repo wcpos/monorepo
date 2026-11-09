@@ -6,9 +6,9 @@ type Figures = Pick<RecordedFigures, 'expected' | 'counted' | 'variance'>;
 type T = (key: string) => string;
 
 /**
- * Which figures a surface shows, named at its call so the choice is visible. `recorded` is the
- * closure as the store wrote it (write-once; corrections sit beside it) and reads the variance it
- * wrote; several recorded closures sum. `settled` is a closure after its corrections
+ * Which figures a surface shows, named at its call so the choice is visible. `recorded` reads the
+ * variance a closure row carries: as the store wrote it (write-once; corrections sit beside it),
+ * or as `settledRow` settled it; several rows sum. `settled` is a closure after its corrections
  * (`deriveSettled`), counted less expected.
  */
 export type ClosureFigures =

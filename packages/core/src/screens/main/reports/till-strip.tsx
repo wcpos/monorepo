@@ -33,7 +33,8 @@ import { useSessionReport } from '../../../services/register-session/use-session
 import { useCurrencyFormat } from '../hooks/use-currency-format';
 import { useReceiptDocument } from '../receipt/use-receipt-document';
 import { PrintSheet } from '../receipt/print-sheet';
-import { normalizeClosureRow } from './closures/use-closure-rows';
+import { settledRow } from '../../../services/register-session/settled-figures';
+import { normalizeClosureRow, useClosureCorrections } from './closures/use-closure-rows';
 import { useLastClosure } from './closures/use-last-closure';
 import { useReportsDirectories } from './scope';
 
@@ -72,11 +73,9 @@ export function TillStrip({
 	const open = active || !!remoteSession;
 	const liveSession = active ? session : remoteSession;
 	// Open here or elsewhere, the last closure line is this device's own record of it.
-	const closure = open
-		? lastClosure
-		: authoritative
-			? remoteClosure
-			: (lastClosure ?? remoteClosure);
+	const shown = open ? lastClosure : authoritative ? remoteClosure : (lastClosure ?? remoteClosure);
+	const [closure = null] = useClosureCorrections(shown ? [shown] : []);
+	const figures = closure && settledRow(closure);
 	const unavailable =
 		!open && (remote.online ? remote.unavailable : !lastClosure ? remote.unavailable : undefined);
 	const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -133,8 +132,8 @@ export function TillStrip({
 				: closure
 					? date(closure.closed_at, 'EEE d MMM')
 					: '';
-	// The last closure's RECORDED result, as the closures list shows it.
-	const last = closureResult({ recorded: closure ? [closure] : [] }, 4);
+	// The last closure's SETTLED result, as the closures list shows it.
+	const last = closureResult({ recorded: figures ? [figures] : [] }, 4);
 	const result = resultText(last, format(resultAmount(last, 4)), t);
 	const resultColor = TONE[last.tone].text;
 	const rows: Term[] = [];
@@ -202,14 +201,14 @@ export function TillStrip({
 					t('reports.expected_in_drawer'),
 					money(remoteSession.expected.cash),
 				]);
-		} else if (!open && closure) {
+		} else if (!open && figures) {
 			rows.push([
 				'till-expected',
 				'',
 				t('reports.document.expected'),
-				money(closure.expected.cash ?? '0'),
+				money(figures.expected.cash ?? '0'),
 			]);
-			rows.push(['till-counted', '·', t('register.counted'), money(closure.counted.cash ?? '0')]);
+			rows.push(['till-counted', '·', t('register.counted'), money(figures.counted.cash ?? '0')]);
 			rows.push(['till-result', '=', t('reports.drawer_result'), result]);
 		}
 	}

@@ -59,8 +59,8 @@ it('exports an expected-only tender with zero counted and its shortage', () => {
 	expect(csv).toContain('"40.0000","0","40.0000 short"');
 });
 
-// Pins the figure the CSV shows: the RECORDED (written) variance the closures list shows, not
-// counted less expected (Exact here). Moving it to settled is a ruling, not a refactor.
+// Pins the figure the CSV shows for a closure with no corrections: the RECORDED (written)
+// variance the closures list shows, not counted less expected (Exact here).
 it('exports the RECORDED result', () => {
 	const csv = exportCsv(
 		[
@@ -74,4 +74,35 @@ it('exports the RECORDED result', () => {
 		createTestT()
 	);
 	expect(csv).toContain('"100.0000","100.0000","1.0000 short"');
+});
+// Paul 2026-11-09: settled everywhere. A recount to £101 exports the detail's £1.00 over, still Corrected.
+it('exports a recounted closure’s SETTLED figures and keeps Corrected', () => {
+	const csv = exportCsv(
+		[
+			{
+				...row,
+				expected: { cash: '100.0000' },
+				counted: { cash: '99.0000' },
+				variance: { cash: '-1.0000' },
+				synced_rows_at: 'now',
+				period_sales_total: '0',
+				period_refunds_total: '0',
+				perpetual_sales_total: '0',
+				perpetual_refunds_total: '0',
+				corrections: [
+					{
+						id: 1,
+						type: 'recount',
+						created_at: '2026-09-17T18:00:00Z',
+						actor: { id: 1, name: 'Sam' },
+						approver: null,
+						reason: 'Miscount',
+						figures: { counted: { cash: '101.0000' } },
+					},
+				],
+			} as ClosureRow,
+		],
+		createTestT()
+	);
+	expect(csv).toContain('"100.0000","101.0000","1.0000 over","Corrected"');
 });

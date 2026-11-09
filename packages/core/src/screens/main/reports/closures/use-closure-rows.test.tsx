@@ -532,3 +532,22 @@ it.each(['pending', 'failed'] as const)(
 		expect(result.current.rows.find((r) => r.id === 'local')).toEqual(local);
 	}
 );
+// Revert: read every corrected closure at once, or settle none (Paul 2026-11-09: settled everywhere).
+it('reads corrected closures’ corrections three at a time and carries them on the rows', async () => {
+	const pending: Record<string, (value: unknown) => void> = {};
+	get.mockImplementation((path: string) =>
+		path === 'closures'
+			? Promise.resolve({
+					data: [...['1', '2', '3', '4'].map((id) => row(id, { corrections_count: 1 })), row('5')],
+				})
+			: new Promise((resolve) => {
+					pending[path] = resolve;
+				})
+	);
+	const { result } = renderHook(() => useClosureRows(scope));
+	await waitFor(() => expect(Object.keys(pending)).toHaveLength(3));
+	expect(get).not.toHaveBeenCalledWith('closures/5');
+	await act(async () => pending['closures/1']({ data: { corrections: [{ id: 9 }] } }));
+	await waitFor(() => expect(Object.keys(pending)).toHaveLength(4));
+	expect(result.current.rows.find((r) => r.id === '1')).toMatchObject({ corrections: [{ id: 9 }] });
+});

@@ -27,6 +27,7 @@ import {
 	resultWord,
 } from '../../../../services/register-session/closure-result';
 import { varianceAmount } from '../../../../services/register-session/count-money';
+import { settledRow } from '../../../../services/register-session/settled-figures';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { ClosureStats, closureTotals } from './closure-stats';
 
@@ -99,10 +100,11 @@ export function ClosureList({
 	const inPeriod = !scopeFrom || !scopeTo || (scopeFrom <= today && today <= scopeTo);
 	const sessions = inPeriod ? allSessions : [];
 	const todayRows = rows.filter((row) => row.business_day === today);
-	// Closure money is stored at four decimals; the list shows the RECORDED result throughout.
+	// Closure money is stored at four decimals; the list shows the SETTLED result throughout.
 	const dayHeading = (day: string | undefined, dayRows: readonly ClosureRow[]) => {
-		const total = closureTotals(dayRows);
-		const result = closureResult({ recorded: dayRows }, 4);
+		const settled = dayRows.map(settledRow);
+		const total = closureTotals(settled);
+		const result = closureResult({ recorded: settled }, 4);
 		return (
 			<View
 				testID={`closure-day-${day}`}
@@ -180,9 +182,10 @@ export function ClosureList({
 
 			{visibleRows.map((row, index) => {
 				// As a sum of one: a row with no cash figure reads Exact.
-				const result = closureResult({ recorded: [row] }, 4);
-				const expected = format(Number(row.expected.cash ?? 0));
-				const counted = format(Number(row.counted.cash ?? 0));
+				const figures = settledRow(row);
+				const result = closureResult({ recorded: [figures] }, 4);
+				const expected = format(Number(figures.expected.cash ?? 0));
+				const counted = format(Number(figures.counted.cash ?? 0));
 				const signed = varianceAmount(result.minor, 4, format);
 				const toneClass = TONE[result.tone].text;
 				const resultBadge = (
