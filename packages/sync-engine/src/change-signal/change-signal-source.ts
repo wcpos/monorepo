@@ -429,14 +429,19 @@ export function createLiveChangeSignalSource(
 			return page;
 		},
 
-		// TIER 2 (products) — GET /integrity/scan?bucket_size=&after_id=&limit_buckets=.
+		// TIER 2 (products) — GET /integrity/scan?bucket_size=&after_id=&limit_buckets=&status=publish.
 		// `changes` ARE the HashChecksumBucket rows already (shape matches exactly);
-		// the next page's afterId is `checkpoint.after_id`.
+		// the next page's afterId is `checkpoint.after_id`. `status=publish` scopes the
+		// server's digest to the rows the products list serves (the existence reconcile
+		// asks the same); without it every draft, private or `importing` row counts,
+		// the drill-down names ids the list never returns, and the engine prunes and
+		// re-requests them on every cycle.
 		async hashChecksumScan({ bucketSize, afterId, limitBuckets }) {
 			const envelope = await getEnvelope<RawHashChecksumBucketRow>(input, '/integrity/scan', {
 				bucket_size: String(bucketSize),
 				after_id: String(afterId),
 				limit_buckets: String(limitBuckets),
+				status: 'publish',
 			});
 			const buckets: HashChecksumBucket[] = envelope.changes.map((row) => ({
 				bucket: row.bucket,
@@ -483,6 +488,7 @@ export function createLiveChangeSignalSource(
 				const envelope = await getEnvelope<RawHashDrillRow>(input, '/integrity/scan', {
 					bucket_size: String(bucketSize),
 					bucket: String(bucket),
+					status: 'publish',
 				});
 				const driftedIds: DriftedId[] = envelope.changes.map((row) => ({
 					id: row.id,
