@@ -78,6 +78,7 @@ export const PREFLIGHT_BLOCK = {
 	OFFLINE: 'preflight-offline',
 	AUTH_REQUIRED: 'preflight-auth-required',
 	RECOVERING: 'preflight-recovering',
+	UPDATE_REQUIRED: 'preflight-update-required',
 } as const;
 
 export type PreflightBlockCode = (typeof PREFLIGHT_BLOCK)[keyof typeof PREFLIGHT_BLOCK];
