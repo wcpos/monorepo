@@ -157,6 +157,15 @@ describe('the Scale section', () => {
 		);
 	});
 
+	it('reads a value that is not a step as Auto, as the provider does', () => {
+		store.scale = 'huge';
+		const { getByRole, getByTestId } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.scale' }).textContent).toContain(
+			'settings.current_scale:settings.scale.auto'
+		);
+		expect(getByTestId('settings-scale-auto').getAttribute('aria-checked')).toBe('true');
+	});
+
 	it('offers four scale steps with Auto selected by default', () => {
 		const { getByTestId, getAllByTestId, getAllByRole } = render(<ThemeSettings />);
 
@@ -210,6 +219,15 @@ describe('the Icons section', () => {
 		const section = getByRole('region', { name: 'settings.icons' });
 		expect(section.querySelector('p')!.textContent).toBe('settings.icons.description');
 		expect(section.textContent).toContain('settings.current_icons:settings.icons.hugeicons');
+	});
+
+	it('reads a retired family as Match theme, as the runtime does', () => {
+		store.icons = 'lucide';
+		const { getByRole, getByTestId } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.icons' }).textContent).toContain(
+			'settings.current_icons:settings.icons.auto'
+		);
+		expect(getByTestId('settings-icons-auto').getAttribute('aria-checked')).toBe('true');
 	});
 
 	it('offers Match theme first and selected by default, followed by the three sets', () => {
@@ -302,6 +320,15 @@ describe('the Fonts section', () => {
 		expect(getByRole('region', { name: 'settings.fonts' }).textContent).toContain(
 			'settings.current_fonts:settings.fonts.grotesk'
 		);
+	});
+
+	it('reads a retired set as Match theme, as the runtime does', () => {
+		store.fonts = 'garamond';
+		const { getByRole, getByTestId } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.fonts' }).textContent).toContain(
+			'settings.current_fonts:settings.fonts.auto'
+		);
+		expect(getByTestId('settings-fonts-auto').getAttribute('aria-checked')).toBe('true');
 	});
 
 	it('offers Match theme first and selected by default, followed by the five sets', () => {

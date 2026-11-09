@@ -166,7 +166,13 @@ const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
 function ScaleSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const scale = useDocField(store, (latest) => latest.scale) ?? 'auto';
+	const saved = useDocField(store, (latest) => latest.scale);
+	// A value that is not a step is Auto, as `resolveStep` reads it.
+	const scale: (typeof SCALE_OPTIONS)[number] = SCALE_OPTIONS.includes(
+		saved as (typeof SCALE_OPTIONS)[number]
+	)
+		? (saved as (typeof SCALE_OPTIONS)[number])
+		: 'auto';
 
 	const handleScaleChange = React.useCallback(
 		async (value: string | undefined) => {
@@ -193,7 +199,7 @@ function ScaleSection({ t }: { t: ReturnType<typeof useT> }) {
 				stacked
 				name="scale"
 				label={t('settings.current_scale', {
-					scale: labels[scale as keyof typeof labels] ?? scale,
+					scale: labels[scale],
 				})}
 			>
 				<SegmentedControl
@@ -234,7 +240,10 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
 	const { theme, icons: saved } = useThemeSetting();
-	const icons = saved ?? ICON_SETTING_AUTO;
+	// A retired family follows the theme, as `resolveIconSet` reads it (decision 45).
+	const icons: IconSetId | typeof ICON_SETTING_AUTO = ICON_SET_IDS.includes(saved as IconSetId)
+		? (saved as IconSetId)
+		: ICON_SETTING_AUTO;
 	const labels: Record<IconSetId | typeof ICON_SETTING_AUTO, string> = {
 		auto: t('settings.icons.auto'),
 		tabler: t('settings.icons.tabler'),
@@ -261,7 +270,7 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 				stacked
 				name="icons"
 				label={t('settings.current_icons', {
-					icons: labels[icons as keyof typeof labels] ?? icons,
+					icons: labels[icons],
 				})}
 			/>
 			{/* The shared radio group: on web it is Radix, so Tab lands once, arrows move
@@ -306,7 +315,10 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
 	const { theme, fonts: saved } = useThemeSetting();
-	const fonts = saved ?? TYPE_SETTING_AUTO;
+	// A retired set follows the theme, as `resolveTypeSet` reads it.
+	const fonts: TypeSetId | typeof TYPE_SETTING_AUTO = TYPE_SET_IDS.includes(saved as TypeSetId)
+		? (saved as TypeSetId)
+		: TYPE_SETTING_AUTO;
 	const traits = useThemeTraits();
 	const labels: Record<TypeSetId | typeof TYPE_SETTING_AUTO, string> = {
 		auto: t('settings.fonts.auto'),
@@ -354,7 +366,7 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 				stacked
 				name="fonts"
 				label={t('settings.current_fonts', {
-					fonts: labels[fonts as keyof typeof labels] ?? fonts,
+					fonts: labels[fonts],
 				})}
 			/>
 			<RadioGroup
