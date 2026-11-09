@@ -109,10 +109,10 @@ describe('every part sums to the period figure', () => {
 		expect(sumBy(rows, 'amount')).toBe(figures.gross);
 		expect(sumBy(rows, 'orders')).toBeGreaterThanOrEqual(figures.count);
 	});
-	it('the printed cashier and store groups, and the taxes', () => {
-		expect(sumBy(figures.byCashierAndStore, 'totalAmount')).toBe(figures.gross);
+	it('the printed cashier and register groups, and the taxes', () => {
+		expect(group('cashiers')!.totalRaw[2]).toBe(figures.gross);
+		expect(group('registers')!.totalRaw[2]).toBe(figures.gross);
 		expect(sumBy(figures.taxesByRate.rows, 'tax')).toBe(figures.tax);
-		expect(sumBy(figures.taxLines, 'total')).toBe(figures.tax);
 		expect(figures.taxesByRate.net + figures.taxesByRate.tax).toBe(figures.gross);
 		expect(figures.net + figures.tax).toBe(figures.gross);
 	});
@@ -154,13 +154,15 @@ describe('a card and its panel agree where they read the same figure', () => {
 		]);
 	});
 });
-// Ledger 35, 36: the cards are gross, the panels net the period refunds into their groupings.
+// Ledger 35, 36: the hero is gross; the panels, and the Top products and Categories cards, net the
+// period refunds into their groupings.
 it('netting refunds moves the products and categories by exactly the refunded lines', () => {
-	const gross = sumBy(figures.products.gross, 'amount');
+	const sales = salesFigures({ orders, decimals: 2 });
+	const gross = sumBy(sales.products.netOfRefunds(directory), 'amount');
 	expect(gross).toBe(129);
 	expect(sumBy(figures.products.netOfRefunds(directory), 'amount')).toBe(gross - 25);
 	expect(amountOf(panel('products'))).toBe(gross - 25);
-	expect(sumBy(figures.categories.gross(directory).parts, 'amount')).toBe(gross);
+	expect(sumBy(sales.categories.netOfRefunds(directory).parts, 'amount')).toBe(gross);
 	expect(sumBy(figures.categories.netOfRefunds(directory).parts, 'amount')).toBe(gross - 25);
 	expect(amountOf(panel('categories'))).toBe(gross - 25);
 });
@@ -177,7 +179,7 @@ it('the figures that read no refunds keep their answers when the refunds arrive'
 	const before = salesFigures({ orders, decimals: 2 });
 	const after = before.withRefunds(refunds);
 	expect(after.takenByTender).toBe(before.takenByTender);
-	expect(after.products.gross).toBe(before.products.gross);
+	expect(after.brands.gross(directory)).toBe(before.brands.gross(directory));
 	expect(before.refunds.refunded).toBe(0);
 	expect(after.refunds.refunded).toBe(25);
 });
@@ -213,8 +215,8 @@ describe('each panel reads its named figure', () => {
 				},
 			},
 		],
-		['products', { products: { gross: [decoy], netOfRefunds: () => [pin] } }],
-		['categories', { categories: { gross: () => parts(decoy), netOfRefunds: () => parts(pin) } }],
+		['products', { products: { netOfRefunds: () => [pin] } }],
+		['categories', { categories: { netOfRefunds: () => parts(pin) } }],
 		['brands', { brands: { gross: () => parts(decoy), netOfRefunds: () => parts(pin) } }],
 	] as const)('%s', (id, over) => {
 		const spec = panel(id, { ...figures, ...over } as unknown as SalesFigures);
@@ -237,30 +239,24 @@ describe('each printed group reads its named figure', () => {
 		group(key, { ...figures, ...over } as SalesFigures, storeNames)?.rows.map((row) => row.key);
 	it.each([
 		['payments', { takenByTender: [pin] }, ['pin']],
-		['taxes', { taxLines: [{ rate_id: 5, label: 'Pinned', total: 1 }] }, ['5']],
+		[
+			'taxes',
+			{ taxesByRate: { rows: [{ rateId: 5, label: 'Pinned', tax: 1, net: 1 }], tax: 1 } },
+			['5'],
+		],
 		['shipping', { shipping: [{ method_id: 'pin', total: 1, total_tax: 0 }] }, ['pin']],
 		[
 			'registers',
 			{
 				registersStamped: [
-					{ registerId: 'pin', totalOrders: 1, totalAmount: 1 },
-					{ registerId: 'pin2', totalOrders: 1, totalAmount: 1 },
+					{ registerId: 'a', totalOrders: 1, totalAmount: 1 },
+					{ registerId: 'b', totalOrders: 1, totalAmount: 1 },
 				],
-				byRegister: [decoy],
+				byRegister: [pin, { ...pin, key: 'online' }],
 			},
-			['pin', 'pin2'],
+			['pin', 'online'],
 		],
-		[
-			'cashiers',
-			{
-				byCashierAndStore: [
-					{ cashierId: '1', storeId: '1', totalOrders: 1, totalAmount: 1 },
-					{ cashierId: '1', storeId: '2', totalOrders: 1, totalAmount: 1 },
-				],
-				byCashier: [decoy],
-			},
-			['0', '1'],
-		],
+		['cashiers', { byCashier: [pin, { ...pin, key: 'pin2' }] }, ['pin', 'pin2']],
 	] as const)('%s', (key, over, expected) => {
 		expect(rows(key, over)).toEqual(expected);
 	});
@@ -275,5 +271,54 @@ describe('each printed group reads its named figure', () => {
 			)?.raw[2];
 		expect(refundRow({ refunds: { refunded: 7 }, embeddedRefunds: 5 })).toBe(-7);
 		expect(refundRow({ refundRows: undefined, embeddedRefunds: 5 })).toBe(-5);
+	});
+});
+
+// Paul 2026-11-09, ruling 2: the paper prints the figure its card and panel show.
+describe('the printed groups print what the cards and panels show', () => {
+	const rowsOf = (spec: { rows: { raw: (string | number)[] }[] }, columns: number[]) =>
+		spec.rows.map((row) => columns.map((column) => row.raw[column]));
+	it('Registers names the online and no-register orders, as the Where sold Registers view does', () => {
+		const printedRows = group('registers')!;
+		expect(printedRows.rows.map((row) => row.key)).toContain('online');
+		expect(rowsOf(printedRows, [1, 2])).toEqual(rowsOf(panel('registers'), [1, 3]));
+		expect(printedRows.rows.find((row) => row.key === 'online')!.raw[0]).toBe('Online');
+	});
+	it('Cashiers prints one row per cashier under All stores, as the Cashiers card does', () => {
+		const twoStores = salesFigures({
+			orders: [
+				...orders,
+				{
+					...split,
+					uuid: 'other-store',
+					meta_data: [...identity('far', '7').slice(0, 2), { key: '_pos_store', value: '2' }],
+				},
+			] as ReportOrder[],
+			decimals: 2,
+		});
+		const printedRows = group('cashiers', twoStores, { '1': 'Shop', '2': 'Far' })!;
+		expect(printedRows.rows.map((row) => row.key)).toEqual(
+			twoStores.byCashier.map((row) => row.key)
+		);
+		expect(new Set(printedRows.rows.map((row) => row.key)).size).toBe(printedRows.rows.length);
+		expect(rowsOf(printedRows, [1, 2])).toEqual(
+			rowsOf(panelSpec('cashiers', twoStores, formats, t, view), [1, 3])
+		);
+	});
+	it('Taxes prints the rounded rates and labels the Taxes card and panel show', () => {
+		const unrounded = salesFigures({
+			orders: [
+				{
+					...orders[1],
+					tax_lines: [{ rate_id: 4, label: '', rate_code: 'GB-VAT-1', tax_total: '2.004' }],
+				},
+			] as ReportOrder[],
+			decimals: 2,
+		});
+		const printedRows = group('taxes', unrounded)!;
+		expect(rowsOf(printedRows, [0, 2])).toEqual([['GB-VAT-1', 2]]);
+		expect(rowsOf(printedRows, [0, 2])).toEqual(
+			rowsOf(panelSpec('taxes', unrounded, formats, t, view), [0, 2])
+		);
 	});
 });

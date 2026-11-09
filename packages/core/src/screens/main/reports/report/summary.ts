@@ -70,12 +70,14 @@ export function summarySpec(
 			)
 		)
 	);
-	if (figures.taxLines.length)
+	// Taxes, Registers and Cashiers print the rows their cards and panels show.
+	const taxes = figures.taxesByRate;
+	if (taxes.rows.length)
 		group(
 			'taxes',
 			t('common.taxes'),
-			figures.taxLines.map((tax) => row(String(tax.rate_id), tax.label, '', tax.total)),
-			row('total', t('reports.tax_collected'), '', figures.tax)
+			taxes.rows.map((tax) => row(String(tax.rateId), tax.label || t('common.tax'), '', tax.tax)),
+			row('total', t('reports.tax_collected'), '', taxes.tax)
 		);
 	if (figures.shipping.length)
 		group(
@@ -106,38 +108,42 @@ export function summarySpec(
 		group(
 			'registers',
 			t('reports.panel_registers'),
-			figures.registersStamped.map((register) =>
+			figures.byRegister.map((register) =>
 				row(
-					register.registerId,
-					registerNames[register.registerId] || register.registerId.slice(0, 8),
-					register.totalOrders,
-					register.totalAmount
+					register.key,
+					register.key === 'online'
+						? t('common.online')
+						: register.key === 'unregistered'
+							? t('reports.no_register_row')
+							: registerNames[register.key] || register.key.slice(0, 8),
+					register.orders,
+					register.amount
 				)
 			),
 			row(
 				'total',
 				t('common.total'),
-				sumBy(figures.registersStamped, 'totalOrders'),
-				sumBy(figures.registersStamped, 'totalAmount')
+				sumBy(figures.byRegister, 'orders'),
+				sumBy(figures.byRegister, 'amount')
 			)
 		);
-	if (figures.byCashierAndStore.length > 1)
+	if (figures.byCashier.length > 1)
 		group(
 			'cashiers',
 			t('reports.panel_cashiers'),
-			figures.byCashierAndStore.map((cashier, i) =>
+			figures.byCashier.map((cashier) =>
 				row(
-					String(i),
-					cashierNames[cashier.cashierId] || t('common.unknown'),
-					cashier.totalOrders,
-					cashier.totalAmount
+					cashier.key,
+					cashierNames[cashier.key] || t('common.unknown'),
+					cashier.orders,
+					cashier.amount
 				)
 			),
 			row(
 				'total',
 				t('common.total'),
-				sumBy(figures.byCashierAndStore, 'totalOrders'),
-				sumBy(figures.byCashierAndStore, 'totalAmount')
+				sumBy(figures.byCashier, 'orders'),
+				sumBy(figures.byCashier, 'amount')
 			)
 		);
 	const items = row('items', t('reports.items_sold_line'), figures.items);

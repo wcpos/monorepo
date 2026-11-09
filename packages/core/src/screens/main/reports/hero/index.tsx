@@ -244,7 +244,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		dataReady:
 			!!formats.store &&
 			cashier.ready &&
-			(figures.byCashierAndStore.length < 2 || namesReady.cashier) &&
+			(figures.byCashier.length < 2 || namesReady.cashier) &&
 			(allStores ||
 				namesReady.register ||
 				!online ||

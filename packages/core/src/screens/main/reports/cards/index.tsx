@@ -42,7 +42,8 @@ export function PeriodSection() {
 			(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 		)
 	);
-	const enabled = figures.margin.shown(products ?? []);
+	// The Brands slot reads the margin its panel reads: costs on a period refund line count too.
+	const enabled = figures.margin.shownNetOfRefunds(products ?? []);
 	// Brands follows the brands, not the costs: a store that labels its products by brand expects
 	// the card whether or not it enters costs; a store with neither sees no empty slot.
 	const branded = (products ?? []).some((product) => product.brands?.length);
