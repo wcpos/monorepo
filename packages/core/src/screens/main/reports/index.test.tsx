@@ -31,6 +31,10 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
 }));
+jest.mock('../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({}),
+	useRegisterNamesReady: () => true,
+}));
 jest.mock('../components/pro-guard', () => ({
 	withProAccess: (Component: React.ComponentType) => () =>
 		mockPro ? (
@@ -73,6 +77,13 @@ const mockLocalClosure = {
 };
 const mockReadClosure = jest.fn();
 const mockStoreDB = {};
+// One session: a new `site` or credentials per render would resubscribe the directories forever.
+const mockSession = {
+	storeDB: mockStoreDB,
+	store: { id: 9 },
+	site: { populate$: () => of([]) },
+	wpCredentials: { populate$: () => mockViewedStores },
+};
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
 	readClosure: (...args: unknown[]) => mockReadClosure(...args),
@@ -248,7 +259,7 @@ jest.mock('./reports', () => ({
 	},
 }));
 jest.mock('../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ storeDB: mockStoreDB }),
+	useStoreSession: () => mockSession,
 	useAppState: () => ({
 		wpCredentials: { id: 7, capabilities: mockCapabilities, populate$: () => mockViewedStores },
 		site: { timezone_string: 'UTC', gmt_offset: '0' },

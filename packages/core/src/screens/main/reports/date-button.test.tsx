@@ -3,7 +3,7 @@ import * as React from 'react';
 import * as ReactNative from 'react-native';
 
 import { TZDate } from '@date-fns/tz';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render as renderTree, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { HISTORY_DAYS } from '@wcpos/sync-core';
@@ -11,8 +11,12 @@ import { HISTORY_DAYS } from '@wcpos/sync-core';
 import { Bar, ClosuresCashierChip } from './bar';
 import { DateButton } from './date-button';
 import { ReportsScreen } from './index';
+import { ReportsDirectoriesProvider } from './scope';
 
 import type { ClosureScope } from './closures/use-closure-rows';
+
+/** Every reader names cashiers and stores from the room's one directory read. */
+const render = (ui: React.ReactElement) => renderTree(ui, { wrapper: ReportsDirectoriesProvider });
 
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),

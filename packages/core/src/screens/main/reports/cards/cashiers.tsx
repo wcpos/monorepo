@@ -1,14 +1,10 @@
 import * as React from 'react';
 
-import { filter } from 'rxjs';
-import { useObservableState } from 'observable-hooks';
-
-import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Text } from '@wcpos/components/text';
 
-import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
+import { useReportsDirectories } from '../scope';
 import { useReportFormats } from '../use-report-formats';
 import { cashiers } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
@@ -19,13 +15,8 @@ export function CashiersCard() {
 	const t = useT(),
 		{ totals } = useReportsData(),
 		{ storeId } = useReportsPeriod(),
-		{ site } = useStoreSession();
+		directory = useReportsDirectories().cashiers;
 	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId);
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
-	const directory = useObservableState(source);
 	const rows = React.useMemo(() => cashiers(totals), [totals]);
 	if (!store || !directory)
 		return <CardSkeleton testID="card-cashiers" name={t('reports.card_cashiers')} />;

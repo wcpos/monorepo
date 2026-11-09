@@ -1,10 +1,14 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as renderTree, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { ReportsDirectoriesProvider } from './scope';
 import { TillStrip } from './till-strip';
+
+/** Every reader names cashiers and stores from the room's one directory read. */
+const render = (ui: React.ReactElement) => renderTree(ui, { wrapper: ReportsDirectoriesProvider });
 
 jest.mock('react-native', () => ({
 	...jest.requireActual('react-native'),
@@ -47,6 +51,12 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../jest/translate').createTestT(),
 }));
 const credentials = of([{ id: 7, display_name: 'Dylan' }]);
+// The room's store directory, one array: a fresh one per read re-renders the provider forever.
+const mockNoStores: never[] = [];
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: () => jest.requireActual('rxjs').of(mockNoStores),
+}));
 const appState = () => ({
 	store: {
 		id: 1,

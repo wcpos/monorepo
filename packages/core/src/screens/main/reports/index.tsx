@@ -1,13 +1,10 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { filter, of } from 'rxjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
-import { useObservableState } from 'observable-hooks';
 
-import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import type { ClosureRow } from '@wcpos/query/register-session';
@@ -38,6 +35,12 @@ import { TillStrip } from './till-strip';
 import { Closures } from './closures';
 import { ClosurePanel } from './closures/closure-panel';
 import { ReportsProvider, ReportsRefunds, ReportsScopeProvider, useReportsPeriod } from './context';
+import {
+	ReportsDirectoriesProvider,
+	ReportsFilterScopeProvider,
+	useReportsDirectories,
+	useReportsFilterScope,
+} from './scope';
 import { HeroShell, SalesScope } from './hero';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
@@ -133,24 +136,12 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		[search, limit, dateRange]
 	);
 	const refundsHandle = useCollectionQueryHandle('refunds', refundsState);
-	const storeId = Number.isFinite(Number(state.filters.store))
-		? Number(state.filters.store)
-		: undefined;
+	// All stores keeps the bound till's day, zone and formats (`useStoreDay(0)` could pick a
+	// directory store 0).
+	const { storeId, allStores } = useReportsFilterScope();
 	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
-	const { wpCredentials, store, site } = useAppState();
-	const storesSource = React.useMemo(
-		() =>
-			wpCredentials
-				? observeCredentialStores(wpCredentials).pipe(
-						filter((value) => value !== PENDING_USER_DB_READ)
-					)
-				: of([]),
-		[wpCredentials]
-	);
-	const stores = useObservableState(storesSource, []);
-	// The sentinel is also store 0's own scope: All stores only with stores to choose from. The
-	// day, zone and formats stay the bound till's (`useStoreDay(0)` could pick a directory store 0).
-	const allStores = state.filters.store === 'woocommerce-pos' && stores.length > 1;
+	const { store, site } = useAppState();
+	const stores = useReportsDirectories().stores ?? [];
 	const range = state.filters.dateRange;
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
@@ -292,14 +283,16 @@ function SalesScreen({ hasRoom, onRoomChange, onOpenClosure, page }: SalesScreen
 		>
 			<ErrorBoundary>
 				<Suspense>
-					<ReportsScopeProvider>
-						<ReportsScreenContent
-							hasRoom={hasRoom}
-							onRoomChange={onRoomChange}
-							onOpenClosure={onOpenClosure}
-							page={page}
-						/>
-					</ReportsScopeProvider>
+					<ReportsFilterScopeProvider>
+						<ReportsScopeProvider>
+							<ReportsScreenContent
+								hasRoom={hasRoom}
+								onRoomChange={onRoomChange}
+								onOpenClosure={onOpenClosure}
+								page={page}
+							/>
+						</ReportsScopeProvider>
+					</ReportsFilterScopeProvider>
 				</Suspense>
 			</ErrorBoundary>
 		</QueryStateProvider>
@@ -468,7 +461,9 @@ export function ReportsScreen() {
 	const t = useT();
 	const ground = useGround();
 	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
-		<ReportsShell key={link.key} pressed={pressed} onOpenClosure={openClosure} />
+		<ReportsDirectoriesProvider>
+			<ReportsShell key={link.key} pressed={pressed} onOpenClosure={openClosure} />
+		</ReportsDirectoriesProvider>
 	) : (
 		<View className="flex-1">
 			<ManagementBar title={t('common.reports')} testID="reports-bar" />
