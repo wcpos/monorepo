@@ -100,6 +100,13 @@ jest.mock('@wcpos/components/form', () => ({
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
 }));
+jest.mock('@wcpos/components/dialog', () => ({
+	useDialog: () => ({ close: mockClose }),
+	DialogBody: mockWrap,
+	DialogFooter: jest.requireActual('../../../../../../../jest/footer.test-utils').DialogFooter,
+	DialogClose: mockButton,
+	DialogAction: mockButton,
+}));
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
 		open ? <>{children}</> : null,
