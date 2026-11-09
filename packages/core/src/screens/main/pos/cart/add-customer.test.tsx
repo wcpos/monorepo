@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { AddCustomerDialog, AddNewCustomer } from './add-customer';
+import { AddCustomerDialog } from './add-customer';
 
 const mockCreate = jest.fn();
 const mockUseMutationProps = jest.fn();
@@ -42,20 +42,6 @@ jest.mock('react-hook-form', () => ({
 		handleSubmit: (submit: (data: Record<string, unknown>) => Promise<void>) => () =>
 			submit({ first_name: 'Ada', email: 'ada@example.com', billing: {} }),
 	}),
-}));
-
-jest.mock('@wcpos/components/error-boundary', () => ({
-	ErrorBoundary: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-
-jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/tooltip', () => ({
-	Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	TooltipContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	TooltipTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
@@ -131,10 +117,9 @@ jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
 
-describe.each([
-	['button dialog', () => <AddNewCustomer />],
-	['controlled dialog', () => <AddCustomerDialog open onOpenChange={mockOnOpenChange} />],
-])('%s customer creation', (_name, renderComponent) => {
+describe('customer creation', () => {
+	const renderComponent = () => <AddCustomerDialog open onOpenChange={mockOnOpenChange} />;
+
 	beforeEach(() => {
 		jest.clearAllMocks();
 		// The attach mocks write into this record; start each case from the same order.
