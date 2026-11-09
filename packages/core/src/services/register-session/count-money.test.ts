@@ -6,6 +6,7 @@ import {
 	countVariance,
 	denominationTotal,
 	overThreshold,
+	seedAmount,
 	validAmount,
 	varianceText,
 } from './count-money';
@@ -61,4 +62,20 @@ it('counts coins on a store that shows no decimals', () => {
 	expect(fromMinor(denominationTotal({ '0.25': 4 }, countDecimals(0)), countDecimals(0))).toBe(
 		'1.00'
 	);
+});
+
+describe('seedAmount', () => {
+	it('rounds a four-decimal server amount half-up to the count decimals', () => {
+		expect(seedAmount('63014.5600', 2)).toBe('63014.56');
+		expect(seedAmount('100.0050', 2)).toBe('100.01');
+		expect(seedAmount('2.6750', 2)).toBe('2.68');
+		expect(seedAmount('1.2345', 3)).toBe('1.235');
+	});
+	it('never pads a shorter amount and passes null through', () => {
+		expect(seedAmount('200', 2)).toBe('200');
+		expect(seedAmount('570.10', 2)).toBe('570.10');
+		expect(seedAmount('', 2)).toBe('');
+		expect(seedAmount(null, 2)).toBeNull();
+		expect(seedAmount(undefined, 2)).toBeNull();
+	});
 });
