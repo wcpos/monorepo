@@ -6,7 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
-import { UpgradeNotice, upgradeNoticeGround } from './index';
+import { STRIP_BODY_COUNT, UpgradeNotice, upgradeNoticeGround } from './index';
 
 // RN-web drops className without Uniwind's transform; retain it at the native boundary.
 jest.mock('react-native', () => ({
@@ -49,12 +49,18 @@ beforeEach(() => {
 	mockTheme = 'light';
 	mockScreenSize = 'lg';
 	jest.clearAllMocks();
+	// The body is picked at random once per mount; pin the pick so the copy assertions are stable.
+	jest.spyOn(Math, 'random').mockReturnValue(0);
+});
+
+afterEach(() => {
+	jest.restoreAllMocks();
 });
 
 it('shows the free-plan copy and separate Pro actions on large layouts', () => {
 	render(<UpgradeNotice setShowUpgrade={jest.fn()} />);
 	expect(screen.getByTestId('upgrade-notice-banner').textContent).toContain(
-		"You're on the free version of WCPOS. Pro adds receipt templates, held orders, reports and priority support."
+		"You're on the free version of WCPOS. Pro adds refunds, card readers, stock and price editing, and order history."
 	);
 	expect(screen.getByTestId('upgrade-notice-more').textContent).toBe('See what Pro adds');
 	expect(screen.getByTestId('upgrade-notice-upgrade').textContent).toBe('Upgrade to Pro');
@@ -66,6 +72,31 @@ it('shows the free-plan copy and separate Pro actions on large layouts', () => {
 	expect(screen.getByTestId('upgrade-notice-banner').querySelector('button button')).toBeNull();
 });
 
+it('rotates the body between launches: every pick names a Pro feature and none names a Free one', () => {
+	const bodies = new Set<string>();
+	for (let i = 0; i < STRIP_BODY_COUNT; i++) {
+		jest.spyOn(Math, 'random').mockReturnValue((i + 0.5) / STRIP_BODY_COUNT);
+		const { unmount } = render(<UpgradeNotice setShowUpgrade={jest.fn()} />);
+		const body = screen
+			.getByTestId('upgrade-notice-banner')
+			.textContent!.replace("You're on the free version of WCPOS. ", '')
+			.replace('See what Pro addsUpgrade to Pro', '');
+		expect(body).toMatch(/^Pro /);
+		expect(body).not.toMatch(/receipt template|held order|split payment|coupon/i);
+		bodies.add(body);
+		unmount();
+	}
+	expect(bodies.size).toBe(STRIP_BODY_COUNT);
+});
+
+it('keeps the body it picked at mount across rerenders', () => {
+	const { rerender } = render(<UpgradeNotice setShowUpgrade={jest.fn()} />);
+	const first = screen.getByTestId('upgrade-notice-banner').textContent;
+	jest.spyOn(Math, 'random').mockReturnValue(0.99);
+	rerender(<UpgradeNotice setShowUpgrade={jest.fn()} />);
+	expect(screen.getByTestId('upgrade-notice-banner').textContent).toBe(first);
+});
+
 it('dismisses the notice until next launch', () => {
 	const setShowUpgrade = jest.fn();
 	render(<UpgradeNotice setShowUpgrade={setShowUpgrade} />);
@@ -75,12 +106,13 @@ it('dismisses the notice until next launch', () => {
 	expect(setShowUpgrade).toHaveBeenCalledWith(false);
 });
 
-it('omits the body and more link on phones while keeping the title and controls', () => {
+it('omits the body and more link on phones and shortens the title to fit beside the button', () => {
 	mockScreenSize = 'sm';
 	render(<UpgradeNotice setShowUpgrade={jest.fn()} />);
 	const banner = screen.getByTestId('upgrade-notice-banner');
-	expect(banner.textContent).toContain("You're on the free version of WCPOS.");
-	expect(banner.textContent).not.toContain('Pro adds receipt templates');
+	expect(banner.textContent).toContain("You're on WCPOS Free.");
+	expect(banner.textContent).not.toContain('free version of WCPOS');
+	expect(banner.textContent).not.toContain('Pro adds refunds');
 	expect(screen.queryByTestId('upgrade-notice-more')).toBeNull();
 	expect(screen.getByTestId('upgrade-notice-upgrade').textContent).toBe('Upgrade to Pro');
 	expect(screen.getByTestId('upgrade-notice-dismiss')).toBeTruthy();

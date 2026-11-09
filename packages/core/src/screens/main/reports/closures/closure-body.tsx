@@ -15,7 +15,7 @@ import { Text } from '@wcpos/components/text';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
-import type { ClosureRow } from '@wcpos/query/register-session';
+import { type ClosureRow, isLiveMovement } from '@wcpos/query/register-session';
 
 import { useT } from '../../../../contexts/translations';
 import { useViewedStore } from '../../../../hooks/use-store-day';
@@ -160,9 +160,7 @@ export function ClosureBody({
 		voided_by?: string | null;
 		voids?: string | null;
 	}[];
-	const active = movements.filter(
-		(m) => m.type !== 'void' && !m.voided_by && !movements.some((v) => v.voids === m.id)
-	);
+	const active = movements.filter((row) => isLiveMovement(row, movements));
 	const others = buildClosureDocument(
 		{ ...row, expected: settled.expected },
 		context

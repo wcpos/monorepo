@@ -23,13 +23,14 @@ import {
 	useViewedStore,
 	zoneOptions,
 } from '../../../hooks/use-store-day';
-import { calculateTotals } from './report/utils';
+import { salesFigures } from './report/sales-figures';
 import { inRoom, useReportsFilterScope } from './scope';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useDrawnHandle, useQuerySnapshot, useQueryState } from '../../../query';
 
 import type { RowSelectionState } from '@tanstack/react-table';
 import type { QueryHandle } from '../../../query';
+import type { SalesFigures } from './report/sales-figures';
 
 export interface DateRange {
 	start: Date;
@@ -67,8 +68,8 @@ export interface ReportsData {
 	comparisonOrders: ReportOrder[];
 	wholeComparisonOrders: ReportOrder[];
 	live: boolean;
-	/** The selected orders aggregated once, at the viewed store's precision, for every reader. */
-	totals: ReturnType<typeof calculateTotals>;
+	/** The selected orders' figures, at the viewed store's precision, for every reader. */
+	figures: SalesFigures;
 }
 
 export type DetailId =
@@ -279,11 +280,11 @@ export function ReportsProvider({
 		[unselectedRowIds]
 	);
 
-	// One aggregation for the hero, both print actions and both document renderers.
+	// One set of figures for the hero, the cards, the panels and the printed summary.
 	const { storeId } = useReportsPeriod();
 	const numDecimals = useDocField(useViewedStore(storeId), (value) => value.price_num_decimals);
-	const totals = React.useMemo(
-		() => calculateTotals({ orders: selectedOrders, num_decimals: numDecimals }),
+	const figures = React.useMemo(
+		() => salesFigures({ orders: selectedOrders, decimals: numDecimals }),
 		[selectedOrders, numDecimals]
 	);
 	const dataValue = React.useMemo<ReportsData>(
@@ -295,9 +296,9 @@ export function ReportsProvider({
 			live,
 			comparisonOrders: [],
 			wholeComparisonOrders: [],
-			totals,
+			figures,
 		}),
-		[allOrders, selectedOrders, dateRange, comparisonRange, live, totals]
+		[allOrders, selectedOrders, dateRange, comparisonRange, live, figures]
 	);
 
 	return (
@@ -392,8 +393,10 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 				? [{ ...refund, parentNumber: parent?.number }]
 				: [];
 		});
+	// The figures that read no refunds keep their answers; the refund figures read these.
+	const figures = periodRefunds ? data.figures.withRefunds(periodRefunds) : data.figures;
 	return (
-		<ReportsDataContext.Provider value={{ ...data, periodRefunds }}>
+		<ReportsDataContext.Provider value={{ ...data, periodRefunds, figures }}>
 			{children}
 		</ReportsDataContext.Provider>
 	);

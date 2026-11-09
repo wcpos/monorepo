@@ -1,6 +1,8 @@
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
+import { rowsSince, type SplitView } from './split-view';
 import { type TenderFacts, type TenderFigures, tenderFigures } from './tender-figures';
+import { splitWith } from './tender-figures.test-utils';
 import { initialTenderState } from './tender-state';
 
 type Method = NonNullable<TenderFacts['method']>;
@@ -30,21 +32,36 @@ const wholeOrderGateway: Method = {
 const row = (id: string, amount: string, status: PaymentRow['status'] = 'captured') =>
 	({ id, method_id: 'pos_cash', amount, status }) as PaymentRow;
 
+const titleOf = (id: string) => (id === 'pos_cash' ? 'Cash' : id);
+/** The split's parts ride beside the facts, as the hook's `splitView` hands them over. */
 const facts = (
-	over: Partial<Omit<TenderFacts, 'state'>> = {},
+	{
+		lines = [],
+		picked = {},
+		paidUnits = {},
+		...over
+	}: Partial<
+		Omit<TenderFacts, 'state' | 'split'> & Pick<TenderFacts['split'], 'lines' | 'picked'>
+	> & { paidUnits?: SplitView['paidUnits'] } = {},
 	state: Partial<TenderFacts['state']> = {}
-): TenderFacts => ({
-	dp: 2,
-	balanceMinor: 9295,
-	rows: [],
-	titleOf: (id) => (id === 'pos_cash' ? 'Cash' : id),
-	method: cash,
-	lines: [],
-	picked: {},
-	paidUnits: {},
-	...over,
-	state: { ...initialTenderState, view: 'amount', ...state },
-});
+): TenderFacts => {
+	const full = { ...initialTenderState, view: 'amount' as const, ...state };
+	const rowsSinceFrom = rowsSince(full.plan, over.rows ?? [], 2, titleOf);
+	return {
+		dp: 2,
+		balanceMinor: 9295,
+		rows: [],
+		method: cash,
+		...over,
+		state: full,
+		split: splitWith({
+			lines: lines.map((line) => ({ name: '', ...line })),
+			picked,
+			paidUnits,
+			rowsSinceFrom,
+		}),
+	};
+};
 
 describe('tenderFigures', () => {
 	it.each<[string, TenderFacts, Partial<TenderFigures>]>([
@@ -125,7 +142,7 @@ describe('tenderFigures', () => {
 					balanceMinor: 1001,
 					lines: [{ id: 'l1', quantity: 3, totalMinor: 1001 }],
 					picked: { l1: 2 },
-					paidUnits: { l1: { units: 1 } },
+					paidUnits: { l1: { units: 1, methods: [] } },
 				},
 				{ entryMinor: 0 }
 			),
@@ -133,7 +150,6 @@ describe('tenderFigures', () => {
 				pickedMinor: 668,
 				allUnpaidPicked: false,
 				entryMinor: 668,
-				unpaidUnits: { l1: 2 },
 				shareMinor: 668,
 			},
 		],
@@ -154,10 +170,13 @@ describe('tenderFigures', () => {
 			facts({ balanceMinor: 1001, lines: [{ id: 'l1', quantity: 3, totalMinor: 1001 }] }, {})
 		);
 		expect(figures.allUnpaidPicked).toBe(false);
-		const all = tenderFigures({
-			...facts({ balanceMinor: 1002, lines: [{ id: 'l1', quantity: 3, totalMinor: 1001 }] }),
-			picked: { l1: 3 },
-		});
+		const all = tenderFigures(
+			facts({
+				balanceMinor: 1002,
+				lines: [{ id: 'l1', quantity: 3, totalMinor: 1001 }],
+				picked: { l1: 3 },
+			})
+		);
 		expect(all).toMatchObject({ pickedMinor: 1001, allUnpaidPicked: true, entryMinor: 1002 });
 	});
 

@@ -27,7 +27,7 @@ let mockData = {
 		end: new Date('2026-09-21T22:59:59.999Z'),
 	},
 	live: true,
-	totals: { total: 30 },
+	figures: { gross: 30 } as ReportsData['figures'],
 } as ReportsData;
 const mockBounds = { left: 0, right: 320, top: 0, bottom: 190 };
 let mockHover: (e: { x: number }) => void;
@@ -190,7 +190,7 @@ it('labels the comparison line with the plotted total, leaving an unmatched 31st
 			end: new Date('2026-03-31T22:59:59.999Z'),
 		},
 		live: false,
-		totals: { total: 10 },
+		figures: { gross: 10 },
 	} as unknown as ReportsData;
 	await act(async () => {
 		render(<Chart comparison />);

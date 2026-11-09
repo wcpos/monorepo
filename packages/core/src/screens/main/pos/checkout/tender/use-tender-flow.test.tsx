@@ -539,7 +539,7 @@ describe('useTenderFlow', () => {
 		mockPayload.id = 42;
 		mockRecordManualPayment.mockResolvedValue({ ...recorded, via });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockInfo.mock.calls.filter(([, options]) => options.context?.type === type)).toEqual([
 			[
 				expect.any(String),
@@ -566,7 +566,7 @@ describe('useTenderFlow', () => {
 		mockRecordManualPayment.mockResolvedValue({ ...recorded, order: reopened, notMirrored: null });
 		mockCompleteOrderFlow.mockResolvedValueOnce('partial');
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({ source: 'manual', order: reopened }),
 			expect.anything()
@@ -585,9 +585,9 @@ describe('useTenderFlow', () => {
 		act(() => mockGate$.next(true));
 		expect(result.current.unansweredCommand).toBe(true);
 		expect(result.current.tiles).toEqual([]);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockResend).toHaveBeenCalledWith(expect.anything(), mockStoreDB, 'order-1', {
 			post: expect.any(Function),
 		});
@@ -600,7 +600,7 @@ describe('useTenderFlow', () => {
 			const answer = { kind: 'cancel' as const, data: { order: { status: 'processing' } } };
 			return [answer];
 		});
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 	});
@@ -613,7 +613,7 @@ describe('useTenderFlow', () => {
 		mockResend.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
 		let retried!: Promise<void>;
 		act(() => {
-			retried = result.current.retryCommand();
+			retried = result.current.commands.retryCommand();
 		});
 		expect(result.current.busy).toBe(true);
 		expect(result.current.unansweredCommand).toBe(true);
@@ -638,7 +638,7 @@ describe('useTenderFlow', () => {
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			let pending!: Promise<void>;
 			act(() => {
-				pending = result.current[command]();
+				pending = result.current.commands[command]();
 			});
 			await waitFor(() => expect(mock).toHaveBeenCalledTimes(1));
 			expect(result.current.busy).toBe(true);
@@ -661,9 +661,9 @@ describe('useTenderFlow', () => {
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			let retried!: Promise<void>;
 			act(() => {
-				retried = result.current.retryCommand();
+				retried = result.current.commands.retryCommand();
 			});
-			await act(async () => result.current[command]());
+			await act(async () => result.current.commands[command]());
 			expect(mockRecordManualPayment).not.toHaveBeenCalled();
 			expect(mockVoidPayments).not.toHaveBeenCalled();
 			await act(async () => {
@@ -680,10 +680,10 @@ describe('useTenderFlow', () => {
 			throw new Error('logger down');
 		});
 		await act(async () => {
-			await expect(result.current.cancelPayment()).rejects.toThrow('logger down');
+			await expect(result.current.commands.cancelPayment()).rejects.toThrow('logger down');
 		});
 		expect(result.current.busy).toBe(false);
-		await act(async () => result.current.cancelPayment());
+		await act(async () => result.current.commands.cancelPayment());
 		expect(mockVoidPayments).toHaveBeenCalledTimes(2);
 	});
 
@@ -694,7 +694,7 @@ describe('useTenderFlow', () => {
 			throw new Error('record gone');
 		});
 		await act(async () => {
-			await expect(result.current.takeTender()).rejects.toThrow('record gone');
+			await expect(result.current.commands.takeTender()).rejects.toThrow('record gone');
 		});
 		latest.mockRestore();
 		expect(result.current.busy).toBe(false);
@@ -711,7 +711,7 @@ describe('useTenderFlow', () => {
 			})
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.order_changed_retry',
 			expect.objectContaining({ showToast: true })
@@ -734,7 +734,7 @@ describe('useTenderFlow', () => {
 		mockResend.mockResolvedValueOnce([answer]);
 		mockCompleteOrderFlow.mockResolvedValueOnce('not-completed');
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			{ source: 'zero-balance', order: { status: 'completed' } },
 			undefined
@@ -756,7 +756,7 @@ describe('useTenderFlow', () => {
 			const { resolveCompletionAttempt } = jest.requireMock('@wcpos/query/store-local');
 			mockResend.mockResolvedValueOnce([{ kind: 'submit', data: { outcome, order: { status } } }]);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.retryCommand());
+			await act(async () => result.current.commands.retryCommand());
 			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(finished);
 			// A reopen since ends the completion attempt and says so, as at the press.
 			expect(resolveCompletionAttempt).toHaveBeenCalledTimes(1 - finished);
@@ -787,7 +787,7 @@ describe('useTenderFlow', () => {
 			{ kind: 'submit', data: { outcome: 'sent', order: summary } },
 		]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			{ source: 'gateway', order: summary, stamp },
 			undefined
@@ -822,7 +822,7 @@ describe('useTenderFlow', () => {
 			return [answer];
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 		expect(resolveStage(order.uuid, getCheckoutModeSnapshot(), [], mockPayload.status)).toBe(
 			'checkout'
@@ -841,7 +841,7 @@ describe('useTenderFlow', () => {
 		mockResend.mockResolvedValueOnce([{ kind: 'record', data: { payment: row, order: reopened } }]);
 		mockCompleteOrderFlow.mockResolvedValueOnce('partial');
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({ source: 'manual', order: reopened }),
 			undefined
@@ -857,7 +857,7 @@ describe('useTenderFlow', () => {
 		const summary = { status: 'completed', total: '92.95', paid: '92.95', balance: '0.00' };
 		mockResend.mockResolvedValueOnce([{ kind: 'record', data: { payment: row, order: summary } }]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				source: 'manual',
@@ -895,7 +895,7 @@ describe('useTenderFlow', () => {
 			mockResend.mockResolvedValueOnce([{ kind: 'submit', data }]);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			try {
-				await act(async () => result.current.retryCommand());
+				await act(async () => result.current.commands.retryCommand());
 				expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(1);
 				for (const sentence of [
 					'pos_checkout.payment_completed_for_order',
@@ -917,7 +917,7 @@ describe('useTenderFlow', () => {
 			entryMinor: 9295,
 			entryDirty: false,
 		});
-		act(() => result.current.dispatch({ type: 'key', key: '2' }));
+		act(() => result.current.commands.dispatch({ type: 'key', key: '2' }));
 		rerender();
 		expect(result.current.state.entryMinor).toBe(2);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
@@ -926,7 +926,7 @@ describe('useTenderFlow', () => {
 
 	it('publishes a picked method to the URL store', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(getCheckoutModeSnapshot().tenderMethods.get(order.uuid)).toBe('pos_cash');
 		await act(async () => {});
 	});
@@ -938,7 +938,7 @@ describe('useTenderFlow', () => {
 			methodId: 'pos_cash',
 			entryMinor: result.current.balanceMinor,
 		});
-		act(() => result.current.dispatch({ type: 'back' }));
+		act(() => result.current.commands.dispatch({ type: 'back' }));
 		expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
 		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
 		await act(async () => {});
@@ -956,10 +956,10 @@ describe('useTenderFlow', () => {
 	});
 	it('keeps the chosen method for the next leg once one is recorded', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 1000 }));
 		await act(async () => {
-			await result.current.takeTender();
+			await result.current.commands.takeTender();
 		});
 		// The selector is always on screen now, so a leg never sends the cashier back to a menu.
 		expect(result.current.state.methodId).toBe('pos_cash');
@@ -971,18 +971,18 @@ describe('useTenderFlow', () => {
 		markOrderSaving(order.uuid);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.saveState).toEqual({ kind: 'saving' });
-		act(() => result.current.pickMethod('pos_card'));
+		act(() => result.current.commands.pickMethod('pos_card'));
 		expect(result.current.state.methodId).toBe('pos_cash');
 		// Exercise takeTender with a selected method so its guard is tested independently.
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'pick-method',
 				methodId: 'pos_cash',
 				prefillMinor: 9295,
 				readerId: null,
 			})
 		);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
@@ -1011,8 +1011,8 @@ describe('useTenderFlow', () => {
 			settlesLater: true,
 		});
 		// The press freezes the queued save as its lane: the record journals, it never posts.
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockRecordManualPayment).toHaveBeenCalledWith(
 			order,
 			cash,
@@ -1046,14 +1046,14 @@ describe('useTenderFlow', () => {
 	it('treats cash above a planned share as change, not a bigger leg', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 5000 }));
 		expect(result.current.figures.entryAppliedMinor).toBe(4648);
 		expect(result.current.figures.entryChangeMinor).toBe(352);
 		await act(async () => {});
@@ -1061,14 +1061,14 @@ describe('useTenderFlow', () => {
 	it('lets the last planned cash leg take the whole remaining balance', async () => {
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'pick-method',
 				methodId: 'pos_cash',
 				prefillMinor: 4648,
@@ -1078,9 +1078,9 @@ describe('useTenderFlow', () => {
 		mockPayload.meta_data = withLedger([], [payment({ amount: '10.00' })]);
 		rerender();
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'tender-recorded',
-				rowsSinceFrom: [{ title: 'Cash', amountMinor: 1000 }],
+				rowsSinceFrom: [{ minor: 1000, title: 'Cash' }],
 				balanceMinor: result.current.balanceMinor,
 			})
 		);
@@ -1091,7 +1091,7 @@ describe('useTenderFlow', () => {
 	it('pre-fills a picked method with the ledger-derived balance', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 
 		expect(result.current.state).toMatchObject({
 			view: 'amount',
@@ -1104,14 +1104,14 @@ describe('useTenderFlow', () => {
 	it('caps a cash overtender at the balance and records the tendered amount', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => {
-			result.current.pickMethod('pos_cash');
+			result.current.commands.pickMethod('pos_cash');
 		});
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 10000 }));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 10000 }));
 
 		expect(result.current.figures.entryAppliedMinor).toBe(9295);
 		expect(result.current.figures.entryChangeMinor).toBe(705);
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
 			amount: '92.95',
@@ -1123,10 +1123,10 @@ describe('useTenderFlow', () => {
 
 	it('completes a fully paid online order after the record resolves', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 10000 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 10000 }));
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(1);
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
@@ -1142,7 +1142,7 @@ describe('useTenderFlow', () => {
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(mockLocalPatch).toHaveBeenCalledWith(
@@ -1174,7 +1174,7 @@ describe('useTenderFlow', () => {
 			mockCompleteOrderFlow.mockRejectedValueOnce(new Error('journal write failed'));
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-			await act(async () => result.current.takeTender());
+			await act(async () => result.current.commands.takeTender());
 
 			expect(mockWarn).toHaveBeenCalledWith(
 				'journal write failed',
@@ -1192,7 +1192,7 @@ describe('useTenderFlow', () => {
 			mockManualMirror.mockRejectedValueOnce(new Error('resident write failed'));
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-			await act(async () => result.current.takeTender());
+			await act(async () => result.current.commands.takeTender());
 
 			expect(mockWarn).not.toHaveBeenCalledWith(
 				'pos_checkout.payment_recorded_not_synced',
@@ -1226,9 +1226,9 @@ describe('useTenderFlow', () => {
 			mockPayload = { id: 42, total: '0.00', meta_data: [] };
 			mockManualPost.mockRejectedValueOnce(new Error('Network Error'));
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod('pos_cash'));
+			act(() => result.current.commands.pickMethod('pos_cash'));
 
-			await act(async () => result.current.takeTender());
+			await act(async () => result.current.commands.takeTender());
 
 			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 			expect(mockError).toHaveBeenCalledWith(
@@ -1248,7 +1248,7 @@ describe('useTenderFlow', () => {
 		mockLocalPatch.mockResolvedValueOnce(false);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockManualPost).not.toHaveBeenCalledWith('orders/42/close', {});
 		expect(mockError).toHaveBeenCalledWith(
@@ -1262,7 +1262,7 @@ describe('useTenderFlow', () => {
 		mockOnlineStatus = 'offline';
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockManualPost).not.toHaveBeenCalled();
@@ -1280,7 +1280,7 @@ describe('useTenderFlow', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.online).toBe(true);
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockManualPost).not.toHaveBeenCalled();
@@ -1299,11 +1299,11 @@ describe('useTenderFlow', () => {
 		};
 		mockMethods = [onlineOnly];
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('online_card'));
+		act(() => result.current.commands.pickMethod('online_card'));
 
 		mockOnlineStatus = 'offline';
 		rerender();
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		// Refusing silently would leave the cashier pressing a dead button.
@@ -1315,10 +1315,10 @@ describe('useTenderFlow', () => {
 
 	it('returns to method selection without completing after a part payment', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 5000 }));
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, cash, {
 			amount: '50.00',
@@ -1340,10 +1340,10 @@ describe('useTenderFlow', () => {
 
 	it('never records a card amount above the balance', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_card'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 10000 }));
+		act(() => result.current.commands.pickMethod('pos_card'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 10000 }));
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockRecordManualPayment).toHaveBeenCalledWith(order, card, {
 			amount: '92.95',
@@ -1356,14 +1356,14 @@ describe('useTenderFlow', () => {
 	it('uses a split share as the next tender pre-fill', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
 
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 
 		expect(result.current.state.entryMinor).toBe(4648);
 		await act(async () => {});
@@ -1373,23 +1373,23 @@ describe('useTenderFlow', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.figures.thisPaymentMinor).toBe(9295);
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
 		expect(result.current.figures.thisPaymentMinor).toBe(4648);
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.figures.thisPaymentMinor).toBe(4648);
 		expect(result.current.figures.quickAmountsMinor).toEqual([4648, 5000]);
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 1200 }));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 1200 }));
 		expect(result.current.figures.thisPaymentMinor).toBe(4648);
 		expect(result.current.figures.afterThisPaymentMinor).toBe(8095);
 		expect(result.current.figures.quickAmountsMinor).toEqual([1200, 1500, 2000, 5000]);
-		act(() => result.current.dispatch({ type: 'back' }));
-		act(() => result.current.dispatch({ type: 'arm-custom' }));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'back' }));
+		act(() => result.current.commands.dispatch({ type: 'arm-custom' }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(0);
 		expect(result.current.figures.thisPaymentMinor).toBe(9295);
 		await act(async () => {});
@@ -1397,18 +1397,18 @@ describe('useTenderFlow', () => {
 	it('advances the plan only for a recorded leg and shows its actual ledger amount', async () => {
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		mockRecordManualPayment.mockResolvedValueOnce({ kind: 'refused' });
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(result.current.figures.legs.filter((leg) => leg.state === 'done')).toHaveLength(0);
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 5000 }));
 		mockPayload.meta_data = [
 			{
 				key: '_wcpos_payments',
@@ -1418,14 +1418,14 @@ describe('useTenderFlow', () => {
 		// In the app the ledger change re-renders the keypad before the next tap; without this the
 		// commit sees a balance that moved since the keypad was drawn and refuses, as it should.
 		rerender();
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		rerender();
 		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
 		expect(result.current.figures.legs).toEqual([
 			{ minor: 5000, state: 'done', title: 'Cash' },
 			{ minor: 4295, state: 'now' },
 		]);
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(4295);
 	});
 
@@ -1436,9 +1436,14 @@ describe('useTenderFlow', () => {
 			{ id: 2, name: 'Socks', quantity: 2, total: '6.00' },
 		];
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		expect(result.current.lines[1]).toEqual({ id: 2, name: 'Socks', quantity: 2, totalMinor: 600 });
+		expect(result.current.split.lines[1]).toEqual({
+			id: 2,
+			name: 'Socks',
+			quantity: 2,
+			totalMinor: 600,
+		});
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'items', units: { 1: 1 }, ways: 2, firstMinor: 2200, from: 0 },
 				balanceMinor: 4600,
@@ -1446,7 +1451,7 @@ describe('useTenderFlow', () => {
 		);
 		expect(result.current.planLabel).toBe('pos_checkout.item_payment_n_of');
 		// A plan turns the store's Split on: the bill (the other column) is the picker.
-		expect(result.current.splitOn).toBe(true);
+		expect(result.current.split.splitOn).toBe(true);
 		expect(getCheckoutModeSnapshot().splitOn.has(order.uuid)).toBe(true);
 		// The row lands under the id the flow minted and froze the allocation with, as the writer does.
 		let first = payment({ id: 'first', amount: '11.00', method_id: 'pos_card' });
@@ -1455,38 +1460,38 @@ describe('useTenderFlow', () => {
 			mockPayload.meta_data = withLedger([], [first]);
 			return { ...recorded, row: first };
 		});
-		act(() => result.current.pickMethod('pos_card'));
-		await act(async () => result.current.takeTender());
-		expect(result.current.paidUnits).toEqual({ 1: { units: 1, methods: ['Card'] } });
+		act(() => result.current.commands.pickMethod('pos_card'));
+		await act(async () => result.current.commands.takeTender());
+		expect(result.current.split.paidUnits).toEqual({ 1: { units: 1, methods: ['Card'] } });
 		const second = payment({ id: 'second', amount: '11.00' });
 		mockRecordManualPayment.mockImplementationOnce(async () => {
 			mockPayload.meta_data = withLedger([], [first, second]);
 			return { ...recorded, row: second };
 		});
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		rerender();
 		expect(result.current.planLabel).toBe('pos_checkout.rest_of_the_order');
 		expect(result.current.figures.thisPaymentMinor).toBe(2400);
 		// The group's later leg carries no units: they count once, under the first leg.
-		expect(result.current.paidUnits).toEqual({ 1: { units: 1, methods: ['Card'] } });
-		expect(result.current.splitOn).toBe(true);
+		expect(result.current.split.paidUnits).toEqual({ 1: { units: 1, methods: ['Card'] } });
+		expect(result.current.split.splitOn).toBe(true);
 	});
 	it('picks in the checkout store (the bill) drive the picked money and the entry', async () => {
 		mockPayload.line_items = [
 			{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00', total_tax: '2.00' },
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'key', key: '7' }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'key', key: '7' }));
 		expect(result.current.state.entryDirty).toBe(true);
 		// The other column writes the store; the pane's typed entry gives way to the picks.
 		act(() => pickUnits(order.uuid, 1, 2));
-		expect(result.current.picked).toEqual({ 1: 2 });
+		expect(result.current.split.picked).toEqual({ 1: 2 });
 		expect(result.current.figures.pickedMinor).toBe(1100);
 		expect(result.current.state.entryDirty).toBe(false);
 		expect(result.current.state.entryMinor).toBe(1100);
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 0 }));
+		act(() => result.current.commands.dispatch({ type: 'pick-units', lineId: 1, units: 0 }));
 		expect(getCheckoutModeSnapshot().pickedUnits.get(order.uuid)).toEqual({});
 		expect(result.current.figures.pickedMinor).toBe(0);
 		await act(async () => {});
@@ -1495,47 +1500,49 @@ describe('useTenderFlow', () => {
 	it('a pick replaces an active plan: the Split chip and the picks stay, the plan goes (Greptile on #3412)', async () => {
 		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00' }];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
-		expect(result.current.plan).not.toBeNull();
+		expect(result.current.figures.plan).not.toBeNull();
 		expect(result.current.state.entryMinor).toBe(4648);
 		// The bill picks a unit worth more than the planned share: the pick is the payment now.
 		act(() => pickUnits(order.uuid, 1, 4));
-		expect(result.current.plan).toBeNull();
+		expect(result.current.figures.plan).toBeNull();
 		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toBeUndefined();
-		expect(result.current.splitOn).toBe(true);
-		expect(result.current.picked).toEqual({ 1: 4 });
+		expect(result.current.split.splitOn).toBe(true);
+		expect(result.current.split.picked).toEqual({ 1: 4 });
 		expect(result.current.state.entryMinor).toBe(2000);
 		expect(result.current.figures.entryAppliedMinor).toBe(2000);
 	});
 	it('Split on lives in the store; Split off clears it and the picks, and a paid sale ends both', async () => {
 		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00' }];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'split-on' }));
-		expect(result.current.splitOn).toBe(true);
+		act(() => result.current.commands.dispatch({ type: 'split-on' }));
+		expect(result.current.split.splitOn).toBe(true);
 		act(() => pickUnits(order.uuid, 1, 1));
-		act(() => result.current.dispatch({ type: 'clear-plan', balanceMinor: 9295, keepSplit: true }));
+		act(() =>
+			result.current.commands.dispatch({ type: 'clear-plan', balanceMinor: 9295, keepSplit: true })
+		);
 		expect(getCheckoutModeSnapshot().splitOn.has(order.uuid)).toBe(true);
 		expect(getCheckoutModeSnapshot().pickedUnits.has(order.uuid)).toBe(false);
 		act(() => pickUnits(order.uuid, 1, 1));
-		act(() => result.current.dispatch({ type: 'clear-plan', balanceMinor: 9295 }));
-		expect(result.current.splitOn).toBe(false);
-		expect(result.current.picked).toEqual({});
-		act(() => result.current.dispatch({ type: 'split-on' }));
+		act(() => result.current.commands.dispatch({ type: 'clear-plan', balanceMinor: 9295 }));
+		expect(result.current.split.splitOn).toBe(false);
+		expect(result.current.split.picked).toEqual({});
+		act(() => result.current.commands.dispatch({ type: 'split-on' }));
 		act(() => pickUnits(order.uuid, 1, 4));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		const paid = payment({ id: 'all', amount: '92.95' });
 		mockRecordManualPayment.mockImplementationOnce(async () => {
 			mockPayload.meta_data = withLedger([], [paid]);
 			return { ...recorded, row: paid };
 		});
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(getCheckoutModeSnapshot().pickedUnits.has(order.uuid)).toBe(false);
 		expect(getCheckoutModeSnapshot().splitOn.has(order.uuid)).toBe(false);
 	});
@@ -1547,7 +1554,7 @@ describe('useTenderFlow', () => {
 
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-		expect(result.current.lines[0]?.totalMinor).toBe(1200);
+		expect(result.current.split.lines[0]?.totalMinor).toBe(1200);
 		await act(async () => {});
 	});
 	it('a line removed offline (a product_id null tombstone) is not on the bill to pick (Codex on #3412)', async () => {
@@ -1556,7 +1563,7 @@ describe('useTenderFlow', () => {
 			{ id: 2, name: 'Lemonade', quantity: 2, total: '10.00' },
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		expect(result.current.lines.map(({ id }) => id)).toEqual([2]);
+		expect(result.current.split.lines.map(({ id }) => id)).toEqual([2]);
 		await act(async () => {});
 	});
 	it('prices a unit with its tax inside on an exclusive-display store', async () => {
@@ -1565,8 +1572,8 @@ describe('useTenderFlow', () => {
 			{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00', total_tax: '2.00' },
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		expect(result.current.lines[0]?.totalMinor).toBe(2200);
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 1 }));
+		expect(result.current.split.lines[0]?.totalMinor).toBe(2200);
+		act(() => result.current.commands.dispatch({ type: 'pick-units', lineId: 1, units: 1 }));
 		expect(result.current.figures.pickedMinor).toBe(550);
 		await act(async () => {});
 	});
@@ -1574,15 +1581,15 @@ describe('useTenderFlow', () => {
 		// 92.95 total, 80.00 of lines: picking all four units leaves 12.95 of shipping in the rest.
 		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '80.00' }];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 4 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'pick-units', lineId: 1, units: 4 }));
 		expect(result.current.figures.allUnpaidPicked).toBe(false);
 		expect(result.current.state.entryMinor).toBe(8000);
 		// 92.95 of lines in three units floors to 3098 × 3 = 9294: the odd cent rides along.
 		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 3, total: '92.95' }];
 		const { result: odd } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => odd.current.pickMethod('pos_cash'));
-		act(() => odd.current.dispatch({ type: 'pick-units', lineId: 1, units: 3 }));
+		act(() => odd.current.commands.pickMethod('pos_cash'));
+		act(() => odd.current.commands.dispatch({ type: 'pick-units', lineId: 1, units: 3 }));
 		expect(odd.current.figures.allUnpaidPicked).toBe(true);
 		expect(odd.current.state.entryMinor).toBe(9295);
 		await act(async () => {});
@@ -1598,8 +1605,8 @@ describe('useTenderFlow', () => {
 			from: 0,
 		};
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 9295 }));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-plan', plan, balanceMinor: 9295 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		const legs: PaymentRow[] = [];
 		const record = async (_order: unknown, _method: unknown, input: { paymentId?: string }) => {
 			const row = payment({ id: input.paymentId ?? `leg-${legs.length}`, amount: '5.00' });
@@ -1608,9 +1615,9 @@ describe('useTenderFlow', () => {
 			return { ...recorded, row };
 		};
 		mockRecordManualPayment.mockImplementationOnce(record).mockImplementationOnce(record);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		rerender();
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		const [first, second] = mockRecordManualPayment.mock.calls.map(([, , input]) => input);
 		const paidUnits = (input: { extraMeta?: { key: string; value: string }[] }) =>
 			JSON.parse(input.extraMeta?.find(({ key }) => key === '_wcpos_paid_units')?.value ?? 'null');
@@ -1631,18 +1638,20 @@ describe('useTenderFlow', () => {
 		};
 		mockPayload.line_items = [line];
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		expect(result.current.lines[0]?.id).toBe('line-local');
+		expect(result.current.split.lines[0]?.id).toBe('line-local');
 
 		mockPayload.line_items = [{ ...line, id: 123 }];
 		rerender();
 
-		expect(result.current.lines[0]?.id).toBe('line-local');
+		expect(result.current.split.lines[0]?.id).toBe('line-local');
 		await act(async () => {});
 	});
 	it('restores an active split plan after an order-switch remount', async () => {
 		const plan = { kind: 'even' as const, ways: 2, from: 0 };
 		const first = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => first.result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 9295 }));
+		act(() =>
+			first.result.current.commands.dispatch({ type: 'set-plan', plan, balanceMinor: 9295 })
+		);
 		first.unmount();
 
 		const second = renderHook(() => useTenderFlow(order, hostAtWidth()));
@@ -1660,10 +1669,10 @@ describe('useTenderFlow', () => {
 			row: payment({ id: 'b', amount: '30.00', tendered: null }),
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 6295 }));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 3000 }));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.dispatch({ type: 'set-plan', plan, balanceMinor: 6295 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 3000 }));
+		await act(async () => result.current.commands.takeTender());
 		// Before the fix the store held null here (two legs taken on a 2-way plan); the mocked
 		// payload is not mirrored in this harness, so only the stored and reducer plans are read.
 		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toEqual(plan);
@@ -1686,10 +1695,10 @@ describe('useTenderFlow', () => {
 			row: payment({ id: 'b', amount: '10.00', tendered: null }),
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 2000 }));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.dispatch({ type: 'set-plan', plan, balanceMinor: 2000 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 1000 }));
+		await act(async () => result.current.commands.takeTender());
 		expect(result.current.state.entryMinor).toBe(1000);
 		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toEqual(plan);
 	});
@@ -1714,10 +1723,10 @@ describe('useTenderFlow', () => {
 			}),
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 9000 }));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 3000 }));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.dispatch({ type: 'set-plan', plan, balanceMinor: 9000 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 3000 }));
+		await act(async () => result.current.commands.takeTender());
 		// Leg 2 of 3 is still due: 30.00 of the 60.00 balance, not the whole of it as leg 3.
 		expect(result.current.state.entryMinor).toBe(3000);
 		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toEqual(plan);
@@ -1750,9 +1759,9 @@ describe('useTenderFlow', () => {
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.state.plan).toEqual(plan);
-		expect(result.current.plan).toBeNull();
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		expect(result.current.figures.plan).toBeNull();
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.extraMeta?.[0].key).toBe('_wcpos_split');
 		expect(JSON.parse(input.extraMeta?.[0].value as string)).toMatchObject({
@@ -1777,8 +1786,8 @@ describe('useTenderFlow', () => {
 				return { document: order };
 			});
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.takeTender());
-			if (repeat) await act(async () => result.current.takeTender());
+			await act(async () => result.current.commands.takeTender());
+			if (repeat) await act(async () => result.current.commands.takeTender());
 
 			// Every stamp goes through the door; only the first resolves to a write.
 			expect(mockLocalPatch).toHaveBeenCalledTimes(repeat ? 2 : 1);
@@ -1799,7 +1808,7 @@ describe('useTenderFlow', () => {
 			return { ...recorded, row };
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockCompleteOrderFlow).toHaveBeenCalled();
 		expect(mockLocalPatch).not.toHaveBeenCalled();
@@ -1815,7 +1824,7 @@ describe('useTenderFlow', () => {
 		mockLocalPatch.mockRejectedValueOnce(new Error('local write failed'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		await act(async () => {
-			await expect(result.current.takeTender()).resolves.toBeUndefined();
+			await expect(result.current.commands.takeTender()).resolves.toBeUndefined();
 		});
 
 		expect(mockWarn).toHaveBeenCalledWith(
@@ -1829,26 +1838,15 @@ describe('useTenderFlow', () => {
 		expect(result.current.state.entryMinor).toBe(4295);
 	});
 
-	it('clears stale paid units left by a refused attempt when the sale completes without picks', async () => {
-		mockPayload.meta_data = [{ key: '_wcpos_paid_units', value: '{"dead":{"l1":1}}' }];
-		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
-		const [, , input] = mockRecordManualPayment.mock.calls[0];
-		expect(input.extraMeta).toEqual(
-			expect.arrayContaining([{ key: '_wcpos_paid_units', value: null }])
-		);
-	});
-
 	it('keeps the saved units of a live payment when the store is empty (a reopened sale), and exposes them', async () => {
 		mockPayload.meta_data = withLedger(
 			[{ key: '_wcpos_paid_units', value: '{"a":{"l1":1},"dead":{"l2":2}}' }],
 			[payment({ id: 'a', amount: '30.00', tendered: null })]
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		expect(result.current.allocations).toEqual({ a: { l1: 1 }, dead: { l2: 2 } });
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		expect(result.current.split.allocations).toEqual({ a: { l1: 1 }, dead: { l2: 2 } });
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		const paidUnits = input.extraMeta?.find(
 			(entry: { key: string }) => entry.key === '_wcpos_paid_units'
@@ -1862,9 +1860,9 @@ describe('useTenderFlow', () => {
 			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		act(() => pickUnits(order.uuid, 2, 2));
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.paymentId).toEqual(expect.any(String));
 		const feeWrite = mockLocalPatch.mock.calls.find(
@@ -1883,9 +1881,9 @@ describe('useTenderFlow', () => {
 		setAllocations(order.uuid, { a: { 1: 1 } });
 		mockPayload.meta_data = withLedger([], [payment({ id: 'a', amount: '30.00', tendered: null })]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		act(() => pickUnits(order.uuid, 2, 2));
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.paymentId).toEqual(expect.any(String));
 		// The leg recorded: THIS payment's picks leave the store.
@@ -1899,10 +1897,37 @@ describe('useTenderFlow', () => {
 		});
 	});
 
+	// ADR 0040, ledger line 38: the attempt is journaled before money moves; the split module
+	// freezes THIS payment's picks at the press, before the record that can land it.
+	it('a completing press journals the attempt, freezes its picks, then records the payment', async () => {
+		mockPayload.line_items = [
+			{ id: 1, name: 'Flat white', quantity: 1, total: '40.00' },
+			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
+		];
+		// The flat white is paid: picking both lemonades is the whole balance.
+		setAllocations(order.uuid, { a: { 1: 1 } });
+		mockPayload.meta_data = withLedger([], [payment({ id: 'a', amount: '40.00', tendered: null })]);
+		let frozen: unknown;
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			frozen = getCheckoutModeSnapshot().allocations.get(order.uuid);
+			return { kind: 'refused' };
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => pickUnits(order.uuid, 2, 2));
+		jest.mocked(recordCompletionAttempt).mockClear();
+		await act(async () => result.current.commands.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(frozen).toEqual({ a: { 1: 1 }, [input.paymentId as string]: { 2: 2 } });
+		expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+			mockRecordManualPayment.mock.invocationCallOrder[0]
+		);
+	});
+
 	it('does not pick a disabled tile', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-		act(() => result.current.pickMethod('device_card'));
+		act(() => result.current.commands.pickMethod('device_card'));
 
 		expect(result.current.state.methodId).toBe('pos_cash');
 		await act(async () => {});
@@ -1911,9 +1936,9 @@ describe('useTenderFlow', () => {
 	it('voids live payments, resets tender state, and routes to the cart', async () => {
 		mockVoidPayments.mockResolvedValue({ rows: [payment({ status: 'voided' })], failed: [] });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'request-cancel' }));
+		act(() => result.current.commands.dispatch({ type: 'request-cancel' }));
 
-		await act(async () => result.current.cancelPayment());
+		await act(async () => result.current.commands.cancelPayment());
 
 		expect(mockInfo).toHaveBeenCalledWith(
 			expect.any(String),
@@ -1955,7 +1980,7 @@ describe('useTenderFlow', () => {
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
-		await act(async () => result.current.cancelOnePayment('b'));
+		await act(async () => result.current.commands.cancelOnePayment('b'));
 
 		expect(mockConfirm).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -1989,28 +2014,6 @@ describe('useTenderFlow', () => {
 		expect(mockDismissTo).not.toHaveBeenCalled();
 	});
 
-	it('cancelling the last allocated leg clears saved paid units', async () => {
-		const row = payment();
-		mockPayload.meta_data = withLedger(
-			[{ id: 17, key: '_wcpos_paid_units', value: '{"payment-1":{"line":1}}' }],
-			[row]
-		);
-		mockVoidPayments.mockImplementationOnce(async () => {
-			const voided = { ...row, status: 'voided' as const };
-			mockPayload.meta_data = withLedger(mockPayload.meta_data, [voided]);
-			return { rows: [voided], failed: [] };
-		});
-		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.cancelOnePayment(row.id));
-
-		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload).meta_data).toContainEqual({
-			id: 17,
-			key: '_wcpos_paid_units',
-			value: null,
-		});
-	});
-
 	it('cancelOnePayment re-plans the next payment over what is left (Greptile on #3405)', async () => {
 		// 92.95 three ways: 10.00 taken, then 45.00 (37.95 is the last share). Cancelling the
 		// 10.00 leaves 47.95 over two payments, so the untouched entry becomes 23.98, not 37.95.
@@ -2021,10 +2024,10 @@ describe('useTenderFlow', () => {
 		mockPayload.meta_data = withLedger([], [first, second]);
 		mockVoidPayments.mockResolvedValue({ rows: [{ ...first, status: 'voided' }], failed: [] });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(3795);
 
-		await act(async () => result.current.cancelOnePayment('a'));
+		await act(async () => result.current.commands.cancelOnePayment('a'));
 
 		expect(result.current.state.entryMinor).toBe(2398);
 	});
@@ -2034,10 +2037,10 @@ describe('useTenderFlow', () => {
 		mockPayload.meta_data = withLedger([], [first]);
 		mockVoidPayments.mockResolvedValue({ rows: [{ ...first, status: 'voided' }], failed: [] });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 2500 }));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 2500 }));
 
-		await act(async () => result.current.cancelOnePayment('a'));
+		await act(async () => result.current.commands.cancelOnePayment('a'));
 
 		expect(result.current.state.entryMinor).toBe(2500);
 		expect(mockInfo).toHaveBeenCalledWith(
@@ -2050,7 +2053,7 @@ describe('useTenderFlow', () => {
 		mockPayload.meta_data = withLedger([], [payment({ id: 'b' })]);
 		mockConfirm.mockResolvedValueOnce(false);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.cancelOnePayment('b'));
+		await act(async () => result.current.commands.cancelOnePayment('b'));
 		expect(mockVoidPayments).not.toHaveBeenCalled();
 	});
 
@@ -2060,9 +2063,9 @@ describe('useTenderFlow', () => {
 			failed: [{ paymentId: 'payment-1', message: 'Provider refused', refused: true }],
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'request-cancel' }));
+		act(() => result.current.commands.dispatch({ type: 'request-cancel' }));
 
-		await act(async () => result.current.cancelPayment());
+		await act(async () => result.current.commands.cancelPayment());
 
 		expect(
 			mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.cancelled')
@@ -2100,9 +2103,9 @@ describe('useTenderFlow', () => {
 			failed: [{ paymentId: 'card-1', message: 'captured_refund_required', refused: true }],
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'request-cancel' }));
+		act(() => result.current.commands.dispatch({ type: 'request-cancel' }));
 
-		await act(async () => result.current.cancelPayment());
+		await act(async () => result.current.commands.cancelPayment());
 
 		expect(mockError).not.toHaveBeenCalled();
 		expect(mockInfo).toHaveBeenCalledWith(
@@ -2133,9 +2136,9 @@ describe('useTenderFlow', () => {
 			failed: [{ paymentId: 'payment-1', message: 'network', refused: false }],
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'request-cancel' }));
+		act(() => result.current.commands.dispatch({ type: 'request-cancel' }));
 
-		await act(async () => result.current.cancelPayment());
+		await act(async () => result.current.commands.cancelPayment());
 
 		expect(mockError).toHaveBeenCalledWith(
 			'pos_checkout.void_failed',
@@ -2150,9 +2153,9 @@ describe('useTenderFlow', () => {
 	it('an offline cancel says it needs the store and never promises a hand refund', async () => {
 		mockVoidPayments.mockResolvedValue({ kind: 'offline', paymentIds: ['payment-1'] });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'request-cancel' }));
+		act(() => result.current.commands.dispatch({ type: 'request-cancel' }));
 
-		await act(async () => result.current.cancelPayment());
+		await act(async () => result.current.commands.cancelPayment());
 
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.void_needs_connection',
@@ -2164,9 +2167,9 @@ describe('useTenderFlow', () => {
 	it('does not record when the storage money-path guard blocks the take', async () => {
 		mockBlockIfDegraded.mockReturnValue(true);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockBlockIfDegraded).toHaveBeenCalledWith('process-payment', {
 			orderId: 'order-1',
@@ -2207,7 +2210,7 @@ it('leaves wide checkout mode without navigating after cancellation', async () =
 	mockVoidPayments.mockResolvedValue({ rows: [], failed: [] });
 	enterCheckout(order.uuid);
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	await act(async () => result.current.cancelPayment());
+	await act(async () => result.current.commands.cancelPayment());
 	expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(false);
 	expect(mockReplace).not.toHaveBeenCalled();
 	expect(mockDismiss).not.toHaveBeenCalled();
@@ -2274,8 +2277,8 @@ describe('server tender', () => {
 			mockBoundRegisterId = registerId;
 			mockSessionsOn = !!registerId;
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod('terminal'));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod('terminal'));
+			await act(async () => result.current.commands.takeTender());
 			expect(mockBegin).toHaveBeenCalledWith(
 				expect.objectContaining({
 					row: expect.objectContaining({
@@ -2303,22 +2306,22 @@ describe('server tender', () => {
 			},
 		];
 		const { result, unmount } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.pickMethod('terminal'));
-		act(() => result.current.pickReader('b'));
-		act(() => result.current.dispatch({ type: 'back' }));
-		act(() => result.current.pickMethod('terminal'));
+		await act(async () => result.current.commands.pickMethod('terminal'));
+		act(() => result.current.terminal.pickReader('b'));
+		act(() => result.current.commands.dispatch({ type: 'back' }));
+		act(() => result.current.commands.pickMethod('terminal'));
 		expect(result.current.state.readerId).toBe('reader');
-		act(() => result.current.pickReader('b'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.terminal.pickReader('b'));
+		await act(async () => result.current.commands.takeTender());
 		mockLeg = null;
-		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.commands.pickMethod('terminal'));
 		expect(result.current.state.readerId).toBe('b');
 		unmount();
 		resetCheckoutMode();
 		if (busy) mockReadersInUse.set('b', { orderUuid: 'other', orderNumber: '99' });
 		const next = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		await act(async () => {});
-		act(() => next.result.current.pickMethod('terminal'));
+		act(() => next.result.current.commands.pickMethod('terminal'));
 		expect(next.result.current.state.readerId).toBe(busy ? 'reader' : 'b');
 	});
 	it('applies a late remembered read when no reader has been picked', async () => {
@@ -2341,7 +2344,7 @@ describe('server tender', () => {
 			},
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.commands.pickMethod('terminal'));
 		expect(result.current.state.readerId).toBeNull();
 		await waitFor(() => expect(result.current.state.readerId).toBe('reader'));
 	});
@@ -2401,20 +2404,20 @@ describe('server tender', () => {
 			{ id: 2, name: 'Lemonade', quantity: 2, total: '52.95' },
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.commands.pickMethod('terminal'));
 		act(() => setPickedUnits(order.uuid, { 1: 1 }));
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		const [{ row }] = mockBegin.mock.calls[0];
-		expect(result.current.picked).toEqual({});
+		expect(result.current.split.picked).toEqual({});
 		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ [row.id]: { 1: 1 } });
 	});
 	it('mints once, begins on the selected reader, and never records manually', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.commands.pickMethod('terminal'));
 		expect(result.current.state.readerId).toBe('reader');
 		await act(async () => {
-			await result.current.takeTender();
-			await result.current.takeTender();
+			await result.current.commands.takeTender();
+			await result.current.commands.takeTender();
 		});
 		expect(mockBegin).toHaveBeenCalledTimes(1);
 		expect(mockBegin).toHaveBeenCalledWith(
@@ -2446,8 +2449,8 @@ describe('server tender', () => {
 			// The store document says EUR; a saved cart opened in USD keeps USD.
 			mockPayload = { ...mockPayload, currency: orderCurrency };
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod('terminal'));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod('terminal'));
+			await act(async () => result.current.commands.takeTender());
 			expect(mockBegin).toHaveBeenCalledWith(
 				expect.objectContaining({ row: expect.objectContaining({ currency: minted }) })
 			);
@@ -2456,10 +2459,10 @@ describe('server tender', () => {
 	it.each(['reader', 'order'] as const)('refuses Take without %s', async (missing) => {
 		if (missing === 'order') delete mockPayload.id;
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.commands.pickMethod('terminal'));
 		if (missing === 'reader')
-			act(() => result.current.dispatch({ type: 'pick-reader', readerId: null }));
-		await act(async () => result.current.takeTender());
+			act(() => result.current.commands.dispatch({ type: 'pick-reader', readerId: null }));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockBegin).not.toHaveBeenCalled();
 		expect(mockInfo).toHaveBeenCalledWith(
 			missing === 'reader'
@@ -2489,9 +2492,9 @@ describe('server tender', () => {
 			},
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.commands.pickMethod('terminal'));
 		expect(result.current.state.readerId).toBeNull();
-		act(() => result.current.pickReader('reader'));
+		act(() => result.current.terminal.pickReader('reader'));
 		expect(result.current.state.readerId).toBe('reader');
 		await act(async () => {});
 	});
@@ -2511,7 +2514,7 @@ describe('server tender', () => {
 			},
 		];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.commands.pickMethod('terminal'));
 		expect(result.current.state.readerId).toBe('reader');
 		await act(async () => {});
 	});
@@ -2569,21 +2572,21 @@ describe('server tender', () => {
 	});
 	it('retry preserves amount and reader but the next Take mints a new row', async () => {
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('terminal'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 5000 }));
+		await act(async () => result.current.commands.takeTender());
 		const first = mockBegin.mock.calls[0][0].row;
-		act(() => result.current.dispatch({ type: 'set-tab', tab: 'legacy' }));
+		act(() => result.current.commands.dispatch({ type: 'set-tab', tab: 'legacy' }));
 		mockLeg = terminalState({ row: first, phase: 'final', outcome: 'failed' });
 		rerender();
-		act(() => result.current.retryTerminalLeg());
+		act(() => result.current.terminal.retryTerminalLeg());
 		expect(result.current.state).toMatchObject({
 			tab: 'payments',
 			entryMinor: 5000,
 			readerId: 'reader',
 			methodId: 'terminal',
 		});
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockBegin).toHaveBeenCalledTimes(2);
 		expect(mockBegin.mock.calls[1][0].row.id).not.toBe(first.id);
 	});
@@ -2606,8 +2609,8 @@ describe('server tender', () => {
 		'only displays cashier copy for the initial Take (%s, reason %s, polling=%s)',
 		async (code, message, failureReason, expected, polling) => {
 			const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod('terminal'));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod('terminal'));
+			await act(async () => result.current.commands.takeTender());
 			if (polling) {
 				mockLeg = { ...mockLeg!, phase: 'polling' };
 				rerender();
@@ -2629,8 +2632,8 @@ describe('server tender', () => {
 	);
 	it("recognizes an adopted row as the cashier's own Take by its intent id", async () => {
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('terminal'));
+		await act(async () => result.current.commands.takeTender());
 		const row = { ...mockLeg!.row, id: 'adopted-leg', status: 'failed' as const };
 		mockLeg = {
 			...mockLeg!,
@@ -2662,9 +2665,9 @@ describe('server tender', () => {
 		mockLeg = terminalState();
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		await act(async () => {
-			result.current.cancelTerminalLeg();
-			result.current.releaseTerminalLeg();
-			result.current.retryTerminalCapture();
+			result.current.terminal.cancelTerminalLeg();
+			result.current.terminal.releaseTerminalLeg();
+			result.current.terminal.retryTerminalCapture();
 		});
 		expect(mockCancel).toHaveBeenCalledWith('cashier');
 		expect(mockRelease).toHaveBeenCalledTimes(1);
@@ -2785,8 +2788,8 @@ describe('server tender', () => {
 				const flow = useTenderFlow(order, hostAtWidth());
 				return (
 					<>
-						<button onClick={() => flow.pickMethod('terminal')}>Pick</button>
-						<button onClick={() => void flow.takeTender()}>Take</button>
+						<button onClick={() => flow.commands.pickMethod('terminal')}>Pick</button>
+						<button onClick={() => void flow.commands.takeTender()}>Take</button>
 					</>
 				);
 			}
@@ -2861,8 +2864,8 @@ describe('server tender', () => {
 				expect(reopened.result.current.terminalLeg).toBeNull();
 				// A re-opened flow must not bring the finished sale's receipt back.
 				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
-				act(() => reopened.result.current.pickMethod('terminal'));
-				await act(async () => reopened.result.current.takeTender());
+				act(() => reopened.result.current.commands.pickMethod('terminal'));
+				await act(async () => reopened.result.current.commands.takeTender());
 				expect(mockManualPost).toHaveBeenCalledTimes(2);
 				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 				reopened.unmount();
@@ -2904,9 +2907,9 @@ describe('device tender', () => {
 			transport: 'bluetooth',
 		};
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.pickMethod('device'));
-		expect(result.current.rememberedReaderId).toBe('remembered');
-		await expect(result.current.bootstrapReader('bluetooth')).resolves.toEqual({
+		await act(async () => result.current.commands.pickMethod('device'));
+		expect(result.current.terminal.rememberedReaderId).toBe('remembered');
+		await expect(result.current.terminal.bootstrapReader('bluetooth')).resolves.toEqual({
 			token: 'connection',
 			method_id: 'device',
 		});
@@ -2914,7 +2917,7 @@ describe('device tender', () => {
 			context: { transport: 'bluetooth' },
 		});
 		await act(async () =>
-			result.current.rememberReader({
+			result.current.terminal.rememberReader({
 				id: 'replacement',
 				label: 'Replacement',
 				transport: 'bluetooth',
@@ -2928,20 +2931,20 @@ describe('device tender', () => {
 		registerDriver(createSimulatedDriver());
 		mockReaderPreferences.device = { id: 'tmr_front', label: 'Front counter' };
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.pickMethod('device'));
-		expect(result.current.rememberedReaderId).toBeNull();
+		await act(async () => result.current.commands.pickMethod('device'));
+		expect(result.current.terminal.rememberedReaderId).toBeNull();
 	});
 	it('refuses a press on an order the store has not created, before the reader starts', async () => {
 		delete mockPayload.id;
 		const driver = createSimulatedDriver();
 		registerDriver(driver);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod(deviceMethod.id));
+		act(() => result.current.commands.pickMethod(deviceMethod.id));
 		await act(async () => {
 			await driver.connect!((await driver.discoverReaders!('bluetooth'))[0], null);
 		});
-		expect(result.current.deviceReady).toBe(true);
-		await act(async () => result.current.takeTender());
+		expect(result.current.terminal.deviceReady).toBe(true);
+		await act(async () => result.current.commands.takeTender());
 		expect(mockBegin).not.toHaveBeenCalled();
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.order_not_on_store_yet',
@@ -2954,14 +2957,14 @@ describe('device tender', () => {
 		const driver = createSimulatedDriver();
 		registerDriver(driver);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod(deviceMethod.id));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod(deviceMethod.id));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockBegin).not.toHaveBeenCalled();
 		await act(async () => {
 			await driver.connect!((await driver.discoverReaders!('bluetooth'))[0], null);
 		});
-		expect(result.current.deviceReady).toBe(true);
-		await act(async () => result.current.takeTender());
+		expect(result.current.terminal.deviceReady).toBe(true);
+		await act(async () => result.current.commands.takeTender());
 		expect(mockBegin).toHaveBeenCalledWith(
 			expect.objectContaining({
 				method: deviceMethod,
@@ -2987,13 +2990,13 @@ describe('device tender', () => {
 			const readers = await driver.discoverReaders!('bluetooth');
 			await driver.connect!(readers[1], null);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.pickMethod(deviceMethod.id));
-			const take = result.current.takeTender;
+			await act(async () => result.current.commands.pickMethod(deviceMethod.id));
+			const take = result.current.commands.takeTender;
 			let connecting!: Promise<void>;
 			act(() => {
 				connecting = driver.connect!(readers[0], null);
 			});
-			expect(result.current.deviceReady).toBe(false);
+			expect(result.current.terminal.deviceReady).toBe(false);
 			await act(async () => take());
 			expect(mockBegin).not.toHaveBeenCalled();
 			expect(mockInfo).toHaveBeenCalledWith(
@@ -3001,7 +3004,7 @@ describe('device tender', () => {
 				expect.objectContaining({ showToast: true })
 			);
 			await act(async () => connecting);
-			expect(result.current.deviceReady).toBe(true);
+			expect(result.current.terminal.deviceReady).toBe(true);
 			await act(async () => take());
 			expect(mockBegin).toHaveBeenCalledTimes(1);
 			expect(mockBegin).toHaveBeenCalledWith(
@@ -3020,13 +3023,13 @@ describe('device tender', () => {
 		const reader = (await driver.discoverReaders!('tap_to_pay'))[0];
 		jest.spyOn(driver.status$, 'get').mockReturnValue({ connection: 'connected', reader });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.pickMethod(deviceMethod.id));
-		expect(result.current.deviceTransport).toBe('tap_to_pay');
-		expect(result.current.deviceReady).toBe(true);
+		await act(async () => result.current.commands.pickMethod(deviceMethod.id));
+		expect(result.current.terminal.deviceTransport).toBe('tap_to_pay');
+		expect(result.current.terminal.deviceReady).toBe(true);
 		// A transport left over from an earlier reader does not outrank the connected one.
-		await act(async () => result.current.pickTransport!('bluetooth'));
-		expect(result.current.deviceTransport).toBe('tap_to_pay');
-		expect(result.current.deviceReady).toBe(true);
+		await act(async () => result.current.terminal.pickTransport!('bluetooth'));
+		expect(result.current.terminal.deviceTransport).toBe('tap_to_pay');
+		expect(result.current.terminal.deviceReady).toBe(true);
 	});
 	it.each(['disconnected', 'discovering', 'updating', 'no-reader'] as const)(
 		'keeps Take unavailable and refuses minting with %s',
@@ -3040,9 +3043,9 @@ describe('device tender', () => {
 				reader: state === 'no-reader' ? null : reader,
 			});
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.pickMethod(deviceMethod.id));
-			expect(result.current.deviceReady).toBe(false);
-			await act(async () => result.current.takeTender());
+			await act(async () => result.current.commands.pickMethod(deviceMethod.id));
+			expect(result.current.terminal.deviceReady).toBe(false);
+			await act(async () => result.current.commands.takeTender());
 			expect(mockBegin).not.toHaveBeenCalled();
 			expect(mockInfo).toHaveBeenCalledWith(
 				'pos_checkout.reader_disconnected',
@@ -3056,7 +3059,7 @@ describe('device tender', () => {
 			meta_data: withLedger([], [{ ...deviceRow, status: 'authorized', recorded_offline: true }]),
 		};
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.cancelPayment());
+		await act(async () => result.current.commands.cancelPayment());
 		expect(mockVoidPayments).not.toHaveBeenCalled();
 		expect(mockInfo).toHaveBeenCalled();
 	});
@@ -3074,16 +3077,16 @@ it('does not reopen an offline device tile, whatever its descriptor allows offli
 	registerDriver(createSimulatedDriver());
 	const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 	act(() => {
-		result.current.pickMethod(deviceMethod.id);
+		result.current.commands.pickMethod(deviceMethod.id);
 	});
 	act(() => {
-		result.current.pickTransport!('tap_to_pay');
+		result.current.terminal.pickTransport!('tap_to_pay');
 	});
 	mockOnlineStatus = 'offline';
 	rerender();
 	expect(result.current.tiles[0].reason).toBe('offline');
-	act(() => result.current.dispatch({ type: 'back' }));
-	act(() => result.current.pickMethod(deviceMethod.id));
+	act(() => result.current.commands.dispatch({ type: 'back' }));
+	act(() => result.current.commands.pickMethod(deviceMethod.id));
 	expect(result.current.state.methodId).toBeNull();
 	expect(result.current.tiles[0]).toMatchObject({ disabled: true, reason: 'offline' });
 });
@@ -3114,7 +3117,7 @@ it('zero balance writes its provenance once, then closes', async () => {
 	mockBlockIfDegraded.mockReturnValue(false);
 	mockOnlineStatus = 'online-website-available';
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	await act(async () => result.current.takeTender());
+	await act(async () => result.current.commands.takeTender());
 	expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
 		mockLocalPatch.mock.invocationCallOrder[0]
 	);
@@ -3176,11 +3179,11 @@ it.each([
 		}));
 		const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		try {
-			act(() => view.result.current.pickMethod('pos_cash'));
+			act(() => view.result.current.commands.pickMethod('pos_cash'));
 			if (amountMinor === 500)
-				act(() => view.result.current.dispatch({ type: 'set-entry', minor: 500 }));
+				act(() => view.result.current.commands.dispatch({ type: 'set-entry', minor: 500 }));
 			expect(view.result.current.figures.entryAppliedMinor).toBe(amountMinor);
-			await act(async () => view.result.current.takeTender());
+			await act(async () => view.result.current.commands.takeTender());
 			expect(mockManualPost).toHaveBeenCalledTimes(1);
 			expect(mockManualMirror).toHaveBeenCalledTimes(1);
 			expect(order.getLatest().payload.status).toBe(status);
@@ -3238,7 +3241,7 @@ it('full manual online tender persists provenance before POST and the mirror', a
 	resetCheckoutMode();
 	const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
 	try {
-		act(() => view.result.current.pickMethod('pos_cash'));
+		act(() => view.result.current.commands.pickMethod('pos_cash'));
 		let release!: () => void;
 		jest.mocked(recordCompletionAttempt).mockImplementationOnce(
 			() =>
@@ -3248,7 +3251,7 @@ it('full manual online tender persists provenance before POST and the mirror', a
 		);
 		let taking!: Promise<void>;
 		await act(async () => {
-			taking = view.result.current.takeTender();
+			taking = view.result.current.commands.takeTender();
 		});
 		expect(recordCompletionAttempt).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).not.toHaveBeenCalled();
@@ -3305,7 +3308,7 @@ describe('provider completion provenance before intent', () => {
 			const original = { key: '_wcpos_split', value: 'original split' };
 			const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			act(() =>
-				result.current.dispatch({
+				result.current.commands.dispatch({
 					type: 'set-plan',
 					plan: { kind: 'even', ways: 3, from: 0 },
 					balanceMinor: 9295,
@@ -3317,10 +3320,10 @@ describe('provider completion provenance before intent', () => {
 				payment({ id: 'second', amount: '30.98' }),
 			]);
 			rerender();
-			act(() => result.current.pickMethod('terminal'));
+			act(() => result.current.commands.pickMethod('terminal'));
 			expect(result.current.figures.entryAppliedMinor).toBe(3098);
 			const beforeMeta = mockPayload.meta_data;
-			await act(async () => result.current.takeTender());
+			await act(async () => result.current.commands.takeTender());
 			const split = {
 				key: '_wcpos_split',
 				value: JSON.stringify({ kind: 'even', ways: 3, shares: ['30.99', '30.98', '30.98'] }),
@@ -3351,8 +3354,8 @@ describe('provider completion provenance before intent', () => {
 		const stale = { id: 7, key: '_wcpos_split', value: 'stale' };
 		mockPayload.meta_data = withLedger([stale], [payment({ id: 'first', amount: '46.48' })]);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('terminal'));
+		await act(async () => result.current.commands.takeTender());
 		const cleared = { key: '_wcpos_split', value: null };
 		expect(persistProvenanceSpy).toHaveBeenCalledWith(
 			expect.anything(),
@@ -3376,16 +3379,16 @@ describe('provider completion provenance before intent', () => {
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 3295,
 			})
 		);
-		expect(result.current.plan).toBeNull();
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 3295 }));
-		await act(async () => result.current.takeTender());
+		expect(result.current.figures.plan).toBeNull();
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 3295 }));
+		await act(async () => result.current.commands.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.extraMeta?.[0].key).toBe('_wcpos_split');
 		expect(JSON.parse(input.extraMeta?.[0].value as string)).toMatchObject({
@@ -3397,14 +3400,14 @@ describe('provider completion provenance before intent', () => {
 		mockMethods = [cash];
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		const [, , input] = mockRecordManualPayment.mock.calls[0];
 		expect(input.extraMeta).toHaveLength(1);
 		expect(input.extraMeta?.[0].key).toBe('_wcpos_split');
@@ -3424,10 +3427,10 @@ describe('provider completion provenance before intent', () => {
 				})
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.commands.pickMethod('terminal'));
 		let take!: Promise<void>;
 		await act(async () => {
-			take = result.current.takeTender();
+			take = result.current.commands.takeTender();
 		});
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: order,
@@ -3452,8 +3455,8 @@ describe('provider completion provenance before intent', () => {
 	it('does not begin a provider leg after a failed explicit save', async () => {
 		mockPushDocument.mockRejectedValueOnce(new Error('save failed'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('terminal'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockBegin).not.toHaveBeenCalled();
 		expect(mockError).toHaveBeenCalledWith(
 			'Checkout failed',
@@ -3467,8 +3470,8 @@ describe('provider completion provenance before intent', () => {
 		const { WriteDeferredError } = jest.requireMock('@wcpos/query');
 		mockPushDocument.mockRejectedValueOnce(new WriteDeferredError('mutation-1', 401));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('terminal'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockBegin).not.toHaveBeenCalled();
 		const failures = mockError.mock.calls.filter(([message]) => message === 'Checkout failed');
 		expect(failures).toHaveLength(1);
@@ -3476,9 +3479,9 @@ describe('provider completion provenance before intent', () => {
 	});
 	it('does not stamp a partial server leg', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('terminal'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('terminal'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 5000 }));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockBegin).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPushDocument).not.toHaveBeenCalled();
@@ -3506,8 +3509,8 @@ it('does not claim the store holds a payment it refused but could not mirror', a
 	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 	const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
 	try {
-		act(() => view.result.current.pickMethod('pos_cash'));
-		await act(async () => view.result.current.takeTender());
+		act(() => view.result.current.commands.pickMethod('pos_cash'));
+		await act(async () => view.result.current.commands.takeTender());
 
 		// Nothing was taken, so "the store has this payment, don't take it again" would
 		// both contradict the refusal the cashier was just shown and block a corrected
@@ -3544,8 +3547,8 @@ it('reports a payment the store took but the till could not mirror, and never sa
 	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 	const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
 	try {
-		act(() => view.result.current.pickMethod('pos_cash'));
-		await act(async () => view.result.current.takeTender());
+		act(() => view.result.current.commands.pickMethod('pos_cash'));
+		await act(async () => view.result.current.commands.takeTender());
 
 		expect(mockWarn).toHaveBeenCalledWith(
 			'pos_checkout.payment_recorded_not_synced',
@@ -3590,8 +3593,8 @@ it('a recorded payment whose mirror and completion both fail warns status-check-
 	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 	const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
 	try {
-		act(() => view.result.current.pickMethod('pos_cash'));
-		await act(async () => view.result.current.takeTender());
+		act(() => view.result.current.commands.pickMethod('pos_cash'));
+		await act(async () => view.result.current.commands.takeTender());
 
 		expect(mockWarn).toHaveBeenCalledWith(
 			'pos_checkout.payment_recorded_not_synced',
@@ -3628,9 +3631,9 @@ it('keeps the pane on the balance the store reports when a partial payment could
 	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 	const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
 	try {
-		act(() => view.result.current.pickMethod('pos_cash'));
-		act(() => view.result.current.dispatch({ type: 'set-entry', minor: 500 }));
-		await act(async () => view.result.current.takeTender());
+		act(() => view.result.current.commands.pickMethod('pos_cash'));
+		act(() => view.result.current.commands.dispatch({ type: 'set-entry', minor: 500 }));
+		await act(async () => view.result.current.commands.takeTender());
 
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
@@ -3663,8 +3666,8 @@ it('resets a failed manual tender without logging a second error or toast', asyn
 	mockPayload = { id: 42, total: '10.00', meta_data: [] };
 	mockRecordManualPayment.mockResolvedValueOnce({ kind: 'failed' });
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	act(() => result.current.pickMethod('pos_cash'));
-	await act(async () => result.current.takeTender());
+	act(() => result.current.commands.pickMethod('pos_cash'));
+	await act(async () => result.current.commands.takeTender());
 	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
 	expect(mockError).not.toHaveBeenCalled();
 	expect(mockInfo).not.toHaveBeenCalled();
@@ -3690,7 +3693,7 @@ it('no open session: toasts without POST, recording a leg or rejecting tender', 
 	resetCheckoutMode();
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 	await act(async () => {
-		await expect(result.current.takeTender()).resolves.toBeUndefined();
+		await expect(result.current.commands.takeTender()).resolves.toBeUndefined();
 	});
 	expect(mockInfo).toHaveBeenCalledWith(
 		'pos_checkout.open_register_first',
@@ -3718,8 +3721,8 @@ describe('register still to be chosen', () => {
 	});
 	it('refuses the completing leg until a register is picked, with the reason on screen', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.choose_register_first',
@@ -3728,16 +3731,16 @@ describe('register still to be chosen', () => {
 	});
 	it('lets a part payment through: only completion needs the register', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 5000 }));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
 	});
 	it('a store with no register at all keeps trading', async () => {
 		mockBindingStatus = 'none';
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
 	});
 });
@@ -4008,9 +4011,9 @@ describe('gateway capture mode (contract 1.2)', () => {
 	it('a gateway press whose sale attempt fails to journal says it was not recorded, not unanswered', async () => {
 		jest.mocked(provenance.recordSaleAttempt).mockRejectedValueOnce(new Error('journal failed'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
 
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockManualPost).not.toHaveBeenCalled();
 		expect(mockError).toHaveBeenCalledWith(
@@ -4030,8 +4033,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 			mockMethods = [{ ...cash, defaults: { ...cash.defaults, rounding } }, invoice];
 			mockPayload = { total: '10.02', meta_data: [], billing: mockPayload.billing };
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod(methodId));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod(methodId));
+			await act(async () => result.current.commands.takeTender());
 			expect(mockInfo).toHaveBeenCalledWith(
 				'pos_checkout.order_not_on_store_yet',
 				expect.objectContaining({ showToast: true })
@@ -4061,10 +4064,10 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockAutoShowReceipt = true;
 		const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		try {
-			act(() => view.result.current.pickMethod('wcpos_email_invoice'));
+			act(() => view.result.current.commands.pickMethod('wcpos_email_invoice'));
 			// The catalog lands after mount; the press reads it.
 			await act(async () => {});
-			await act(async () => view.result.current.takeTender());
+			await act(async () => view.result.current.commands.takeTender());
 			expect(mockManualPost).toHaveBeenCalledWith(
 				'orders/42/payment-methods/wcpos_email_invoice/submit',
 				expect.objectContaining({ attempt_id: expect.any(String) })
@@ -4109,8 +4112,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		try {
-			act(() => result.current.pickMethod('wcpos_email_invoice'));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+			await act(async () => result.current.commands.takeTender());
 			expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 				{ source: 'gateway-settled', order: summary('pending') },
 				expect.objectContaining({ dispatchToken: expect.any(Object) })
@@ -4144,8 +4147,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		});
 		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockWarn).toHaveBeenCalledWith(
 			'pos_checkout.payment_recorded_not_synced',
 			expect.objectContaining({
@@ -4175,8 +4178,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		});
 		mockPosterInputs.length = 0;
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockPosterInputs.at(-1)?.approval).toEqual({ total: '100.00', currency: 'EUR' });
 	});
 
@@ -4193,8 +4196,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		try {
-			act(() => result.current.pickMethod('wcpos_email_invoice'));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+			await act(async () => result.current.commands.takeTender());
 			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(1);
 			expect(mockInfo).not.toHaveBeenCalledWith(
 				'pos_checkout.payment_completed_for_order',
@@ -4211,8 +4214,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 			data: { outcome: 'paid', payment: null, order: summary('pos-open') },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 		// The reopen ends the completion attempt at the press, as a reopened close does.
 		expect(resolveCompletionAttempt).toHaveBeenCalledWith(expect.anything(), order.uuid);
@@ -4229,8 +4232,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		});
 		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.sale_reopened_elsewhere',
 			expect.objectContaining({ showToast: true })
@@ -4256,7 +4259,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		} as typeof mockPayload;
 		mockManualPost.mockResolvedValue({ data: { order: summary('completed') } });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.cancelInvoice());
+		await act(async () => result.current.commands.cancelInvoice());
 		expect(mockWarn).toHaveBeenCalledWith(
 			'pos_checkout.invoice_not_cancelled',
 			expect.objectContaining({ showToast: true })
@@ -4280,7 +4283,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockManualPost.mockResolvedValue({ data: { order: summary('completed') } });
 		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.cancelInvoice());
+		await act(async () => result.current.commands.cancelInvoice());
 		expect(mockWarn).toHaveBeenCalledWith(
 			'pos_checkout.invoice_not_cancelled',
 			expect.objectContaining({ showToast: true })
@@ -4296,18 +4299,18 @@ describe('gateway capture mode (contract 1.2)', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
 		expect(result.current.fieldValues).toEqual({
 			woocommerce_pos_invoice_email_address: 'buyer@example.com',
 			woocommerce_pos_save_billing_email: false,
 		});
 		act(() =>
-			result.current.setFieldValues(
+			result.current.commands.setFieldValues(
 				{ ...result.current.fieldValues, woocommerce_pos_save_billing_email: true },
 				'woocommerce_pos_save_billing_email'
 			)
 		);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockManualPost).toHaveBeenCalledWith(
 			'orders/42/payment-methods/wcpos_email_invoice/submit',
 			{
@@ -4348,12 +4351,12 @@ describe('gateway capture mode (contract 1.2)', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'key', key: '2' }));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'key', key: '2' }));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
 		// The reducer keeps a hand-typed amount across pills (ledger line 1); what is applied is the balance.
 		expect(result.current.figures.entryAppliedMinor).toBe(9295);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(jest.mocked(provenance.recordSaleAttempt)).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({ source: 'gateway', completing: true })
@@ -4363,11 +4366,11 @@ describe('gateway capture mode (contract 1.2)', () => {
 
 	it('leaves the shared entry alone: a typed cash amount survives a visit to the invoice pill', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 4648 }));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 4648 }));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
 		expect(result.current.figures.entryAppliedMinor).toBe(9295);
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(4648);
 		expect(result.current.figures.entryAppliedMinor).toBe(4648);
 		await act(async () => {});
@@ -4376,15 +4379,15 @@ describe('gateway capture mode (contract 1.2)', () => {
 	it('drops an unstarted split plan when a whole-order gateway is picked', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
-		expect(result.current.plan).not.toBeNull();
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		expect(result.current.plan).toBeNull();
+		expect(result.current.figures.plan).not.toBeNull();
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		expect(result.current.figures.plan).toBeNull();
 		expect(getCheckoutModeSnapshot().tenderPlans.get(order.uuid)).toBeUndefined();
 		await act(async () => {});
 	});
@@ -4394,17 +4397,17 @@ describe('gateway capture mode (contract 1.2)', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
-		expect(result.current.plan).toBeNull();
+		expect(result.current.figures.plan).toBeNull();
 		expect(result.current.planLabel).toBeNull();
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(provenance.persistSaleProvenance).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({ extraMeta: undefined })
@@ -4419,11 +4422,11 @@ describe('gateway capture mode (contract 1.2)', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
 		});
 		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		const ids = mockManualPost.mock.calls.map(
 			([, body]) => (body as { attempt_id: string }).attempt_id
 		);
@@ -4432,11 +4435,11 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockManualPost.mockRejectedValueOnce(
 			Object.assign(new Error('down'), { response: { status: 503 } })
 		);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		const lost = (mockManualPost.mock.calls.at(-1)![1] as { attempt_id: string }).attempt_id;
 		mockPayload.meta_data = withAwaitingCustomer([], { ...stamp, attempt_id: lost });
 		rerender();
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect((mockManualPost.mock.calls.at(-1)![1] as { attempt_id: string }).attempt_id).not.toBe(
 			lost
 		);
@@ -4444,18 +4447,18 @@ describe('gateway capture mode (contract 1.2)', () => {
 
 	it('the next pill starts from the balance once the invoice pill dropped a plan', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		act(() =>
-			result.current.dispatch({
+			result.current.commands.dispatch({
 				type: 'set-plan',
 				plan: { kind: 'even', ways: 2, from: 0 },
 				balanceMinor: 9295,
 			})
 		);
 		expect(result.current.state.entryMinor).toBe(4648);
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current.plan).toBeNull();
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		expect(result.current.figures.plan).toBeNull();
 		expect(result.current.state.entryMinor).toBe(9295);
 		await act(async () => {});
 	});
@@ -4465,7 +4468,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
 		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		await act(async () => result.current.cancelInvoice());
+		await act(async () => result.current.commands.cancelInvoice());
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.invoice_cancelled',
 			expect.objectContaining({
@@ -4491,15 +4494,15 @@ describe('gateway capture mode (contract 1.2)', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		act(() =>
-			result.current.setFieldValues(
+			result.current.commands.setFieldValues(
 				{ ...result.current.fieldValues, woocommerce_pos_invoice_email_address: 'other@b.c' },
 				'woocommerce_pos_invoice_email_address'
 			)
 		);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		const ids = mockManualPost.mock.calls.map(
 			([, body]) => (body as { attempt_id: string }).attempt_id
 		);
@@ -4510,7 +4513,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockPayload.billing = { email: '', phone: '' };
 		mockPayload.meta_data = withAwaitingCustomer([], stamp);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
 		expect(result.current.fieldValues.woocommerce_pos_invoice_email_address).toBe(
 			'buyer@example.com'
 		);
@@ -4527,15 +4530,15 @@ describe('gateway capture mode (contract 1.2)', () => {
 				data: { outcome: 'sent', payment: null, order: summary('pending') },
 			});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		// #2900: the journal keeps an unanswered submit; it may have taken money.
 		expect(mockError).toHaveBeenCalledWith(
 			'pos_checkout.payment_unanswered',
 			expect.objectContaining({ code: 'PAYMENT201', showToast: true })
 		);
-		await act(async () => result.current.takeTender());
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		const ids = mockManualPost.mock.calls.map(
 			([, body]) => (body as { attempt_id: string }).attempt_id
 		);
@@ -4552,8 +4555,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 			})
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockError).toHaveBeenCalledWith(
 			'pos_checkout.payment_unanswered',
 			expect.objectContaining({ code: 'PAYMENT201', showToast: true })
@@ -4570,8 +4573,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		});
 		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockWarn).toHaveBeenCalledWith(
 			'pos_checkout.invoice_sent_not_synced',
 			expect.objectContaining({
@@ -4596,8 +4599,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockManualMirror.mockRejectedValueOnce(new Error('disk'));
 		mockCompleteOrderFlow.mockRejectedValueOnce(new Error('journal write failed'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockWarn).toHaveBeenCalledWith(
 			'pos_checkout.invoice_sent_not_synced',
 			expect.objectContaining({ code: 'PAYMENT113' })
@@ -4620,10 +4623,10 @@ describe('gateway capture mode (contract 1.2)', () => {
 			})
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(result.current.fieldErrors).toEqual({ _form: 'Nope.' });
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.fieldErrors).toEqual({});
 	});
 
@@ -4635,8 +4638,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pending') },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockManualPost).not.toHaveBeenCalled();
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.not_with_split',
@@ -4647,8 +4650,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 	it('refuses to send with the required field empty, naming it, without a request', async () => {
 		mockPayload.billing = { email: '', phone: '' };
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockManualPost).not.toHaveBeenCalled();
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.enter_field',
@@ -4670,15 +4673,15 @@ describe('gateway capture mode (contract 1.2)', () => {
 			})
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(result.current.fieldErrors).toEqual({
 			woocommerce_pos_invoice_email_address: 'Enter a valid email.',
 		});
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 		expect(mockError).not.toHaveBeenCalled();
 		act(() =>
-			result.current.setFieldValues(
+			result.current.commands.setFieldValues(
 				{ ...result.current.fieldValues, woocommerce_pos_invoice_email_address: 'x@y.z' },
 				'woocommerce_pos_invoice_email_address'
 			)
@@ -4696,8 +4699,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 			})
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockError).toHaveBeenCalledWith(
 			'Mail server unreachable.',
 			expect.objectContaining({
@@ -4735,8 +4738,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		it('a press answered in flight warns once, never PAYMENT212 or "send again"', async () => {
 			mockManualPost.mockRejectedValue(inFlight());
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod('wcpos_email_invoice'));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+			await act(async () => result.current.commands.takeTender());
 			expectOneWarning({ attemptId: 'attempt-9' });
 			// The pressed method may not be the attempt's: the row names none.
 			expect(unanswered()[0][1].context).not.toHaveProperty('method');
@@ -4753,7 +4756,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				inFlight({ attempt_id: 'attempt-9', order: summary('pos-partial') })
 			);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.takeTender());
+			await act(async () => result.current.commands.takeTender());
 			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
 			expectOneWarning({ attemptId: 'attempt-9' });
 		});
@@ -4761,7 +4764,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		it('a Try again answered in flight warns the same, never PAYMENT201', async () => {
 			mockResend.mockRejectedValueOnce(inFlight());
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.retryCommand());
+			await act(async () => result.current.commands.retryCommand());
 			expectOneWarning({ attemptId: 'attempt-9' });
 		});
 
@@ -4775,7 +4778,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				})
 			);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.retryCommand());
+			await act(async () => result.current.commands.retryCommand());
 			expect(mockError).toHaveBeenCalledTimes(1);
 			expect(mockError).toHaveBeenCalledWith(
 				'The attempt was closed.',
@@ -4846,7 +4849,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				mockPayload.meta_data = stranded();
 				mockManualPost.mockResolvedValue({ data: { order: { ...summary(status), balance } } });
 				const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-				await act(async () => result.current.clearAttempt());
+				await act(async () => result.current.commands.clearAttempt());
 				expect(mockConfirm).toHaveBeenCalledWith({
 					title: 'pos_checkout.clear_attempt_title',
 					body: 'pos_checkout.clear_attempt_body',
@@ -4877,13 +4880,13 @@ describe('gateway capture mode (contract 1.2)', () => {
 			mockConfirm.mockResolvedValueOnce(false);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			expect(result.current.confirmDialog).toBe('confirm-dialog');
-			await act(async () => result.current.clearAttempt());
+			await act(async () => result.current.commands.clearAttempt());
 			expect(mockConfirm).toHaveBeenCalledTimes(1);
 			expect(mockManualPost).not.toHaveBeenCalled();
 			expect(result.current.busy).toBe(false);
 			expect(result.current.running).toBeNull();
 			mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
-			await act(async () => result.current.clearAttempt());
+			await act(async () => result.current.commands.clearAttempt());
 			expect(mockConfirm).toHaveBeenCalledTimes(2);
 			expect(mockManualPost).toHaveBeenCalledTimes(1);
 		});
@@ -4897,7 +4900,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 			let cleared!: Promise<void>;
 			act(() => {
-				cleared = result.current.clearAttempt();
+				cleared = result.current.commands.clearAttempt();
 			});
 			expect(mockConfirm).toHaveBeenCalledTimes(1);
 			expect(result.current.busy).toBe(true);
@@ -4928,7 +4931,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 				let pending!: Promise<void>;
 				act(() => {
-					pending = result.current[command]();
+					pending = result.current.commands[command]();
 				});
 				await waitFor(() => expect(mockManualPost).toHaveBeenCalledTimes(1));
 				expect(result.current.busy).toBe(true);
@@ -4938,7 +4941,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				expect(
 					result.current[other === 'clearAttempt' ? 'unansweredAttempt' : 'invoiceSent']
 				).not.toBeNull();
-				await act(async () => result.current[other]());
+				await act(async () => result.current.commands[other]());
 				expect(mockManualPost).toHaveBeenCalledTimes(1);
 				// The refused call does not overwrite the holder.
 				expect(result.current.running).toBe(command);
@@ -4965,7 +4968,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				})
 			);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.clearAttempt());
+			await act(async () => result.current.commands.clearAttempt());
 			expect(mockWarn).toHaveBeenCalledWith('pos_checkout.attempt_not_cleared', {
 				showToast: true,
 				context: expect.objectContaining({
@@ -4982,7 +4985,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 				Object.assign(new Error('down'), { response: { status: 503 } })
 			);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			await act(async () => result.current.clearAttempt());
+			await act(async () => result.current.commands.clearAttempt());
 			expect(mockWarn).toHaveBeenCalledWith('pos_checkout.attempt_clear_unanswered', {
 				showToast: true,
 				context: expect.objectContaining({ attemptId: 'attempt-9', error: 'down' }),
@@ -5008,8 +5011,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 			},
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				source: 'manual',
@@ -5041,8 +5044,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 		try {
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod('wcpos_email_invoice'));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+			await act(async () => result.current.commands.takeTender());
 			expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 				expect.objectContaining({
 					source: 'manual',
@@ -5066,8 +5069,8 @@ describe('gateway capture mode (contract 1.2)', () => {
 			data: { outcome: 'sent', payment: null, order: summary('pos-open') },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockManualMirror).toHaveBeenCalledWith(
 			expect.objectContaining({
 				changes: { status: 'pos-open', meta_data: stamped(null) },
@@ -5096,7 +5099,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		mockManualPost.mockResolvedValue({ data: { order: summary('pos-open') } });
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.invoiceSent).toEqual(stamp);
-		await act(async () => result.current.cancelInvoice());
+		await act(async () => result.current.commands.cancelInvoice());
 		expect(mockManualPost).toHaveBeenCalledWith(
 			'orders/42/payment-methods/wcpos_email_invoice/cancel',
 			{ attempt_id: 'attempt-0' }
@@ -5159,7 +5162,7 @@ it('presents a failed session guard and never starts the tender writer', async (
 	resetCheckoutMode();
 	mockResolveSession.mockRejectedValueOnce(new Error('session storage unavailable'));
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	await act(async () => result.current.takeTender());
+	await act(async () => result.current.commands.takeTender());
 	expect(mockActionLog).toHaveBeenCalledWith(
 		'warn',
 		'actions.hook_failed',
@@ -5196,10 +5199,10 @@ it('waits for the order mutation queue before resolving the session or recording
 			})
 	);
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	act(() => result.current.pickMethod('pos_cash'));
+	act(() => result.current.commands.pickMethod('pos_cash'));
 	let taking!: Promise<void>;
 	await act(async () => {
-		taking = result.current.takeTender();
+		taking = result.current.commands.takeTender();
 		await Promise.resolve();
 	});
 	try {
@@ -5238,10 +5241,10 @@ it('refuses the commit when a cart edit queued before Pay moved the balance', as
 			})
 	);
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	act(() => result.current.pickMethod('pos_cash'));
+	act(() => result.current.commands.pickMethod('pos_cash'));
 	let taking!: Promise<void>;
 	await act(async () => {
-		taking = result.current.takeTender();
+		taking = result.current.commands.takeTender();
 		await Promise.resolve();
 	});
 	await act(async () => {
@@ -5300,8 +5303,8 @@ describe('the conditions gate (roadmap#62)', () => {
 	});
 	const take = async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		return result;
 	};
 
@@ -5357,10 +5360,10 @@ describe('the conditions gate (roadmap#62)', () => {
 				})
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		let taking!: Promise<void>;
 		await act(async () => {
-			taking = result.current.takeTender();
+			taking = result.current.commands.takeTender();
 			await Promise.resolve();
 		});
 		await act(async () => {
@@ -5392,8 +5395,8 @@ it("writes the session's pre-action reset in the handler, after the gate's read 
 	};
 	requireOpenSession.mockClear();
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	act(() => result.current.pickMethod('pos_cash'));
-	await act(async () => result.current.takeTender());
+	act(() => result.current.commands.pickMethod('pos_cash'));
+	await act(async () => result.current.commands.takeTender());
 	// The gate read first, the handler then wrote, then the attempt was recorded.
 	expect(mockResolveSession).toHaveBeenCalledTimes(1);
 	expect(requireOpenSession).toHaveBeenCalledTimes(1);
@@ -5430,9 +5433,9 @@ it('a session closed between the gate and the write refuses with the open-regist
 		throw new RegisterSessionRequiredError();
 	});
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	act(() => result.current.pickMethod('pos_cash'));
+	act(() => result.current.commands.pickMethod('pos_cash'));
 	await act(async () => {
-		await expect(result.current.takeTender()).resolves.toBeUndefined();
+		await expect(result.current.commands.takeTender()).resolves.toBeUndefined();
 	});
 	expect(mockResolveSession).toHaveBeenCalledTimes(1);
 	expect(mockInfo).toHaveBeenCalledWith(
@@ -5459,9 +5462,9 @@ it('a session replaced between the gate and the write refuses with the open-regi
 	};
 	requireOpenSession.mockResolvedValueOnce('replacement-session');
 	const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-	act(() => result.current.pickMethod('pos_cash'));
+	act(() => result.current.commands.pickMethod('pos_cash'));
 	await act(async () => {
-		await expect(result.current.takeTender()).resolves.toBeUndefined();
+		await expect(result.current.commands.takeTender()).resolves.toBeUndefined();
 	});
 	expect(mockResolveSession).toHaveBeenCalledTimes(1);
 	expect(mockInfo).toHaveBeenCalledWith(
@@ -5529,7 +5532,7 @@ describe('cash rounding (#66, #84)', () => {
 	it('previews the rounded due: the prefill, the change and the rounding for the cash tile only', async () => {
 		mockPayload = sale('10.03');
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current).toMatchObject({
 			balanceMinor: 1003,
 			state: { entryMinor: 1005, entryDirty: false },
@@ -5540,15 +5543,15 @@ describe('cash rounding (#66, #84)', () => {
 			entryAppliedMinor: 1005,
 			entryChangeMinor: 0,
 		});
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 2000 }));
 		expect(result.current.figures).toMatchObject({ roundingMinor: 2, entryChangeMinor: 995 });
 		// An exact unrounded entry pays the balance as it is; the hook does not round it either.
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 1003 }));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 1003 }));
 		expect(result.current.figures).toMatchObject({ roundingMinor: 0, entryAppliedMinor: 1003 });
 		// A partial tender is never rounded.
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 500 }));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 500 }));
 		expect(result.current.figures).toMatchObject({ roundingMinor: 0, entryAppliedMinor: 500 });
-		act(() => result.current.pickMethod('pos_card'));
+		act(() => result.current.commands.pickMethod('pos_card'));
 		expect(result.current.figures).toMatchObject({ roundedDueMinor: 1003, roundingMinor: 0 });
 		await act(async () => {});
 	});
@@ -5563,10 +5566,12 @@ describe('cash rounding (#66, #84)', () => {
 		async (balance, share, rounding, applied, change) => {
 			mockPayload = sale((balance / 100).toFixed(2));
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod('pos_cash'));
+			act(() => result.current.commands.pickMethod('pos_cash'));
 			const plan = { kind: 'fixed', firstMinor: share, title: null, from: 0 } as const;
-			act(() => result.current.dispatch({ type: 'set-plan', plan, balanceMinor: balance }));
-			act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
+			act(() =>
+				result.current.commands.dispatch({ type: 'set-plan', plan, balanceMinor: balance })
+			);
+			act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 2000 }));
 			expect(result.current.figures).toMatchObject({
 				thisPaymentMinor: share,
 				roundingMinor: rounding,
@@ -5588,9 +5593,9 @@ describe('cash rounding (#66, #84)', () => {
 			},
 		}));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 2000 }));
+		await act(async () => result.current.commands.takeTender());
 
 		const [fee] = patches();
 		const leg = mockManualMirror.mock.calls[0][0].changes as Record<string, unknown>;
@@ -5630,10 +5635,10 @@ describe('cash rounding (#66, #84)', () => {
 		mockManualPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
 		mockManualMirror.mockRejectedValue(new Error('resident write failed'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		// The keypad says 10.00 against 10.02 (2 left); the chain rounds the due to 10.00 (none left).
-		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.dispatch({ type: 'set-entry', minor: 1000 }));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -5669,8 +5674,8 @@ describe('cash rounding (#66, #84)', () => {
 		mockPayload = sale('10.03');
 		mockRecordManualPayment.mockImplementationOnce(outcome);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		const [fee, unround] = patches();
 		expect(fee.total).toBe('10.05');
@@ -5687,8 +5692,8 @@ describe('cash rounding (#66, #84)', () => {
 			row: payment({ amount: '10.00' }),
 		}));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		const [fee, ...rest] = patches();
 		expect(fee.total).toBe('10.00');
@@ -5712,8 +5717,8 @@ describe('cash rounding (#66, #84)', () => {
 			return { kind: 'unknown', row: payment({ id: rowId, amount: '10.05' }) };
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockPayload).toMatchObject({ total: '10.05' });
 
 		mockRecordManualPayment.mockImplementationOnce(async () => ({
@@ -5722,8 +5727,8 @@ describe('cash rounding (#66, #84)', () => {
 			row: payment({ id: rowId, amount: '10.05', status: 'failed' }),
 			order: null,
 		}));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockPayload).toMatchObject({ total: '10.03', fee_lines: [] });
 	});
@@ -5746,14 +5751,14 @@ describe('cash rounding (#66, #84)', () => {
 				}
 			);
 			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-			act(() => result.current.pickMethod('pos_cash'));
-			await act(async () => result.current.takeTender());
+			act(() => result.current.commands.pickMethod('pos_cash'));
+			await act(async () => result.current.commands.takeTender());
 			expect(mockPayload).toMatchObject({ total: '10.05' });
 
 			act(() => mockGate$.next(true));
 			readJournaledRecordIds.mockResolvedValueOnce(new Set(journaled ? [rowId] : []));
 			mockResend.mockRejectedValueOnce(new Error('wcpos_amount_exceeds_balance'));
-			await act(async () => result.current.retryCommand());
+			await act(async () => result.current.commands.retryCommand());
 			expect(mockPayload).toMatchObject({ total });
 		}
 	);
@@ -5768,8 +5773,8 @@ describe('cash rounding (#66, #84)', () => {
 			return { ...recorded, row: payment({ id: rowId, amount: '10.05' }) };
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockPayload).toMatchObject({ total: '10.05' });
 
 		act(() => mockGate$.next(true));
@@ -5778,7 +5783,7 @@ describe('cash rounding (#66, #84)', () => {
 			mockPayload = { ...mockPayload, meta_data: withLedger([], [voided]) };
 			return [{ kind: 'void', data: { payment: voided, order: { status: 'pos-open' } } }];
 		});
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockPayload).toMatchObject({ total: '10.03' });
 	});
 
@@ -5791,15 +5796,15 @@ describe('cash rounding (#66, #84)', () => {
 			return { kind: 'unknown', row: payment({ id: rowId, amount: '10.05' }) };
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockPayload).toMatchObject({ total: '10.05' });
 
 		mockRecordManualPayment.mockImplementationOnce(async () => {
 			throw new RecordManualPaymentError('conflict', 'wcpos_payment_conflict', 409);
 		});
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockPayload).toMatchObject({ total: '10.03', fee_lines: [] });
 	});
@@ -5822,8 +5827,8 @@ describe('cash rounding (#66, #84)', () => {
 			reason: 'provenance_save_failed',
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		const [, unround] = patches();
 		expect(unround).toEqual({
@@ -5860,8 +5865,8 @@ describe('cash rounding (#66, #84)', () => {
 		});
 		mockLocalPatch.mockResolvedValue(undefined);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.dispatch({ type: 'request-cancel' }));
-		await act(async () => result.current.cancelPayment());
+		act(() => result.current.commands.dispatch({ type: 'request-cancel' }));
+		await act(async () => result.current.commands.cancelPayment());
 
 		expect(mockInfo).toHaveBeenCalledWith(
 			'Payment voided',
@@ -5882,9 +5887,9 @@ describe('cash rounding (#66, #84)', () => {
 			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.figures).toMatchObject({ roundedDueMinor: 0, roundingMinor: -2 });
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(patches()).toEqual([
 			expect.objectContaining({
@@ -5909,8 +5914,8 @@ describe('cash rounding (#66, #84)', () => {
 			data: { order: { status: 'completed' }, completion: { n: 1, id: 'c1' } },
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		// The close is approved against the total the rounding fee commits (0.00), not the 0.02
 		// the cashier saw before it: the store's order and the approval agree on the first press.
@@ -5926,8 +5931,8 @@ describe('cash rounding (#66, #84)', () => {
 		mockPayload = sale('0.02');
 		jest.mocked(provenance.completionMetaFor).mockRejectedValueOnce(new Error('meta'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPayload).toMatchObject({ total: '0.02' });
@@ -5939,9 +5944,9 @@ describe('cash rounding (#66, #84)', () => {
 		mockPayload = sale('10.02');
 		mockBindingStatus = 'choose';
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(1000);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockInfo).toHaveBeenCalledWith(
 			'pos_checkout.choose_register_first',
@@ -6025,8 +6030,8 @@ describe('offline manual tenders', () => {
 		mockUseRealCompletion = true;
 		enterCheckout(order.uuid);
 		const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => view.result.current.pickMethod('pos_cash'));
-		await act(async () => view.result.current.takeTender());
+		act(() => view.result.current.commands.pickMethod('pos_cash'));
+		await act(async () => view.result.current.commands.takeTender());
 		view.unmount();
 
 		expect(mockDefer).toHaveBeenCalledWith('orders/42/payments', {
@@ -6055,8 +6060,8 @@ describe('offline manual tenders', () => {
 			disabled: false,
 			settlesLater: true,
 		});
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockDefer).toHaveBeenCalledTimes(1);
 		const [, body] = mockDefer.mock.calls[0] as [string, { payment: PaymentRow }];
@@ -6073,8 +6078,8 @@ describe('offline manual tenders', () => {
 			reason: 'offline',
 			settlesLater: false,
 		});
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockConfirm).not.toHaveBeenCalled();
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
@@ -6091,8 +6096,8 @@ describe('offline manual tenders', () => {
 		mockPayload = { id: 42, total: '10.03', meta_data: [] };
 		mockConfirm.mockResolvedValueOnce(false);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 		expect(mockT).toHaveBeenCalledWith('pos_checkout.confirm_offline_title', {
 			amount: '10.05',
 			method: 'Cash',
@@ -6108,8 +6113,8 @@ describe('offline manual tenders', () => {
 		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({
 			settlesLater: true,
 		});
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockConfirm).not.toHaveBeenCalled();
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
@@ -6118,8 +6123,8 @@ describe('offline manual tenders', () => {
 	it('the cashier declines the offline confirmation → nothing journaled', async () => {
 		mockConfirm.mockResolvedValueOnce(false);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockConfirm).toHaveBeenCalledWith(offlineQuestion);
 		expect(mockT).toHaveBeenCalledWith('pos_checkout.take_amount_in', {
@@ -6134,8 +6139,8 @@ describe('offline manual tenders', () => {
 	it('the cashier confirms offline → journaled via defer and logged as recorded offline', async () => {
 		mockUseRealManual = true;
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
-		await act(async () => result.current.takeTender());
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
 
 		expect(mockConfirm).toHaveBeenCalledWith(offlineQuestion);
 		expect(mockDefer).toHaveBeenCalledWith('orders/42/payments', {
@@ -6154,12 +6159,12 @@ describe('offline manual tenders', () => {
 		let answer: (confirmed: boolean) => void = () => {};
 		mockConfirm.mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		let pressed!: Promise<void>;
 		act(() => {
-			pressed = result.current.takeTender();
+			pressed = result.current.commands.takeTender();
 		});
-		await act(async () => result.current.retryCommand());
+		await act(async () => result.current.commands.retryCommand());
 		expect(mockConfirm).toHaveBeenCalledTimes(1);
 		expect(mockResend).not.toHaveBeenCalled();
 		await act(async () => {
@@ -6177,13 +6182,13 @@ describe('offline manual tenders', () => {
 			() => new Promise((resolve) => (settle = resolve))
 		);
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({
 			settlesLater: true,
 		});
 		let pressed!: Promise<void>;
 		act(() => {
-			pressed = result.current.takeTender();
+			pressed = result.current.commands.takeTender();
 		});
 		expect(result.current.busy).toBe(true);
 		expect(result.current.running).toBeNull();
@@ -6202,12 +6207,12 @@ describe('offline manual tenders', () => {
 		let answer: (confirmed: boolean) => void = () => {};
 		mockConfirm.mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.commands.pickMethod('pos_cash'));
 		let first!: Promise<void>;
 		act(() => {
-			first = result.current.takeTender();
+			first = result.current.commands.takeTender();
 		});
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockConfirm).toHaveBeenCalledTimes(1);
 		// The gate is held, and shown, while the cashier answers; no spinner behind the prompt.
 		expect(result.current.busy).toBe(true);
@@ -6219,12 +6224,12 @@ describe('offline manual tenders', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 
 		mockConfirm.mockRejectedValueOnce(new Error('prompt lost'));
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockConfirm).toHaveBeenCalledTimes(2);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		// Freed: the next press asks again.
 		mockConfirm.mockResolvedValueOnce(false);
-		await act(async () => result.current.takeTender());
+		await act(async () => result.current.commands.takeTender());
 		expect(mockConfirm).toHaveBeenCalledTimes(3);
 	});
 });

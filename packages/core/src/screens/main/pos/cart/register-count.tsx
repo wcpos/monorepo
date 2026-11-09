@@ -48,6 +48,7 @@ import {
 import {
 	countDecimals,
 	denominationTotal,
+	seedAmount,
 	varianceAmount,
 } from '../../../../services/register-session/count-money';
 
@@ -80,7 +81,7 @@ export function RegisterCount({
 		figuresPending,
 		refusedClose,
 		lastClosure,
-		movements,
+		refusedCash: refusedRows,
 	} = useRegisterSession();
 	const { store, wpCredentials } = useStoreSession();
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
@@ -94,7 +95,7 @@ export function RegisterCount({
 	const note = useWatch({ control: noteForm.control, name: 'note' });
 	const noteId = React.useId();
 	const noteRef = React.useRef<React.ComponentRef<typeof Input.InputField>>(null);
-	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
+	const [cash, setCash] = React.useState(seedAmount(session?.counted?.cash, decimals) ?? '');
 	const [keypadOpen, setKeypadOpen] = React.useState(true);
 	// The amount and its keypad are one focus region: on the web a key takes focus before its press
 	// lands, and a cashier may enter the count by keys alone, so the keypad collapses when focus
@@ -121,7 +122,7 @@ export function RegisterCount({
 	const prefill = React.useEffectEvent(() => {
 		if (!session) return;
 		const kept = keptCount(session, lastClosure);
-		setCash(kept.counted.cash ?? '');
+		setCash(seedAmount(kept.counted.cash, decimals) ?? '');
 		setOthers(
 			Object.fromEntries(Object.entries(kept.counted).filter(([method]) => method !== 'cash'))
 		);
@@ -146,7 +147,7 @@ export function RegisterCount({
 	const [acknowledgedKey, setAcknowledgedKey] = React.useState('');
 	const decision = countDecision(
 		session,
-		{ expected, movements, figuresPending, refusedClose },
+		{ expected, refusedCash: refusedRows, figuresPending, refusedClose },
 		{ cash: amount, others, decimals, acknowledgedKey },
 		{ blind, varianceThreshold }
 	);

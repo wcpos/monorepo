@@ -236,7 +236,13 @@ jest.mock('./reports/panels/specs', () => ({
 }));
 jest.mock('./reports/context', () => ({
 	useIncludedStatus: () => () => true,
-	useReportsData: () => ({ allOrders: [], selectedOrders: [], totals: {}, periodRefunds: [] }),
+	useReportsData: () => ({
+		allOrders: [],
+		selectedOrders: [],
+		// panelSpec is stubbed; the panel itself reads only the gross figure for its footer.
+		figures: { gross: 0 },
+		periodRefunds: [],
+	}),
 	useReportsHandles: () => ({}),
 	useReportsPeriod: () => ({
 		dateRange: { start: new Date(0), end: new Date(0) },

@@ -4,7 +4,6 @@ import {
 	type PaymentRow,
 	roundedDue,
 	settlesAtRoundedDue,
-	toMinor,
 } from '@wcpos/order-math';
 
 import {
@@ -19,6 +18,8 @@ import {
 	type TenderState,
 	unitsMinor,
 } from './tender-state';
+
+import type { SplitView } from './split-view';
 
 /** The notes a cashier is handed: the balance itself, then the next whole 5, 10 and 50. */
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
@@ -39,35 +40,29 @@ export interface TenderFacts {
 	balanceMinor: number;
 	/** The order's ledger rows, in ledger order. */
 	rows: readonly PaymentRow[];
-	/** The title a taken leg shows for its method. */
-	titleOf: (methodId: string) => string;
 	/** The selected method, or null in the select view. */
 	method: FigureMethod | null;
 	state: Pick<
 		TenderState,
 		'view' | 'entryMinor' | 'entryDirty' | 'extraMinor' | 'entryMode' | 'plan'
 	>;
-	lines: readonly { id: TenderLineId; quantity: number; totalMinor: number }[];
-	/** THIS payment's picked units per line. */
-	picked: Record<TenderLineId, number>;
-	/** Units of each line the live payments already cover. */
-	paidUnits: Record<TenderLineId, { units: number }>;
+	/** The split's facts (`splitView`): the lines, this payment's picks, the paid units, the legs taken. */
+	split: Pick<SplitView, 'picked' | 'unpaidUnits' | 'rowsSinceFrom'> & {
+		lines: readonly { id: TenderLineId; quantity: number; totalMinor: number }[];
+		paidUnits: Record<TenderLineId, { units: number }>;
+	};
 }
 
 /** Every number the keypad shows and commits, computed once (the hook) and formatted (the pane). */
 export type TenderFigures = ReturnType<typeof tenderFigures>;
 
 export function tenderFigures(facts: TenderFacts) {
-	const { dp, balanceMinor, rows, method, state, lines, picked } = facts;
+	const { dp, balanceMinor, rows, method, state } = facts;
+	const { lines, picked, unpaidUnits, rowsSinceFrom } = facts.split;
 	// With a plan, a cash leg is the planned share: notes handed over above it are change,
 	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
 	// what was typed, capped at the balance — typing a different amount IS changing the leg.
 	// The last leg is whatever balance remains (rounding, or a short earlier leg), never the share.
-	// The legs taken are the money `derive()` counts (ADR 0040 D6): an authorization is a hold.
-	const rowsSinceFrom = rows
-		.slice(state.plan?.from ?? rows.length)
-		.filter(countsTowardPaid)
-		.map((row) => ({ minor: toMinor(row.amount, dp), title: facts.titleOf(row.method_id) }));
 	// A gateway that runs the whole order has no split: whatever plan is stored is ignored for it
 	// (the Split chip is hidden on its keypad) and never written as the sale's provenance.
 	const fixedAmount = runsWholeOrder(method);
@@ -93,10 +88,7 @@ export function tenderFigures(facts: TenderFacts) {
 	);
 	// THIS payment built from picked units: their price (all unpaid units picked carries the stray
 	// rounding cents) plus any `+ amount`, until the cashier types over it (a cash tender).
-	const paidOf = (lineId: TenderLineId) => facts.paidUnits[lineId]?.units ?? 0;
-	const unpaidUnits = Object.fromEntries(
-		lines.map(({ id, quantity }) => [String(id), Math.max(0, quantity - paidOf(id))])
-	);
+	const paidOf = (lineId: TenderLineId) => facts.split.paidUnits[lineId]?.units ?? 0;
 	const pickedMinor = lines.reduce((sum, { id, quantity, totalMinor }) => {
 		const paid = Math.min(paidOf(id), quantity);
 		const units = paid + (picked[id] ?? 0);
@@ -145,7 +137,6 @@ export function tenderFigures(facts: TenderFacts) {
 		fixedAmount,
 		/** The plan as the keypad sees it: null once its legs are taken, or for a fixed gateway. */
 		plan,
-		rowsSinceFrom,
 		legs,
 		/** The plan's untranslated label pieces; the flow localizes them. */
 		label: split?.label ?? null,
@@ -164,7 +155,6 @@ export function tenderFigures(facts: TenderFacts) {
 		roundingMinor,
 		pickedMinor,
 		allUnpaidPicked,
-		unpaidUnits,
 		percentMinor,
 		/** The entry as the cashier sees it: picks, percent share or the (rounded) prefill. */
 		entryMinor,

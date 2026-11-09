@@ -4,9 +4,10 @@ import { createRxDatabase, type RxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { countDecision, keptCount, mayAbandonCount } from './count-decision';
+import { refusedCashOf } from '../../../../query/src/register-session/drawer-rules';
 
 type Session = Parameters<typeof countDecision>[0];
-type Movement = Parameters<typeof countDecision>[1]['movements'][number];
+type Movement = { id: string; amount: string | null; sync_status: string };
 
 /** Expected cash 480.80; the cashier enters `cash` with nothing else on the drawer or session. */
 const decide = ({
@@ -34,7 +35,13 @@ const decide = ({
 }) =>
 	countDecision(
 		session,
-		{ expected: { cash: '480.80' }, movements, figuresPending, refusedClose },
+		// The session's movements through the drawer read's refused-cash rule.
+		{
+			expected: { cash: '480.80' },
+			refusedCash: refusedCashOf(movements),
+			figuresPending,
+			refusedClose,
+		},
 		{ cash, others, decimals, acknowledgedKey },
 		{ blind, varianceThreshold }
 	);

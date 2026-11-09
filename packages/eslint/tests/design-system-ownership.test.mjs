@@ -279,7 +279,7 @@ test('keeps the #1093 server-delete guard firing beside the ownership rule on co
 test('enforces variant ownership outside core screens under per-package lint', async () => {
 	const messages = await lint(
 		PAINTED_BUTTON,
-		join(CORE_ROOT, 'src/contexts/theme/index.tsx'),
+		join(CORE_ROOT, 'src/contexts/theme-setting/index.tsx'),
 		'no-restricted-syntax',
 		coreConfig,
 		CORE_ROOT
@@ -392,7 +392,7 @@ test('rejects every hand-rolled notice tint in literal and template classNames',
 test('keeps the notice ratchet under core screen and app config overrides', async () => {
 	for (const [file, base, cwd] of [
 		[IN_APP, coreConfig, CORE_ROOT],
-		[join(CORE_ROOT, 'src/contexts/theme/index.tsx'), coreConfig, CORE_ROOT],
+		[join(CORE_ROOT, 'src/contexts/theme-setting/index.tsx'), coreConfig, CORE_ROOT],
 		[join(MAIN_ROOT, 'app/+not-found.tsx'), mainConfig, MAIN_ROOT],
 		[join(MAIN_ROOT, 'components/health/uptime-strip.tsx'), mainConfig, MAIN_ROOT],
 	]) {

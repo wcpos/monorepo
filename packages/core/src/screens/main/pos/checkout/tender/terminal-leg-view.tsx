@@ -187,11 +187,11 @@ export function TerminalLegView({
 				{leg.orderNumber ? (
 					<Text variant="help">
 						{t('common.order')} #{leg.orderNumber} ·{' '}
-						{t('coupons.items_summary', { n: flow.lines.length })}
+						{t('coupons.items_summary', { n: flow.split.lines.length })}
 					</Text>
 				) : null}
 				<Text variant="help" decodeHtml>
-					{flow.plan ? flow.planLabel : t('pos_checkout.payment_n_of', { n: 1, ways: 1 })}
+					{flow.figures.plan ? flow.planLabel : t('pos_checkout.payment_n_of', { n: 1, ways: 1 })}
 				</Text>
 			</HStack>
 			<View className="min-h-4 flex-1" />
@@ -271,7 +271,7 @@ export function TerminalLegView({
 						variant="default"
 						size="lg"
 						testID="checkout-terminal-capture-retry"
-						onPress={flow.retryTerminalCapture}
+						onPress={flow.terminal.retryTerminalCapture}
 					>
 						<ButtonText>
 							{row.capture_mode === 'device'
@@ -289,7 +289,7 @@ export function TerminalLegView({
 						testID="checkout-terminal-cancel"
 						disabled={action === 'cancelling'}
 						loading={action === 'cancelling'}
-						onPress={flow.cancelTerminalLeg}
+						onPress={flow.terminal.cancelTerminalLeg}
 					>
 						<ButtonText>{t('pos_checkout.cancel_on_terminal')}</ButtonText>
 					</Button>
@@ -298,7 +298,7 @@ export function TerminalLegView({
 					<Button
 						variant="outline"
 						testID="checkout-terminal-release"
-						onPress={flow.releaseTerminalLeg}
+						onPress={flow.terminal.releaseTerminalLeg}
 					>
 						<ButtonText>{t('pos_checkout.release_this_payment')}</ButtonText>
 					</Button>
@@ -309,14 +309,14 @@ export function TerminalLegView({
 							variant="default"
 							size="lg"
 							testID="checkout-terminal-retry"
-							onPress={flow.retryTerminalLeg}
+							onPress={flow.terminal.retryTerminalLeg}
 						>
 							<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
 						</Button>
 						<Button
 							variant="outline"
 							testID="checkout-terminal-another"
-							onPress={flow.dismissTerminalLeg}
+							onPress={flow.terminal.dismissTerminalLeg}
 						>
 							<ButtonText>{t('pos_checkout.choose_another_way')}</ButtonText>
 						</Button>

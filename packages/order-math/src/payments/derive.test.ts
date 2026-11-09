@@ -491,12 +491,20 @@ describe('netRefundable', () => {
 		expect(netRefundable('100', [{ total: '-10' }], [row({ amount: '20' })])).toBe(10);
 	});
 
+	it('does not subtract a pending provider Woo refund twice from captured money', () => {
+		const payment = row({
+			amount: '20',
+			refunds: [{ id: 1, amount: '10', status: 'pending', provider_ref: null }],
+		});
+		expect(netRefundable('20', [{ total: '-10' }], [payment])).toBe(10);
+	});
+
 	it('reserves pending allocations separately from an unallocated manual Woo refund', () => {
 		const payment = row({
 			amount: '20',
 			refunds: [{ id: 1, amount: '10', status: 'pending', provider_ref: null }],
 		});
-		expect(netRefundable('100', [{ total: '-10' }], [payment])).toBe(0);
+		expect(netRefundable('100', [{ total: '-10' }, { total: '-10' }], [payment])).toBe(0);
 	});
 
 	it('does not subtract an allocated Woo refund twice from part-paid money', () => {

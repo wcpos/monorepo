@@ -5,21 +5,16 @@ import { Text } from '@wcpos/components/text';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
-import { refundsSummary } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Legend, ProportionalBar, StatGrid } from './primitives';
 
 export function RefundsCard() {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ selectedOrders, totals, periodRefunds } = useReportsData();
+		{ figures, periodRefunds } = useReportsData();
 	const { storeId } = useReportsPeriod(),
 		{ store, money, percent, quantity } = useReportFormats(storeId);
-	const decimals = store?.price_num_decimals;
-	const summary = React.useMemo(
-		() => refundsSummary(periodRefunds ?? [], totals, decimals, selectedOrders.length),
-		[selectedOrders.length, totals, decimals, periodRefunds]
-	);
+	const summary = figures.refunds;
 	if (!store || !periodRefunds)
 		return <CardSkeleton testID="card-refunds" name={t('reports.card_refunds')} />;
 	return (
@@ -59,7 +54,7 @@ export function RefundsCard() {
 				segments={[
 					{ share: summary.keptShare ?? 0, className: 'bg-c1' },
 					{
-						share: totals.total ? summary.refunded / totals.total : 0,
+						share: figures.gross ? summary.refunded / figures.gross : 0,
 						className: 'bg-bad',
 					},
 				]}

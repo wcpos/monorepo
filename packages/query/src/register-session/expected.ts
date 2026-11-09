@@ -2,6 +2,8 @@ import { POS_META_KEYS } from '@wcpos/sync-core';
 import type { RefundDocumentType } from '@wcpos/database';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
+import { isLiveMovement } from './drawer-rules';
+
 type LedgerRow = {
 	id?: string;
 	/** The order the row belongs to, when the caller keeps it; counts distinct orders. */
@@ -175,8 +177,10 @@ const display = (amount: string | null | undefined) => fromMinor(toMinor(amount,
 function localTerms(input: Parameters<typeof deriveExpected>[0]) {
 	const { session, movements, ledgerRowsBySession, refundRecords = [] } = input;
 	const own = movements.filter((row) => row.session_id === session.id);
-	const voids = new Set(own.filter((row) => row.type === 'void').map((row) => row.voids));
-	const live = own.filter((row) => !row.voided_by && !voids.has(row.id));
+	const live = own.filter((row) => isLiveMovement(row, own));
+	const voids = own.filter(
+		(row) => row.type === 'void' && !row.voided_by && !own.some((entry) => entry.voids === row.id)
+	);
 	const cash = ledgerRowsBySession.filter(
 		(row) => row.session_id === session.id && row.status === 'captured' && row.kind === 'cash'
 	);
@@ -193,7 +197,7 @@ function localTerms(input: Parameters<typeof deriveExpected>[0]) {
 		cashRefunds: refunds.byMethod.cash ?? 0,
 		cashRefundsCount: refunds.countByMethod.cash ?? 0,
 		noSales: live.filter((row) => row.type === 'no_sale').length,
-		voids: live.filter((row) => row.type === 'void').length,
+		voids: voids.length,
 	};
 }
 

@@ -103,6 +103,9 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(document: T, selector: (value: T) => unknown) => selector(document),
 }));
 jest.mock('../../../contexts/app-state', () => ({ useStoreSession: () => ({ store }) }));
+jest.mock('../../../contexts/theme-setting', () => ({
+	useThemeSetting: () => ({ theme: store.theme, icons: store.icons, fonts: store.fonts }),
+}));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),

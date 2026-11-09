@@ -11,7 +11,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { TenderCheckout } from './tender-checkout';
 import { initialTenderState } from './tender-state';
-import { withFigures } from './tender-figures.test-utils';
+import { splitWith, withFigures } from './tender-figures.test-utils';
 
 import type { TenderFlow } from './use-tender-flow';
 
@@ -229,7 +229,6 @@ const reopenedPaid = {
 	totalMinor: 1683,
 	balanceMinor: 0,
 	paidMinor: 1683,
-	allocations: {},
 	rows: [
 		{ id: 'r1', method_id: 'pos_cash', amount: '16.83', status: 'captured', kind: 'cash' },
 	] as TenderFlow['rows'],
@@ -243,18 +242,30 @@ const strandedAttempt = {
 	flagged: false,
 	title: 'Email Invoice',
 } as TenderFlow['unansweredAttempt'];
-function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
+type FlowOverrides = Partial<Omit<TenderFlow, 'terminal' | 'commands'>> & {
+	terminal?: Partial<TenderFlow['terminal']>;
+	commands?: Partial<TenderFlow['commands']>;
+};
+function makeFlow({ terminal, commands, ...overrides }: FlowOverrides = {}): TenderFlow {
 	return withFigures({
 		state: initialTenderState,
-		dispatch: jest.fn(),
+		terminal: {
+			readers: [],
+			lockToDefault: false,
+			pickReader: jest.fn(),
+			...terminal,
+		},
+		commands: {
+			dispatch: jest.fn(),
+			pickMethod: mockPickMethod,
+			takeTender: jest.fn(),
+			cancelPayment: jest.fn(),
+			...commands,
+		},
 		dp: 2,
 		totalMinor: 9295,
 		paidMinor: 0,
-		plan: null,
 		planLabel: null,
-		lines: [],
-		picked: {},
-		splitOn: false,
 		discountMinor: 0,
 		balanceMinor: 9295,
 		rows: [],
@@ -271,12 +282,6 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		saveState: null,
 		terminalLeg: null,
 		hasLiveTerminalLeg: false,
-		readers: [],
-		lockToDefault: false,
-		pickReader: jest.fn(),
-		pickMethod: mockPickMethod,
-		takeTender: jest.fn(),
-		cancelPayment: jest.fn(),
 		...overrides,
 	} as TenderFlow);
 }
@@ -353,7 +358,9 @@ describe('TenderCheckout', () => {
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
 			},
 		];
-		mockFlow = makeFlow({ paidUnits: { 'line-local': { units: 1, methods: ['Cash'] } } });
+		mockFlow = makeFlow({
+			split: splitWith({ paidUnits: { 'line-local': { units: 1, methods: ['Cash'] } } }),
+		});
 
 		render(<TenderCheckout order={order} />);
 
@@ -426,10 +433,12 @@ describe('TenderCheckout', () => {
 			state: { ...initialTenderState, view: 'cancel' },
 		});
 		render(<TenderCheckout order={order} />);
+		expect(screen.getByTestId('checkout-cancel-confirm')).not.toBeNull();
 
 		mockOnClose?.();
 
 		expect(mockBack).not.toHaveBeenCalled();
+		expect(mockFlow.commands.dispatch).not.toHaveBeenCalled();
 	});
 
 	it('keeps the terminal pane mounted when the leg finishes on the Legacy tab', () => {
@@ -465,13 +474,13 @@ describe('TenderCheckout', () => {
 			fireEvent.click(screen.getByTestId('checkout-offline-leave'));
 			expect(mockBack).toHaveBeenCalledTimes(1);
 			expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
-			expect(mockFlow.dispatch).not.toHaveBeenCalled();
+			expect(mockFlow.commands.dispatch).not.toHaveBeenCalled();
 		}
 	);
 
 	it('offers a completion action for a zero-total order', () => {
 		const takeTender = jest.fn();
-		mockFlow = makeFlow({ totalMinor: 0, balanceMinor: 0, takeTender });
+		mockFlow = makeFlow({ totalMinor: 0, balanceMinor: 0, commands: { takeTender } });
 		render(<TenderCheckout order={order} />);
 
 		fireEvent.click(screen.getByTestId('checkout-complete-order'));
@@ -482,7 +491,7 @@ describe('TenderCheckout', () => {
 	// A paid sale re-opened from Orders: its captured payments cover it, so Done completes it.
 	it('offers the completion action for a re-opened sale its payments cover', () => {
 		const takeTender = jest.fn();
-		mockFlow = makeFlow({ ...reopenedPaid, takeTender });
+		mockFlow = makeFlow({ ...reopenedPaid, commands: { takeTender } });
 		render(<TenderCheckout order={order} />);
 
 		expect(screen.queryByTestId('checkout-commit')).toBeNull();
@@ -519,7 +528,7 @@ describe('TenderCheckout', () => {
 		['the Legacy tab', { state: { ...initialTenderState, tab: 'legacy' as const } }],
 	])('%s with an unanswered command offers only Try again', (_, overrides) => {
 		const retryCommand = jest.fn(async () => undefined);
-		mockFlow = makeFlow({ ...overrides, unansweredCommand: true, retryCommand });
+		mockFlow = makeFlow({ ...overrides, unansweredCommand: true, commands: { retryCommand } });
 		render(<TenderCheckout order={order} />);
 		expect(screen.queryByTestId('checkout-complete-order')).toBeNull();
 		expect(screen.queryByTestId('legacy-tab')).toBeNull();
@@ -533,7 +542,7 @@ it('closing a live terminal leg leaves without a whole-order cancel prompt', () 
 	render(<TenderCheckout order={order} />);
 	mockOnClose?.();
 	expect(mockBack).toHaveBeenCalledTimes(1);
-	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+	expect(mockFlow.commands.dispatch).not.toHaveBeenCalled();
 	expect(screen.queryByTestId('checkout-cancel-payment')).toBeNull();
 });
 it('reader chips require an explicit choice when there is no default', () => {
@@ -543,10 +552,12 @@ it('reader chips require an explicit choice when there is no default', () => {
 	mockFlow = makeFlow({
 		method: server,
 		state: { ...initialTenderState, view: 'amount', methodId: server.id, entryMinor: 500 },
-		readers: [
-			{ id: 'free', label: 'Front', isDefault: false, inUseBy: null },
-			{ id: 'busy', label: 'Back', isDefault: false, inUseBy: '123' },
-		],
+		terminal: {
+			readers: [
+				{ id: 'free', label: 'Front', isDefault: false, inUseBy: null },
+				{ id: 'busy', label: 'Back', isDefault: false, inUseBy: '123' },
+			],
+		},
 	});
 	render(<TenderCheckout order={order} />);
 	expect((screen.getByTestId('checkout-commit') as HTMLButtonElement).disabled).toBe(true);
@@ -554,14 +565,14 @@ it('reader chips require an explicit choice when there is no default', () => {
 	// The reader chooser sits above the keys now, not inside them.
 	expect(document.body.textContent).toContain('pos_checkout.choose_a_terminal');
 	fireEvent.click(screen.getByTestId('checkout-reader-free'));
-	expect(mockFlow.pickReader).toHaveBeenCalledWith('free');
+	expect(mockFlow.terminal.pickReader).toHaveBeenCalledWith('free');
 });
 it('the single default reader is a locked line, not a chip', () => {
 	mockFlow = makeFlow({
 		method: method({
 			capture: { mode: 'server', provider: null, hardware: null, webview_available: false },
 		}),
-		readers: [{ id: 'reader', label: 'Front', isDefault: true, inUseBy: null }],
+		terminal: { readers: [{ id: 'reader', label: 'Front', isDefault: true, inUseBy: null }] },
 	});
 	render(<TenderCheckout order={order} />);
 	expect(screen.getByTestId('checkout-reader-locked').textContent).toBe('pos_checkout.reader_line');

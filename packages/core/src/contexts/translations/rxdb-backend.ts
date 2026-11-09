@@ -1,38 +1,37 @@
-import { cacheTranslations, type TranslationsState, type UserDatabase } from '@wcpos/query/user-db';
+/** Where the backend reads and writes catalogues, keyed `<language>@<version>`. */
+interface TranslationCache {
+	get(key: string): unknown;
+	/** `cached` is the value read when the fetch started, so an unchanged catalogue is not rewritten. */
+	set(key: string, catalogue: Record<string, string>, cached: unknown): void;
+}
 
-// On next, this is wcpos/translations' moving jsDelivr branch ref, refreshed by the CDN within about 12 hours.
-// On main, the release workflow replaces it with a CalVer tag; resolve this one-line conflict in main's favour when merging next.
-export const TRANSLATION_VERSION = '2026.11.12';
-
-// A rolling ref must be re-fetched because its content changes under the same name.
-// (Named REF, not VERSION, so the release bump regex `TRANSLATION_VERSION = '2026.11.12'` cannot match it.)
-// Typed as string: on main TRANSLATION_VERSION is a CalVer literal and the `===` below would
-// otherwise be a TypeScript no-overlap error (TS2367) on every release.
-const ROLLING_TRANSLATION_REF: string = 'next';
+export interface RxDBBackendOptions {
+	/** A wcpos/translations jsDelivr ref: a CalVer tag, or a branch such as `next`. */
+	version: string;
+	/** A rolling ref changes content under the same name, so it is re-fetched once per backend instance. */
+	rolling: boolean;
+	cache: TranslationCache;
+}
 
 /**
  * Custom i18next backend that loads translations from jsDelivr CDN
- * and caches them in RxDB via the app's translationsState.
+ * and caches them through the cache it is given.
  */
 export class RxDBBackend {
 	static type = 'backend' as const;
 	type = 'backend' as const;
 
-	private translationsState?: TranslationsState;
-	private userDB?: UserDatabase;
-	private services: any;
+	private options!: RxDBBackendOptions;
 	// A rolling ref is fetched once per backend instance; every later read for the same key
 	// serves the cache, as a pinned version does.
 	private fetchedRolling = new Set<string>();
 
-	init(services: any, backendOptions: any) {
-		this.services = services;
-		this.userDB = backendOptions.userDB;
-		this.translationsState = backendOptions.translationsState;
+	init(_services: unknown, backendOptions: RxDBBackendOptions) {
+		this.options = backendOptions;
 	}
 
 	buildUrl(language: string, namespace: string): string {
-		return `https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/${language}/monorepo/${namespace}.json`;
+		return `https://cdn.jsdelivr.net/gh/wcpos/translations@${this.options.version}/translations/js/${language}/monorepo/${namespace}.json`;
 	}
 
 	/**
@@ -55,12 +54,12 @@ export class RxDBBackend {
 	}
 
 	read(language: string, namespace: string, callback: (err: any, data?: any) => void) {
-		const cacheKey = `${language}@${TRANSLATION_VERSION}`;
+		const { version, rolling, cache } = this.options;
+		const cacheKey = `${language}@${version}`;
 
 		// A pinned version serves the cache without fetching; a rolling ref serves it once
 		// this instance has fetched the key.
-		const cached = this.translationsState?.get(cacheKey);
-		const rolling = TRANSLATION_VERSION === ROLLING_TRANSLATION_REF;
+		const cached = cache.get(cacheKey);
 		// The refreshed set is keyed by namespace too, so a second namespace would still be
 		// fetched; the stored key stays language-only, as before this change.
 		const refreshedKey = `${cacheKey}|${namespace}`;
@@ -78,7 +77,7 @@ export class RxDBBackend {
 			.then((data) => {
 				if (data && Object.keys(data).length > 0) {
 					refreshed();
-					if (this.userDB) void cacheTranslations(this.userDB, cacheKey, data, { cached });
+					cache.set(cacheKey, data, cached);
 					callback(null, data);
 					return;
 				}
@@ -94,8 +93,7 @@ export class RxDBBackend {
 					if (fallbackData && Object.keys(fallbackData).length > 0) {
 						// Cache under the original language + version key.
 						refreshed();
-						if (this.userDB)
-							void cacheTranslations(this.userDB, cacheKey, fallbackData, { cached });
+						cache.set(cacheKey, fallbackData, cached);
 						callback(null, fallbackData);
 					} else {
 						callback(null, cached ?? {});
