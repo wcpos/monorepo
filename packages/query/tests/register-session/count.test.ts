@@ -112,13 +112,20 @@ it('begins a count: counting, pending, the live copy marked here, and the fact',
 });
 
 it('abandons a count: open, the approval snapshot dropped, the live copy, and the fact', async () => {
-	await insert({ status: 'counting', approved_counted: { cash: '100' }, count_note: 'n' });
+	await insert({
+		status: 'counting',
+		approved_counted: { cash: '100' },
+		approval_required: true,
+		count_note: 'n',
+	});
 	const opened = await abandonCount(ctx, 's1');
 	expect(opened.toJSON()).toMatchObject({
 		status: 'open',
 		pending_status: 'open',
 		approved_counted: null,
 		count_note: null,
+		// The server's flag: it stays until the server clears it.
+		approval_required: true,
 	});
 	expect(live()).toMatchObject({ status: 'open', counting_here: false, acknowledged: true });
 	expect(logger.info).toHaveBeenCalledWith('Register session counting abandoned', {
