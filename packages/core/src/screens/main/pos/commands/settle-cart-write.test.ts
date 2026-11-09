@@ -163,12 +163,7 @@ it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', asyn
 	);
 	if (operation === 'remove') {
 		expect(localPatch).toHaveBeenCalledWith({ document: order, data });
-		expect(commitAtBoundary).toHaveBeenCalledWith(
-			order,
-			expect.objectContaining({ changed: true }),
-			queue,
-			undefined
-		);
+		expect(commitAtBoundary).toHaveBeenCalledWith(order, queue, undefined);
 	} else {
 		expect(order.payload.total).toBe('6');
 		expect(commitAtBoundary).not.toHaveBeenCalled();

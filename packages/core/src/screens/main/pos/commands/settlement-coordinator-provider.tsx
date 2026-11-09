@@ -4,13 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import {
-	type EngineWarning,
-	settleAggregate,
-	settleCart,
-	settlementPatch,
-	snapshotFromOrderJSON,
-} from '@wcpos/order-math';
+import type { EngineWarning } from '@wcpos/order-math';
 import {
 	observeCatalogChanges,
 	observeCoverage,
@@ -30,7 +24,8 @@ import { readCouponContext } from '../hooks/use-coupon-context';
 import { writeOrderChanges } from './write-order-changes';
 import { commitAtBoundary } from './boundary-commit';
 import { useCloseSale } from './close-sale';
-import { crossesPaidBalanceBoundary, orderLocked } from './paid-balance-boundary';
+import { orderLocked } from './paid-balance-boundary';
+import { type SettleError, settlePayload } from './settle-payload';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
 import { completeSale } from '../checkout/sale-completion';
 import {
@@ -52,7 +47,6 @@ import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 import { useCartConfigInputs, useCartConfigReader } from '../hooks/use-cart-config';
 import { useTaxSettings } from '../../contexts/tax-rates';
 
-import type { BoundaryResult } from './paid-balance-boundary';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
 
@@ -102,10 +96,9 @@ export function SettlementCoordinatorProvider() {
 	);
 	const repair = useRepairTaxExempt(
 		React.useCallback<Parameters<typeof useRepairTaxExempt>[0]>(
-			(order, result, queue, coupons, valid) =>
+			(order, queue, coupons, valid) =>
 				commitAtBoundary(systemContext(), {
 					order: order as EngineRecord<'orders'>,
-					result,
 					queue,
 					write: (changes) => writeOrderChanges(manager, { document: order, changes }),
 					coupons: coupons && {
@@ -181,36 +174,32 @@ export function SettlementCoordinatorProvider() {
 			observe,
 			settle: async (uuid, document, allowed, coupons, queue) => {
 				let warnings: readonly EngineWarning[] = [];
-				let boundary: BoundaryResult | undefined;
-				let failure: Extract<ReturnType<typeof settleCart>, { ok: false }>['error'] | undefined;
+				let boundary = false;
+				let failure: SettleError | undefined;
 				const write = (changes: Parameters<typeof writeOrderChanges>[1]['changes']) =>
 					writeOrderChanges(manager, { document, changes });
 				await write((payload) => {
-					boundary = undefined;
+					boundary = false;
 					if (!allowed(payload as OrderPayload)) return {};
-					const config = read(payload as OrderPayload);
-					const snapshot = snapshotFromOrderJSON(payload);
-					const result = coupons
-						? settleCart(snapshot, config, { coupons })
-						: settleAggregate(snapshot, config);
-					warnings = result.warnings;
-					if ('error' in result) {
-						failure = result.error;
+					const outcome = settlePayload({
+						payload: payload as OrderPayload,
+						config: read(payload as OrderPayload),
+						coupons,
+						owner: { uuid, serverOwnsMoney },
+					});
+					if (outcome.kind === 'owned') return {};
+					warnings = outcome.warnings;
+					if (outcome.kind === 'error') {
+						failure = outcome.error;
 						return {};
 					}
-					if (
-						crossesPaidBalanceBoundary({ payload: payload as OrderPayload, result, dp: config.dp })
-					) {
-						boundary = result;
-						return {};
-					}
-					return result.changed ? settlementPatch(result) : {};
+					boundary = outcome.kind === 'boundary';
+					return outcome.kind === 'patch' ? outcome.changes : {};
 				});
 				let outcome;
 				if (boundary)
 					outcome = await commitAtBoundary(systemContext(), {
 						order: document as EngineRecord<'orders'>,
-						result: boundary,
 						queue,
 						write,
 						coupons,

@@ -11,7 +11,6 @@ import { commitAtBoundary } from './boundary-commit';
 import { useCloseSale } from './close-sale';
 
 import type { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import type { BoundaryResult } from './paid-balance-boundary';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
@@ -27,7 +26,7 @@ export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['lo
 	const complete = useCompleteOrderFlowForOrder();
 	const closeSale = useCloseSale();
 	return React.useCallback(
-		(order: CurrentOrderRecord, result: BoundaryResult, queue: OrderMutationContext) =>
+		(order: CurrentOrderRecord, queue: OrderMutationContext) =>
 			commitAtBoundary(
 				{
 					...ctx,
@@ -42,7 +41,6 @@ export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['lo
 				},
 				{
 					order: order as EngineRecord<'orders'>,
-					result,
 					queue,
 					// Coupon carts belong to the continuation, including arrivals during guards.
 					allowed: (payload) => !payload.coupon_lines?.some((line) => line.code != null),
