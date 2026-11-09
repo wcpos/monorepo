@@ -8,8 +8,8 @@ import * as fake from './testing';
 
 /**
  * Pins `./testing` to the real row: the same props give the same testIDs, the same form-item ids
- * (ledger line 9), the same verb and add buttons, locked's switch and Open, and the Saved mark's
- * testID. The harness is `property-row.test.tsx`'s.
+ * (ledger line 9), the same verb and add buttons, locked's switch and Open, and the Saved mark
+ * beside the key with the verb kept (ledger line 21). The harness is `property-row.test.tsx`'s.
  */
 
 // Keep RNW rendering; Jest does not compile Uniwind classes, so expose them on the DOM.
@@ -161,5 +161,7 @@ describe.each(both)('%s property row', (_name, m) => {
 		expect(screen.queryByTestId('saved-tax_class')).toBeNull();
 		fireEvent.click(screen.getByText('save tax_class'));
 		expect(screen.getByTestId('saved-tax_class')).toBeTruthy();
+		expect(screen.getByTestId('line-row-tax')).toHaveTextContent(/^Tax.*Standard.*Edit$/);
+		expect(screen.getByTestId('verb')).toBeTruthy();
 	});
 });

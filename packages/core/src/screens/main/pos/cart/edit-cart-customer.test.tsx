@@ -393,17 +393,17 @@ describe('EditCartCustomerForm', () => {
 		expect(screen.getByRole('button', { name: 'common.state' })).toBeTruthy();
 	});
 
-	it('a verb and the SavedMark never share the line', () => {
+	it('a SavedMark sits with the key and the verb stays (property-row ledger line 21)', () => {
 		open({ billing: ADDRESS, shipping: { address_1: 'Unit 4', city: 'Leeds' }, tax_ids: [{}] });
 		mockSavedName = 'shipping';
 		const { rerender } = render(<EditCartCustomerForm />);
 		expect(screen.getByTestId('saved-shipping')).toBeTruthy();
-		expect(screen.queryByTestId('cart-address-edit-shipping')).toBeNull();
-		expect(screen.queryByTestId('cart-address-shipping-same')).toBeNull();
+		expect(screen.getByTestId('cart-address-edit-shipping')).toBeTruthy();
+		expect(screen.getByTestId('cart-address-shipping-same')).toBeTruthy();
 		mockSavedName = 'tax_ids';
 		rerender(<EditCartCustomerForm />);
 		expect(screen.getByTestId('saved-tax_ids')).toBeTruthy();
-		expect(screen.queryByTestId('cart-address-remove-tax_id-0')).toBeNull();
+		expect(screen.getByTestId('cart-address-remove-tax_id-0')).toBeTruthy();
 		mockSavedName = '';
 		rerender(<EditCartCustomerForm />);
 		expect(screen.queryByTestId('saved-shipping')).toBeNull();

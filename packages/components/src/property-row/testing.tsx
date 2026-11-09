@@ -4,8 +4,8 @@ import type * as Real from './index';
 
 /**
  * The row for runners that cannot load it (Button, Switch, Reanimated): its ids and slots (testID
- * `<prefix>-row-<id>`, item `<prefix>-<id>`, key `<item>-form-item`, ledger line 9; the mark in the
- * verb's place, locked's where and Open), pinned to the real row by `testing.test.tsx`.
+ * `<prefix>-row-<id>`, item `<prefix>-<id>`, key `<item>-form-item`, ledger line 9; the Saved mark
+ * with the key and the verb kept, ledger line 21; locked's where and Open), pinned to the real row by `testing.test.tsx`.
  */
 type RowProps = React.ComponentProps<typeof Real.PropertyRow>;
 
@@ -60,11 +60,12 @@ export function PropertyRow(props: RowProps) {
 			data-indent={props.indent || undefined}
 		>
 			{props.label !== undefined && <span id={item && `${item}-form-item`}>{props.label}</span>}
+			{mark}
 			{props.help ? <span>{props.help}</span> : null}
 			{/* The row is the form item: the suite's FormItem, if any, is what its controls adopt. */}
 			<FormItem {...(FormItem === React.Fragment ? {} : { nativeID: item })}>
 				{value}
-				{mark ?? (props.locked ? <span>{props.locked.where}</span> : props.verb)}
+				{props.locked ? <span>{props.locked.where}</span> : props.verb}
 				{props.locked?.href ? <a href={props.locked.href}>Open</a> : null}
 				{props.control}
 			</FormItem>
