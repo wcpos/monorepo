@@ -88,10 +88,17 @@ export function productWriterCredentialsConfigured(): boolean {
 // globalSetup hands its one writer login to shard workers as JSON keyed by store URL without trailing slashes.
 export const WRITER_RUN_AUTH_ENV = 'E2E_PRODUCT_WRITER_RUN_AUTH';
 
+// The plugin's access token lives 30 minutes; estimating expiry from login start never puts it later than the server's.
+export const WRITER_ACCESS_TOKEN_TTL_MS = 30 * 60_000;
+// Require this much life for product-visibility's 20-minute VISIBILITY_TEST_TIMEOUT_MS, the longest writer-using test budget.
+export const WRITER_RENEW_MARGIN_MS = 20 * 60_000;
+// expiresAt is epoch milliseconds.
+export type WriterAuthorization = StoreAuthorization & { expiresAt: number };
+
 export function publishedWriterAuthorization(
 	storeUrl: string,
 	env: NodeJS.ProcessEnv = process.env
-): StoreAuthorization | null {
+): WriterAuthorization | null {
 	try {
 		const published = JSON.parse(env[WRITER_RUN_AUTH_ENV] ?? '{}');
 		if (!published || typeof published !== 'object' || Array.isArray(published)) return null;
@@ -101,7 +108,9 @@ export function publishedWriterAuthorization(
 			typeof authorization === 'object' &&
 			(authorization.transport === 'header' || authorization.transport === 'query') &&
 			typeof authorization.value === 'string' &&
-			authorization.value.length > 0
+			authorization.value.length > 0 &&
+			typeof authorization.expiresAt === 'number' &&
+			Number.isFinite(authorization.expiresAt)
 		) {
 			return authorization;
 		}
@@ -113,10 +122,10 @@ export function publishedWriterAuthorization(
 
 export function publishWriterAuthorization(
 	storeUrl: string,
-	authorization: StoreAuthorization,
+	authorization: WriterAuthorization,
 	env: NodeJS.ProcessEnv = process.env
 ): void {
-	let published: Record<string, StoreAuthorization> = {};
+	let published: Record<string, WriterAuthorization> = {};
 	try {
 		const parsed = JSON.parse(env[WRITER_RUN_AUTH_ENV] ?? '{}');
 		if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) published = parsed;
@@ -204,23 +213,43 @@ export function mintSearchProbeToken(workerIndex: number): string {
  * token to an anonymous 401 — so the helper verifies the header with one read
  * and falls back to the `?authorization=` param.
  *
- * Reuse globalSetup's handed-over writer authorization after one products read
- * confirms it still works; otherwise log in for this call as usual.
+ * Reuse globalSetup's handed-over writer authorization only with the renewal margin
+ * remaining and one products read confirming it works; otherwise log in for this call.
  */
 export async function productWriterAuthorization(
 	request: APIRequestContext,
 	storeUrl: string
-): Promise<StoreAuthorization | null> {
+): Promise<WriterAuthorization | null> {
 	const user = process.env.E2E_PRODUCT_WRITER_USER;
 	const pass = process.env.E2E_PRODUCT_WRITER_PASS;
 	productWriterCredentialsDecision(user, pass);
 	if (!user || !pass) return null;
 
 	const published = publishedWriterAuthorization(storeUrl);
-	if (published && (await writerAuthorizationAccepted(request, storeUrl, published))) {
+	if (
+		published &&
+		published.expiresAt - Date.now() >= WRITER_RENEW_MARGIN_MS &&
+		(await writerAuthorizationAccepted(request, storeUrl, published))
+	) {
 		return published;
 	}
 	return loginProductWriter(request, storeUrl, user, pass);
+}
+
+/**
+ * Renew in place so worker-scoped fixtures and specs holding this one object
+ * for the worker's life all receive the fresh credential.
+ */
+export async function renewProductWriterIfExpiring(
+	request: APIRequestContext,
+	storeUrl: string,
+	writer: WriterAuthorization
+): Promise<boolean> {
+	if (writer.expiresAt - Date.now() >= WRITER_RENEW_MARGIN_MS) return false;
+	const fresh = await productWriterAuthorization(request, storeUrl);
+	if (!fresh) return false;
+	Object.assign(writer, fresh);
+	return true;
 }
 
 async function writerAuthorizationAccepted(
@@ -245,11 +274,12 @@ async function loginProductWriter(
 	storeUrl: string,
 	user: string,
 	pass: string
-): Promise<StoreAuthorization> {
+): Promise<WriterAuthorization> {
 	// The server keys auth sessions by state + redirect URI, so concurrent workers need distinct states.
 	const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe-${randomUUID()}`;
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		try {
+			const mintedAt = Date.now();
 			const pageResponse = await request.get(authUrl);
 			if (isNetworkishStatus(pageResponse.status())) {
 				throw new WriterAuthenticationFailure('transport', pageResponse.status());
@@ -280,7 +310,10 @@ async function loginProductWriter(
 			const location = submit.headers()['location'] ?? '';
 			const token = /access_token=([^&]+)/.exec(location)?.[1];
 			if (!token) throw new WriterAuthenticationFailure('http', submit.status());
-			return await resolveWriterTransport(request, storeUrl, token);
+			return {
+				...(await resolveWriterTransport(request, storeUrl, token)),
+				expiresAt: mintedAt + WRITER_ACCESS_TOKEN_TTL_MS,
+			};
 		} catch (error) {
 			const failure =
 				error instanceof WriterAuthenticationFailure

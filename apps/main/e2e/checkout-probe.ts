@@ -7,31 +7,32 @@ import {
 	type WorkerInfo,
 } from '@playwright/test';
 
-import {
-	authenticatedTest,
-	ensureRegisterOpen,
-	type StoreAuthorization,
-	tryAddProductBySku,
-} from './fixtures';
+import { log } from '@wcpos/utils/logger';
+
+import { authenticatedTest, ensureRegisterOpen, tryAddProductBySku } from './fixtures';
 import {
 	createRunPrivateProduct,
 	createVariationMatrixProduct,
 	deleteSearchProbe,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
+	renewProductWriterIfExpiring,
 	type RunPrivateProductProbe,
 	searchAndWaitForServer,
 	type SearchProbe,
 	sweepOrphanedProductProbes,
 	type VariationMatrixProbe,
+	type WriterAuthorization,
 } from './search-probe';
 
 import type { WcposTestOptions } from '../playwright.config';
 
 type ProductProbeWorkerFixtures = {
 	productProbeRequest: APIRequestContext;
-	productWriter: StoreAuthorization | null;
+	productWriter: WriterAuthorization | null;
 };
+
+type ProductWriterRenewalFixtures = { productWriterRenewal: void };
 
 type SimpleProductProbeWorkerFixtures = {
 	runPrivateSimpleProducts: SearchProbe[] | null;
@@ -57,12 +58,24 @@ export function workerStoreUrl(workerInfo: WorkerInfo): string {
 	return (workerInfo.project.use as WcposTestOptions).storeUrl || 'https://dev-free.wcpos.com';
 }
 
+async function renewWriterForTeardown(
+	request: APIRequestContext,
+	storeUrl: string,
+	writer: WriterAuthorization
+): Promise<void> {
+	try {
+		await renewProductWriterIfExpiring(request, storeUrl, writer);
+	} catch {
+		log.warn('[checkout-probe] writer renewal before teardown failed');
+	}
+}
+
 /**
  * Worker-private products are reused by that worker's serial test executions,
  * but their random tokens keep concurrent workers and CI runs disjoint.
  */
 const productProbeTest = authenticatedTest.extend<
-	ProductProbeTestFixtures,
+	ProductWriterRenewalFixtures,
 	ProductProbeWorkerFixtures
 >({
 	productProbeRequest: [
@@ -92,6 +105,9 @@ const productProbeTest = authenticatedTest.extend<
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
 				await use(writer);
 			} finally {
+				if (writer) {
+					await renewWriterForTeardown(productProbeRequest, workerStoreUrl(workerInfo), writer);
+				}
 				await sweepOrphanedProductProbes({
 					request: productProbeRequest,
 					storeUrl: workerStoreUrl(workerInfo),
@@ -100,6 +116,20 @@ const productProbeTest = authenticatedTest.extend<
 			}
 		},
 		{ scope: 'worker' },
+	],
+	// Renew the worker's writer before each test so none starts with less than WRITER_RENEW_MARGIN_MS of life.
+	productWriterRenewal: [
+		async ({ productProbeRequest, productWriter }, use, testInfo) => {
+			if (productWriter) {
+				await renewProductWriterIfExpiring(
+					productProbeRequest,
+					workerStoreUrl(testInfo),
+					productWriter
+				);
+			}
+			await use();
+		},
+		{ auto: true },
 	],
 });
 
@@ -130,6 +160,11 @@ export const isolatedProductTest = productProbeTest.extend<
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
 				await use(probes);
 			} finally {
+				await renewWriterForTeardown(
+					productProbeRequest,
+					workerStoreUrl(workerInfo),
+					productWriter
+				);
 				for (const probe of probes) {
 					await deleteSearchProbe({
 						request: productProbeRequest,
@@ -176,6 +211,11 @@ export const isolatedVariableProductTest = productProbeTest.extend<
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
 				await use(probe);
 			} finally {
+				await renewWriterForTeardown(
+					productProbeRequest,
+					workerStoreUrl(workerInfo),
+					productWriter
+				);
 				await deleteSearchProbe({
 					request: productProbeRequest,
 					storeUrl: workerStoreUrl(workerInfo),
@@ -222,6 +262,11 @@ export const isolatedVariationMatrixTest = productProbeTest.extend<
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
 				await use(probe);
 			} finally {
+				await renewWriterForTeardown(
+					productProbeRequest,
+					workerStoreUrl(workerInfo),
+					productWriter
+				);
 				await deleteSearchProbe({
 					request: productProbeRequest,
 					storeUrl: workerStoreUrl(workerInfo),
