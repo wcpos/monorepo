@@ -20,8 +20,11 @@ import {
 	productProbeFailureAction,
 	productWriterAuthorization,
 	productWriterCredentialsDecision,
+	publishedWriterAuthorization,
+	publishWriterAuthorization,
 	searchAndWaitForServer,
 	sweepOrphanedProductProbes,
+	WRITER_RUN_AUTH_ENV,
 } from './search-probe';
 
 import type { APIRequestContext } from '@playwright/test';
@@ -451,6 +454,125 @@ test.describe('search-probe pure logic', () => {
 			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
 			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
 			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+		}
+	});
+
+	test('uses the handed-over writer authorization without logging in when the store accepts it', async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		const previousAuth = process.env.E2E_PRODUCT_WRITER_RUN_AUTH;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		const authorization: StoreAuthorization = { transport: 'query', value: 'run-token' };
+		process.env.E2E_PRODUCT_WRITER_RUN_AUTH = JSON.stringify({
+			'https://example.test': authorization,
+		});
+		const logins: string[] = [];
+		const reads: { url: string; params?: Record<string, string> }[] = [];
+		const request = {
+			get: async (url: string, options?: { params?: Record<string, string> }) => {
+				if (url.includes('/wcpos-auth/')) logins.push(url);
+				else reads.push({ url, params: options?.params });
+				return response(200, []);
+			},
+		};
+		try {
+			expect(await productWriterAuthorization(request as never, 'https://example.test/')).toEqual(
+				authorization
+			);
+			expect(logins).toHaveLength(0);
+			expect(reads).toEqual([
+				{
+					url: 'https://example.test/wp-json/wc/v3/products',
+					params: { authorization: 'run-token', per_page: '1' },
+				},
+			]);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+			if (previousAuth === undefined) delete process.env.E2E_PRODUCT_WRITER_RUN_AUTH;
+			else process.env.E2E_PRODUCT_WRITER_RUN_AUTH = previousAuth;
+		}
+	});
+
+	test('logs in again when the store rejects the handed-over writer authorization', async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		const previousAuth = process.env.E2E_PRODUCT_WRITER_RUN_AUTH;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		process.env.E2E_PRODUCT_WRITER_RUN_AUTH = JSON.stringify({
+			'https://example.test': { transport: 'query', value: 'run-token' },
+		});
+		const logins: string[] = [];
+		const request = {
+			get: async (url: string, options?: { params?: Record<string, string> }) => {
+				if (url.includes('/wcpos-auth/')) {
+					logins.push(url);
+					return {
+						...response(200, {}),
+						text: async () =>
+							'<input name="_wpnonce" value="nonce"><input name="auth_session" value="session">',
+					};
+				}
+				return response(options?.params?.authorization === 'run-token' ? 401 : 200, []);
+			},
+			post: async () => ({
+				status: () => 302,
+				headers: () => ({ location: 'https://localhost/cb?access_token=token' }),
+			}),
+		};
+		try {
+			const authorization = await productWriterAuthorization(
+				request as never,
+				'https://example.test'
+			);
+			expect(logins).toHaveLength(1);
+			expect(authorization?.value).toContain('token');
+			expect(authorization?.value).not.toContain('run-token');
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+			if (previousAuth === undefined) delete process.env.E2E_PRODUCT_WRITER_RUN_AUTH;
+			else process.env.E2E_PRODUCT_WRITER_RUN_AUTH = previousAuth;
+		}
+	});
+
+	test('publishedWriterAuthorization ignores malformed or foreign hand-overs', () => {
+		expect(WRITER_RUN_AUTH_ENV).toBe('E2E_PRODUCT_WRITER_RUN_AUTH');
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		const previousAuth = process.env.E2E_PRODUCT_WRITER_RUN_AUTH;
+		try {
+			delete process.env.E2E_PRODUCT_WRITER_RUN_AUTH;
+			expect(publishedWriterAuthorization('https://example.test')).toBeNull();
+			for (const handover of [
+				'not json',
+				JSON.stringify({ 'https://other.test': { transport: 'query', value: 'run-token' } }),
+				JSON.stringify({ 'https://example.test': { transport: 'cookie', value: 'run-token' } }),
+				JSON.stringify({ 'https://example.test': { transport: 'query', value: '' } }),
+			]) {
+				process.env.E2E_PRODUCT_WRITER_RUN_AUTH = handover;
+				expect(publishedWriterAuthorization('https://example.test')).toBeNull();
+			}
+			const env: NodeJS.ProcessEnv = { [WRITER_RUN_AUTH_ENV]: 'not json' };
+			const first: StoreAuthorization = { transport: 'query', value: 'first-token' };
+			const second: StoreAuthorization = { transport: 'header', value: 'Bearer second-token' };
+			publishWriterAuthorization('https://example.test/', first, env);
+			publishWriterAuthorization('https://other.test', second, env);
+			expect(publishedWriterAuthorization('https://example.test', env)).toEqual(first);
+			expect(publishedWriterAuthorization('https://other.test', env)).toEqual(second);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+			if (previousAuth === undefined) delete process.env.E2E_PRODUCT_WRITER_RUN_AUTH;
+			else process.env.E2E_PRODUCT_WRITER_RUN_AUTH = previousAuth;
 		}
 	});
 

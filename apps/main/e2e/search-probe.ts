@@ -85,6 +85,76 @@ export function productWriterCredentialsConfigured(): boolean {
 	);
 }
 
+// globalSetup hands its one writer login to shard workers as JSON keyed by store URL without trailing slashes.
+export const WRITER_RUN_AUTH_ENV = 'E2E_PRODUCT_WRITER_RUN_AUTH';
+
+export function publishedWriterAuthorization(
+	storeUrl: string,
+	env: NodeJS.ProcessEnv = process.env
+): StoreAuthorization | null {
+	try {
+		const published = JSON.parse(env[WRITER_RUN_AUTH_ENV] ?? '{}');
+		if (!published || typeof published !== 'object' || Array.isArray(published)) return null;
+		const authorization = published[storeUrl.replace(/\/+$/, '')];
+		if (
+			authorization &&
+			typeof authorization === 'object' &&
+			(authorization.transport === 'header' || authorization.transport === 'query') &&
+			typeof authorization.value === 'string' &&
+			authorization.value.length > 0
+		) {
+			return authorization;
+		}
+	} catch {
+		return null;
+	}
+	return null;
+}
+
+export function publishWriterAuthorization(
+	storeUrl: string,
+	authorization: StoreAuthorization,
+	env: NodeJS.ProcessEnv = process.env
+): void {
+	let published: Record<string, StoreAuthorization> = {};
+	try {
+		const parsed = JSON.parse(env[WRITER_RUN_AUTH_ENV] ?? '{}');
+		if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) published = parsed;
+	} catch {
+		published = {};
+	}
+	env[WRITER_RUN_AUTH_ENV] = JSON.stringify({
+		...published,
+		[storeUrl.replace(/\/+$/, '')]: authorization,
+	});
+}
+
+export async function mintRunWriterAuthorization(
+	request: APIRequestContext,
+	storeUrls: string[]
+): Promise<void> {
+	try {
+		if (!productWriterCredentialsConfigured()) return;
+	} catch {
+		log.warn('[global-setup] product-writer run login failed; specs will log in themselves');
+		return;
+	}
+	for (const storeUrl of storeUrls) {
+		if (!storeUrl) continue;
+		try {
+			const authorization = await loginProductWriter(
+				request,
+				storeUrl,
+				process.env.E2E_PRODUCT_WRITER_USER!,
+				process.env.E2E_PRODUCT_WRITER_PASS!
+			);
+			publishWriterAuthorization(storeUrl, authorization);
+		} catch {
+			log.warn('[global-setup] product-writer run login failed; specs will log in themselves');
+		}
+	}
+}
+
 export function productProbeFailureAction({
 	writerConfigured,
 	failure,
@@ -133,6 +203,9 @@ export function mintSearchProbeToken(workerIndex: number): string {
  * always-on at dev-free since 2026-08-21), silently degrading a header-carried
  * token to an anonymous 401 — so the helper verifies the header with one read
  * and falls back to the `?authorization=` param.
+ *
+ * Reuse globalSetup's handed-over writer authorization after one products read
+ * confirms it still works; otherwise log in for this call as usual.
  */
 export async function productWriterAuthorization(
 	request: APIRequestContext,
@@ -143,6 +216,36 @@ export async function productWriterAuthorization(
 	productWriterCredentialsDecision(user, pass);
 	if (!user || !pass) return null;
 
+	const published = publishedWriterAuthorization(storeUrl);
+	if (published && (await writerAuthorizationAccepted(request, storeUrl, published))) {
+		return published;
+	}
+	return loginProductWriter(request, storeUrl, user, pass);
+}
+
+async function writerAuthorizationAccepted(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization
+): Promise<boolean> {
+	try {
+		const options = storeRequestOptions(authorization);
+		const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+			...options,
+			params: { ...options.params, per_page: '1' },
+		});
+		return response.ok();
+	} catch {
+		return false;
+	}
+}
+
+async function loginProductWriter(
+	request: APIRequestContext,
+	storeUrl: string,
+	user: string,
+	pass: string
+): Promise<StoreAuthorization> {
 	// The server keys auth sessions by state + redirect URI, so concurrent workers need distinct states.
 	const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe-${randomUUID()}`;
 	for (let attempt = 0; attempt < 2; attempt += 1) {
