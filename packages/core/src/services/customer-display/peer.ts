@@ -1,3 +1,5 @@
+import { DEFAULT_ICE_SERVERS, type IceServer } from './ice-servers';
+
 // Three seconds is the contract cap for embedding host ICE candidates in the SDP.
 const ICE_GATHERING_TIMEOUT_MS = 3000;
 
@@ -27,8 +29,8 @@ function waitForIce(connection: RTCPeerConnection): Promise<void> {
 	});
 }
 
-export function createOfferer(): OffererPeer {
-	const connection = new RTCPeerConnection({ iceServers: [] });
+export function createOfferer(iceServers: IceServer[] = DEFAULT_ICE_SERVERS): OffererPeer {
+	const connection = new RTCPeerConnection({ iceServers });
 	const channel = connection.createDataChannel('wcpos-display', { ordered: true });
 	let open: () => void = () => undefined;
 	let message: (text: string) => void = () => undefined;

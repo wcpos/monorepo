@@ -1,6 +1,43 @@
 /** @jest-environment node */
 
+import { DEFAULT_ICE_SERVERS } from './ice-servers';
 import { createOfferer } from './peer';
+
+test('creates the connection with the default STUN servers', () => {
+	const connection = {
+		createDataChannel: jest.fn(() => ({})),
+		addEventListener: jest.fn(),
+	};
+	Object.assign(globalThis, { RTCPeerConnection: jest.fn(() => connection) });
+
+	createOfferer();
+
+	expect(globalThis.RTCPeerConnection).toHaveBeenCalledWith({ iceServers: DEFAULT_ICE_SERVERS });
+});
+
+test('passes a caller-supplied ICE server list through unchanged', () => {
+	const connection = {
+		createDataChannel: jest.fn(() => ({})),
+		addEventListener: jest.fn(),
+	};
+	Object.assign(globalThis, { RTCPeerConnection: jest.fn(() => connection) });
+
+	createOfferer([{ urls: 'stun:example.test:3478' }]);
+
+	expect(globalThis.RTCPeerConnection).toHaveBeenCalledWith({
+		iceServers: [{ urls: 'stun:example.test:3478' }],
+	});
+});
+
+test('default ICE servers are STUN only', () => {
+	for (const url of DEFAULT_ICE_SERVERS.flatMap((server) => server.urls)) {
+		expect(url.startsWith('stun:')).toBe(true);
+	}
+	for (const server of DEFAULT_ICE_SERVERS) {
+		expect(server).not.toHaveProperty('username');
+		expect(server).not.toHaveProperty('credential');
+	}
+});
 
 test('creates the reliable ordered channel and returns gathered local SDP', async () => {
 	const channel = {
