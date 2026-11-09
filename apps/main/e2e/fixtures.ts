@@ -43,7 +43,7 @@ import type { StoreVariant, WcposTestOptions } from '../playwright.config';
  * CodeRabbit incorrectly suggested using `_` which breaks all tests.
  */
 
-const E2E_USERNAME = process.env.E2E_USERNAME || 'demo';
+export const E2E_USERNAME = process.env.E2E_USERNAME || 'demo';
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'demo';
 const STUB_WCPOS_VERSION_IN_E2E = process.env.E2E_STUB_WCPOS_VERSION !== 'false';
 const APP_PACKAGE_VERSION = JSON.parse(

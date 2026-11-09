@@ -14,9 +14,10 @@ import {
 	COLD_START_STATE_NAME,
 	installThinCatalogueRoutes,
 } from './cold-start';
-import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
+import { authenticateWithStore, E2E_USERNAME, stubStoreVersionForE2E } from './fixtures';
 import { hasTillAnchor, restoreLocalStorageAsClone } from './indexeddb-helpers';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
+import { closeShardRegisterSessions } from './register-session-cleanup';
 import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
 // Resolved by playwright.config, never re-derived here: these used to be two
 // independent copies with different fallbacks, so a lane could bootstrap against
@@ -523,6 +524,18 @@ async function globalSetup(config: FullConfig) {
 		console.log('[global-setup] WARNING: no shared e2e-setup state (#2321); this shard logs in');
 	}
 	await setupShard(baseURL, shardIndex, trust);
+	// The run's teardown: close the stale register sessions this shard's cashiers opened.
+	const stores = [
+		...(FREE_STORE_URL ? [{ variant: 'free' as const, storeUrl: FREE_STORE_URL }] : []),
+		{ variant: 'pro' as const, storeUrl: PRO_STORE_URL },
+	];
+	return () =>
+		closeShardRegisterSessions(
+			stores.map(({ variant, storeUrl }) => ({
+				storeUrl,
+				username: getE2ECashierAuth(variant, shardIndex)?.username ?? E2E_USERNAME,
+			}))
+		);
 }
 
 async function setupShard(baseURL: string, shardIndex: number, trust: boolean) {
