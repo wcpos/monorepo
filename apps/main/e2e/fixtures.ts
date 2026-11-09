@@ -1235,6 +1235,11 @@ export interface HydrateAuthenticatedPageOptions {
 	 */
 	storeId?: string;
 	/**
+	 * Skip the saved state and sign in fresh. A saved state belongs to the store it was captured
+	 * on and carries no store tag, so a spec whose store can be overridden must not restore it.
+	 */
+	ignoreSavedState?: boolean;
+	/**
 	 * Wait for a product marker once the app boots. The cold-start profile
 	 * turns this off — its catalogue is empty by design.
 	 */
@@ -1281,7 +1286,7 @@ export async function hydrateAuthenticatedPage(
 	const statePath = path.join(__dirname, '.auth-state', `${stateName}.json`);
 
 	let state: SavedAuthState | null = null;
-	if (fs.existsSync(statePath)) {
+	if (!options.ignoreSavedState && fs.existsSync(statePath)) {
 		try {
 			state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
 		} catch (e) {
@@ -1427,6 +1432,19 @@ export function listStoreIds(variant: StoreVariant = 'pro'): string[] {
 	}
 }
 
+/**
+ * The store id a variant may open. Specs that build their describes from `listStoreIds('pro')` at
+ * module scope (the coupon specs) run on the free project too, with pro store ids that dev-free
+ * does not have: the store pick then throws "requested store … not offered" whenever Open POS is
+ * still disabled after 2 s. Only the pro project takes a target store.
+ */
+export function storeIdForVariant(
+	variant: StoreVariant,
+	targetStoreId: string | null
+): string | null {
+	return variant === 'pro' ? targetStoreId : null;
+}
+
 export const authenticatedTest = base.extend<{
 	quarantineGate: void;
 	posPage: Page;
@@ -1441,23 +1459,33 @@ export const authenticatedTest = base.extend<{
 	 * Requires globalSetup to have captured that store's state; see `listStoreIds`.
 	 */
 	targetStoreId: string | null;
+	/** Sign in fresh via OAuth instead of restoring the saved state (`ignoreSavedState`). */
+	freshLogin: boolean;
 }>({
 	quarantineGate,
 	targetStoreId: [null, { option: true }],
+	freshLogin: [false, { option: true }],
 	storeAuthorization: async ({ page }, use) => {
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 		await use(captureStoreAuthorization(page));
 	},
-	posPage: async ({ page, storeAuthorization, request, targetStoreId }, use, testInfo) => {
+	posPage: async (
+		{ page, storeAuthorization, request, targetStoreId, freshLogin },
+		use,
+		testInfo
+	) => {
 		// `storeAuthorization` is a declared dependency so its request listener is
 		// attached before the app boots and sends its first authenticated request.
 		storeAuthorization();
 		// Record the server id of every order this spec pushes, so teardown can
 		// finalize the ones left as lingering pos-open carts.
 		const orderCapture = captureCreatedOrderIds(page);
+		const variant = getStoreVariant(testInfo);
+		const storeId = storeIdForVariant(variant, targetStoreId);
 		await hydrateAuthenticatedPage(page, testInfo, {
-			stateName: targetStoreId ? `${getStoreVariant(testInfo)}-store-${targetStoreId}` : undefined,
-			storeId: targetStoreId ?? undefined,
+			stateName: storeId ? `${variant}-store-${storeId}` : undefined,
+			storeId: storeId ?? undefined,
+			ignoreSavedState: freshLogin,
 		});
 
 		// Layout-drift pin (#1106): every POS interaction scopes under screen-pos,

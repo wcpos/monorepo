@@ -1,8 +1,9 @@
 /**
  * J2 "Sell to a guest": a cashier's guest cash sale, written once as seven steps.
  *
- * - Start state: register open, empty cart on the store's default customer (Guest on the stores
- *   it runs against), Products visible.
+ * - Start state: register open, empty cart on the Guest, Products visible. The chip's label is
+ *   translated, so the walk proves the Guest from the sold order's customer id, and it fails on
+ *   a store whose default customer is someone else.
  * - Edition: Free. Tender cash on Pro stores that serve the payments contract, the legacy
  *   webview pay otherwise.
  * - Docs: `pos/checkout/index.mdx` (wcpos/docs, `versioned_docs/version-2.x`).
