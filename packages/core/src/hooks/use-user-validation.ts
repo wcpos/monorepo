@@ -115,7 +115,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 	const onUpdateRequired = useReportUpdateRequired(wpApiUrl);
 
 	// Create HTTP client with token refresh handler
-	const httpClient = useHttpClient([tokenRefreshHandler], onUpdateRequired);
+	const httpClient = useHttpClient([tokenRefreshHandler], onUpdateRequired, wpApiUrl);
 
 	// Add a ref to track if validation is already in progress
 	const validationInProgress = React.useRef(false);
