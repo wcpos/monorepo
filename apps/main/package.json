@@ -115,8 +115,8 @@
 		"victory-native": "^42.0.1"
 	},
 	"devDependencies": {
-		"@babel/core": "^7.29.7",
-		"@playwright/test": "^1.64.1",
+		"@babel/core": "^8.1.0",
+		"@playwright/test": "^1.65.0",
 		"@react-native/jest-preset": "0.88.1",
 		"@testing-library/react-native": "14.1.0",
 		"@types/react": "^19.3.0",
