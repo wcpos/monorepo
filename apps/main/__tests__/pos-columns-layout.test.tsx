@@ -49,7 +49,10 @@ const mockSubscribeUISettings = (listener: () => void) => {
 jest.mock('react-native/Libraries/Components/Pressable/Pressable', () => ({
 	default: 'Pressable',
 }));
-jest.mock('expo-router', () => ({ useSegments: () => mockSegments }));
+jest.mock('expo-router', () => ({
+	useSegments: () => mockSegments,
+	useGlobalSearchParams: () => ({}),
+}));
 // The paid flash reads uniwind (ESM, untransformed here) and Reanimated colour interpolation; this
 // layout test wants the plain surface it wraps.
 jest.mock('@wcpos/components/flash-surface', () => ({

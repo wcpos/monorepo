@@ -14,11 +14,14 @@ export function posPathFor({ orderId, stage, methodId, receiptOrderId }: PosUrlS
 	return `/cart/${orderId}`;
 }
 
-export function readCheckoutSeed(orderIdParam: string | string[] | undefined): {
+/** The `orderId` route param read as a checkout link. */
+export interface CheckoutSeed {
 	orderId?: string;
 	checkout: boolean;
 	methodId?: string;
-} {
+}
+
+export function readCheckoutSeed(orderIdParam: string | string[] | undefined): CheckoutSeed {
 	const parts = Array.isArray(orderIdParam) ? orderIdParam : [orderIdParam];
 	const [orderId, suffix, methodId] = parts;
 	// `/cart/<uuid>/checkout[/<method>]` and nothing longer; the router hands us decoded segments.

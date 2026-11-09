@@ -18,7 +18,10 @@ let mockMode = { receiptOrders: new Set<string>(), selectedReceiptOrder: null as
 let mockCurrent: { uuid: string; isNew?: boolean; payload: Record<string, unknown[]> };
 let mockOpenOrders: { id: string }[] = [];
 
-jest.mock('expo-router', () => ({ useSegments: () => mockSegments }));
+jest.mock('expo-router', () => ({
+	useSegments: () => mockSegments,
+	useGlobalSearchParams: () => ({}),
+}));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));

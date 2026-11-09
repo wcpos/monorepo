@@ -1,4 +1,4 @@
-import { tillOrderIdForRoute } from './pos-till-order-id';
+import { tillOrderIdForRoute } from './till-order-id';
 
 const pos = ['(app)', '(drawer)', '(pos)'];
 const cart = [...pos, '(columns)', 'cart', '[...orderId]'];
@@ -62,7 +62,8 @@ it.each([
 		expected: { orderId: undefined, tillOrderId: undefined },
 	},
 ])('$name', ({ segments, orderIdFromParams, tillOrderId, expected }) => {
+	const location = { inPos: segments.includes('(pos)'), inSheet: segments.includes('(modals)') };
 	expect(
-		tillOrderIdForRoute({ segments, orderIdFromParams, tillOrderId, lastOrderId: 'A' })
+		tillOrderIdForRoute({ ...location, orderIdFromParams, tillOrderId, lastOrderId: 'A' })
 	).toEqual(expected);
 });

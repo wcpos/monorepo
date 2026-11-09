@@ -22,6 +22,7 @@ const mockOpenOrders = [{ id: 'a' }, { id: 'b' }];
 let mockFocused = true;
 jest.mock('expo-router', () => ({
 	useSegments: () => ['(app)', '(drawer)', '(pos)', '(columns)', 'cart'],
+	useGlobalSearchParams: () => ({}),
 }));
 jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@wcpos/query', () => ({

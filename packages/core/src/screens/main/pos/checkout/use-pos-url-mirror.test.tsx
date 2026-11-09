@@ -17,7 +17,11 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: true } }));
 let mockSegments: string[] = ['(app)', '(drawer)', '(pos)', '(columns)', 'cart', '[...orderId]'];
-jest.mock('expo-router', () => ({ useRouter: () => ({}), useSegments: () => mockSegments }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({}),
+	useSegments: () => mockSegments,
+	useGlobalSearchParams: () => ({}),
+}));
 jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
 	useIsPhone: () => mockSize === 'sm',
@@ -81,6 +85,17 @@ it.each([
 	flush();
 	expect(window.history.replaceState).toHaveBeenCalledTimes(1);
 	expect(window.location.pathname).toBe('/cart/receipt/u');
+});
+it('leaves the address bar to a drawer page while the POS stays mounted behind it', () => {
+	mockSegments = ['(app)', '(drawer)', 'orders', '(modals)', 'receipt', '[orderId]'];
+	window.history.replaceState(null, '', '/orders');
+	const { rerender } = renderHook(usePosUrlMirror);
+	// The receipt modal closes over the orders page: still not the POS's address bar.
+	mockSegments = ['(app)', '(drawer)', 'orders'];
+	rerender();
+	flush();
+	expect(window.history.replaceState).toHaveBeenCalledTimes(1);
+	expect(window.location.pathname).toBe('/orders');
 });
 it('omits draft ids and cancels a stale frame', () => {
 	const { rerender } = renderHook(usePosUrlMirror);
