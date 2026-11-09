@@ -118,7 +118,11 @@ const actor = {};
 jest.mock('./tax-exempt', () => ({ setTaxExempt: jest.fn() }));
 jest.mock('./use-boundary-commit', () => ({ useBoundaryCommit: () => boundary }));
 const systemCommit = jest.fn(async (_input: unknown) => ({ kind: 'closed' as const }));
-jest.mock('./use-boundary-committer', () => ({ useBoundaryCommitter: () => systemCommit }));
+const userCommit = jest.fn();
+// Only the system committer answers: a repair through the cashier's commit fails the assertions.
+jest.mock('./use-boundary-committer', () => ({
+	useBoundaryCommitter: (source: string) => (source === 'system' ? systemCommit : userCommit),
+}));
 jest.mock('./write-order-changes', () => ({ writeOrderChanges: jest.fn() }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch }),
@@ -245,6 +249,7 @@ it.each([false, true])(
 			...(override && { taxStatusFor }),
 		};
 		await deps.commitAtBoundary(order, queue, coupons);
+		expect(userCommit).not.toHaveBeenCalled();
 		expect(systemCommit).toHaveBeenLastCalledWith({
 			order,
 			queue,

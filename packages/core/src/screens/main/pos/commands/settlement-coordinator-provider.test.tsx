@@ -683,6 +683,27 @@ it('leaves a coupon edit to the continuation and completes once at the redistrib
 	view.unmount();
 });
 
+it('marks coordinator boundary work as system rather than cashier initiated', async () => {
+	const a = record({
+		status: 'pos-partial',
+		line_items: [{ total: '4' }],
+		meta_data: [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [{ id: 'leg', status: 'captured', amount: '4' }] },
+			},
+		],
+	});
+	orders.next({ ready: true, hits: [{ record: a }] });
+	const view = render(<SettlementCoordinatorProvider />);
+	await flush();
+	expect(commitAtBoundary).toHaveBeenCalledWith(
+		expect.objectContaining({ source: 'system' }),
+		expect.anything()
+	);
+	view.unmount();
+});
+
 it.each([
 	['products', 'pos_cart.only_n_available', false],
 	['variations', 'pos_products.out_of_stock', true],

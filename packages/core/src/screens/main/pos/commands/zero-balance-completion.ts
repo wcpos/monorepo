@@ -8,7 +8,7 @@ import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
 /** A close the store answered landed in `complete`; every other close outcome is returned. */
-export type ZeroBalanceResult =
+type ZeroBalanceResult =
 	| { kind: 'closed' }
 	| { kind: 'superseded'; reason?: string }
 	| Exclude<CloseOutcome, { kind: 'answered' }>;

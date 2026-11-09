@@ -48,7 +48,8 @@ export function SettlementCoordinatorProvider() {
 	const inputs = useCartConfigInputs();
 	// Coverage says the lane synced once; only a database read says `allRates` is an answer (#3186).
 	const { ratesRead } = useTaxSettings();
-	const locks = useOrderLockReaders();
+	// The save-state and checkout readers are module-stable; only the money reader can change.
+	const { serverOwnsMoney, orderSaveState, inCheckout } = useOrderLockReaders();
 	const configForOrder = useCartConfigReader();
 	const commit = useBoundaryCommitter('system');
 	const repair = useRepairTaxExempt();
@@ -56,7 +57,7 @@ export function SettlementCoordinatorProvider() {
 	const t = useT();
 	// Read when the coordinator calls: a reader, binding or translation change never restarts it.
 	const latest = React.useEffectEvent(() => ({
-		...locks,
+		serverOwnsMoney,
 		configForOrder,
 		commit,
 		repair,
@@ -98,8 +99,8 @@ export function SettlementCoordinatorProvider() {
 					couponLines: payload.coupon_lines ?? [],
 				}),
 			serverOwnsMoney: (uuid) => latest().serverOwnsMoney(uuid),
-			orderSaveState: (uuid) => latest().orderSaveState(uuid),
-			inCheckout: (uuid) => latest().inCheckout(uuid),
+			orderSaveState,
+			inCheckout,
 			repairTaxExempt: (record, exempt, valid) => latest().repair(record, exempt, valid),
 			now: Date.now,
 			observe,
@@ -134,6 +135,16 @@ export function SettlementCoordinatorProvider() {
 			stock.unsubscribe();
 			orders.unsubscribe();
 		};
-	}, [manager, handle, storeDB, registerId, inputs$, reconnected$, rates]);
+	}, [
+		manager,
+		handle,
+		storeDB,
+		registerId,
+		inputs$,
+		reconnected$,
+		rates,
+		orderSaveState,
+		inCheckout,
+	]);
 	return null;
 }
