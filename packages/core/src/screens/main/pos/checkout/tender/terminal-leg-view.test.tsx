@@ -196,11 +196,14 @@ function renderLeg(changes: Partial<TerminalLegState> = {}, extra: Partial<Tende
 		dp: 2,
 		split: splitWith(),
 		tiles: [],
-		cancelTerminalLeg: jest.fn(),
-		releaseTerminalLeg: jest.fn(),
-		retryTerminalCapture: jest.fn(),
-		retryTerminalLeg: jest.fn(),
-		dismissTerminalLeg: jest.fn(),
+		figures: { plan: null },
+		terminal: {
+			cancelTerminalLeg: jest.fn(),
+			releaseTerminalLeg: jest.fn(),
+			retryTerminalCapture: jest.fn(),
+			retryTerminalLeg: jest.fn(),
+			dismissTerminalLeg: jest.fn(),
+		},
 		...extra,
 	} as unknown as TenderFlow;
 	const view = render(
@@ -297,7 +300,7 @@ it('merges logs oldest first and copies the displayed lines', async () => {
 		)
 	);
 	fireEvent.click(screen.getByTestId('checkout-terminal-cancel'));
-	expect(flow.cancelTerminalLeg).toHaveBeenCalledTimes(1);
+	expect(flow.terminal.cancelTerminalLeg).toHaveBeenCalledTimes(1);
 });
 
 it.each([
@@ -316,7 +319,16 @@ it.each([
 	};
 	render(
 		<TerminalLegView
-			flow={{ terminalLeg: leg, tiles: [], split: splitWith(), dp: 2 } as unknown as TenderFlow}
+			flow={
+				{
+					terminalLeg: leg,
+					tiles: [],
+					split: splitWith(),
+					figures: { plan: null },
+					terminal: {},
+					dp: 2,
+				} as unknown as TenderFlow
+			}
 			format={String}
 		/>
 	);
@@ -456,14 +468,14 @@ it.each([
 ] as const)('keeps the %s action wired to %s', (changes, id, handler) => {
 	const flow = renderLeg(changes);
 	fireEvent.click(screen.getByTestId(`checkout-terminal-${id}`));
-	expect(flow[handler]).toHaveBeenCalledTimes(1);
+	expect(flow.terminal[handler]).toHaveBeenCalledTimes(1);
 });
 
 it('uses the flow order number, line count (not quantities), and plan label', () => {
 	renderLeg(
 		{},
 		{
-			plan: { kind: 'even', ways: 3, from: 0 },
+			figures: { plan: { kind: 'even', ways: 3, from: 0 } } as TenderFlow['figures'],
 			planLabel: 'Payment 2 of 3',
 			split: splitWith({
 				lines: [
