@@ -44,7 +44,8 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 		if (flow.state.view === 'cancel' && !flow.hasLiveTerminalLeg) {
 			return <CancelPaymentView flow={flow} format={format} />;
 		}
-		if (flow.state.tab === 'legacy') {
+		// A terminal leg on screen keeps the pane (a live leg is never hidden behind another view).
+		if (flow.state.tab === 'legacy' && !flow.terminalLeg) {
 			return <LegacyTab flow={flow} order={order} receiptHost="stage" />;
 		}
 		// Nothing left to take: a free sale, or a re-opened sale its payments already cover. The
