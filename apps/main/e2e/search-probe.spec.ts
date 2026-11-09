@@ -559,7 +559,7 @@ test.describe('search-probe pure logic', () => {
 				process.env.E2E_PRODUCT_WRITER_RUN_AUTH = handover;
 				expect(publishedWriterAuthorization('https://example.test')).toBeNull();
 			}
-			const env: NodeJS.ProcessEnv = { [WRITER_RUN_AUTH_ENV]: 'not json' };
+			const env: NodeJS.ProcessEnv = { ...process.env, [WRITER_RUN_AUTH_ENV]: 'not json' };
 			const first: StoreAuthorization = { transport: 'query', value: 'first-token' };
 			const second: StoreAuthorization = { transport: 'header', value: 'Bearer second-token' };
 			publishWriterAuthorization('https://example.test/', first, env);
