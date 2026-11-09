@@ -106,7 +106,11 @@ jest.mock('../../../contexts/app-state', () => ({ useStoreSession: () => ({ stor
 jest.mock('../../../contexts/theme-setting', () => ({
 	useThemeSetting: () => ({ theme: store.theme, icons: store.icons, fonts: store.fonts }),
 }));
-jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+// The key, then the values it was given, so a status line's current value is visible to a test.
+jest.mock('../../../contexts/translations', () => ({
+	useT: () => (key: string, values?: Record<string, unknown>) =>
+		values ? `${key}:${Object.values(values).join(',')}` : key,
+}));
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	patchStoreSettings: (document: unknown, data: unknown) => mockLocalPatch({ document, data }),
@@ -141,8 +145,16 @@ describe('the Scale section', () => {
 		const { getByRole } = render(<ThemeSettings />);
 		const section = getByRole('region', { name: 'settings.scale' });
 		expect(section.querySelector('p')!.textContent).toBe('settings.scale.description');
-		expect(section.textContent).toContain('settings.current_scale');
+		expect(section.textContent).toContain('settings.current_scale:settings.scale.auto');
 		expect(section.querySelector('[data-testid="settings-scale-auto"]')).not.toBeNull();
+	});
+
+	it('names the stored step in its status line', () => {
+		store.scale = 'spacious';
+		const { getByRole } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.scale' }).textContent).toContain(
+			'settings.current_scale:settings.scale.spacious'
+		);
 	});
 
 	it('offers four scale steps with Auto selected by default', () => {
@@ -192,6 +204,14 @@ describe('the Scale section', () => {
 });
 
 describe('the Icons section', () => {
+	it('is a titled section: the description under the heading, the status line keying the list', () => {
+		store.icons = 'hugeicons';
+		const { getByRole } = render(<ThemeSettings />);
+		const section = getByRole('region', { name: 'settings.icons' });
+		expect(section.querySelector('p')!.textContent).toBe('settings.icons.description');
+		expect(section.textContent).toContain('settings.current_icons:settings.icons.hugeicons');
+	});
+
 	it('offers Match theme first and selected by default, followed by the three sets', () => {
 		const { getByTestId, getAllByTestId, getByRole } = render(<ThemeSettings />);
 
@@ -272,8 +292,16 @@ describe('the Fonts section', () => {
 		const { getByRole } = render(<ThemeSettings />);
 		const section = getByRole('region', { name: 'settings.fonts' });
 		expect(section.querySelector('p')!.textContent).toBe('settings.fonts.description');
-		expect(section.textContent).toContain('settings.current_fonts');
+		expect(section.textContent).toContain('settings.current_fonts:settings.fonts.auto');
 		expect(section.querySelector('[data-testid="settings-fonts-auto"]')).not.toBeNull();
+	});
+
+	it('names the stored set in its status line', () => {
+		store.fonts = 'grotesk';
+		const { getByRole } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.fonts' }).textContent).toContain(
+			'settings.current_fonts:settings.fonts.grotesk'
+		);
 	});
 
 	it('offers Match theme first and selected by default, followed by the five sets', () => {
