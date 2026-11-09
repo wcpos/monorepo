@@ -264,3 +264,17 @@ it('says who closed on another till and when, but not after a close here', () =>
 		mockClosedElsewhere = previous;
 	}
 });
+
+it("a suggestion shows at the store's decimals, as the cashier would type it", async () => {
+	// The server keeps money at four decimals; the field keeps the store's two. No padding either way.
+	defaultFloat = '100.0050';
+	lastCount = '63014.5600';
+	render(<OpenRegisterCard />);
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('100.01');
+	fireEvent.click(screen.getByTestId('open-register-chip-last'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('63014.56');
+	fireEvent.click(screen.getByTestId('open-register-button'));
+	await waitFor(() =>
+		expect(open).toHaveBeenLastCalledWith({ expectedFloat: '100.01', countedFloat: '63014.56' })
+	);
+});

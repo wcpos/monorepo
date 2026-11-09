@@ -22,6 +22,7 @@ import { useAppState, useStoreSession } from '../../../../contexts/app-state';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useT } from '../../../../contexts/translations';
+import { countDecimals, seedAmount } from '../../../../services/register-session/count-money';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RegisterAmount } from '../../components/register-count';
@@ -36,10 +37,14 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 	const phone = useIsPhone();
 	const credentials = useObservableSuspense(credentialsListResource(site));
 	const { time } = useStoreDayLabel(sessionStore.id);
-	const defaultFloat = binding.registers.find(
-		(row) => row.id === binding.registerId
-	)?.default_float;
-	const lastCount = lastClosed?.counted?.cash;
+	// A suggestion is shown as the cashier would count it: the server keeps money at four decimals
+	// ("63014.5600"), the count keeps the store's (at least cents), rounded half-up.
+	const countPlaces = countDecimals(useDocField(store, (value) => value.price_num_decimals));
+	const defaultFloat = seedAmount(
+		binding.registers.find((row) => row.id === binding.registerId)?.default_float,
+		countPlaces
+	);
+	const lastCount = seedAmount(lastClosed?.counted?.cash, countPlaces);
 	const expectedFloat = defaultFloat ?? lastCount ?? null;
 	const [typed, setTyped] = React.useState<string | null>(null);
 	const [chosen, setChosen] = React.useState<string | null>(null);
