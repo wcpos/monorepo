@@ -197,7 +197,7 @@ export const useRestHttpClient = (endpoint = '') => {
 	/**
 	 *
 	 */
-	const httpClient = useHttpClient(errorHandlers, onUpdateRequired);
+	const httpClient = useHttpClient(errorHandlers, onUpdateRequired, site.wp_api_url);
 
 	/**
 	 * Main request function.

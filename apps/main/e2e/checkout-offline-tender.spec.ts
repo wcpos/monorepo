@@ -332,6 +332,9 @@ liveTest.describe('POS offline cash tender (live store, ADR 0040 Decided 1)', ()
 
 				// One press leaves checkout, and the cart still holds the sale.
 				await leave.click();
+				// Pay is back before the products panel's exit animation (pos-columns.tsx) unmounts the old
+				// checkout column; opening checkout again inside that window mounts a second leave button.
+				await expect(leave).toHaveCount(0, { timeout: 30_000 });
 				await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 30_000 });
 				expect((await readCartMoney(page)).total, 'the cart keeps the sale').toBe(total);
 
@@ -339,6 +342,7 @@ liveTest.describe('POS offline cash tender (live store, ADR 0040 Decided 1)', ()
 				await page.getByTestId('checkout-button').click();
 				await expect(leave).toBeVisible({ timeout: 30_000 });
 				await leave.click();
+				await expect(leave).toHaveCount(0, { timeout: 30_000 });
 				await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 30_000 });
 
 				// Armed before the flip: the queued save goes out on the online event.

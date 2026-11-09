@@ -27,6 +27,7 @@ import {
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -118,6 +119,7 @@ export function RefundOrderForm({ order }: Props) {
 	const { store } = useAppState();
 	const refundMutation = useRefundMutation();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const http = useRestHttpClient();
 	const router = useRouter();
 	const taxRates = useTaxSettingsOptional();
@@ -321,6 +323,13 @@ export function RefundOrderForm({ order }: Props) {
 	const refundTotalNum = parseFloat(refundTotal);
 	const formattedRefundTotal = format(refundTotalNum);
 	const isValid = !refundDetailsLoading && refundTotalNum > 0 && refundTotalNum <= maxRefundable;
+	// The label reads the value that is submitted, so it cannot promise one destination and send another.
+	const submitLabel =
+		!isValid || awaitingGateway
+			? t('orders.process_refund')
+			: refundDestination === 'cash'
+				? t('orders.submit_refund_cash', { amount: formattedRefundTotal })
+				: t('orders.submit_refund_original', { amount: formattedRefundTotal });
 
 	const handleSubmit = React.useCallback(async () => {
 		// Gateways still loading: the destination is not known yet (it must not default
@@ -331,6 +340,11 @@ export function RefundOrderForm({ order }: Props) {
 		// #163 follow-up ruling: the latch can fire while the confirm dialog sits
 		// open, so re-read it here rather than trusting the rendered disabled state.
 		if (blockIfDegraded('refund', { orderId: orderData.id })) {
+			setConfirmOpen(false);
+			return;
+		}
+		// The link can drop while the confirm dialog sits open: nothing is sent, the line below says why.
+		if (!online) {
 			setConfirmOpen(false);
 			return;
 		}
@@ -426,6 +440,7 @@ export function RefundOrderForm({ order }: Props) {
 		}
 	}, [
 		blockIfDegraded,
+		online,
 		loading,
 		awaitingGateway,
 		refundDetailsLoading,
@@ -578,7 +593,7 @@ export function RefundOrderForm({ order }: Props) {
 					</VStack>
 				) : null}
 
-				{gatewaysError && !isPosCash ? (
+				{gatewaysError && !isPosCash && online ? (
 					<Text className="text-muted-foreground">
 						{t('orders.original_method_refund_lookup_failed')}
 					</Text>
@@ -586,12 +601,19 @@ export function RefundOrderForm({ order }: Props) {
 
 				<MoneyList.Total label={t('orders.refund_total')} amount={formattedRefundTotal} />
 			</DialogBody>
+			{online ? null : (
+				<VStack className="px-4 pb-2">
+					<Text testID="refund-offline-reason" variant="help">
+						{t('orders.refund_needs_connection')}
+					</Text>
+				</VStack>
+			)}
 			<DialogFooter
 				close
 				intent={{
-					label: t('orders.process_refund'),
+					label: submitLabel,
 					testID: 'process-refund-button',
-					disabled: !isValid || storageDegraded || awaitingGateway,
+					disabled: !isValid || storageDegraded || awaitingGateway || !online,
 					onPress: () => setConfirmOpen(true),
 					loading: loading || awaitingGateway,
 				}}
