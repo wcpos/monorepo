@@ -72,6 +72,15 @@ describe('collectEmittedEventTypes', () => {
 		assert.deepStrictEqual([...emitted.keys()], ['register.movement-retrying']);
 	});
 
+	it('excludes translation keys handed to t() while retaining real event literals', async () => {
+		const directory = fixture({
+			'words.ts': `emit({ type: 'register.closed', level: 'info' });
+			const word = short ? t('register.short') : t( "register.over" );`,
+		});
+		const emitted = await collectEmittedEventTypes([directory]);
+		assert.deepStrictEqual([...emitted.keys()], ['register.closed']);
+	});
+
 	it('finds types at the type: property, through ternaries and helper arguments', async () => {
 		const directory = fixture({
 			'emitters.ts': `
