@@ -80,6 +80,7 @@
 	"reports.difference": "Difference",
 	"reports.order_time_cashier": "{time} · {cashier}",
 	"pro.strip_title": "You're on the free version of WCPOS.",
+	"pro.strip_title_phone": "You're on WCPOS Free.",
 	"pro.strip_body_overview": "Pro adds refunds, card readers, stock and price editing, and order history.",
 	"pro.strip_body_refunds": "Pro refunds a sale from the till, in full or in part.",
 	"pro.strip_body_readers": "Pro connects card readers and a customer-facing display.",

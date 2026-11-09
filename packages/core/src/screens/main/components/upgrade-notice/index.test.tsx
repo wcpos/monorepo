@@ -106,11 +106,12 @@ it('dismisses the notice until next launch', () => {
 	expect(setShowUpgrade).toHaveBeenCalledWith(false);
 });
 
-it('omits the body and more link on phones while keeping the title and controls', () => {
+it('omits the body and more link on phones and shortens the title to fit beside the button', () => {
 	mockScreenSize = 'sm';
 	render(<UpgradeNotice setShowUpgrade={jest.fn()} />);
 	const banner = screen.getByTestId('upgrade-notice-banner');
-	expect(banner.textContent).toContain("You're on the free version of WCPOS.");
+	expect(banner.textContent).toContain("You're on WCPOS Free.");
+	expect(banner.textContent).not.toContain('free version of WCPOS');
 	expect(banner.textContent).not.toContain('Pro adds refunds');
 	expect(screen.queryByTestId('upgrade-notice-more')).toBeNull();
 	expect(screen.getByTestId('upgrade-notice-upgrade').textContent).toBe('Upgrade to Pro');

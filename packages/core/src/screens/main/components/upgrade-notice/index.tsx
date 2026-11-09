@@ -67,8 +67,10 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 				aria-hidden
 			/>
 			<Text className="min-w-0 flex-1 text-sm" numberOfLines={1}>
+				{/* A phone hides the body and gives the title about 166 px beside the button; the full
+				    title is 251 px and was cut mid-word, so phones get the short form (Paul, 2026-11-09). */}
 				<Text className={cn('font-semibold', !light && 'text-warning-foreground')}>
-					{t('pro.strip_title')}
+					{isPhone ? t('pro.strip_title_phone') : t('pro.strip_title')}
 				</Text>
 				{!isPhone && (
 					<Text className={light ? 'text-muted-foreground' : 'text-warning-foreground/80'}>
