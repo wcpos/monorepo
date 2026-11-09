@@ -187,7 +187,11 @@ function EditOrderFormFields({ order }: Props) {
 
 	// Status is read, never written, until Update status: reactive values are right here.
 	const currentStatus = useRecordField(order, (record) => record.payload.status) ?? '';
-	const paymentRows = useRecordField(order, (record) => readLedger(record.payload.meta_data));
+	const paymentFacts = useRecordField(order, ({ payload }) => ({
+		total: payload.total,
+		refunds: payload.refunds,
+		rows: readLedger(payload.meta_data),
+	}));
 	const statusForm = useForm<{ status: string }>({
 		resolver: zodResolver(statusSchema),
 		values: { status: currentStatus },
@@ -205,11 +209,11 @@ function EditOrderFormFields({ order }: Props) {
 		}
 		const latest = order.getLatest().payload;
 		const previous = latest.status ?? '';
-		const allowed = allowedOrderStatuses(
-			PUSHABLE_ORDER_STATUSES,
-			previous,
-			readLedger(latest.meta_data)
-		);
+		const allowed = allowedOrderStatuses(PUSHABLE_ORDER_STATUSES, previous, {
+			total: latest.total,
+			refunds: latest.refunds,
+			rows: readLedger(latest.meta_data),
+		});
 		if (!allowed.includes(data.status)) {
 			statusForm.reset({ status: previous });
 			setLoading(false);
@@ -371,8 +375,8 @@ function EditOrderFormFields({ order }: Props) {
 		const base = statusPushable
 			? PUSHABLE_ORDER_STATUSES
 			: [...PUSHABLE_ORDER_STATUSES, ...(currentStatus ? [currentStatus] : [])];
-		return allowedOrderStatuses(base, currentStatus, paymentRows);
-	}, [currentStatus, paymentRows, statusPushable]);
+		return allowedOrderStatuses(base, currentStatus, paymentFacts);
+	}, [currentStatus, paymentFacts, statusPushable]);
 
 	// Billing holds the order's contact facts too, so a name or an email alone is a Billing row
 	// (never hidden behind an add that would write the store's country), and Remove clears them all.

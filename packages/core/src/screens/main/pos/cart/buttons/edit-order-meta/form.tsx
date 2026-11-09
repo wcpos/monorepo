@@ -192,11 +192,15 @@ export function EditOrderMetaForm({
 	});
 	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
 	const statusPushable = isPushableOrderStatus(handOverData.status);
-	const rows = useRecordField(order, (record) => readLedger(record.payload.meta_data));
+	const paymentFacts = useRecordField(order, ({ payload }) => ({
+		total: payload.total,
+		refunds: payload.refunds,
+		rows: readLedger(payload.meta_data),
+	}));
 	const allowedStatuses = allowedOrderStatuses(
 		statusPushable ? PUSHABLE_ORDER_STATUSES : [...PUSHABLE_ORDER_STATUSES, handOverData.status],
 		handOverData.status,
-		rows
+		paymentFacts
 	);
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 	const { label: cashierBefore } = useCashierLabel(base.cashier_id);
@@ -320,8 +324,11 @@ export function EditOrderMetaForm({
 		if (
 			status === 'cancelled' &&
 			statusChanged &&
-			allowedOrderStatuses(['cancelled'], previous.status ?? '', readLedger(previous.meta_data))
-				.length === 0
+			allowedOrderStatuses(['cancelled'], previous.status ?? '', {
+				total: previous.total,
+				refunds: previous.refunds,
+				rows: readLedger(previous.meta_data),
+			}).length === 0
 		) {
 			setLoading(false);
 			setPending(null);
