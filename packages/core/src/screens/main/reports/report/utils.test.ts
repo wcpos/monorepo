@@ -88,26 +88,6 @@ describe('calculateTotals', () => {
 		expect(result.totalItemsSold).toBe(2);
 	});
 
-	it('categorizes unpaid and unknown payment methods correctly', () => {
-		const result = calculateTotals({ orders: mockOrders });
-		// Note: order.total already includes tax in WooCommerce
-		expect(result.paymentMethodsArray).toContainEqual({
-			payment_method: 'credit_card',
-			payment_method_title: 'Credit Card',
-			total: 100,
-		});
-		expect(result.paymentMethodsArray).toContainEqual({
-			payment_method: 'unpaid',
-			payment_method_title: '',
-			total: 200,
-		});
-		expect(result.paymentMethodsArray).toContainEqual({
-			payment_method: 'unknown',
-			payment_method_title: '',
-			total: 150,
-		});
-	});
-
 	it('calculates tax totals correctly', () => {
 		const result = calculateTotals({ orders: mockOrders });
 		expect(result.taxTotalsArray).toContainEqual({

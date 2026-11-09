@@ -31,7 +31,7 @@ import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useQueryHandleFields, useQueryState, useQueryStateActions } from '../../../../query';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
-import { stores as storeRows } from '../cards/aggregate';
+import { stores as storeRows, tenders } from '../cards/aggregate';
 import {
 	ReportsComparison,
 	useIncludedStatus,
@@ -289,6 +289,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		{
 			totals,
 			orders: selectedOrders.length,
+			payments: tenders(selectedOrders, totals, formats.store?.price_num_decimals),
 			periodRefunds,
 			registerNames: names,
 			stores: allStores
