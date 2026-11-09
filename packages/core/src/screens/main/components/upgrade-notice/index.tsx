@@ -19,9 +19,30 @@ import { useT } from '../../../../contexts/translations';
  * (the dark palette's --warning-bg is a brown tint, not yellow; Paul, 2026-11-02). */
 export const upgradeNoticeGround = (light: boolean) => (light ? 'bg-warning-bg' : 'bg-warning');
 
+/** The desktop body: one Pro pitch per launch, chosen at random when the strip mounts (ledger
+ * line 1). The strip is on every page of every session, so a line that changes between launches
+ * says more over a week than one line that never does; it never changes within a session, so a
+ * rerender does not reshuffle the copy. Each entry is a literal `t()` call (the string extractor
+ * only sees literal keys) and the text is read from the live translator, so a language change
+ * still translates it. Every line names only what is Pro in 2.0 (docs: getting-started/free-vs-pro). */
+const STRIP_BODIES: ((t: ReturnType<typeof useT>) => string)[] = [
+	(t) => t('pro.strip_body_overview'),
+	(t) => t('pro.strip_body_refunds'),
+	(t) => t('pro.strip_body_readers'),
+	(t) => t('pro.strip_body_products'),
+	(t) => t('pro.strip_body_orders'),
+	(t) => t('pro.strip_body_reports'),
+	(t) => t('pro.strip_body_stores'),
+];
+
+export const STRIP_BODY_COUNT = STRIP_BODIES.length;
+
+const pickStripBody = () => Math.floor(Math.random() * STRIP_BODIES.length);
+
 export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boolean) => void }) {
 	const t = useT();
 	const light = isLightTheme(useUniwind().theme);
+	const [bodyIndex] = React.useState(pickStripBody);
 
 	const isPhone = useIsPhone();
 	const ground = useGround();
@@ -52,7 +73,7 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 				{!isPhone && (
 					<Text className={light ? 'text-muted-foreground' : 'text-warning-foreground/80'}>
 						{' '}
-						{t('pro.strip_body')}
+						{STRIP_BODIES[bodyIndex](t)}
 					</Text>
 				)}
 			</Text>
