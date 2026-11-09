@@ -270,6 +270,30 @@ it('returns through onBack without a Reports host or footer Close', () => {
 	expect(screen.getByTestId('closure-panel-footer').textContent).not.toContain('Close');
 });
 
+// Revert: drop the late_refund label (the corrections list would show a blank heading).
+it('names a late refund in the corrections list and settles it off expected cash', () => {
+	const corrections: Correction[] = [
+		{
+			...correction,
+			id: 7,
+			type: 'late_refund',
+			figures: { expected_delta: { cash: '-5' }, refunds_delta: '5' },
+		},
+	];
+	const settled = deriveSettled(row, corrections);
+	render(
+		<ClosureBody
+			row={row}
+			doc={doc}
+			{...settled}
+			corrections={corrections}
+			blind={false}
+			context={context}
+		/>
+	);
+	expect(screen.getByTestId('closure-correction-7').textContent).toContain('Late refund');
+	expect(settled.touched.has('expected.cash')).toBe(true);
+});
 // A correction can introduce a tender absent from the frozen baseline.
 it('lists a newly settled non-cash tender with its document label', () => {
 	const corrections: Correction[] = [

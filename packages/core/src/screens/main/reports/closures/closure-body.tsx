@@ -179,6 +179,7 @@ export function ClosureBody({
 	const correctionLabel: Record<Correction['type'], string> = {
 		recount: t('reports.correction_recount'),
 		late_sale: t('reports.late_sale'),
+		late_refund: t('reports.late_refund'),
 		late_movement: t('reports.late_movement'),
 	};
 	const documentError = doc.documentError && !doc.isOffline;

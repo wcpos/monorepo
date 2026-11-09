@@ -200,6 +200,7 @@
 	"reports.not_printed": "not printed yet",
 	"reports.late_sale": "Late sale",
 	"reports.late_movement": "Late movement",
+	"reports.late_refund": "Late refund",
 	"reports.recount": "Recount…",
 	"reports.approver": "Approved by {name}",
 	"reports.actions_unavailable": "Printing and recounting are not available here yet",
