@@ -36,9 +36,10 @@ const cards: { id: string; name: T; Component: React.ComponentType }[] = [
 const THREE_COLUMNS_MIN_WIDTH = 1000;
 const TWO_COLUMNS_MIN_WIDTH = 600;
 export function PeriodSection() {
-	const { selectedOrders, figures } = useReportsData();
+	const { selectedOrders, periodRefunds, figures } = useReportsData();
+	// The products the period's sale and refund lines name, as the grouped panels read them.
 	const products = useLocalProducts(
-		selectedOrders.flatMap((order) =>
+		[...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
 			(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 		)
 	);

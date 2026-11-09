@@ -224,7 +224,10 @@ it.each(['products', 'categories', 'brands'])(
 		] as Context.ReportOrder[]);
 		mockState.data.periodRefunds = undefined;
 		room();
-		fireEvent.click(screen.getByTestId(`card-${panel}-open`));
+		// A card that nets refunds waits with them, so the panel is opened directly.
+		fireEvent.click(
+			screen.queryByTestId(`card-${panel}-open`) ?? screen.getByTestId(`open-${panel}`)
+		);
 		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
 		expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading the report');
 	}

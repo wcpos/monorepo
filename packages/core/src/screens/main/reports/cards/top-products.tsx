@@ -11,14 +11,15 @@ import { LocalProductsContext } from './use-local-products';
 
 export function TopProductsCard() {
 	const t = useT(),
-		{ figures } = useReportsData();
+		{ figures, periodRefunds } = useReportsData();
 	const { setDetail } = useReportsScope();
 	const { storeId } = useReportsPeriod(),
 		{ store, money, quantity, percent } = useReportFormats(storeId);
 	const products = React.useContext(LocalProductsContext);
-	// The card reads its panel's figure, net of the period refunds (ledger 36); the hero stays gross.
+	// The card reads its panel's figure, net of the period refunds (ledger 36), and waits for them
+	// as its panel does; the hero stays gross.
 	const rows = React.useMemo(() => figures.products.netOfRefunds(products), [figures, products]);
-	if (!store || !products)
+	if (!store || !products || !periodRefunds)
 		return <CardSkeleton testID="card-products" name={t('reports.card_top_products')} />;
 	return (
 		<ReportCard

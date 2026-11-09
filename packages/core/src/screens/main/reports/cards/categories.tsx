@@ -13,7 +13,7 @@ import { useLocalCategories } from './use-local-categories';
 export function CategoriesCard({ group = 'categories' }: { group?: 'categories' | 'brands' }) {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ figures } = useReportsData(),
+		{ figures, periodRefunds } = useReportsData(),
 		{ storeId } = useReportsPeriod();
 	const { store, money, moneyWhole, quantity, percent } = useReportFormats(storeId);
 	const products = React.useContext(LocalProductsContext);
@@ -26,7 +26,8 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 				)
 			: []
 	);
-	// Categories reads its panel's figure, net of the period refunds (ledger 36); Brands stays gross.
+	// Categories reads its panel's figure, net of the period refunds (ledger 36), and waits for them
+	// as its panel does; Brands stays gross.
 	const summary = React.useMemo(
 		() =>
 			group === 'brands'
@@ -35,7 +36,8 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 		[figures, group, products, tree]
 	);
 	const name = group === 'brands' ? t('reports.card_brands') : t('reports.card_categories');
-	if (!store || !products || !tree) return <CardSkeleton testID={`card-${group}`} name={name} />;
+	if (!store || !products || !tree || (group === 'categories' && !periodRefunds))
+		return <CardSkeleton testID={`card-${group}`} name={name} />;
 	const count = { count: summary.parts.length, n: quantity(summary.parts.length) };
 	const labels: Record<string, string> = {
 		unknown: t('reports.unknown_product'),

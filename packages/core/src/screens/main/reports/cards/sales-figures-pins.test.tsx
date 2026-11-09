@@ -81,8 +81,10 @@ it('the heads read gross; Taxes, Refunds and Orders read their own figures', () 
 // A period with a refund: the card's rows are its panel's rows (Paul 2026-11-09, ruling 1).
 describe('Top products and Categories show what their panels show', () => {
 	const t = createTestT();
+	// The store's money format, so a panel cell reads as the card prints it.
 	const formats = {
-		money: (n: number | null | undefined) => `£${Number(n).toFixed(2)}`,
+		money: (n: number | null | undefined) =>
+			`${Number(n) < 0 ? '-' : ''}£${Math.abs(Number(n)).toFixed(2)}`,
 		number: String,
 		quantity: String,
 		percent: String,
@@ -104,12 +106,23 @@ describe('Top products and Categories show what their panels show', () => {
 			id: 9,
 			parent_id: 1,
 			amount: '30',
-			line_items: [{ product_id: 1, name: 'Shirt', quantity: -1.5, total: '-30' }],
+			line_items: [
+				{ product_id: 1, name: 'Shirt', quantity: -1.5, total: '-30' },
+				// Sold before the period: only the refund line names it, and only it carries a cost.
+				{
+					product_id: 3,
+					name: 'Scarf',
+					quantity: -1,
+					total: '-5',
+					cost_of_goods_sold: { value: -2 },
+				},
+			],
 		},
 	] as RefundRow[];
 	const directory = [
 		{ id: 1, categories: [{ id: 10, name: 'Tops' }] },
 		{ id: 2, categories: [{ id: 11, name: 'Hats' }] },
+		{ id: 3, categories: [{ id: 12, name: 'Scarves' }] },
 	];
 	beforeEach(() => {
 		setOrders(orders);
@@ -126,7 +139,11 @@ describe('Top products and Categories show what their panels show', () => {
 	it('Top products', async () => {
 		render(<PeriodSection />);
 		const rows = panel('products').rows;
-		expect(rows.map((row) => row.cells[2])).toEqual(['£20.00', '£10.00']);
+		expect(rows.map((row) => [row.cells[0], row.cells[2]])).toEqual([
+			['Hat', '£20.00'],
+			['Shirt', '£10.00'],
+			['Scarf', '-£5.00'],
+		]);
 		for (const [index, row] of rows.entries()) {
 			const shown = await screen.findByTestId(`card-products-row-${index}`);
 			expect(shown.textContent).toContain(row.cells[0]);
@@ -139,6 +156,7 @@ describe('Top products and Categories show what their panels show', () => {
 		expect(rows.map((row) => [row.key, row.raw[2]])).toEqual([
 			['11', 20],
 			['10', 10],
+			['12', -5],
 		]);
 		for (const row of rows)
 			expect(
@@ -146,5 +164,15 @@ describe('Top products and Categories show what their panels show', () => {
 					row.cells[2]
 				)
 			).toBeTruthy();
+	});
+	it('both wait for the period refunds, as their panels do', () => {
+		mockState.data = { ...mockState.data, periodRefunds: undefined };
+		render(<PeriodSection />);
+		expect(screen.getByTestId('card-products-loading')).toBeTruthy();
+		expect(screen.getByTestId('card-categories-loading')).toBeTruthy();
+	});
+	it('the Brands slot opens on a cost only a refund line carries, as its panel margin does', async () => {
+		render(<PeriodSection />);
+		expect(await screen.findByTestId('card-brands')).toBeTruthy();
 	});
 });

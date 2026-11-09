@@ -30,8 +30,8 @@ const named = <P extends object, T extends Record<string, () => unknown>>(thunks
  *
  * Every figure is named. Where two surfaces show different figures for one idea, the difference
  * is the name each reads: the hero reads `gross`, the Top products card and its panel
- * `products.netOfRefunds` (ledger 35, 36: the hero stays gross, margin nets refunds), so changing
- * what a surface shows is changing the name it reads. The arithmetic stays in `calculateTotals`,
+ * `products.netOfRefunds` (ledger 35, 36: the hero stays gross, margin nets refunds), so making two
+ * surfaces agree, or differ, is changing the name one of them reads. The arithmetic stays in `calculateTotals`,
  * `cards/aggregate.ts` and `margin.ts`.
  */
 export function salesFigures(
