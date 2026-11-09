@@ -6,7 +6,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 **Job:** Browse register closures and current sessions, inspect fiscal documents, recount and export.
 
-**Composes:** `@wcpos/components/{badge,button,dialog,dropdown-menu,icon,input,portal,text}` and `@wcpos/components/lib/portal-container`.
+**Composes:** `@wcpos/components/{badge,button,dialog,dropdown-menu,icon,input,portal,text}`.
 
 ## Lines
 

@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
@@ -172,8 +174,15 @@ jest.mock('../../components/register-count/register-amount', () => ({
 	),
 }));
 jest.mock('./approve-sheet', () => ({
-	ApproveSheet: ({ side, portalHost }: { side?: 'left' | 'right'; portalHost?: string | null }) => (
-		<div data-testid="approve-sheet" data-side={side} data-portal={String(portalHost)} />
+	// The host its DialogContent takes: the nearest provided, else the root.
+	ApproveSheet: ({ side }: { side?: 'left' | 'right' }) => (
+		<div
+			data-testid="approve-sheet"
+			data-side={side}
+			data-portal={String(
+				jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost() ?? null
+			)}
+		/>
 	),
 }));
 const enter = (value: string) =>
@@ -445,13 +454,14 @@ it('requires manager over threshold', () => {
 it('forwards its side and host to the approval sheet', () => {
 	varianceThreshold = '5';
 	render(
-		<RegisterCount
-			description="Shop · open since 08:00 · Pat"
-			onBack={jest.fn()}
-			onClosed={jest.fn()}
-			side="right"
-			portalHost="scene"
-		/>
+		<OverlayHostProvider name="scene">
+			<RegisterCount
+				description="Shop · open since 08:00 · Pat"
+				onBack={jest.fn()}
+				onClosed={jest.fn()}
+				side="right"
+			/>
+		</OverlayHostProvider>
 	);
 	enter('463.30');
 	fireEvent.click(screen.getByTestId('count-close'));

@@ -582,7 +582,6 @@ function POSProductsContent({
 							<ViewModeToggle />
 							<UISettingsDialog
 								side={side}
-								portalHost="pos"
 								title={t('pos_products.product_settings')}
 								triggerTestID="products-settings-button"
 							>

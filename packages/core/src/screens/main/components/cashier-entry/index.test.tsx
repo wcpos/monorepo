@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
 import { consumeCashierSheetRequest, requestCashierSheet } from './cashier-sheet-request';
 import { CurrentOrderContext } from '../../pos/contexts/current-order/context';
 import { CashierEntry } from './index';
@@ -14,7 +16,10 @@ import {
 // The real redirect-return module: its one-shot is what is under test. Only the ESM it pulls in is stubbed.
 jest.mock('expo-auth-session', () => ({ makeRedirectUri: () => 'wcpos://callback' }));
 jest.mock('expo-haptics', () => ({}));
-jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'coarse' }));
+jest.mock('@wcpos/components/lib/device', () => ({
+	usePointer: () => 'coarse',
+	useIsPhone: () => false,
+}));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		site: { wcpos_login_url: 'https://shop.test/login' },
@@ -26,21 +31,20 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('../user-avatar', () => ({ UserAvatar: () => null }));
 jest.mock('../../pos/cart/user-sheet', () => ({
+	// The host the sheet's DialogContent takes: the nearest one the entry sits under, or the root.
 	UserSheet: ({
 		open,
-		portalHost,
-
 		onOpenRegister,
 	}: {
 		open: boolean;
-		portalHost?: string | null;
-
 		onOpenRegister?: (pane?: 'register' | 'count') => void;
 	}) =>
 		open ? (
 			<div
 				data-testid="user-sheet"
-				data-host={String(portalHost)}
+				data-host={String(
+					jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost() ?? null
+				)}
 				// What the sheet's register rows read: no order in context disables every switch.
 				data-order={String(
 					jest.requireActual('../../pos/contexts/current-order/context').useCurrentOrderOptional()
@@ -53,25 +57,24 @@ jest.mock('../../pos/cart/user-sheet', () => ({
 }));
 
 jest.mock('../../pos/cart/register-panel', () => ({
-	RegisterPanel: ({
-		open,
-		portalHost,
-		initialPane,
-	}: {
-		open: boolean;
-		portalHost?: string | null;
-		initialPane?: 'register' | 'count';
-	}) => (
+	RegisterPanel: ({ open, initialPane }: { open: boolean; initialPane?: 'register' | 'count' }) => (
 		<div
 			data-testid="register-panel"
 			data-open={String(open)}
-			data-portal={String(portalHost)}
+			data-portal={String(
+				jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost() ?? null
+			)}
 			data-pane={initialPane}
 		/>
 	),
 }));
 
 const CSRF = 'a'.repeat(64);
+
+/** The host the entry sits under (the bar's: the till's `pos`, a page's `scene`). */
+function Host({ name, children }: React.PropsWithChildren<{ name: string }>) {
+	return <OverlayHostProvider name={name}>{children}</OverlayHostProvider>;
+}
 
 /** A popup-blocked OAuth login for `loginUrl`: the saved state, then the reload with the tokens. */
 function returnFrom(loginUrl: string) {
@@ -99,7 +102,7 @@ it.each([
 	['no return', null, false],
 ])('claims a redirect return for %s: open %s', (_case, url, open) => {
 	if (url) returnFrom(url);
-	render(<CashierEntry testID="bar-avatar" portalHost={null} />);
+	render(<CashierEntry testID="bar-avatar" />);
 	expect(screen.queryByTestId('user-sheet') !== null).toBe(open);
 });
 
@@ -109,15 +112,21 @@ it('opens one sheet for one return when two entries are mounted', () => {
 	returnFrom('https://shop.test/login');
 	render(
 		<>
-			<CashierEntry testID="products-avatar" portalHost="pos" />
-			<CashierEntry testID="cart-avatar" portalHost="pos" />
+			<Host name="pos">
+				<CashierEntry testID="products-avatar" />
+				<CashierEntry testID="cart-avatar" />
+			</Host>
 		</>
 	);
 	expect(screen.getAllByTestId('user-sheet')).toHaveLength(1);
 });
 
 it('opens the one cashier surface from the avatar, on the host and with the rows it is given', () => {
-	render(<CashierEntry testID="register-bar-avatar" portalHost="pos" />);
+	render(
+		<Host name="pos">
+			<CashierEntry testID="register-bar-avatar" />
+		</Host>
+	);
 	expect(screen.queryByTestId('user-sheet')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('pos');
@@ -125,7 +134,11 @@ it('opens the one cashier surface from the avatar, on the host and with the rows
 
 it("on the till the bar's door is used and the entry mounts no panel", () => {
 	const onOpenRegister = jest.fn();
-	render(<CashierEntry testID="avatar" portalHost="pos" onOpenRegister={onOpenRegister} />);
+	render(
+		<Host name="pos">
+			<CashierEntry testID="avatar" onOpenRegister={onOpenRegister} />
+		</Host>
+	);
 	fireEvent.click(screen.getByTestId('avatar'));
 	fireEvent.click(screen.getByTestId('open-register'));
 	expect(onOpenRegister).toHaveBeenCalledTimes(1);
@@ -137,9 +150,17 @@ jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocus
 it('opens one sheet for one request when two entries are mounted and one is focused', () => {
 	requestCashierSheet();
 	mockFocused = false;
-	render(<CashierEntry testID="hidden" portalHost="pos" />);
+	render(
+		<Host name="pos">
+			<CashierEntry testID="hidden" />
+		</Host>
+	);
 	mockFocused = true;
-	render(<CashierEntry testID="shown" portalHost="pos" />);
+	render(
+		<Host name="pos">
+			<CashierEntry testID="shown" />
+		</Host>
+	);
 	expect(screen.getAllByTestId('user-sheet')).toHaveLength(1);
 	expect(consumeCashierSheetRequest()).toBe(false);
 });
@@ -161,9 +182,13 @@ it.each([
 	mockFocused = true;
 	render(
 		<>
-			<CashierEntry testID="title-bar-avatar" portalHost="scene" />
+			<Host name="scene">
+				<CashierEntry testID="title-bar-avatar" />
+			</Host>
 			<Till>
-				<CashierEntry testID="register-bar-avatar" portalHost="pos" headless />
+				<Host name="pos">
+					<CashierEntry testID="register-bar-avatar" headless />
+				</Host>
 			</Till>
 		</>
 	);
@@ -177,14 +202,22 @@ it.each([
 
 it('off the till, the title bar opens its own sheet', () => {
 	mockFocused = true;
-	render(<CashierEntry testID="title-bar-avatar" portalHost="scene" />);
+	render(
+		<Host name="scene">
+			<CashierEntry testID="title-bar-avatar" />
+		</Host>
+	);
 	fireEvent.click(screen.getByTestId('title-bar-avatar'));
 	expect(screen.getByTestId('user-sheet').getAttribute('data-host')).toBe('scene');
 	expect(screen.getByTestId('user-sheet').getAttribute('data-order')).toBe('undefined');
 });
 
 it("outside the till, the drawer door opens the register panel in place, on the entry's host", () => {
-	render(<CashierEntry testID="avatar" portalHost="scene" />);
+	render(
+		<Host name="scene">
+			<CashierEntry testID="avatar" />
+		</Host>
+	);
 	expect(screen.queryByTestId('register-panel')).toBeNull();
 	fireEvent.click(screen.getByTestId('avatar'));
 	expect(screen.queryByTestId('register-panel')).toBeNull();

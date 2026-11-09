@@ -4,13 +4,19 @@ import * as React from 'react';
 import { render, renderHook, screen } from '@testing-library/react';
 
 import { TitleBarStripProvider } from '@wcpos/components/edge-surface/title-bar-strip';
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
 
 import { BarControls, useBarMenu, useBarStatus, useOnlineBadge } from './index';
-import { PageSheetHostContext, setFocusedPageSheetHost } from '../page-sheet-host';
+import { setFocusedPageSheetHost } from '../page-sheet-host';
 
 const wrapper = ({ children }: React.PropsWithChildren) => (
-	<PageSheetHostContext.Provider value="scene:orders">{children}</PageSheetHostContext.Provider>
+	<OverlayHostProvider name="scene:orders" phoneUsesRoot>
+		{children}
+	</OverlayHostProvider>
 );
+// The till's host, nested in its page's.
+const till = ({ children }: React.PropsWithChildren) =>
+	wrapper({ children: <OverlayHostProvider name="pos">{children}</OverlayHostProvider> });
 
 let mockSize: 'sm' | 'lg' = 'sm';
 let mockStatus = 'online-website-available';
@@ -24,14 +30,23 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockStatus }),
 }));
+// Each records the host its sheet's DialogContent takes: the nearest provided, else the root.
 jest.mock('../notification-bell/notification-bell', () => ({
-	NotificationBell: ({ testID, portalHost }: { testID: string; portalHost?: string }) => (
-		<div data-testid={testID} data-host={String(portalHost)} />
+	NotificationBell: ({ testID }: { testID: string }) => (
+		<div
+			data-testid={testID}
+			data-host={String(jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost())}
+		/>
 	),
 }));
 jest.mock('../cashier-entry', () => ({
-	CashierEntry: ({ testID, portalHost }: { testID: string; portalHost: string | null }) => (
-		<div data-testid={testID} data-host={String(portalHost)} />
+	CashierEntry: ({ testID }: { testID: string }) => (
+		<div
+			data-testid={testID}
+			data-host={String(
+				jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost() ?? null
+			)}
+		/>
 	),
 }));
 
@@ -53,7 +68,7 @@ it.each([
 	result.current?.onPress();
 	expect(mockOpenDrawer).toHaveBeenCalledTimes(below ? 1 : 0);
 
-	render(<BarControls testID="register-bar" portalHost="pos" />, { wrapper });
+	render(<BarControls testID="register-bar" />, { wrapper: till });
 	expect(screen.getByTestId('register-bar-bell').getAttribute('data-host')).toBe('pos');
 	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
 });
@@ -71,7 +86,7 @@ it.each([
 		expect(screen.getByTestId('orders-bar-bell').getAttribute('data-host')).toBe(bellHost);
 		expect(screen.getByTestId('orders-bar-avatar').getAttribute('data-host')).toBe(host);
 		unmount();
-		render(<BarControls testID="register-bar" portalHost="pos" />, { wrapper });
+		render(<BarControls testID="register-bar" />, { wrapper: till });
 		expect(screen.getByTestId('register-bar-bell').getAttribute('data-host')).toBe('pos');
 		expect(screen.getByTestId('register-bar-avatar').getAttribute('data-host')).toBe('pos');
 	}
@@ -97,9 +112,9 @@ it.each([
 ])('with a title-bar strip of %s a bar carries its controls: %s', (height, carried) => {
 	mockStatus = 'offline';
 	const strip = ({ children }: React.PropsWithChildren) => (
-		<PageSheetHostContext.Provider value="scene:orders">
+		<OverlayHostProvider name="scene:orders" phoneUsesRoot>
 			<TitleBarStripProvider value={{ node: null, height }}>{children}</TitleBarStripProvider>
-		</PageSheetHostContext.Provider>
+		</OverlayHostProvider>
 	);
 	render(<BarControls testID="orders-bar" />, { wrapper: strip });
 	expect(screen.queryByTestId('orders-bar-bell') !== null).toBe(carried);

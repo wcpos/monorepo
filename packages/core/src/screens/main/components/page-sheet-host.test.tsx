@@ -3,7 +3,9 @@ import * as React from 'react';
 
 import { act, renderHook } from '@testing-library/react';
 
-import { PageSheetHostContext, setFocusedPageSheetHost, usePageSheetHost } from './page-sheet-host';
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
+import { setFocusedPageSheetHost, usePageSheetHost } from './page-sheet-host';
 
 let mockSize: 'sm' | 'lg' = 'sm';
 jest.mock('@wcpos/components/lib/device', () => ({
@@ -12,7 +14,9 @@ jest.mock('@wcpos/components/lib/device', () => ({
 }));
 
 const wrapper = ({ children }: React.PropsWithChildren) => (
-	<PageSheetHostContext.Provider value="scene:reports">{children}</PageSheetHostContext.Provider>
+	<OverlayHostProvider name="scene:reports" phoneUsesRoot>
+		{children}
+	</OverlayHostProvider>
 );
 
 afterEach(() => setFocusedPageSheetHost(undefined));
@@ -20,7 +24,7 @@ afterEach(() => setFocusedPageSheetHost(undefined));
 // A wide sheet must leave the rail outside its host; a phone has no rail.
 it.each([
 	['lg', 'scene:reports'],
-	['sm', undefined],
+	['sm', null],
 ] as const)('on %s renders the page sheet on %s', (size, host) => {
 	mockSize = size;
 	const { result } = renderHook(() => usePageSheetHost(), { wrapper });
@@ -31,7 +35,7 @@ it.each([
 it('uses the root on wide with no provider and no focused screen', () => {
 	mockSize = 'lg';
 	const { result } = renderHook(() => usePageSheetHost());
-	expect(result.current).toBeUndefined();
+	expect(result.current).toBeNull();
 });
 
 // Revert: drop the focused-host fallback; the title bar's cashier sheet falls to the root and
@@ -45,4 +49,22 @@ it('follows the focused screen above every screen, and its own provider under on
 	expect(under.result.current).toBe('scene:reports');
 	act(() => setFocusedPageSheetHost('scene:products'));
 	expect(above.result.current).toBe('scene:products');
+});
+
+// The till nests its own `pos` host in its page's: a Reports sheet the register panel reuses
+// there (the closure panel's print and recount sheets) keeps the page's host. Revert: read the
+// nearest host; this reads `pos` on both sizes.
+it.each([
+	['lg', 'scene:(pos)'],
+	['sm', null],
+] as const)('under the till on %s reads the page host %s', (size, host) => {
+	mockSize = size;
+	const { result } = renderHook(() => usePageSheetHost(), {
+		wrapper: ({ children }) => (
+			<OverlayHostProvider name="scene:(pos)" phoneUsesRoot>
+				<OverlayHostProvider name="pos">{children}</OverlayHostProvider>
+			</OverlayHostProvider>
+		),
+	});
+	expect(result.current).toBe(host);
 });

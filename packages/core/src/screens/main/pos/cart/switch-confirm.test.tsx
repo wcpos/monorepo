@@ -7,6 +7,7 @@ import { BehaviorSubject, of } from 'rxjs';
 import type { UserDatabase } from '@wcpos/database';
 import { readRegister, type RegisterDocument } from '@wcpos/query/register-session';
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
 
 import { recordCarriedFrom } from '../../../../../../query/src/register-session/register-document';
 import { createTestT } from '../../../../../jest/translate';
@@ -88,8 +89,9 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 			children,
 			side,
 			testID,
-		}: React.PropsWithChildren<{ side: string; testID: string }>) => (
-			<div data-testid={testID} data-side={side}>
+			portalHost,
+		}: React.PropsWithChildren<{ side: string; testID: string; portalHost?: string }>) => (
+			<div data-testid={testID} data-side={side} data-host={portalHost}>
 				{children}
 			</div>
 		),
@@ -354,15 +356,17 @@ const onOpenChange = jest.fn();
 const onConfirm = jest.fn();
 const onSignOutAnyway = jest.fn();
 const HOST = 'scene-host';
+// The caller's (the cashier sheet's) host.
 const show = (request: SwitchRequest | null) =>
 	render(
-		<SwitchConfirm
-			portalHost={HOST}
-			request={request}
-			onOpenChange={onOpenChange}
-			onConfirm={onConfirm}
-			onSignOutAnyway={onSignOutAnyway}
-		/>
+		<OverlayHostProvider name={HOST}>
+			<SwitchConfirm
+				request={request}
+				onOpenChange={onOpenChange}
+				onConfirm={onConfirm}
+				onSignOutAnyway={onSignOutAnyway}
+			/>
+		</OverlayHostProvider>
 	);
 beforeEach(() => {
 	mockOpenOrdersHandle.value = { count: 0 };
@@ -631,10 +635,16 @@ jest.mock('../../receipt/print-sheet', () => ({
 		title: string;
 		description: string;
 		error?: string;
-		portalHost: string;
+		portalHost?: string;
 	}) =>
 		open ? (
-			<div data-testid={testID} data-host={portalHost}>
+			// The host its DialogContent resolves: a named one, else the nearest provided.
+			<div
+				data-testid={testID}
+				data-host={
+					portalHost ?? jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost()
+				}
+			>
 				{title}
 				{description}
 				{error}
@@ -643,6 +653,12 @@ jest.mock('../../receipt/print-sheet', () => ({
 			</div>
 		) : null,
 }));
+// An alert takes no ambient host, so the confirmation is told the caller's: on a phone page the
+// root, else the till's or the page's host, the same as the cashier sheet beside it.
+it("puts the confirmation on the caller's host", () => {
+	show({ kind: 'cashier', credential: amy });
+	expect(screen.getByTestId('switch-confirm').getAttribute('data-host')).toBe(HOST);
+});
 it('opens and prints the nested hand-over sheet without confirming or dismissing the switch', async () => {
 	mockPrint.mockClear();
 	show({ kind: 'cashier', credential: amy });

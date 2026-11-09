@@ -3,11 +3,14 @@ import * as React from 'react';
 
 import { fireEvent, render as renderUI, screen } from '@testing-library/react';
 
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
 import { ManagementBar } from './index';
-import { PageSheetHostContext } from '../page-sheet-host';
 
 const wrapper = ({ children }: React.PropsWithChildren) => (
-	<PageSheetHostContext.Provider value="scene:orders">{children}</PageSheetHostContext.Provider>
+	<OverlayHostProvider name="scene:orders" phoneUsesRoot>
+		{children}
+	</OverlayHostProvider>
 );
 const render = (ui: React.ReactElement) => renderUI(ui, { wrapper });
 
@@ -50,8 +53,16 @@ jest.mock('../session-hold-banner', () => ({
 	SessionHoldBanner: () => (mockHeld ? <div data-testid="session-hold-banner" /> : null),
 }));
 jest.mock('../../pos/cart/user-sheet', () => ({
-	UserSheet: ({ open, portalHost }: { open: boolean; portalHost?: string | null }) =>
-		open ? <div data-testid="user-sheet" data-host={String(portalHost)}></div> : null,
+	// The host the sheet's DialogContent takes: the nearest provided, else the root.
+	UserSheet: ({ open }: { open: boolean }) =>
+		open ? (
+			<div
+				data-testid="user-sheet"
+				data-host={String(
+					jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost() ?? null
+				)}
+			></div>
+		) : null,
 }));
 beforeEach(() => {
 	mockPhone = false;

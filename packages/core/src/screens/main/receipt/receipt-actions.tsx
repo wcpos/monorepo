@@ -59,7 +59,9 @@ export function useReceiptActions(doc: ReceiptDocument, order: EngineRecord<'ord
 		];
 		dialog = (
 			<Dialog open={emailOpen} onOpenChange={setEmailOpen}>
+				{/* The root (`null`), where it has always opened: unnamed, it would take the till's or the page's host. */}
 				<DialogContent
+					portalHost={null}
 					closeLabel={t('common.close')}
 					onCloseAutoFocus={(event) => {
 						if (Platform.OS === 'web') {

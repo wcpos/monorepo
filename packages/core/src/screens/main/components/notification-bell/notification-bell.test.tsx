@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
 import { NotificationBell } from './notification-bell';
 
 const mockSeen = jest.fn();
@@ -51,7 +53,15 @@ jest.mock('@wcpos/components/dialog', () => ({
 		size?: string;
 		portalHost?: string;
 	}>) => (
-		<div data-testid={testID} data-side={side} data-size={size} data-host={portalHost}>
+		<div
+			data-testid={testID}
+			data-side={side}
+			data-size={size}
+			// The host DialogContent resolves: a named one, else the nearest provided.
+			data-host={
+				portalHost ?? jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost()
+			}
+		>
 			{children}
 		</div>
 	),
@@ -63,7 +73,11 @@ beforeEach(() => {
 });
 
 it('opens the sheet and marks seen from the opener', () => {
-	render(<NotificationBell testID="register-bar-bell" portalHost="pos" />);
+	render(
+		<OverlayHostProvider name="pos">
+			<NotificationBell testID="register-bar-bell" />
+		</OverlayHostProvider>
+	);
 	expect(triggerChild?.props.testID).toBe('register-bar-bell');
 	expect(mockPanel).not.toHaveBeenCalled();
 	expect(mockSeen).not.toHaveBeenCalled();

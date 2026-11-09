@@ -4,6 +4,7 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { DialogFooter } from '@wcpos/components/dialog';
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
 
 import { RecordDialog } from '.';
 
@@ -16,7 +17,11 @@ jest.mock('@wcpos/components/dialog', () => ({
 			data-testid={testID as string}
 			data-side={side as string}
 			data-size={size as string}
-			data-host={portalHost as string}
+			// The host DialogContent resolves: a named one, else the nearest provided.
+			data-host={
+				(portalHost as string | undefined) ??
+				jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost()
+			}
 		>
 			{children}
 		</div>
@@ -128,14 +133,9 @@ it.each([
 	['left', 'left', 'pos'],
 ] as const)('opens on the %s side at the one size', (side, shown, host) => {
 	render(
-		<RecordDialog
-			side={side}
-			portalHost={host}
-			title="t"
-			record={record}
-			form={() => null}
-			payload={{}}
-		/>
+		<OverlayHostProvider name={host}>
+			<RecordDialog side={side} title="t" record={record} form={() => null} payload={{}} />
+		</OverlayHostProvider>
 	);
 	const panel = screen.getByRole('dialog');
 	expect(panel.dataset.side).toBe(shown);

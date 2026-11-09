@@ -56,11 +56,9 @@ export function RegisterPanel({
 	open,
 	onOpenChange,
 	initialPane = 'register',
-	portalHost = 'pos',
 }: {
 	open: boolean;
 	initialPane?: 'register' | 'count';
-	portalHost?: string | null;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const {
@@ -255,18 +253,17 @@ export function RegisterPanel({
 	if (pane === 'written' && written)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
-					<ClosureWritten count={written} onDone={() => close(false)} portalHost={portalHost} />
+				<DialogContent side={side} size="lg" testID="register-panel">
+					<ClosureWritten count={written} onDone={() => close(false)} />
 				</DialogContent>
 			</Dialog>
 		);
 	if (pane === 'count' && session)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
+				<DialogContent side={side} size="lg" testID="register-panel">
 					<RegisterCount
 						side={side}
-						portalHost={portalHost}
 						description={description}
 						onBusyChange={setCountBusy}
 						onBack={() => setPane('register')}
@@ -281,7 +278,7 @@ export function RegisterPanel({
 	if (pane === 'closure' && lastClosure)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
+				<DialogContent side={side} size="lg" testID="register-panel">
 					<ClosurePanel
 						row={lastClosure}
 						onBack={() => setPane('register')}
@@ -293,7 +290,7 @@ export function RegisterPanel({
 
 	return (
 		<Dialog open={open} onOpenChange={close}>
-			<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
+			<DialogContent side={side} size="lg" testID="register-panel">
 				<DialogHeader className="flex-row items-center gap-3">
 					<ToneDisc tone="muted" icon="register" size="sm" testID="register-panel-disc" />
 					<View className="min-w-0 flex-1">
@@ -634,13 +631,11 @@ export function RegisterPanel({
 						}
 					}}
 					side={side}
-					portalHost={portalHost ?? undefined}
 					testID="register-panel-print-sheet"
 				/>
 				{movement && (
 					<MovementSheet
 						side={side}
-						portalHost={portalHost}
 						type={movement}
 						onOpenChange={(value) => {
 							if (!value) setMovement(null);

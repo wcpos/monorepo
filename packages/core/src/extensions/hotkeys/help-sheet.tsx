@@ -46,6 +46,7 @@ export function HelpSheet({
 	};
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
+			{/* Named: the hotkeys mount beside the till's stack, above its `pos` host. */}
 			<DialogContent side={side} size="lg" portalHost="pos" testID="hotkeys-help-sheet">
 				<DialogHeader>
 					<DialogTitle>{t('pos_commands.help_title')}</DialogTitle>

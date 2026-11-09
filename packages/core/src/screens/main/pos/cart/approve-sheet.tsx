@@ -22,10 +22,8 @@ export function ApproveSheet({
 	onClosed,
 	onOpenChange,
 	side: sideProp,
-	portalHost = 'pos',
 }: {
 	side?: 'left' | 'right';
-	portalHost?: string | null;
 	counted: Record<string, string>;
 	note?: string;
 	denominations?: { value: string; pieces: number }[];
@@ -95,7 +93,7 @@ export function ApproveSheet({
 	};
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost={portalHost} testID="approve-sheet">
+			<DialogContent side={side} size="lg" testID="approve-sheet">
 				<DialogTitle>{t('register.manager_approval')}</DialogTitle>
 				{!online && <Text testID="approve-offline">{t('register.approve_offline')}</Text>}
 				<ApprovalFields {...{ username, password, setUsername, setPassword }} />
