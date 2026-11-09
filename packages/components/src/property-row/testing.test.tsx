@@ -8,8 +8,8 @@ import * as fake from './testing';
 
 /**
  * Pins `./testing` to the real row: the same props give the same testIDs, the same form-item ids
- * (ledger line 9), the same verb and add buttons, locked's switch and Open, and the Saved mark's
- * testID. The harness is `property-row.test.tsx`'s.
+ * (ledger line 9), the same verb and add buttons, locked's switch and Open, and the Saved mark
+ * beside the key with the verb kept (ledger line 21). The harness is `property-row.test.tsx`'s.
  */
 
 // Keep RNW rendering; Jest does not compile Uniwind classes, so expose them on the DOM.
@@ -78,6 +78,13 @@ const both: [string, Module][] = [
 	['real', real as unknown as Module],
 	['fake', fake],
 ];
+
+/** Each node comes after the one before it in the document. */
+const inOrder = (...nodes: Node[]) =>
+	nodes.every(
+		(node, i) =>
+			i === 0 || !!(nodes[i - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
+	);
 
 function Save({ name }: { name: string }) {
 	const markSaved = useMarkSaved();
@@ -161,5 +168,26 @@ describe.each(both)('%s property row', (_name, m) => {
 		expect(screen.queryByTestId('saved-tax_class')).toBeNull();
 		fireEvent.click(screen.getByText('save tax_class'));
 		expect(screen.getByTestId('saved-tax_class')).toBeTruthy();
+		const mark = screen.getByTestId('saved-tax_class');
+		expect(inOrder(screen.getByText('Tax'), mark, screen.getByText('Standard'))).toBe(true);
+		expect(inOrder(mark, screen.getByTestId('verb'))).toBe(true);
+	});
+
+	it('marks a row without a key after its value, before the verb', () => {
+		render(
+			<SavedFieldProvider>
+				<Save name="meta" />
+				<m.PropertyRow
+					prefix="line"
+					id="meta"
+					verb={<m.PropertyVerb testID="verb">Remove</m.PropertyVerb>}
+				>
+					Colour
+				</m.PropertyRow>
+			</SavedFieldProvider>
+		);
+		fireEvent.click(screen.getByText('save meta'));
+		const mark = screen.getByTestId('saved-meta');
+		expect(inOrder(screen.getByText('Colour'), mark, screen.getByTestId('verb'))).toBe(true);
 	});
 });
