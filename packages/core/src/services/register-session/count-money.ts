@@ -8,12 +8,13 @@ export const countDecimals = (priceDecimals: unknown) => Math.max(2, Number(pric
 /**
  * A stored amount shown in an editable count field, as the cashier would type it. The server
  * keeps money at four decimals ("63014.5600"); a value with more fraction digits than the count
- * uses is rounded half-up to them. Shorter values are not padded: "200" stays "200".
+ * uses is rounded half-up to them. Shorter values are not padded: "200" stays "200". A value
+ * that is not a number is returned as stored, so the field's own validity check refuses it.
  */
 export const seedAmount = (value: string | null | undefined, decimals: number) =>
 	value == null
 		? null
-		: (value.split('.')[1] ?? '').length > decimals
+		: Number.isFinite(Number(value)) && (value.split('.')[1] ?? '').length > decimals
 			? fromMinor(toMinor(value, decimals), decimals)
 			: value;
 

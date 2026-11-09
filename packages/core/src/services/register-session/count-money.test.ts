@@ -78,4 +78,8 @@ describe('seedAmount', () => {
 		expect(seedAmount(null, 2)).toBeNull();
 		expect(seedAmount(undefined, 2)).toBeNull();
 	});
+	it('returns a malformed amount as stored instead of rounding it to zero', () => {
+		expect(seedAmount('12.34oops', 2)).toBe('12.34oops');
+		expect(seedAmount('1.2.3', 2)).toBe('1.2.3');
+	});
 });
