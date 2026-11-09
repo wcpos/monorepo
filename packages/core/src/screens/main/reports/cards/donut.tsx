@@ -32,7 +32,7 @@ export function Donut({
 		{ money, percent } = useReportFormats(storeId);
 	// The period denominator also includes amounts not represented by a category/register.
 	// Read its formats here so Other is formatted from numbers, never parsed from display text.
-	const { totals } = useReportsData();
+	const { gross } = useReportsData().figures;
 	const colors = useCSSVariable([
 		'--color-c1',
 		'--color-c2',
@@ -54,7 +54,7 @@ export function Donut({
 						value: other,
 						valueText: money(other),
 						shareText: t('reports.percent', {
-							value: percent(totals.total ? (other / totals.total) * 100 : 0),
+							value: percent(gross ? (other / gross) * 100 : 0),
 						}),
 					},
 				]
@@ -75,7 +75,7 @@ export function Donut({
 					{/* A transform attribute, not rotation/origin: those emit transform-origin on web. */}
 					<G transform="rotate(-90 60 60)">
 						{rows.map((part, index) => {
-							const share = totals.total ? part.value / totals.total : 0;
+							const share = gross ? part.value / gross : 0;
 							const before = rows.slice(0, index).reduce((sum, row) => sum + row.value, 0);
 							return (
 								<Circle
@@ -87,7 +87,7 @@ export function Donut({
 									fill="none"
 									stroke={colors[index < 5 ? index : 4]}
 									strokeDasharray={[Math.max(2, circumference * share - 2), circumference]}
-									strokeDashoffset={totals.total ? (-circumference * before) / totals.total : 0}
+									strokeDashoffset={gross ? (-circumference * before) / gross : 0}
 								/>
 							);
 						})}

@@ -13,16 +13,6 @@ import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, zoneOptions } from '../../../../hooks/use-store-day';
-import {
-	cashiers,
-	categories,
-	channels,
-	registers,
-	stores,
-	taxesByRate,
-	tenders,
-	topProducts,
-} from '../cards/aggregate';
 import { useLocalProducts } from '../cards/use-local-products';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import {
@@ -32,7 +22,6 @@ import {
 	useReportsScope,
 	useReportsSelection,
 } from '../context';
-import { brands, cogsEnabled, lineCost } from '../margin';
 import { useLocalCategories } from '../cards/use-local-categories';
 import { ReportPanel } from '../report-panel';
 import { useReportFormats } from '../use-report-formats';
@@ -53,7 +42,7 @@ export function DetailPanel() {
 function DetailPanelContent() {
 	const host = usePageSheetHost();
 	const { detail, setDetail } = useReportsScope(),
-		{ allOrders, selectedOrders, totals, periodRefunds } = useReportsData();
+		{ allOrders, selectedOrders, figures, periodRefunds } = useReportsData();
 	const included = useIncludedStatus();
 	const selection = useReportsSelection();
 	const { unselectedRowIds } = selection;
@@ -121,36 +110,12 @@ function DetailPanelContent() {
 		(detail !== 'cashiers' && detail !== 'orders' ? true : namesReady.cashier) &&
 		(detail !== 'registers' || namesReady.register) &&
 		(detail !== 'stores' || namesReady.store);
-	const decimals = formats.store?.price_num_decimals;
-	const spec = panelSpec(detail ?? 'orders', {
-		cogs:
-			cogsEnabled(selectedOrders, products ?? []) ||
-			(periodRefunds ?? []).some((refund) =>
-				(refund.line_items ?? []).some((line) => lineCost(line) !== null)
-			),
-		num_decimals: decimals,
-		categoryTree: tree,
-		periodRefunds,
-		brands: brands(selectedOrders, products ?? [], totals, decimals, periodRefunds),
-		payments: tenders(selectedOrders, totals, decimals),
-		products: topProducts(filteredOrders, totals, decimals, filteredRefunds, products),
-		categories: categories(
-			selectedOrders,
-			products ?? [],
-			totals,
-			decimals,
-			undefined,
-			undefined,
-			periodRefunds
-		),
-		cashiers: cashiers(totals),
-		channels: channels(selectedOrders, totals),
-		registers: registers(selectedOrders, totals),
-		registerNames: names.register,
-		stores: stores(selectedOrders, totals),
-		storeNames: names.store,
-		taxes: taxesByRate(selectedOrders, totals, decimals),
+	const spec = panelSpec(detail ?? 'orders', figures, formats, t, {
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
+		names,
+		directory: products,
+		categoryTree: tree,
+		productLines: { orders: filteredOrders, refunds: filteredRefunds },
 		unselectedRowIds,
 		orderTime: (order) => {
 			const moment = saleMomentOf(order);
@@ -158,10 +123,6 @@ function DetailPanelContent() {
 				? formatDate(inZone(timezone, convertUTCStringToLocalDate(moment)), 'HH:mm')
 				: t('common.unknown');
 		},
-		totals,
-		formats,
-		t,
-		cashierNames: names.cashier,
 	});
 	const titles: Record<NonNullable<typeof detail>, string> = {
 		orders: t('reports.panel_orders'),
@@ -203,7 +164,7 @@ function DetailPanelContent() {
 		n: formats.quantity(spec.missing?.n),
 		m: formats.quantity(spec.missing?.m),
 		count: formats.quantity(selectedOrders.length),
-		total: formats.money(totals.total),
+		total: formats.money(figures.gross),
 	};
 	// Read only while a filter is on: a spec a test stubs without rows must not throw here.
 	const productStatus = filtering

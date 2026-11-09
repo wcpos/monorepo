@@ -5,28 +5,24 @@ import { Text } from '@wcpos/components/text';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
-import { topProducts } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { ShareBar } from './primitives';
 
 export function TopProductsCard() {
 	const t = useT(),
-		{ selectedOrders, totals } = useReportsData();
+		{ figures } = useReportsData();
 	const { setDetail } = useReportsScope();
 	const { storeId } = useReportsPeriod(),
 		{ store, money, quantity, percent } = useReportFormats(storeId);
-	const decimals = store?.price_num_decimals;
-	const rows = React.useMemo(
-		() => topProducts(selectedOrders, totals, decimals),
-		[selectedOrders, totals, decimals]
-	);
+	// The card is gross: its panel nets the period refunds (ledger 35, 36).
+	const rows = figures.products.gross;
 	if (!store) return <CardSkeleton testID="card-products" name={t('reports.card_top_products')} />;
 	return (
 		<ReportCard
 			onOpen={() => setDetail('products')}
 			testID="card-products"
 			name={t('reports.card_top_products')}
-			figure={quantity(totals.totalItemsSold)}
+			figure={quantity(figures.items)}
 		>
 			{rows.length ? (
 				rows.slice(0, 4).map((row, index) => (

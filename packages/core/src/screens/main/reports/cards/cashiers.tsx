@@ -6,18 +6,17 @@ import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportsDirectories } from '../scope';
 import { useReportFormats } from '../use-report-formats';
-import { cashiers } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
 
 export function CashiersCard() {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ totals } = useReportsData(),
+		{ figures } = useReportsData(),
 		{ storeId } = useReportsPeriod(),
 		directory = useReportsDirectories().cashiers;
 	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId);
-	const rows = React.useMemo(() => cashiers(totals), [totals]);
+	const rows = figures.byCashier;
 	if (!store || !directory)
 		return <CardSkeleton testID="card-cashiers" name={t('reports.card_cashiers')} />;
 	return (
@@ -31,7 +30,7 @@ export function CashiersCard() {
 				<Donut
 					testID="card-cashiers-donut"
 					centre={{
-						figure: moneyWhole(Math.round(totals.total)),
+						figure: moneyWhole(Math.round(figures.gross)),
 						label: t('reports.n_cashiers', { count: rows.length, n: number(rows.length) }),
 					}}
 					parts={rows.map((row) => ({
