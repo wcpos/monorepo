@@ -54,3 +54,9 @@ it('the centre carries the figure and the label', () => {
 	expect(screen.getByTestId('ring-figure').textContent).toBe('£100.00');
 	expect(screen.getByTestId('ring-figure').parentElement?.textContent).toContain('2 ways');
 });
+// A category a refund took below zero (ledger 36) must not draw as a sale.
+it('a part at or below zero draws no arc and keeps its row', () => {
+	const { container } = draw([parts[0], { ...parts[1], value: -5, valueText: '-£5.00' }]);
+	expect(container.querySelectorAll('circle')).toHaveLength(1);
+	expect(screen.getByTestId('ring-row-1-value').textContent).toBe('-£5.00');
+});

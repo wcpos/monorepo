@@ -75,8 +75,12 @@ export function Donut({
 					{/* A transform attribute, not rotation/origin: those emit transform-origin on web. */}
 					<G transform="rotate(-90 60 60)">
 						{rows.map((part, index) => {
+							// A part a refund took to zero or below draws no arc; its row still shows the amount.
+							if (part.value <= 0) return null;
 							const share = gross ? part.value / gross : 0;
-							const before = rows.slice(0, index).reduce((sum, row) => sum + row.value, 0);
+							const before = rows
+								.slice(0, index)
+								.reduce((sum, row) => sum + Math.max(0, row.value), 0);
 							return (
 								<Circle
 									key={part.key}
