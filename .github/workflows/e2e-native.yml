@@ -708,6 +708,16 @@ jobs:
       # the streamed log would still be lost in the exact rover-hang scenario
       # this instrumentation exists for (review #1654). A step timeout kills
       # only the step; the job survives with headroom to upload the log.
+      # The store's responsiveness, in CI's own voice (deploy.yml does the same):
+      # a cart add is a local write that queues behind the engine's catalogue
+      # applies, and those stretch with the store's response times. On 2026-11-08
+      # flow 04 waited 30 s for `cart-subtotal` on both phones while dev-pro
+      # answered in 4–8 s (load 39, PHP OOM on receipts); the row was drawn when
+      # the frame was taken and the id was never hidden. Without this annotation
+      # that red read as an app regression and cost a day. Reports, never gates.
+      - name: 🩺 Probe store health before the flows
+        continue-on-error: true
+        run: node scripts/probe-store-health.mjs "$E2E_STORE_URL" "pro store" "before the flows started"
       - name: 📱 Run Maestro suite on emulator
         timeout-minutes: 90
         uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
@@ -860,6 +870,13 @@ jobs:
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
+      # The same probe after a failure: a store that answered in 600 ms before the
+      # flows and 6 s after them is the run's story, not the diff's.
+      - name: 🩺 Probe store health after a failure
+        if: failure()
+        continue-on-error: true
+        run: node scripts/probe-store-health.mjs "$E2E_STORE_URL" "pro store (post-failure)" "after the flows failed"
+
 
       # Makes a red (or slow-green) check self-explaining at a glance: the job
       # summary carries every flow's duration, and any flow past a threshold is
@@ -1227,6 +1244,10 @@ jobs:
       # invocations, which is all the stateful suite needs. Filename order
       # (01…08) matches config.yaml's flowsOrder; the first failure aborts,
       # matching continueOnFailure: false.
+      # Store responsiveness in CI's own voice; see the Android step's note.
+      - name: 🩺 Probe store health before the flows
+        continue-on-error: true
+        run: node scripts/probe-store-health.mjs "$E2E_STORE_URL" "pro store" "before the flows started"
       - name: 📱 Run Maestro suite on simulator
         run: |
           # pipefail is LOAD-BEARING, not hygiene: `maestro … | tee "$log"`
@@ -1376,6 +1397,13 @@ jobs:
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
+      # The same probe after a failure: a store that answered in 600 ms before the
+      # flows and 6 s after them is the run's story, not the diff's.
+      - name: 🩺 Probe store health after a failure
+        if: failure()
+        continue-on-error: true
+        run: node scripts/probe-store-health.mjs "$E2E_STORE_URL" "pro store (post-failure)" "after the flows failed"
+
 
       # Makes a red (or slow-green) check self-explaining at a glance: the job
       # summary carries every flow's duration, and any flow past a threshold is
