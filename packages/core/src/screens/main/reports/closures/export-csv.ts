@@ -2,6 +2,7 @@ import type { ClosureRow } from '@wcpos/query/register-session';
 import { fromMinor } from '@wcpos/order-math';
 
 import { closureResult, resultWord } from '../../../../services/register-session/closure-result';
+import { settledRow } from '../../../../services/register-session/settled-figures';
 
 export function csvCell(value: unknown) {
 	const text = String(value ?? '');
@@ -9,11 +10,13 @@ export function csvCell(value: unknown) {
 }
 
 export function exportCsv(
-	rows: readonly ClosureRow[],
+	shown: readonly ClosureRow[],
 	t: (key: string) => string,
 	names: Record<string, string> = {},
 	storeName = ''
 ) {
+	// Each row's SETTLED figures, as the list shows them.
+	const rows = shown.map(settledRow);
 	const tenders = [
 		...new Set(
 			rows.flatMap((row) => [
@@ -54,7 +57,7 @@ export function exportCsv(
 			...tenders.flatMap((method) => {
 				const expected = row.expected[method];
 				const counted = row.counted[method] ?? (expected === undefined ? '' : '0');
-				// The RECORDED result the closures list shows, at the stored four decimals.
+				// The result the closures list shows, at the stored four decimals.
 				const result = closureResult({ recorded: row }, 4, method);
 				return [
 					expected ?? '',

@@ -1,4 +1,4 @@
-import { type Correction, deriveSettled } from './settled-figures';
+import { type Correction, deriveSettled, settledRow } from './settled-figures';
 
 const recorded = {
 	expected: { cash: '100.0000', card: '20.0000' },
@@ -107,4 +107,17 @@ it('reports a shortfall for a tender introduced after counting', () => {
 	]);
 	expect(result.settled.variance.voucher).toBe('-12.3400');
 	expect(result.touched.has('variance.voucher')).toBe(true);
+});
+
+// Revert: settle a row with no corrections, or a blind view that carries no expected figures.
+it('settles a row only by the corrections it carries, and never a blind view', () => {
+	const recount = correction(1, 'recount', { counted: { cash: '101.0000' } });
+	expect(settledRow({ ...recorded, corrections: [recount] })).toMatchObject({
+		counted: { cash: '101.0000' },
+		variance: { cash: '1.0000' },
+	});
+	const plain = { ...recorded, corrections: [] };
+	expect(settledRow(plain)).toBe(plain);
+	const blind = { ...recorded, expected: undefined, corrections: [recount] };
+	expect(settledRow(blind as unknown as typeof recorded)).toBe(blind);
 });

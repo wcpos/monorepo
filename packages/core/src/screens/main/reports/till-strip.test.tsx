@@ -240,13 +240,57 @@ it('shows closed Expected · Counted = short result and dispatches the local rep
 	expect(report).toHaveBeenLastCalledWith(data.lastClosure, true, undefined);
 	expect(get).not.toHaveBeenCalled();
 });
-// Pins the figure the strip shows: the RECORDED (written) variance, as the closures list does;
-// counted less expected would read £2.00 over here. Moving it to settled is a ruling, not a refactor.
+// Pins the figure the strip shows for a closure with no corrections: the RECORDED (written)
+// variance, as the closures list does; counted less expected would read £2.00 over here.
 it('shows the last closure’s RECORDED result, never counted less expected', () => {
 	data.session = null;
 	data.lastClosure = { ...data.lastClosure, counted: { cash: '424' } };
 	render(<TillStrip onOpenClosures={jest.fn()} />);
 	expect(screen.getByTestId('till-result').textContent).toContain('£10.00 short');
+});
+// Paul 2026-11-09: settled everywhere. A recount to £432 reads £10.00 over, from the retained
+// document when it holds the corrections, else from the closure's detail read.
+const recount = {
+	id: 1,
+	type: 'recount',
+	created_at: '2026-09-17T04:00:00Z',
+	actor: { id: 1, name: 'Sam' },
+	approver: null,
+	reason: 'Miscount',
+	figures: { counted: { cash: '432' } },
+};
+it.each([
+	['retained document', JSON.stringify({ closure: { corrections: [recount] } })],
+	['detail read', undefined],
+])('shows the last closure’s SETTLED result from its %s', async (_, snapshot) => {
+	data.session = null;
+	online = true;
+	data.lastClosure = {
+		...data.lastClosure,
+		corrections_count: 1,
+		receipt_snapshot: snapshot,
+		period_sales_total: '0',
+		period_refunds_total: '0',
+		perpetual_sales_total: '0',
+		perpetual_refunds_total: '0',
+	} as typeof data.lastClosure;
+	get.mockImplementation((path: string) =>
+		Promise.resolve({
+			data:
+				path === 'sessions'
+					? []
+					: path === 'closures/last'
+						? data.lastClosure
+						: { ...data.lastClosure, corrections: [recount] },
+		})
+	);
+	render(<TillStrip onOpenClosures={jest.fn()} />);
+	await waitFor(() =>
+		expect(screen.getByTestId('till-result').textContent).toContain('£10.00 over')
+	);
+	expect(screen.getByTestId('till-counted').textContent).toContain('£432.00');
+	if (snapshot) expect(get).not.toHaveBeenCalledWith('closures/A');
+	else expect(get).toHaveBeenCalledWith('closures/A');
 });
 it.each(['open', 'counting'])(
 	'hides the equation for a blind %s cashier while keeping actions',

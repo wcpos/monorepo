@@ -24,6 +24,8 @@ import { useRegisterBinding } from '../../../../services/register/use-register-b
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 
+import type { Correction } from '../../../../services/register-session/settled-figures';
+
 export type ClosureScope = {
 	from: string;
 	to: string;
@@ -119,6 +121,80 @@ export function useLocalClosure(id?: string): {
 	if (!id) return { row: null, status: 'missing' };
 	if (result.id !== id) return { row: null, status: 'loading' };
 	return { row: result.row, status: result.row ? 'ready' : result.failed ? 'error' : 'missing' };
+}
+// A retained document's corrections; an unreadable one holds none, so the closure is read.
+function retainedCorrections(snapshot?: string) {
+	try {
+		return snapshot
+			? (get(JSON.parse(snapshot), 'closure.corrections') as Correction[] | undefined)
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}
+// At most three closure detail reads in flight, the session cards' cap (ledger line 24).
+const CORRECTION_READS = 3;
+/**
+ * Each corrected closure with the corrections its settled figures need (ledger line 35): from
+ * its retained document when that holds them all, else from one detail read; the list carries
+ * only their count. A failed read leaves the row as recorded until its count changes or the
+ * store is reachable again.
+ */
+export function useClosureCorrections<R extends ClosureRow>(rows: readonly R[]) {
+	const http = useRestHttpClient();
+	const online = useOnlineStatus().status === 'online-website-available';
+	const [held, setHeld] = React.useState<
+		Record<string, { count: number; corrections: Correction[] | null }>
+	>({});
+	const reading = React.useRef(new Set<string>());
+	const [wasOnline, setWasOnline] = React.useState(online);
+	if (wasOnline !== online) {
+		setWasOnline(online);
+		if (online)
+			setHeld((h) => Object.fromEntries(Object.entries(h).filter(([, v]) => v.corrections)));
+	}
+	const wanted: string[] = [];
+	const listed = rows.map((row) => {
+		const id = row.server_closure_id ?? row.id;
+		const count = row.corrections_count ?? 0;
+		if (!count) return row;
+		const retained = retainedCorrections(row.receipt_snapshot);
+		// A refreshed row already carries its detail's corrections; a stale set is never shown.
+		const own = (row as { corrections?: Correction[] }).corrections;
+		const read = held[id]?.count === count ? held[id] : undefined;
+		const corrections =
+			[retained, own].find((c) => c && c.length >= count) ?? read?.corrections ?? undefined;
+		if (!corrections && !read) wanted.push(`${id}:${count}`);
+		return { ...row, corrections };
+	});
+	const want = wanted.join(',');
+	React.useEffect(() => {
+		if (!online || !want) return;
+		for (const key of want.split(',')) {
+			if (reading.current.size >= CORRECTION_READS) break;
+			if (reading.current.has(key)) continue;
+			reading.current.add(key);
+			const [id, count] = key.split(':');
+			void http
+				.get(`closures/${id}`)
+				.then(
+					({ data }) => (get(data, 'corrections') ?? []) as Correction[],
+					(error) => {
+						log.warn('Closure corrections could not be read', {
+							context: { error: String(error) },
+						});
+						return null;
+					}
+				)
+				.then((corrections) => {
+					reading.current.delete(key);
+					setHeld((h) => ({ ...h, [id]: { count: Number(count), corrections } }));
+				});
+		}
+		// `held` changes as each read lands: the freed slot takes the next wanted closure, even when
+		// the rows changed meanwhile and `want` did not (Codex, Greptile, #3471).
+	}, [online, want, http, held]);
+	return listed;
 }
 // Match the REST list default; a full final page costs one extra read, not a totals query.
 const PAGE_SIZE = 50;
@@ -284,9 +360,10 @@ export function useClosureRows(requested: ClosureScope) {
 		if (observed && (page.status === 'idle' || fillCashierPage)) void loadMore();
 	}, [observed, page.status, fillCashierPage, loadMore]);
 	const localIds = new Set(local.map((row) => row.server_closure_id ?? row.id));
+	const listed = useClosureCorrections(rows);
 	return {
 		scope,
-		rows,
+		rows: listed,
 		localRows: local,
 		loadMore,
 		refreshRow,
