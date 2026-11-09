@@ -10,7 +10,6 @@ export {
 	observeRegister$,
 	readBoundRegister,
 	readCounters,
-	readClosedElsewhere,
 	readLiveSession,
 	readRegister,
 	recordLiveSession,
@@ -48,7 +47,7 @@ export {
 	type ReadonlyClosureDocument,
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
-export { observeRegisterDrawer, type RegisterDrawer } from './drawer';
+export { observeRegisterDrawer } from './drawer';
 export { isLiveMovement } from './drawer-rules';
 export { abandonCount, beginCount } from './count';
 export { closeRegister, type RegisterCount } from './close';
