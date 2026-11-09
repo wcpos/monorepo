@@ -353,10 +353,10 @@ export const useHttpClient = (
 			const endpoint = processedConfig.url
 				? new URL(processedConfig.url, 'http://localhost').pathname
 				: 'unknown';
-			const response = await scheduleRequest(
-				() => http.request(dispatchConfig),
-				`${method} ${endpoint}`
-			);
+			const response = await scheduleRequest(async () => {
+				checkUpdateRequired();
+				return http.request(dispatchConfig);
+			}, `${method} ${endpoint}`);
 			if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
 				httpLogger.info('HTTP request completed', {
 					context: { method, endpoint, status: response.status },
