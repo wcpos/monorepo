@@ -3,7 +3,7 @@ import { fromMinor, toMinor } from '@wcpos/order-math';
 
 export type Correction = {
 	id: number;
-	type: 'late_sale' | 'late_movement' | 'recount';
+	type: 'late_sale' | 'late_refund' | 'late_movement' | 'recount';
 	created_at: string;
 	actor: { id: number; name: string };
 	approver: { id: number; name: string } | null;
@@ -42,16 +42,18 @@ export function deriveSettled(recorded: RecordedFigures, corrections: readonly C
 		if (seen.has(correction.id)) continue;
 		seen.add(correction.id);
 		const f = correction.figures;
+		// A late refund moves expected and the refund totals as a late sale does (it has no sales).
+		const late = correction.type === 'late_sale' || correction.type === 'late_refund';
 		if (correction.type === 'recount') Object.assign(settled.counted, f.counted);
 		const deltas =
 			correction.type === 'late_movement'
 				? { cash: f.cash_delta ?? '0' }
-				: correction.type === 'late_sale'
+				: late
 					? (f.expected_delta ?? {})
 					: {};
 		for (const [tender, delta] of Object.entries(deltas))
 			settled.expected[tender] = add(settled.expected[tender], delta);
-		if (correction.type === 'late_sale') {
+		if (late) {
 			for (const period of ['period', 'perpetual'] as const) {
 				settled[`${period}_sales_total`] = add(settled[`${period}_sales_total`], f.sales_delta);
 				settled[`${period}_refunds_total`] = add(

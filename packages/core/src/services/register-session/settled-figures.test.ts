@@ -47,6 +47,18 @@ it('adds late cash/card sales and refund deltas to both total pairs', () => {
 	expect(result.touched.has('counted.cash')).toBe(false);
 	expect(recorded.expected.cash).toBe('100.0000');
 });
+// Revert: ignore late_refund corrections (the plugin sends them since roadmap#329).
+it('takes a late refund off expected and adds it to both refund totals', () => {
+	const result = deriveSettled(recorded, [
+		correction(1, 'late_refund', { expected_delta: { cash: '-5.0000' }, refunds_delta: '5.0000' }),
+	]);
+	expect(result.settled.expected).toEqual({ cash: '95.0000', card: '20.0000' });
+	expect(result.settled.variance.cash).toBe('3.0000');
+	expect(result.settled.period_refunds_total).toBe('10.0000');
+	expect(result.settled.perpetual_refunds_total).toBe('55.0000');
+	expect(result.settled.period_sales_total).toBe('120.0000');
+	expect(result.touched.has('expected.cash')).toBe(true);
+});
 // Revert: infer movement signs from raw amounts instead of applying server-normalized cash_delta.
 it.each([
 	['paid in', '3.0000', '103.0000'],
