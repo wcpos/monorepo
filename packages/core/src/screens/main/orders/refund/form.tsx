@@ -327,14 +327,9 @@ export function RefundOrderForm({ order }: Props) {
 	const submitLabel =
 		!isValid || awaitingGateway
 			? t('orders.process_refund')
-			: t(
-					refundDestination === 'cash'
-						? 'orders.submit_refund_cash'
-						: 'orders.submit_refund_original',
-					{
-						amount: formattedRefundTotal,
-					}
-				);
+			: refundDestination === 'cash'
+				? t('orders.submit_refund_cash', { amount: formattedRefundTotal })
+				: t('orders.submit_refund_original', { amount: formattedRefundTotal });
 
 	const handleSubmit = React.useCallback(async () => {
 		// Gateways still loading: the destination is not known yet (it must not default
