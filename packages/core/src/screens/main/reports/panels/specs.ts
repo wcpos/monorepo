@@ -360,13 +360,14 @@ export function panelSpec(
 				taxes.rows.map((row) => ({
 					key: row.rateId,
 					raw: [
-						row.label || unknown,
+						row.label || t('common.tax'),
 						row.net ?? '',
 						row.tax,
 						row.net === null ? '' : row.net + row.tax,
 					],
 					cells: [
-						row.label || unknown,
+						// The rate's label, then its code, then "Tax", as on the card and the paper.
+						row.label || t('common.tax'),
 						row.net === null ? '—' : money(row.net),
 						money(row.tax),
 						row.net === null ? '—' : money(row.net + row.tax),

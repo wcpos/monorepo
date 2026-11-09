@@ -305,6 +305,16 @@ describe('the printed groups print what the cards and panels show', () => {
 			rowsOf(panelSpec('cashiers', twoStores, formats, t, view), [1, 3])
 		);
 	});
+	it('a rate with neither label nor code reads "Tax" on the panel and the paper, as on the card', () => {
+		const bare = salesFigures({
+			orders: [
+				{ ...orders[1], tax_lines: [{ rate_id: 4, label: '', tax_total: '2' }] },
+			] as ReportOrder[],
+			decimals: 2,
+		});
+		expect(group('taxes', bare)!.rows[0].cells[0]).toBe('Tax');
+		expect(panelSpec('taxes', bare, formats, t, view).rows[0].cells[0]).toBe('Tax');
+	});
 	it('Taxes prints the rounded rates and labels the Taxes card and panel show', () => {
 		const unrounded = salesFigures({
 			orders: [
