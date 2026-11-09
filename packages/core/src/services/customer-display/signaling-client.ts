@@ -18,7 +18,7 @@ export interface PairingCode {
 	code: string;
 	expires_at: number; // unix seconds
 }
-export type SignalType = 'offer' | 'answer' | 'candidate' | 'bye';
+export type SignalType = 'offer' | 'answer' | 'candidate' | 'bye' | 'snapshot';
 export interface OutgoingSignal {
 	from: string;
 	to: 'display';

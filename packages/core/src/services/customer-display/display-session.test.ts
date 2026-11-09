@@ -77,7 +77,8 @@ const config = {
 
 function setup(
 	currentState: DisplayEvent | null = { action: 'display.idle', payload: { reason: 'no_cart' } },
-	initialConfig: typeof config | null = config
+	initialConfig: typeof config | null = config,
+	extra: Partial<ConstructorParameters<typeof DisplaySession>[0]> = {}
 ) {
 	const peers: FakePeer[] = [];
 	let signals: IncomingSignal[] = [];
@@ -101,6 +102,7 @@ function setup(
 		uuid: () => ids.shift()!,
 		now: () => new Date('2026-09-03T10:00:00Z'),
 		onConnectionChange: jest.fn(),
+		...extra,
 	});
 	return {
 		session,
@@ -387,4 +389,246 @@ test('forget posts bye then closes the peer', async () => {
 		expect.objectContaining({ session: 'session-1', type: 'bye' })
 	);
 	expect(peers[0].channelState).toBe('closed');
+});
+
+describe('snapshot fallback', () => {
+	const extra = {
+		snapshotFallback: true,
+		display: { ...display, connected: true },
+		now: () => new Date(),
+	};
+	beforeEach(() => {
+		jest.useFakeTimers({ now: new Date('2026-09-03T10:00:00Z') });
+	});
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	test('does not post snapshots unless snapshotFallback is set', async () => {
+		const getConfig = jest.fn(() => config);
+		const getCurrentState = jest.fn(() => ({ action: 'display.idle', payload: {} }));
+		const { session, signaling } = setup(undefined, undefined, {
+			display: extra.display,
+			now: extra.now,
+			getConfig,
+			getCurrentState,
+		});
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(30_000);
+
+		expect(signaling.postSignal).toHaveBeenCalledTimes(1);
+		expect(signaling.postSignal).toHaveBeenCalledWith(
+			'display-1',
+			expect.objectContaining({ type: 'offer' })
+		);
+		expect(getConfig).not.toHaveBeenCalled();
+		expect(getCurrentState).not.toHaveBeenCalled();
+		expect(jest.getTimerCount()).toBe(0);
+	});
+
+	test('posts a snapshot after the offer while the channel is not open', async () => {
+		const { session, signaling } = setup(undefined, undefined, extra);
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(1000);
+		const snapshots = jest
+			.mocked(signaling.postSignal)
+			.mock.calls.filter(([, s]) => s.type === 'snapshot');
+
+		expect(snapshots).toHaveLength(1);
+		expect(snapshots[0]).toEqual([
+			'display-1',
+			{
+				from: 'pos:device-1',
+				to: 'display',
+				type: 'snapshot',
+				session: 'session-1',
+				body: {
+					v: 1,
+					seq: 1,
+					config: {
+						contract: '1.0',
+						display: { id: 'display-1', name: 'Counter' },
+						...config,
+						idle: { afterCompleteMs: 8000 },
+					},
+					event: {
+						wcpos: 1,
+						action: 'display.idle',
+						id: expect.any(String),
+						payload: { reason: 'no_cart', seq: 1, sentAt: '2026-09-03T10:00:00.000Z' },
+					},
+				},
+			},
+		]);
+	});
+
+	test('throttles changes to one post per second, latest state wins', async () => {
+		let state: DisplayEvent = { action: 'display.idle', payload: {} };
+		const { session, signaling } = setup(undefined, undefined, {
+			...extra,
+			getCurrentState: () => state,
+		});
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(0);
+		for (let count = 1; count <= 3; count += 1) {
+			if (count > 1) await jest.advanceTimersByTimeAsync(100);
+			state = { action: 'cart.updated', payload: { count } };
+			expect(session.publish(state)).toBe(false);
+		}
+		await jest.advanceTimersByTimeAsync(799);
+		expect(signaling.postSignal).toHaveBeenCalledTimes(2);
+		await jest.advanceTimersByTimeAsync(201);
+		const snapshots = jest
+			.mocked(signaling.postSignal)
+			.mock.calls.filter(([, s]) => s.type === 'snapshot');
+
+		expect(snapshots).toHaveLength(2);
+		const first = snapshots[0][1].body as { seq: number };
+		const latest = snapshots[1][1].body as { seq: number; event: DisplayEvent };
+		expect(latest.seq).toBeGreaterThan(first.seq);
+		expect(latest.event.action).toBe('cart.updated');
+		expect(latest.event.payload).toEqual({
+			...state.payload,
+			seq: latest.seq,
+			sentAt: '2026-09-03T10:00:00.200Z',
+		});
+	});
+
+	test('keeps at most one snapshot post in flight', async () => {
+		let state: DisplayEvent = { action: 'display.idle', payload: {} };
+		const { session, signaling } = setup(undefined, undefined, {
+			...extra,
+			getCurrentState: () => state,
+		});
+		let resolvePost!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			resolvePost = resolve;
+		});
+		jest.mocked(signaling.postSignal).mockImplementation(async (_id, signal) => {
+			if (signal.type === 'snapshot') await pending;
+		});
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(0);
+		state = { action: 'cart.updated', payload: { count: 2 } };
+		session.publish(state);
+		await jest.advanceTimersByTimeAsync(5000);
+		expect(signaling.postSignal).toHaveBeenCalledTimes(2);
+
+		resolvePost();
+		await jest.advanceTimersByTimeAsync(1000);
+		const snapshots = jest
+			.mocked(signaling.postSignal)
+			.mock.calls.filter(([, s]) => s.type === 'snapshot');
+		expect(snapshots).toHaveLength(2);
+		expect(snapshots[1][1].body).toMatchObject({
+			event: { action: state.action, payload: state.payload },
+		});
+	});
+
+	test('re-sends the identical body every 20 seconds while the channel stays shut', async () => {
+		const { session, signaling } = setup(undefined, undefined, extra);
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(0);
+		await jest.advanceTimersByTimeAsync(20_000);
+		await jest.advanceTimersByTimeAsync(20_000);
+		const snapshots = jest
+			.mocked(signaling.postSignal)
+			.mock.calls.filter(([, s]) => s.type === 'snapshot');
+
+		expect(snapshots).toHaveLength(3);
+		const bodies = snapshots.map(([, s]) => JSON.stringify(s.body));
+		expect(bodies).toEqual([bodies[0], bodies[0], bodies[0]]);
+	});
+
+	test('stops posting once the channel opens', async () => {
+		const { session, signaling, peers } = setup(undefined, undefined, extra);
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(0);
+		peers[0].open();
+		peers[0].message({
+			wcpos: 1,
+			id: 'hello-id',
+			action: 'display.hello',
+			payload: { template: { id: 'ledger', version: 2 } },
+		});
+		await jest.advanceTimersByTimeAsync(60_000);
+
+		expect(session.isOpen).toBe(true);
+		expect(signaling.postSignal).toHaveBeenCalledTimes(2);
+	});
+
+	test('resumes with a new seq after an open channel closes', async () => {
+		const { session, signaling, peers } = setup(undefined, undefined, extra);
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(0);
+		peers[0].open();
+		peers[0].close();
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(1000);
+		const snapshots = jest
+			.mocked(signaling.postSignal)
+			.mock.calls.filter(([, s]) => s.type === 'snapshot');
+
+		expect(snapshots).toHaveLength(2);
+		expect(snapshots[1][1].session).toBe('session-2');
+		const first = snapshots[0][1].body as { seq: number };
+		const latest = snapshots[1][1].body as { seq: number };
+		expect(latest.seq).toBeGreaterThan(first.seq);
+	});
+
+	test('does not repost a body the server rejected with 413', async () => {
+		let state: DisplayEvent = { action: 'display.idle', payload: {} };
+		const { session, signaling } = setup(undefined, undefined, {
+			...extra,
+			getCurrentState: () => state,
+		});
+		jest.mocked(signaling.postSignal).mockImplementation(async (_id, signal) => {
+			if (signal.type === 'snapshot') {
+				throw Object.assign(new Error('too large'), { response: { status: 413 } });
+			}
+		});
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(60_000);
+		expect(signaling.postSignal).toHaveBeenCalledTimes(2);
+		expect(mockLoggerWarn).toHaveBeenLastCalledWith('Customer display snapshot failed', {
+			context: { displayId: 'display-1', status: 413 },
+		});
+
+		state = { action: 'cart.updated', payload: { count: 1 } };
+		session.publish(state);
+		await jest.advanceTimersByTimeAsync(1000);
+		const snapshots = jest
+			.mocked(signaling.postSignal)
+			.mock.calls.filter(([, s]) => s.type === 'snapshot');
+		expect(snapshots).toHaveLength(2);
+		const first = snapshots[0][1].body as { seq: number };
+		const latest = snapshots[1][1].body as { seq: number };
+		expect(latest.seq).toBeGreaterThan(first.seq);
+	});
+
+	test('skips a display the registry reports as not connected', async () => {
+		const { session, signaling } = setup(undefined, undefined, extra);
+		await session.poll();
+		session.updateDisplay({ ...display, connected: false });
+		await jest.advanceTimersByTimeAsync(30_000);
+		expect(signaling.postSignal).toHaveBeenCalledTimes(1);
+
+		session.updateDisplay({ ...display, connected: true });
+		await jest.advanceTimersByTimeAsync(1000);
+		const snapshots = jest
+			.mocked(signaling.postSignal)
+			.mock.calls.filter(([, s]) => s.type === 'snapshot');
+		expect(snapshots).toHaveLength(1);
+	});
+
+	test('close stops the snapshot timer', async () => {
+		const { session, signaling } = setup(undefined, undefined, extra);
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(0);
+		session.close();
+		await jest.advanceTimersByTimeAsync(60_000);
+
+		expect(signaling.postSignal).toHaveBeenCalledTimes(2);
+		expect(jest.getTimerCount()).toBe(0);
+	});
 });
