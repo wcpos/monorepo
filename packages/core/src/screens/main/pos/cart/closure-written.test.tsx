@@ -162,17 +162,6 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
-	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
-		open ? <>{children}</> : null,
-	DialogContent: jest.requireActual('react-native').View,
-	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	DialogHeader: jest.requireActual('react-native').View,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-}));
 
 const count = () => ({ closure: mockClosure as never, counted: '0', expected: '0', blind: false });
 it('shows the written heading, variance hero and two tiles with the paper open; Done closes', () => {

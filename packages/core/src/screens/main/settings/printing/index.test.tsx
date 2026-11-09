@@ -13,9 +13,6 @@ let mockTemplates = {
 	report: [{ id: 'report-1', title: 'Sales report', type: 'report', output_type: 'html' }],
 	closure: [{ id: 'closure-1', title: 'Z report', type: 'closure', output_type: 'escpos' }],
 };
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/query', () => ({
 	deletePrinterProfile: (...args: unknown[]) => mockDeletePrinterProfile(...args),
 	setTemplatePrinterOverride: (...args: unknown[]) => mockSetTemplatePrinterOverride(...args),

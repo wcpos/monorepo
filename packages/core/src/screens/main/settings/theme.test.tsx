@@ -9,9 +9,6 @@ import * as TextComponents from '@wcpos/components/text';
 
 import { themeColumns, ThemeSettings } from './theme';
 
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../jest/property-row.test-utils')
-);
 jest.mock('expo-font', () => ({ loadAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('expo-haptics', () => ({}));
 jest.mock('react-native-reanimated', () => ({

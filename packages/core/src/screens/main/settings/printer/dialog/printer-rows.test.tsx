@@ -10,9 +10,6 @@ import { DEFAULT_FORM_VALUES, type PrinterFormValues, type VendorOption } from '
 
 type Field = { value?: unknown; onChange: (value: unknown) => void; testID?: string };
 
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../../jest/property-row.test-utils')
-);
 jest.mock('react-native', () => ({
 	useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
 	View: ({
@@ -45,19 +42,6 @@ jest.mock('@wcpos/components/form', () => {
 		),
 		SavedMark: () => null,
 		useSavedName: () => '',
-	};
-});
-jest.mock('@wcpos/components/dialog', () => {
-	function Wrap({ children }: React.PropsWithChildren) {
-		return <div>{children}</div>;
-	}
-	return {
-		Dialog: Wrap,
-		DialogContent: Wrap,
-		DialogHeader: Wrap,
-		DialogTitle: Wrap,
-		DialogBody: Wrap,
-		DialogFooter: () => null,
 	};
 });
 jest.mock('@wcpos/components/text', () => ({

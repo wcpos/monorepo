@@ -261,38 +261,6 @@ beforeEach(async () => {
 });
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => mockCartSide }));
 
-jest.mock('@wcpos/components/dialog', () => {
-	function Box({ children }: { children: React.ReactNode }) {
-		return <div>{children}</div>;
-	}
-	return {
-		Dialog: ({
-			children,
-			onOpenChange,
-		}: React.PropsWithChildren<{ onOpenChange: (open: boolean) => void }>) => (
-			<div>
-				<button data-testid="dismiss" onClick={() => onOpenChange(false)} />
-				{children}
-			</div>
-		),
-		DialogContent: ({
-			children,
-			side,
-			testID,
-		}: React.PropsWithChildren<{ side: string; testID: string }>) => (
-			<div data-testid={testID} data-side={side}>
-				{children}
-			</div>
-		),
-		DialogDescription: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
-			<div data-testid={testID}>{children}</div>
-		),
-		DialogHeader: Box,
-		DialogTitle: Box,
-		DialogBody: Box,
-		DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-	};
-});
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,

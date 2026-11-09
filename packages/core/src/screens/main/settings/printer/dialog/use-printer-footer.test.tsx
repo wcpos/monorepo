@@ -12,6 +12,8 @@ import { DeviceScope } from '@wcpos/components/lib/device';
 import { usePrinterFooter } from './use-printer-footer';
 
 let mockPresentation = 'right';
+// This suite drives the real dialog; core's Jest maps the bare path to the fake.
+jest.mock('@wcpos/components/dialog', () => jest.requireActual('@wcpos/components/dialog/index'));
 jest.mock('@wcpos/components/lib/overlay', () => ({
 	useOverlay: () => ({ presentation: mockPresentation }),
 	useOverlayPresentation: () => mockPresentation,

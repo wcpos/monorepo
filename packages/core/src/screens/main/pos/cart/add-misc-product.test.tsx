@@ -6,24 +6,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AddMiscProduct } from './add-misc-product';
 
 const mockAddProduct = jest.fn();
-const mockClose = jest.fn();
 
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogAction: ({
-		children,
-		onPress,
-		testID,
-		disabled,
-	}: React.PropsWithChildren<{ onPress: () => void; testID?: string; disabled?: boolean }>) => (
-		<button data-testid={testID ?? 'submit'} onClick={onPress} disabled={disabled}>
-			{children}
-		</button>
-	),
-	DialogClose: () => null,
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-	useDialog: () => ({ close: mockClose }),
-}));
 jest.mock('@wcpos/components/form', () => {
 	const { FormProvider, Controller } = jest.requireActual('react-hook-form');
 	return {
@@ -69,9 +52,6 @@ jest.mock('@wcpos/components/form', () => {
 		FormTreeCombobox: () => null,
 	};
 });
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/select', () => ({ OptionSelect: () => null }));
 jest.mock('../../components/amount-field', () => ({
 	FormAmountField: ({ value, testID }: { value: string; testID?: string }) => (

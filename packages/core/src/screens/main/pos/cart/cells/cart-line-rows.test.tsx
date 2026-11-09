@@ -13,9 +13,6 @@ function mockWrap({ children }: React.PropsWithChildren) {
 function mockField({ testID }: { testID?: string }) {
 	return <span data-testid={testID} />;
 }
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/form', () => {
 	const { FormProvider, Controller } = jest.requireActual('react-hook-form');
 	return {
@@ -93,13 +90,6 @@ jest.mock('@wcpos/components/tooltip', () => ({
 	TooltipTrigger: mockWrap,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogBody: mockWrap,
-	DialogFooter: jest.requireActual('../../../../../../jest/footer.test-utils').DialogFooter,
-	DialogClose: mockWrap,
-	DialogAction: mockWrap,
-	useDialog: () => ({ close: jest.fn() }),
-}));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));

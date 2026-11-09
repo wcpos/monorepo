@@ -31,12 +31,6 @@ function passthrough({ children, testID }: React.PropsWithChildren<{ testID?: st
 	return <div data-testid={testID}>{children}</div>;
 }
 
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogHeader: passthrough,
-	DialogTitle: passthrough,
-	DialogBody: passthrough,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-}));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,

@@ -50,18 +50,6 @@ jest.mock('../../../../services/register-session/use-closure-document-context', 
 	// The viewed store's context: store 3 is a 3-place (fils) store.
 	useClosureDocumentContext: (storeId: number) => (storeId === 3 ? filsContext : context),
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	// The pane's Print closure door mounts a closed PrintSheet: a controlled Dialog that renders nothing while shut.
-	Dialog: ({ children, open }: React.PropsWithChildren<{ open?: boolean }>) =>
-		open ? children : null,
-	DialogContent: jest.requireActual('react-native').View,
-	DialogBody: jest.requireActual('react-native').View,
-	DialogHeader: jest.requireActual('react-native').View,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
-	DialogTitle: jest.requireActual('react-native').Text,
-	DialogDescription: jest.requireActual('react-native').Text,
-}));
 jest.mock('../../receipt/receipt-body', () => ({ ReceiptBody: () => null }));
 jest.mock('../../receipt/template-switcher', () => ({ TemplateSwitcher: () => null }));
 jest.mock('../../receipt/printer-switcher', () => ({ PrinterSwitcher: () => null }));

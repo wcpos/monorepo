@@ -14,9 +14,6 @@ jest.mock('@wcpos/components/empty-state', () => ({
 		<span data-testid={testID}>{title}</span>
 	),
 }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/list-item', () => ({
 	ListItem: ({
 		children,

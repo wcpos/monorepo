@@ -30,9 +30,6 @@ const form = {
 	reset: jest.fn(),
 };
 const mockUseForm = jest.fn(() => form);
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('react-hook-form', () => ({ useForm: () => mockUseForm(), useWatch: () => formValues }));
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: () => undefined }));
 jest.mock('@wcpos/components/form', () => ({
@@ -62,11 +59,6 @@ jest.mock('@wcpos/components/form', () => ({
 		capturedChange = options.onChange;
 		return { flush: mockFlush };
 	},
-}));
-jest.mock('@wcpos/components/dialog', () => ({
-	useDialog: () => ({ close: jest.fn() }),
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: jest.requireActual('@wcpos/components/dialog').DialogFooter,
 }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({

@@ -31,9 +31,6 @@ jest.mock('@wcpos/components/form', () => ({
 	FormInput: mockInput,
 	FormItem: mockWrap,
 }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockWrap }));
 jest.mock('@wcpos/components/section-heading', () => ({
 	SectionHeading: ({ title, testID }: { title: string; testID?: string }) => (
