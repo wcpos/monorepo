@@ -125,3 +125,23 @@ it.each(['menu-add-misc-product', 'menu-add-fee', 'menu-add-discount', 'menu-add
 
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 // The v2 root has no wrapper: a single-child root is `asChild`, so its own props land on the panel.
+jest.mock('@wcpos/components/dialog', () => ({
+	Dialog: ({
+		children,
+		open: _open,
+		onOpenChange: _onOpenChange,
+		...rootProps
+	}: React.PropsWithChildren<{ open?: boolean; onOpenChange?: (open: boolean) => void }>) =>
+		React.cloneElement(React.Children.only(children) as React.ReactElement, rootProps),
+	DialogContent: ({
+		children,
+		testID,
+		style,
+	}: React.PropsWithChildren<{ testID?: string; style?: React.CSSProperties }>) => (
+		<div role="dialog" data-testid={testID} style={style}>
+			{children}
+		</div>
+	),
+	DialogHeader: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	DialogTitle: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
