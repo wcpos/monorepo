@@ -142,7 +142,20 @@ export async function productWriterAuthorization(
 	const pass = process.env.E2E_PRODUCT_WRITER_PASS;
 	productWriterCredentialsDecision(user, pass);
 	if (!user || !pass) return null;
+	return storeLoginAuthorization(request, storeUrl, user, pass);
+}
 
+/**
+ * Mint a JWT for any store login through the wcpos-auth flow the app uses, with its transport
+ * resolved per store. `label` names the login in warnings and errors; the token is never logged.
+ */
+export async function storeLoginAuthorization(
+	request: APIRequestContext,
+	storeUrl: string,
+	user: string,
+	pass: string,
+	label = 'product-writer'
+): Promise<StoreAuthorization> {
 	// The server keys auth sessions by state + redirect URI, so concurrent workers need distinct states.
 	const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe-${randomUUID()}`;
 	for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -195,16 +208,16 @@ export async function productWriterAuthorization(
 			if (action === 'retry' || (failure.kind === 'http' && attempt === 0)) continue;
 			const status = failure.status === null ? '' : ` (HTTP ${failure.status})`;
 			if (failure.kind === 'transport') {
-				log.warn('[search-probe] configured product-writer login transport failed');
+				log.warn(`[search-probe] configured ${label} login transport failed`);
 				throw new Error(
-					`Configured product-writer authentication transport failed after one retry${status}`
+					`Configured ${label} authentication transport failed after one retry${status}`
 				);
 			}
-			log.warn('[search-probe] configured product-writer login was rejected');
-			throw new Error(`Configured product-writer authentication failed${status}`);
+			log.warn(`[search-probe] configured ${label} login was rejected`);
+			throw new Error(`Configured ${label} authentication failed${status}`);
 		}
 	}
-	throw new Error('Configured product-writer authentication failed');
+	throw new Error(`Configured ${label} authentication failed`);
 }
 
 /**
