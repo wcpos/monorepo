@@ -619,6 +619,24 @@ describe('update-required latch', () => {
 		expect(scheduleRequest).not.toHaveBeenCalled();
 	});
 
+	it('refuses a request queued before the latch sets when its turn comes', async () => {
+		(scheduleRequest as jest.Mock).mockImplementationOnce(
+			async (request: () => Promise<unknown>) => {
+				reportUpdateRequired(site, details);
+				return request();
+			}
+		);
+		const { result } = renderHook(() => useHttpClient([], undefined, site));
+
+		await expect(result.current.get('/wc/v3/products')).rejects.toMatchObject({
+			isPreFlightBlocked: true,
+			blockCode: 'preflight-update-required',
+			wpStatus: 426,
+		});
+		expect(scheduleRequest).toHaveBeenCalledTimes(1);
+		expect(http.request).not.toHaveBeenCalled();
+	});
+
 	it('refuses a request parked on a token refresh when the latch sets during the refresh', async () => {
 		(requestStateManager.isTokenRefreshing as jest.Mock).mockReturnValueOnce(true);
 		(requestStateManager.awaitTokenRefresh as jest.Mock).mockImplementationOnce(async () => {
