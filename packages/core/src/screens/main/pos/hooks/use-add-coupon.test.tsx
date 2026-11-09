@@ -145,7 +145,7 @@ jest.mock('./use-action-context', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrderRecord }),
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: () => currentOrderRecord }),
 }));
 
 function engineDocument(document: Record<string, unknown> & { uuid: string; payload: object }) {

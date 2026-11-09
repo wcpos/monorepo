@@ -5,17 +5,14 @@ import { useQueryRuntime } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, POS_META_KEYS } from '@wcpos/sync-core';
 import type { EngineWarning } from '@wcpos/order-math';
 
-import { enqueueCartAction } from './enqueue-cart-action';
-import { useActionContext } from './use-action-context';
 import { useCartConfigReader } from './use-cart-config';
 import { readCatalogTaxStatuses } from './use-coupon-context';
-import { dispatchAction } from '../../../../extensions/actions';
 import { retaxForCustomerWrite } from '../commands/retax-for-customer-write';
-import { useCartWrite } from '../commands/use-cart-write';
+import { useCartCommand } from '../commands/use-cart-command';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 
-import type { OrderMutationContext } from './order-mutation-queue';
+import type { SlotWrite } from '../commands/cart-command';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 import type { OrderPayload } from '../commands/cart-config-for-order';
 
@@ -42,8 +39,7 @@ export interface CartCustomerFields {
  * `cart.customer.set` hooks have seen, rewritten or refused them.
  */
 export const useSetCartCustomer = () => {
-	const { localPatch } = useCartWrite();
-	const { ctx, actor } = useActionContext();
+	const command = useCartCommand('cart.customer.set');
 	const configForOrder = useCartConfigReader();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const reportEngineWarnings = useReportEngineWarnings();
@@ -51,38 +47,30 @@ export const useSetCartCustomer = () => {
 
 	return React.useCallback(
 		async (order: CurrentOrderRecord, fields: CartCustomerFields) => {
-			const run = async (target: CurrentOrderRecord, queue: OrderMutationContext) => {
-				// Read inside the slot: a stamp queued ahead (the new-customer link bridge) is the
-				// customer this write keeps, not the one the form last rendered.
-				const current = target.getLatest().payload.customer_id ?? null;
-				// In the slot, so no later action overtakes this write while the catalog is read.
-				const taxStatusFor = await readCatalogTaxStatuses(
-					runtime.engine,
-					(target.getLatest().payload.line_items ?? []).filter(
-						(line) =>
-							isActiveLineItem(line) &&
-							!line.meta_data?.some(({ key }) => key === POS_META_KEYS.posData)
-					)
-				);
-				const setsCustomer = fields.customerId !== undefined;
-				return dispatchAction({
-					event: 'cart.customer.set',
-					token: queue.dispatchToken,
-					ctx,
-					input: {
-						orderId: target.uuid,
-						actor,
-						source: 'user',
-						payload: {
-							customerId: setsCustomer ? fields.customerId! : (current ?? GUEST_CUSTOMER_ID),
-							previousCustomerId: current,
-							// The dispatcher's clone drops `undefined`; the write puts it back as absent.
-							billing: fields.billing ?? null,
-							shipping: fields.shipping ?? null,
-							taxIds: fields.taxIds,
-						},
-					},
-					bottom: async (e) => {
+			return (await command(
+				async ({ target, dispatch }) => {
+					// Read inside the slot: a stamp queued ahead (the new-customer link bridge) is the
+					// customer this write keeps, not the one the form last rendered.
+					const current = target.getLatest().payload.customer_id ?? null;
+					// In the slot, so no later action overtakes this write while the catalog is read.
+					const taxStatusFor = await readCatalogTaxStatuses(
+						runtime.engine,
+						(target.getLatest().payload.line_items ?? []).filter(
+							(line) =>
+								isActiveLineItem(line) &&
+								!line.meta_data?.some(({ key }) => key === POS_META_KEYS.posData)
+						)
+					);
+					const setsCustomer = fields.customerId !== undefined;
+					const input = {
+						customerId: setsCustomer ? fields.customerId! : (current ?? GUEST_CUSTOMER_ID),
+						previousCustomerId: current,
+						// The dispatcher's clone drops `undefined`; the write puts it back as absent.
+						billing: fields.billing ?? null,
+						shipping: fields.shipping ?? null,
+						taxIds: fields.taxIds,
+					};
+					return dispatch(input, async (e, write) => {
 						const intent = {
 							...(setsCustomer ? { customer_id: e.payload.customerId } : {}),
 							billing: e.payload.billing ?? undefined,
@@ -100,17 +88,15 @@ export const useSetCartCustomer = () => {
 							warnings = retaxed.warnings;
 							return { ...intent, ...retaxed.lines };
 						};
-						const result = await localPatch({ queue, document: target, data });
+						const result = await write(data);
 						reportEngineWarnings(warnings, { orderId: target.uuid, site: 'useSetCartCustomer' });
 						return result;
-					},
-				});
-			};
-			return (await enqueueCartAction(order, run, {
-				ctx,
-				context: { orderId: order.uuid, customerId: fields.customerId ?? null },
-			})) as Awaited<ReturnType<typeof localPatch>> | false;
+					});
+				},
+				(record) => ({ orderId: record.uuid, customerId: fields.customerId ?? null }),
+				order
+			)) as Awaited<ReturnType<SlotWrite>> | false;
 		},
-		[localPatch, ctx, actor, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime]
+		[command, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime]
 	);
 };

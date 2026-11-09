@@ -6,7 +6,7 @@ import { renderHook } from '@testing-library/react';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { expectSettledWrites } from '../../../../../jest/cart-write';
-import { registerActionHook, resetActionRegistry } from '../../../../extensions/actions';
+import { resetActionRegistry } from '../../../../extensions/actions';
 import { useRemoveCoupon } from './use-remove-coupon';
 
 const localPatch = jest.fn();
@@ -84,7 +84,7 @@ jest.mock('./use-action-context', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrderRecord }),
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: () => currentOrderRecord }),
 }));
 
 const couponLine = (code: string, id?: number): CouponLine => ({

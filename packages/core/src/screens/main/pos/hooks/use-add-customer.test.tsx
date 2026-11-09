@@ -81,6 +81,7 @@ jest.mock('./use-action-context', () => ({
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: () => currentOrderRecord }),
 }));
 
 describe('useAddCustomer', () => {

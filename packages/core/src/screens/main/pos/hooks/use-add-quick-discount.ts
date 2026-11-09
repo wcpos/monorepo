@@ -26,43 +26,42 @@ import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
 import { useWcVersion } from '../commands/use-tax-exempt';
-import { useCartWrite } from '../commands/use-cart-write';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCartCommand } from '../commands/use-cart-command';
+import { useCurrentOrder, useCurrentOrderActions } from '../contexts/current-order';
 import { refusalText } from '../../../../extensions/actions/present';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 export const useAddQuickDiscount = () => {
-	const { localPatch } = useCartWrite();
+	const command = useCartCommand('cart.coupon.apply');
 	const wcVersion = useWcVersion();
-	const { currentOrderRecord } = useCurrentOrder();
+	// Subscribed only for the coupon-reference demand below; the press reads its own target.
+	const { currentOrderRecord: shownOrder } = useCurrentOrder();
+	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { recalculate } = useRecalculateCoupons();
-	const { ctx, actor } = useActionContext();
+	const { ctx } = useActionContext();
 	const { getCouponContext } = useCouponContext();
 	const couponRejectionMessage = useCouponRejectionMessage();
 	const t = useT();
 	// The exclusivity check below scans the RESIDENT coupons, and on a device that never
 	// opened the coupon picker they arrive on demand (#952). Declare that demand for a cart
 	// carrying a catalog coupon and wait for it (bounded) before scanning, as settlement does.
-	const hasCatalogCoupons = useRecordField(currentOrderRecord, (order) =>
+	const hasCatalogCoupons = useRecordField(shownOrder, (order) =>
 		(order.payload.coupon_lines || []).some(
 			(line) => line.code != null && !readQuickDiscountIntent(line)
 		)
 	);
 	const { whenSettled: whenCouponReferencesSettled } =
 		useAppliedCouponReferenceDemand(hasCatalogCoupons);
-	const orderLogger = React.useMemo(
-		() =>
-			cartLogger.with({
-				orderUUID: currentOrderRecord.uuid,
-				orderID: currentOrderRecord.payload.id,
-				orderNumber: currentOrderRecord.payload.number,
-			}),
-		[currentOrderRecord]
-	);
 
 	const addQuickDiscount = React.useCallback(
 		async (intent: Parameters<typeof quickDiscountCouponConfig>[0]) => {
+			const currentOrderRecord = getCurrentOrderRecord();
+			const orderLogger = cartLogger.with({
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
+			});
 			try {
 				const order = currentOrderRecord.getLatest();
 				// The cart the exclusivity rule is checked against; the writer refuses if it moved.
@@ -114,7 +113,7 @@ export const useAddQuickDiscount = () => {
 				);
 				// The writer compares the cart when its slot starts and after its recalculation.
 				const outcome = await applyCouponLine(
-					{ ctx, actor, recalculate, localPatch, wcVersion },
+					{ command, recalculate, wcVersion },
 					currentOrderRecord,
 					newLine,
 					validated
@@ -147,16 +146,14 @@ export const useAddQuickDiscount = () => {
 			}
 		},
 		[
-			currentOrderRecord,
-			localPatch,
+			getCurrentOrderRecord,
+			command,
 			recalculate,
 			getCouponContext,
 			couponRejectionMessage,
 			whenCouponReferencesSettled,
 			t,
-			orderLogger,
 			ctx,
-			actor,
 			wcVersion,
 		]
 	);

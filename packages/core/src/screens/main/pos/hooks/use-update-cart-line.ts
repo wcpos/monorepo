@@ -5,22 +5,19 @@ import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportStaleCartLine } from './cart-failure';
-import { enqueueCartAction } from './enqueue-cart-action';
 import './stock-guard-hook';
-import { useActionContext } from './use-action-context';
 import { useCartConfigReader } from './use-cart-config';
 import { extractLineItemData, lineMetaForWrite } from './utils';
 import {
 	type ActionContext,
 	type ActionRefusal,
-	dispatchAction,
 	isActionRefusal,
 } from '../../../../extensions/actions';
-import { useCartWrite } from '../commands/use-cart-write';
-import { type CurrentOrderRecord, useCurrentOrderActions } from '../contexts/current-order';
+import { useCartCommand } from '../commands/use-cart-command';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
-import type { OrderMutationContext } from './order-mutation-queue';
+import type { SlotWrite } from '../commands/cart-command';
+import type { CurrentOrderRecord } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/query').OrderPayload;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
@@ -91,22 +88,20 @@ const lineInfo = {
  * keyed by the order that was selected at enqueue time, so the edit either lands in the
  * new order or is silently dropped when its line is not found there.
  *
- * The caller captures the order at press time and threads it through. `getLatest()` still
- * gets the freshest revision — of that order.
+ * The cart command captures the order at press time and threads it through. `getLatest()`
+ * still gets the freshest revision — of that order.
  */
 export const useUpdateCartLine = () => {
-	const { getCurrentOrderRecord } = useCurrentOrderActions();
-	const { localPatch } = useCartWrite();
+	const command = useCartCommand('cart.line.update');
 	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
-	const { ctx, actor } = useActionContext();
 	const write = React.useCallback(
 		async (
 			record: CurrentOrderRecord,
 			type: EditableLineType,
 			uuid: string,
 			changes: Record<string, unknown>,
-			queue: OrderMutationContext
+			settledWrite: SlotWrite
 		) => {
 			const order = record.getLatest();
 			const json = order.toMutableJSON().payload;
@@ -161,7 +156,7 @@ export const useUpdateCartLine = () => {
 			});
 			reportEngineWarnings(warnings, { orderId: order.uuid, site: lineInfo[type].site });
 			if (!updated || !updatedLines) return;
-			const result = await localPatch({ document: order, queue, data: { [type]: updatedLines } });
+			const result = await settledWrite({ [type]: updatedLines }, order);
 			if (result && !isActionRefusal(result) && type === 'line_items' && previous) {
 				const line = previous as LineItem;
 				lineInfo[type].logger.info('Cart line item updated', {
@@ -178,90 +173,68 @@ export const useUpdateCartLine = () => {
 			}
 			return result;
 		},
-		[configForOrder, localPatch, reportEngineWarnings]
+		[configForOrder, reportEngineWarnings]
 	);
 	const apply = React.useCallback(
-		async (
-			target: CurrentOrderRecord,
-			queue: OrderMutationContext,
+		(
 			type: EditableLineType,
 			uuid: string,
 			changes: Record<string, unknown> | number,
 			options?: UpdateCartLineOptions
-		) => {
-			const order = target.getLatest();
-			const json = order.toMutableJSON().payload;
-			const line = json[type]?.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
-			if (!line) {
-				if (typeof changes === 'number') return;
-				const info = lineInfo[type];
-				reportStaleCartLine(
-					info.logger,
-					`${info.label} update targeted a line that is no longer in the cart`,
-					{
-						toastTitle: info.stale(ctx.t),
-						context: { uuid, orderId: order.payload.id },
+		) =>
+			command(
+				async ({ target, ctx, dispatch }) => {
+					const order = target.getLatest();
+					const json = order.toMutableJSON().payload;
+					const line = json[type]?.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
+					if (!line) {
+						if (typeof changes === 'number') return;
+						const info = lineInfo[type];
+						reportStaleCartLine(
+							info.logger,
+							`${info.label} update targeted a line that is no longer in the cart`,
+							{
+								toastTitle: info.stale(ctx.t),
+								context: { uuid, orderId: order.payload.id },
+							}
+						);
+						return;
 					}
-				);
-				return;
-			}
-			const result = await dispatchAction({
-				event: 'cart.line.update',
-				token: queue.dispatchToken,
-				ctx,
-				input: {
-					orderId: order.uuid,
-					actor,
-					source: 'user',
-					payload: {
-						type,
-						lineUuid: uuid,
-						changes:
-							typeof changes === 'number'
-								? { quantity: ((line as LineItem).quantity ?? 0) + changes }
-								: changes,
-						line,
-						lineItems: json.line_items ?? [],
-						options:
-							options?.skipStockGuard === undefined
-								? {}
-								: { skipStockGuard: options.skipStockGuard },
-					},
+					return dispatch(
+						{
+							type,
+							lineUuid: uuid,
+							changes:
+								typeof changes === 'number'
+									? { quantity: ((line as LineItem).quantity ?? 0) + changes }
+									: changes,
+							line,
+							lineItems: json.line_items ?? [],
+							options:
+								options?.skipStockGuard === undefined
+									? {}
+									: { skipStockGuard: options.skipStockGuard },
+						},
+						(e, settledWrite) => write(target, type, uuid, { ...e.payload.changes }, settledWrite)
+					) as Promise<Awaited<ReturnType<SlotWrite>> | undefined | ActionRefusal>;
 				},
-				bottom: (e) => write(target, type, uuid, { ...e.payload.changes }, queue),
-			});
-			return result as Awaited<ReturnType<typeof localPatch>> | undefined | ActionRefusal;
-		},
-		[actor, ctx, write]
+				(record) => ({ orderId: record.uuid, uuid }),
+				options?.record
+			),
+		[command, write]
 	);
 	const updateCartLine = React.useCallback(
-		async <T extends EditableLineType>(
+		<T extends EditableLineType>(
 			type: T,
 			uuid: string,
 			changes: CartLineChanges[T],
 			options?: UpdateCartLineOptions
-		) => {
-			const record = options?.record ?? getCurrentOrderRecord();
-			if (!record.uuid) throw new Error('Order is missing its uuid');
-			return enqueueCartAction(
-				record,
-				(target, queue) => apply(target, queue, type, uuid, { ...changes }, options),
-				{ ctx, context: { orderId: record.uuid, uuid } }
-			);
-		},
-		[apply, ctx, getCurrentOrderRecord]
+		) => apply(type, uuid, { ...changes }, options),
+		[apply]
 	);
 	const incrementLineItem = React.useCallback(
-		async (uuid: string, by: number) => {
-			const record = getCurrentOrderRecord();
-			if (!record.uuid) throw new Error('Order is missing its uuid');
-			return enqueueCartAction(
-				record,
-				(target, queue) => apply(target, queue, 'line_items', uuid, by),
-				{ ctx, context: { orderId: record.uuid, uuid } }
-			);
-		},
-		[apply, ctx, getCurrentOrderRecord]
+		(uuid: string, by: number) => apply('line_items', uuid, by),
+		[apply]
 	);
 	return { updateCartLine, incrementLineItem };
 };

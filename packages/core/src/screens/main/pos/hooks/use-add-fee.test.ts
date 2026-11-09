@@ -48,13 +48,13 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({
-		currentOrderRecord: {
+	useCurrentOrderActions: () => ({
+		getCurrentOrderRecord: () => ({
 			uuid: 'order-uuid',
 			payload: { id: 17, number: '17' },
 			// The percent basis is read from here — an explicit input to the engine now.
 			getLatest: () => ({ payload: { id: 17, line_items: mockLineItems } }),
-		},
+		}),
 	}),
 }));
 

@@ -51,7 +51,10 @@ jest.mock('./use-action-context', () => ({
 	}),
 }));
 
-jest.mock('../contexts/current-order', () => ({ useCurrentOrder: () => ({ currentOrderRecord }) }));
+jest.mock('../contexts/current-order', () => ({
+	useCurrentOrder: () => ({ currentOrderRecord }),
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: () => currentOrderRecord }),
+}));
 const getCouponContext = jest.fn();
 const whenSettled = jest.fn(async () => true);
 const demandDeclared = jest.fn();

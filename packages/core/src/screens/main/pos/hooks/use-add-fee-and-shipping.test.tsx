@@ -30,12 +30,12 @@ jest.mock('./use-cart-config', () => {
 });
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({
-		currentOrderRecord: {
+	useCurrentOrderActions: () => ({
+		getCurrentOrderRecord: () => ({
 			uuid: 'order-uuid',
 			payload: { id: 7, number: '7' },
 			getLatest: () => ({ payload: { id: 7, line_items: [] } }),
-		},
+		}),
 	}),
 }));
 
