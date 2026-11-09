@@ -294,6 +294,21 @@ test.describe('POS refunds (Pro)', () => {
 			.toBe('original_method');
 		expect(captured.refund?.api_refund).toBe(true);
 	});
+
+	test('holds the refund offline and says why on the form', async ({ posPage: page }) => {
+		await openRefundModalForNewOrder(page);
+		try {
+			// setOffline fires the browser's offline event, which moves the app offline at once.
+			await page.context().setOffline(true);
+			await expect(page.getByTestId('refund-offline-reason')).toBeVisible({ timeout: 15_000 });
+			await expect(page.getByTestId('process-refund-button')).toBeDisabled();
+
+			await page.context().setOffline(false);
+			await expect(page.getByTestId('refund-offline-reason')).toBeHidden({ timeout: 30_000 });
+		} finally {
+			await page.context().setOffline(false);
+		}
+	});
 });
 
 /**

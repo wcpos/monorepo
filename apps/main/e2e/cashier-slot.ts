@@ -7,9 +7,10 @@ export interface E2ECashierAuth {
 }
 
 /**
- * PR runs use band A (1..8); the deploy workflow's e2e-shared-store queue
- * serializes them. All other runs use band B (9..16). Accepted residual: two
- * simultaneous non-PR runs can share band B because that queue does not cover them.
+ * PR runs use band A (1..8); all other runs use band B (9..16). Nothing has
+ * serialized PR runs since the shared-store queue was removed (e21ddcf6c,
+ * 2026-08-18): two PR runs in flight share band A, as two simultaneous non-PR
+ * runs share band B (accepted residual).
  */
 export function selectCashierSlot(eventName: string | undefined, normalizedIndex: number): number {
 	const bandStart = eventName === 'pull_request' ? 1 : 9;

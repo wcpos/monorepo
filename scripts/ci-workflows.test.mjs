@@ -1724,6 +1724,33 @@ test('the shared-store queue stays removed', () => {
 	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '140');
 });
 
+test('a failed shared login fails e2e-setup and the shards refuse to start', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const setup = workflow.jobs['e2e-setup'];
+	assert.equal(setup.outputs.login, '${{ steps.setup.outcome }}');
+	const login = setup.steps.find(({ id }) => id === 'setup');
+	assert.equal(login['continue-on-error'], true);
+	assert.equal(login.if, "steps.key.outputs.present == 'true'");
+
+	const fail = findStep(workflow, 'e2e-setup', '🛑 Fail when the shared login failed');
+	assert.equal(fail.if, "steps.setup.outcome == 'failure'");
+	for (const name of ['🔐 Encrypt the shared auth state', '📤 Upload the encrypted auth state']) {
+		assert.ok(setup.steps.indexOf(fail) > setup.steps.indexOf(findStep(workflow, 'e2e-setup', name)));
+	}
+
+	const refuse = findStep(workflow, 'e2e', '🛑 Refuse without the shared login');
+	assert.equal(refuse.if, "needs.e2e-setup.outputs.login == 'failure'");
+	const shardSteps = workflow.jobs.e2e.steps;
+	assert.ok(
+		shardSteps.indexOf(refuse) < shardSteps.indexOf(findStep(workflow, 'e2e', '🏗 Setup repository'))
+	);
+	for (const step of [fail, refuse]) {
+		const result = runShell(step.run);
+		assert.equal(result.status, 1, result.stderr);
+		assert.match(result.stdout, /^::error/m);
+	}
+});
+
 test('both lanes run six E2E shards', () => {
 	// The two-shard main cap (2026-08-18) guarded dev-pro write capacity, but
 	// the feared load was the per-test catalogue re-sync removed in #1288.

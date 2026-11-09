@@ -12,11 +12,12 @@ import {
 	type RequestPreambleContext,
 } from '@wcpos/utils/request-preamble';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
+import { currentUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { http } from './http';
 import { mapToInternalCode, parseWpError } from './parse-wp-error';
 import { isDroppedRequestError, scheduleRequest } from './request-queue';
-import { requestStateManager } from './request-state-manager';
+import { PREFLIGHT_BLOCK, requestStateManager } from './request-state-manager';
 
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
@@ -251,97 +252,120 @@ type UpdateRequiredHandler = (details: UpdateRequiredDetails & { status: number 
  */
 export const useHttpClient = (
 	errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HANDLERS,
-	onUpdateRequired?: UpdateRequiredHandler
+	onUpdateRequired?: UpdateRequiredHandler,
+	/** The site's wp_api_url, whose update-required latch refuses requests locally. */
+	updateRequiredSite?: string
 ) => {
 	// const defaultErrorHandler = useHttpErrorHandler();
 
 	/**
 	 * Make the actual HTTP request
 	 */
-	const makeRequest = React.useCallback(async (config: WcposRequestConfig) => {
-		// Pre-flight check: ensure request can proceed based on global state
-		const canProceed = requestStateManager.checkCanProceed() as any;
-		if (!canProceed.ok) {
-			// Create error with additional context
-			const error = new Error(canProceed.reason || 'Request blocked') as any;
-			error.blockCode = canProceed.blockCode;
-			error.isPreFlightBlocked = true;
-			error.isSleeping = canProceed.isSleeping || false;
+	const makeRequest = React.useCallback(
+		async (config: WcposRequestConfig) => {
+			// Pre-flight check: ensure request can proceed based on global state
+			const canProceed = requestStateManager.checkCanProceed() as any;
+			if (!canProceed.ok) {
+				// Create error with additional context
+				const error = new Error(canProceed.reason || 'Request blocked') as any;
+				error.blockCode = canProceed.blockCode;
+				error.isPreFlightBlocked = true;
+				error.isSleeping = canProceed.isSleeping || false;
 
-			// Only log if not sleeping - sleeping is expected behavior
-			if (!canProceed.isSleeping) {
-				httpLogger.debug('Request blocked by pre-flight check', {
+				// Only log if not sleeping - sleeping is expected behavior
+				if (!canProceed.isSleeping) {
+					httpLogger.debug('Request blocked by pre-flight check', {
+						context: {
+							blockCode: canProceed.blockCode,
+							reason: canProceed.reason,
+							url: config.url,
+							method: config.method,
+						},
+					});
+				}
+				throw error;
+			}
+
+			const checkUpdateRequired = () => {
+				const state = updateRequiredSite ? currentUpdateRequired(updateRequiredSite) : null;
+				if (state) {
+					throw Object.assign(
+						new Error('Request refused locally: the store requires a newer app'),
+						{
+							blockCode: PREFLIGHT_BLOCK.UPDATE_REQUIRED,
+							isPreFlightBlocked: true,
+							isSleeping: false,
+							wpCode: ERROR_CODES.APP_UPDATE_REQUIRED,
+							wpStatus: state.status,
+						}
+					);
+				}
+			};
+			checkUpdateRequired();
+
+			const databaseEpoch = getDatabaseEpoch();
+
+			// If token refresh is in progress, wait for it to complete
+			if (requestStateManager.isTokenRefreshing()) {
+				httpLogger.debug('Token refresh in progress, waiting before making request', {
 					context: {
-						blockCode: canProceed.blockCode,
-						reason: canProceed.reason,
+						url: config.url,
+						method: config.method,
+					},
+				});
+				await requestStateManager.awaitTokenRefresh();
+				checkUpdateRequired();
+				httpLogger.debug('Token refresh completed, proceeding with request', {
+					context: {
 						url: config.url,
 						method: config.method,
 					},
 				});
 			}
-			throw error;
-		}
 
-		const databaseEpoch = getDatabaseEpoch();
-
-		// If token refresh is in progress, wait for it to complete
-		if (requestStateManager.isTokenRefreshing()) {
-			httpLogger.debug('Token refresh in progress, waiting before making request', {
-				context: {
-					url: config.url,
-					method: config.method,
-				},
-			});
-			await requestStateManager.awaitTokenRefresh();
-			httpLogger.debug('Token refresh completed, proceeding with request', {
-				context: {
-					url: config.url,
-					method: config.method,
-				},
-			});
-		}
-
-		const processedConfig = { ...config };
-		if (processedConfig.timeout === undefined) {
-			processedConfig.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
-		}
-
-		if (processedConfig.method?.toLowerCase() === 'head') {
-			set(processedConfig, 'decompress', false);
-			if (processedConfig.params instanceof URLSearchParams) {
-				processedConfig.params = new URLSearchParams(processedConfig.params);
-				processedConfig.params.set('_method', 'HEAD');
-			} else {
-				processedConfig.params = { ...processedConfig.params, _method: 'HEAD' };
+			const processedConfig = { ...config };
+			if (processedConfig.timeout === undefined) {
+				processedConfig.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
 			}
-		}
 
-		if (process.env.NODE_ENV === 'development') {
-			if (processedConfig.params instanceof URLSearchParams) {
-				processedConfig.params = new URLSearchParams(processedConfig.params);
-				processedConfig.params.set('XDEBUG_SESSION', 'start');
-			} else {
-				processedConfig.params = { ...processedConfig.params, XDEBUG_SESSION: 'start' };
+			if (processedConfig.method?.toLowerCase() === 'head') {
+				set(processedConfig, 'decompress', false);
+				if (processedConfig.params instanceof URLSearchParams) {
+					processedConfig.params = new URLSearchParams(processedConfig.params);
+					processedConfig.params.set('_method', 'HEAD');
+				} else {
+					processedConfig.params = { ...processedConfig.params, _method: 'HEAD' };
+				}
 			}
-		}
 
-		const dispatchConfig = applyPreambleToAxiosConfig(processedConfig);
+			if (process.env.NODE_ENV === 'development') {
+				if (processedConfig.params instanceof URLSearchParams) {
+					processedConfig.params = new URLSearchParams(processedConfig.params);
+					processedConfig.params.set('XDEBUG_SESSION', 'start');
+				} else {
+					processedConfig.params = { ...processedConfig.params, XDEBUG_SESSION: 'start' };
+				}
+			}
 
-		const method = (processedConfig.method ?? 'GET').toUpperCase();
-		const endpoint = processedConfig.url
-			? new URL(processedConfig.url, 'http://localhost').pathname
-			: 'unknown';
-		const response = await scheduleRequest(
-			() => http.request(dispatchConfig),
-			`${method} ${endpoint}`
-		);
-		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
-			httpLogger.info('HTTP request completed', {
-				context: { method, endpoint, status: response.status },
-			});
-		}
-		return response;
-	}, []);
+			const dispatchConfig = applyPreambleToAxiosConfig(processedConfig);
+
+			const method = (processedConfig.method ?? 'GET').toUpperCase();
+			const endpoint = processedConfig.url
+				? new URL(processedConfig.url, 'http://localhost').pathname
+				: 'unknown';
+			const response = await scheduleRequest(
+				() => http.request(dispatchConfig),
+				`${method} ${endpoint}`
+			);
+			if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
+				httpLogger.info('HTTP request completed', {
+					context: { method, endpoint, status: response.status },
+				});
+			}
+			return response;
+		},
+		[updateRequiredSite]
+	);
 
 	/**
 	 * Main request function with error handling

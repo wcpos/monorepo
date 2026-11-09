@@ -5,6 +5,7 @@ import { AxiosError, CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
+import { clearUpdateRequired, reportUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 jest.mock('@wcpos/utils/logger', () => {
 	const debug = jest.fn();
@@ -38,6 +39,13 @@ jest.mock('./request-queue', () => ({
 }));
 
 jest.mock('./request-state-manager', () => ({
+	PREFLIGHT_BLOCK: {
+		ASLEEP: 'preflight-asleep',
+		OFFLINE: 'preflight-offline',
+		AUTH_REQUIRED: 'preflight-auth-required',
+		RECOVERING: 'preflight-recovering',
+		UPDATE_REQUIRED: 'preflight-update-required',
+	},
 	isAsleepBlock: jest.fn(() => false),
 	requestStateManager: {
 		checkCanProceed: jest.fn(() => ({ ok: true })),
@@ -578,6 +586,92 @@ describe('useHttpClient network audit logs', () => {
 		await result.current.get('/wc/v3/products', { timeout: 0 });
 
 		expect(http.request).toHaveBeenCalledWith(expect.objectContaining({ timeout: 0 }));
+	});
+});
+
+describe('update-required latch', () => {
+	const site = 'https://store.test/wp-json/';
+	const otherSite = 'https://other.test/wp-json/';
+	const details = { minProtocol: 2, pluginVersion: '2.0.0', status: 426 };
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	afterEach(() => {
+		clearUpdateRequired(site);
+		clearUpdateRequired(otherSite);
+		(http.request as jest.Mock).mockReset();
+		(requestStateManager.isTokenRefreshing as jest.Mock).mockReset().mockReturnValue(false);
+		(requestStateManager.awaitTokenRefresh as jest.Mock).mockReset();
+	});
+
+	it('refuses locally once the site is latched', async () => {
+		reportUpdateRequired(site, details);
+		const { result } = renderHook(() => useHttpClient([], undefined, 'https://store.test/wp-json'));
+
+		await expect(result.current.get('/wc/v3/products')).rejects.toMatchObject({
+			isPreFlightBlocked: true,
+			blockCode: 'preflight-update-required',
+			wpStatus: 426,
+		});
+		expect(http.request).not.toHaveBeenCalled();
+		expect(scheduleRequest).not.toHaveBeenCalled();
+	});
+
+	it('refuses a request parked on a token refresh when the latch sets during the refresh', async () => {
+		(requestStateManager.isTokenRefreshing as jest.Mock).mockReturnValueOnce(true);
+		(requestStateManager.awaitTokenRefresh as jest.Mock).mockImplementationOnce(async () => {
+			reportUpdateRequired(site, details);
+		});
+		const { result } = renderHook(() => useHttpClient([], undefined, site));
+
+		await expect(result.current.get('/wc/v3/products')).rejects.toMatchObject({
+			blockCode: 'preflight-update-required',
+		});
+		expect(requestStateManager.awaitTokenRefresh).toHaveBeenCalledTimes(1);
+		expect(http.request).not.toHaveBeenCalled();
+		expect(scheduleRequest).not.toHaveBeenCalled();
+	});
+
+	it("refuses the error handler's retry once the latch is set", async () => {
+		const failure = Object.assign(new Error('expired'), {
+			response: { status: 401 },
+			isRefreshTokenInvalid: true,
+		});
+		(http.request as jest.Mock).mockRejectedValueOnce(failure);
+		const { result } = renderHook(() =>
+			useHttpClient(
+				[
+					{
+						name: 'token-refresh',
+						intercepts: true,
+						canHandle: () => true,
+						handle: async (context) => {
+							reportUpdateRequired(site, details);
+							return context.retryRequest();
+						},
+					},
+				],
+				undefined,
+				site
+			)
+		);
+
+		await expect(result.current.get('/wc/v3/products')).rejects.toMatchObject({
+			blockCode: 'preflight-update-required',
+		});
+		expect(http.request).toHaveBeenCalledTimes(1);
+	});
+
+	it('sends as before for a site that is not latched', async () => {
+		reportUpdateRequired(otherSite, details);
+		const response = { status: 200, data: {} };
+		(http.request as jest.Mock).mockResolvedValueOnce(response);
+		const { result } = renderHook(() => useHttpClient([], undefined, site));
+
+		await expect(result.current.get('/wc/v3/products')).resolves.toBe(response);
+		expect(http.request).toHaveBeenCalledTimes(1);
 	});
 });
 
