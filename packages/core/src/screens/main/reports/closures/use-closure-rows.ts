@@ -122,12 +122,23 @@ export function useLocalClosure(id?: string): {
 	if (result.id !== id) return { row: null, status: 'loading' };
 	return { row: result.row, status: result.row ? 'ready' : result.failed ? 'error' : 'missing' };
 }
+// A retained document's corrections; an unreadable one holds none, so the closure is read.
+function retainedCorrections(snapshot?: string) {
+	try {
+		return snapshot
+			? (get(JSON.parse(snapshot), 'closure.corrections') as Correction[] | undefined)
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}
 // At most three closure detail reads in flight, the session cards' cap (ledger line 24).
 const CORRECTION_READS = 3;
 /**
  * Each corrected closure with the corrections its settled figures need (ledger line 35): from
  * its retained document when that holds them all, else from one detail read; the list carries
- * only their count. A failed read leaves the row as recorded until its count changes.
+ * only their count. A failed read leaves the row as recorded until its count changes or the
+ * store is reachable again.
  */
 export function useClosureCorrections<R extends ClosureRow>(rows: readonly R[]) {
 	const http = useRestHttpClient();
@@ -136,14 +147,18 @@ export function useClosureCorrections<R extends ClosureRow>(rows: readonly R[]) 
 		Record<string, { count: number; corrections: Correction[] | null }>
 	>({});
 	const reading = React.useRef(new Set<string>());
+	const [wasOnline, setWasOnline] = React.useState(online);
+	if (wasOnline !== online) {
+		setWasOnline(online);
+		if (online)
+			setHeld((h) => Object.fromEntries(Object.entries(h).filter(([, v]) => v.corrections)));
+	}
 	const wanted: string[] = [];
 	const listed = rows.map((row) => {
 		const id = row.server_closure_id ?? row.id;
 		const count = row.corrections_count ?? 0;
 		if (!count) return row;
-		const retained = row.receipt_snapshot
-			? (get(JSON.parse(row.receipt_snapshot), 'closure.corrections') as Correction[] | undefined)
-			: undefined;
+		const retained = retainedCorrections(row.receipt_snapshot);
 		// A refreshed row already carries its detail's corrections; a stale set is never shown.
 		const own = (row as { corrections?: Correction[] }).corrections;
 		const read = held[id]?.count === count ? held[id] : undefined;

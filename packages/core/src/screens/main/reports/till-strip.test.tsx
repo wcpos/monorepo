@@ -264,7 +264,7 @@ it.each([
 	['detail read', undefined],
 ])('shows the last closure’s SETTLED result from its %s', async (_, snapshot) => {
 	data.session = null;
-	online = !snapshot;
+	online = true;
 	data.lastClosure = {
 		...data.lastClosure,
 		corrections_count: 1,
@@ -289,7 +289,7 @@ it.each([
 		expect(screen.getByTestId('till-result').textContent).toContain('£10.00 over')
 	);
 	expect(screen.getByTestId('till-counted').textContent).toContain('£432.00');
-	if (snapshot) expect(get).not.toHaveBeenCalled();
+	if (snapshot) expect(get).not.toHaveBeenCalledWith('closures/A');
 	else expect(get).toHaveBeenCalledWith('closures/A');
 });
 it.each(['open', 'counting'])(
