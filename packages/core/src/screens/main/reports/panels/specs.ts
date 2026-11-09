@@ -52,10 +52,17 @@ export function panelSpec(
 	view: PanelView
 ): PanelSpec {
 	const { orders, directory } = view;
-	const productRows = () =>
-		figures.products.netOfRefunds(directory, view.productLines?.orders, view.productLines?.refunds);
-	const groupParts = () =>
-		(id === 'brands' ? figures.brands : figures.categories).netOfRefunds(directory).parts;
+	// Each grouping is built once per spec: its rows and its margin columns read the same lines.
+	const once = <T>(compute: () => T) => {
+		let answer: { value: T } | undefined;
+		return () => (answer ??= { value: compute() }).value;
+	};
+	const productRows = once(() =>
+		figures.products.netOfRefunds(directory, view.productLines?.orders, view.productLines?.refunds)
+	);
+	const groupParts = once(
+		() => (id === 'brands' ? figures.brands : figures.categories).netOfRefunds(directory).parts
+	);
 	const { money, number, quantity, percent } = formats;
 	const share = (value: number) => t('reports.percent', { value: percent(value * 100) });
 	const unknown = t('common.unknown'),
