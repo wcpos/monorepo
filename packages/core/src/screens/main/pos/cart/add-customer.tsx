@@ -192,7 +192,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} testID="add-customer-dialog" size="lg" portalHost="pos">
+			<DialogContent side={side} testID="add-customer-dialog" size="lg">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>

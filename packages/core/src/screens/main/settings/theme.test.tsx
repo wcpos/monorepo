@@ -9,9 +9,6 @@ import * as TextComponents from '@wcpos/components/text';
 
 import { themeColumns, ThemeSettings } from './theme';
 
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../jest/property-row.test-utils')
-);
 jest.mock('expo-font', () => ({ loadAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('expo-haptics', () => ({}));
 jest.mock('react-native-reanimated', () => ({
@@ -103,14 +100,28 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(document: T, selector: (value: T) => unknown) => selector(document),
 }));
 jest.mock('../../../contexts/app-state', () => ({ useStoreSession: () => ({ store }) }));
-jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../contexts/theme-setting', () => ({
+	useThemeSetting: () => ({ theme: store.theme, icons: store.icons, fonts: store.fonts }),
+}));
+// The key, then the values it was given, so a status line's current value is visible to a test.
+jest.mock('../../../contexts/translations', () => ({
+	useT: () => (key: string, values?: Record<string, unknown>) =>
+		values ? `${key}:${Object.values(values).join(',')}` : key,
+}));
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	patchStoreSettings: (document: unknown, data: unknown) => mockLocalPatch({ document, data }),
 }));
 jest.mock('./components/settings-section', () => ({
-	SettingsSection: ({ title, children }: React.PropsWithChildren<{ title?: string }>) => (
-		<section aria-label={title}>{children}</section>
+	SettingsSection: ({
+		title,
+		description,
+		children,
+	}: React.PropsWithChildren<{ title?: string; description?: string }>) => (
+		<section aria-label={title}>
+			<p>{description}</p>
+			{children}
+		</section>
 	),
 }));
 
@@ -125,12 +136,31 @@ beforeEach(() => {
 });
 
 describe('the Scale section', () => {
-	// Theme, Scale, Icons: three titled sections, never a lone key row between two of them.
-	it('is a titled section whose description is the row that keys the steps', () => {
+	// Theme, Scale, Icons, Fonts: four sections of one shape, the description under the heading and
+	// the status line as the row that keys the control and carries its Saved mark.
+	it('is a titled section: the description under the heading, the status line keying the steps', () => {
 		const { getByRole } = render(<ThemeSettings />);
 		const section = getByRole('region', { name: 'settings.scale' });
-		expect(section.textContent).toContain('settings.scale.description');
+		expect(section.querySelector('p')!.textContent).toBe('settings.scale.description');
+		expect(section.textContent).toContain('settings.current_scale:settings.scale.auto');
 		expect(section.querySelector('[data-testid="settings-scale-auto"]')).not.toBeNull();
+	});
+
+	it('names the stored step in its status line', () => {
+		store.scale = 'spacious';
+		const { getByRole } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.scale' }).textContent).toContain(
+			'settings.current_scale:settings.scale.spacious'
+		);
+	});
+
+	it('reads a value that is not a step as Auto, as the provider does', () => {
+		store.scale = 'huge';
+		const { getByRole, getByTestId } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.scale' }).textContent).toContain(
+			'settings.current_scale:settings.scale.auto'
+		);
+		expect(getByTestId('settings-scale-auto').getAttribute('aria-checked')).toBe('true');
 	});
 
 	it('offers four scale steps with Auto selected by default', () => {
@@ -180,6 +210,23 @@ describe('the Scale section', () => {
 });
 
 describe('the Icons section', () => {
+	it('is a titled section: the description under the heading, the status line keying the list', () => {
+		store.icons = 'hugeicons';
+		const { getByRole } = render(<ThemeSettings />);
+		const section = getByRole('region', { name: 'settings.icons' });
+		expect(section.querySelector('p')!.textContent).toBe('settings.icons.description');
+		expect(section.textContent).toContain('settings.current_icons:settings.icons.hugeicons');
+	});
+
+	it('reads a retired family as Match theme, as the runtime does', () => {
+		store.icons = 'lucide';
+		const { getByRole, getByTestId } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.icons' }).textContent).toContain(
+			'settings.current_icons:settings.icons.auto'
+		);
+		expect(getByTestId('settings-icons-auto').getAttribute('aria-checked')).toBe('true');
+	});
+
 	it('offers Match theme first and selected by default, followed by the three sets', () => {
 		const { getByTestId, getAllByTestId, getByRole } = render(<ThemeSettings />);
 
@@ -256,11 +303,29 @@ describe('the Icons section', () => {
 describe('the Fonts section', () => {
 	const options = ['auto', 'system', 'instrument', 'grotesk', 'fraunces', 'manrope'];
 
-	it('is a titled section whose description keys the list', () => {
+	it('is a titled section: the description under the heading, the status line keying the list', () => {
 		const { getByRole } = render(<ThemeSettings />);
 		const section = getByRole('region', { name: 'settings.fonts' });
-		expect(section.textContent).toContain('settings.fonts.description');
+		expect(section.querySelector('p')!.textContent).toBe('settings.fonts.description');
+		expect(section.textContent).toContain('settings.current_fonts:settings.fonts.auto');
 		expect(section.querySelector('[data-testid="settings-fonts-auto"]')).not.toBeNull();
+	});
+
+	it('names the stored set in its status line', () => {
+		store.fonts = 'grotesk';
+		const { getByRole } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.fonts' }).textContent).toContain(
+			'settings.current_fonts:settings.fonts.grotesk'
+		);
+	});
+
+	it('reads a retired set as Match theme, as the runtime does', () => {
+		store.fonts = 'garamond';
+		const { getByRole, getByTestId } = render(<ThemeSettings />);
+		expect(getByRole('region', { name: 'settings.fonts' }).textContent).toContain(
+			'settings.current_fonts:settings.fonts.auto'
+		);
+		expect(getByTestId('settings-fonts-auto').getAttribute('aria-checked')).toBe('true');
 	});
 
 	it('offers Match theme first and selected by default, followed by the five sets', () => {

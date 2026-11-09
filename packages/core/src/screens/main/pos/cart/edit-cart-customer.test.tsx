@@ -130,9 +130,6 @@ jest.mock('@wcpos/components/form', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, onPress }: React.PropsWithChildren<{ onPress?: () => void }>) => (
 		<span onClick={onPress}>{children}</span>
@@ -223,6 +220,7 @@ jest.mock('../hooks/use-action-context', () => ({
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: () => currentOrderRecord }),
 }));
 
 /** The order the dialog opens on. */

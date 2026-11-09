@@ -34,7 +34,8 @@ export function hasRefundableMoney(rows: readonly PaymentRow[]): boolean {
 	return rows.some((row) => countsTowardPaid(row) && availableForRefund(row) > 0);
 }
 
-/** Bound by order remainder and captured money; only succeeded allocations are in Woo's history. */
+/** Bound by order remainder and captured money. A ledger allocation is written inside its Woo refund,
+ * so pending ones are in Woo's history too; only manual refunds have no allocation. */
 export function netRefundable(
 	orderTotal: string,
 	wooRefunds: readonly { total?: string | null }[],
@@ -46,11 +47,11 @@ export function netRefundable(
 	);
 	const captured = rows.filter(countsTowardPaid);
 	let available = captured.reduce((sum, row) => sum + toMicro(String(availableForRefund(row))), 0);
-	const succeededAllocated = captured
+	const representedAllocated = captured
 		.flatMap((row) => (Array.isArray(row.refunds) ? row.refunds : []))
-		.filter((entry) => entry?.status === 'succeeded')
+		.filter((entry) => entry?.status === 'pending' || entry?.status === 'succeeded')
 		.reduce((sum, entry) => sum + toMicro(entry.amount), 0);
-	const unallocated = Math.max(0, refunded - succeededAllocated);
+	const unallocated = Math.max(0, refunded - representedAllocated);
 	available = Math.max(0, available - unallocated);
 	const remaining = Math.abs(toMicro(orderTotal)) - refunded;
 	// Only captured rows bound the money: a ledger of failed or authorized rows (an online-paid order whose

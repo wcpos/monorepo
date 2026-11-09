@@ -1,12 +1,11 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render, renderHook, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { of, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { useRegisterSession } from './use-register-session';
 import { RegisterSessionBridge } from './bridge';
 import { sameStore } from '../../../../query/src/register-session/cycle';
 import { drainRegisterSessionQueue } from '../../../../query/src/register-session/queue';
@@ -16,15 +15,9 @@ const sessions = {
 	find: () => ({ $: of([]) }),
 	findOne: () => ({ exec: async () => ({ id: 'session' }) }),
 };
-let observed: unknown = null;
 let registerDoc: unknown = { sites: {} };
 let storeId: number | null = 1;
 const closure = jest.fn();
-// The hook observes the register document too; the sentinel stream answers with the document.
-const registerStream = of(null);
-jest.mock('observable-hooks', () => ({
-	useObservableState: (stream: unknown) => (stream === registerStream ? registerDoc : observed),
-}));
 const engine = { active: () => null };
 const site = { uuid: 'site' };
 const userDB = { getLocal$: () => of(null) };
@@ -59,7 +52,6 @@ jest.mock('../register/use-register-binding', () => ({
 const mockRefreshRequests = new Subject<unknown>();
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
-	observeSessionAccounting: () => of({ orders: { hits: [] } }),
 	get sessionRefreshRequests() {
 		return mockRefreshRequests;
 	},
@@ -68,7 +60,6 @@ jest.mock('@wcpos/query/register-session', () => ({
 jest.mock('../../../../query/src/register-session/register-document', () => ({
 	...jest.requireActual('../../../../query/src/register-session/register-document'),
 	readRegister: async () => registerDoc,
-	observeRegister$: () => registerStream,
 }));
 jest.mock('../../../../query/src/register-session/session-store', () => ({
 	...jest.requireActual('../../../../query/src/register-session/session-store'),
@@ -244,41 +235,6 @@ it('forgets the failure streak once a cycle succeeds', async () => {
 
 	expect(log.warn).not.toHaveBeenCalled();
 	expect(log.debug).toHaveBeenCalledTimes(2);
-});
-
-it('recovers only an interrupted local close; imported history and written closures are never current', () => {
-	const closed = { id: 'history', closure_id: 'history', status: 'closed', sync_status: 'synced' };
-	const data = {
-		storeDB,
-		isCurrent: () => true,
-		registerId: 'register',
-		active: [] as unknown[],
-		closed: [closed] as unknown[],
-		entries: [],
-		orders: { hits: [] },
-		closureRows: [] as unknown[],
-		refundRecords: [],
-	};
-	observed = data;
-	const view = renderHook(() => useRegisterSession());
-	// An older emission without refund records must also remain usable.
-	observed = { ...data, refundRecords: undefined };
-	view.rerender();
-	observed = data;
-	// Imported closed history: synced, no local closure row.
-	expect(view.result.current.session).toBeNull();
-	// A close this till made whose closure write was interrupted: pending, no closure row.
-	const interrupted = { id: 'mine', closure_id: 'mine', status: 'closed', sync_status: 'pending' };
-	data.closed = [closed, interrupted];
-	view.rerender();
-	expect(view.result.current.session?.id).toBe('mine');
-	// Once the closure row exists the closed session is history, whatever its sync state.
-	data.closureRows = [{ id: 'mine', session_id: 'mine', sync_status: 'pending' }];
-	view.rerender();
-	expect(view.result.current.session).toBeNull();
-	data.active = [{ id: 'counting', status: 'counting' }];
-	view.rerender();
-	expect(view.result.current.session?.id).toBe('counting');
 });
 
 it('debounces snapshot refresh requests through the existing bridge cycle', async () => {

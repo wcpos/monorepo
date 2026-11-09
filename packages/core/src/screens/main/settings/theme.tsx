@@ -42,6 +42,7 @@ import { PropertyRow } from '@wcpos/components/property-row';
 
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
+import { useThemeSetting } from '../../../contexts/theme-setting';
 import { useT } from '../../../contexts/translations';
 
 type ThemeOption = {
@@ -157,14 +158,21 @@ function ThemeGrid({
 const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
 
 /**
- * The Scale section, shaped as Icons is: a section title, then its description as the row
- * that carries the Saved mark. The step itself reaches the screens through `ScaleProvider`,
- * which reads this field off the store document — nothing here touches a token.
+ * The Scale section, shaped as Appearance is: a section title with its description under it, then
+ * the status line as the row that carries the Saved mark. The step itself reaches the screens
+ * through `ScaleProvider`, which reads this field off the store document — nothing here touches
+ * a token.
  */
 function ScaleSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const scale = useDocField(store, (latest) => latest.scale) ?? 'auto';
+	const saved = useDocField(store, (latest) => latest.scale);
+	// A value that is not a step is Auto, as `resolveStep` reads it.
+	const scale: (typeof SCALE_OPTIONS)[number] = SCALE_OPTIONS.includes(
+		saved as (typeof SCALE_OPTIONS)[number]
+	)
+		? (saved as (typeof SCALE_OPTIONS)[number])
+		: 'auto';
 
 	const handleScaleChange = React.useCallback(
 		async (value: string | undefined) => {
@@ -186,8 +194,14 @@ function ScaleSection({ t }: { t: ReturnType<typeof useT> }) {
 	};
 
 	return (
-		<SettingsSection title={t('settings.scale')}>
-			<PropertyRow stacked name="scale" label={t('settings.scale.description')}>
+		<SettingsSection title={t('settings.scale')} description={t('settings.scale.description')}>
+			<PropertyRow
+				stacked
+				name="scale"
+				label={t('settings.current_scale', {
+					scale: labels[scale],
+				})}
+			>
 				<SegmentedControl
 					segments={
 						SCALE_OPTIONS.map((option) => ({
@@ -220,13 +234,16 @@ const ICON_OPTIONS = [ICON_SETTING_AUTO, ...ICON_SET_IDS] as const;
 
 /**
  * The Icons section: one row per candidate family, its samples drawn in that
- * family. The choice reaches the screens through `IconSetSettingProvider`.
+ * family. The choice reaches the screens through `ThemeSettingProvider`.
  */
 function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const icons = useDocField(store, (latest) => latest.icons) ?? ICON_SETTING_AUTO;
-	const theme = useDocField(store, (latest) => latest.theme);
+	const { theme, icons: saved } = useThemeSetting();
+	// A retired family follows the theme, as `resolveIconSet` reads it (decision 45).
+	const icons: IconSetId | typeof ICON_SETTING_AUTO = ICON_SET_IDS.includes(saved as IconSetId)
+		? (saved as IconSetId)
+		: ICON_SETTING_AUTO;
 	const labels: Record<IconSetId | typeof ICON_SETTING_AUTO, string> = {
 		auto: t('settings.icons.auto'),
 		tabler: t('settings.icons.tabler'),
@@ -247,9 +264,15 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	);
 
 	return (
-		<SettingsSection title={t('settings.icons')}>
-			{/* The description keys the list, and the list's Saved mark sits on that line. */}
-			<PropertyRow stacked name="icons" label={t('settings.icons.description')} />
+		<SettingsSection title={t('settings.icons')} description={t('settings.icons.description')}>
+			{/* The status line keys the list, and the list's Saved mark sits on that line. */}
+			<PropertyRow
+				stacked
+				name="icons"
+				label={t('settings.current_icons', {
+					icons: labels[icons],
+				})}
+			/>
 			{/* The shared radio group: on web it is Radix, so Tab lands once, arrows move
 			    and Space selects; the radio dot is the selected state. */}
 			<RadioGroup
@@ -291,8 +314,11 @@ const FONT_OPTIONS = [TYPE_SETTING_AUTO, ...TYPE_SET_IDS] as const;
 function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const markSaved = useMarkSaved();
-	const fonts = useDocField(store, (latest) => latest.fonts) ?? TYPE_SETTING_AUTO;
-	const theme = useDocField(store, (latest) => latest.theme);
+	const { theme, fonts: saved } = useThemeSetting();
+	// A retired set follows the theme, as `resolveTypeSet` reads it.
+	const fonts: TypeSetId | typeof TYPE_SETTING_AUTO = TYPE_SET_IDS.includes(saved as TypeSetId)
+		? (saved as TypeSetId)
+		: TYPE_SETTING_AUTO;
 	const traits = useThemeTraits();
 	const labels: Record<TypeSetId | typeof TYPE_SETTING_AUTO, string> = {
 		auto: t('settings.fonts.auto'),
@@ -335,8 +361,14 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 	);
 
 	return (
-		<SettingsSection title={t('settings.fonts')}>
-			<PropertyRow stacked name="fonts" label={t('settings.fonts.description')} />
+		<SettingsSection title={t('settings.fonts')} description={t('settings.fonts.description')}>
+			<PropertyRow
+				stacked
+				name="fonts"
+				label={t('settings.current_fonts', {
+					fonts: labels[fonts],
+				})}
+			/>
 			<RadioGroup
 				value={fonts}
 				onValueChange={(value) => {

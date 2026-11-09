@@ -21,7 +21,7 @@ export function useTelemetryConsent(): TelemetryConsent | null {
 	//   database opens — the moment the storage-corruption class fires.
 	// - Logout, after a store was seen: 'undecided', so both clients stop until the
 	//   next merchant's preference is known.
-	// Adjust state during render — the sanctioned pattern (see useThemeRestorer).
+	// Adjust state during render — the sanctioned pattern.
 	const [seenStore, setSeenStore] = React.useState(false);
 	if (store && !seenStore) setSeenStore(true);
 	const consent$ = React.useMemo(

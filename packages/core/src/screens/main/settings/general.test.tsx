@@ -6,9 +6,6 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { GeneralSettings } from './general';
 
 // The reset's confirm is its own suite; here the danger zone only needs its trigger.
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../jest/property-row.test-utils')
-);
 jest.mock('../pos/cart/clear-local-data', () => ({
 	ClearLocalData: ({ trigger }: { trigger: (onPress: () => void) => React.ReactNode }) =>
 		trigger(jest.fn()),

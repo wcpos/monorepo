@@ -1,10 +1,29 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+	act,
+	fireEvent,
+	render as renderUI,
+	screen,
+	waitFor,
+	within,
+} from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
 import { RegisterPanel } from './register-panel';
+
+// The panel is the till's: it sits under the till's `pos` host unless a test names another.
+const render = (ui: React.ReactElement) =>
+	renderUI(ui, {
+		wrapper: ({ children }) => <OverlayHostProvider name="pos">{children}</OverlayHostProvider>,
+	});
+/** The host the panel sits under: a page's `scene`, or the root (`null`). */
+function Host({ name, children }: React.PropsWithChildren<{ name: string | null }>) {
+	return <OverlayHostProvider name={name ?? undefined}>{children}</OverlayHostProvider>;
+}
 
 // React Native Web drops className without Uniwind; retain the fold's classes in this harness.
 jest.mock('react-native', () => ({
@@ -109,6 +128,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		salesCount: 2,
 		movements,
 		refusedMovements,
+		refusedCash: [],
 		lastClosure: mockHasClosure
 			? {
 					id: 'c',
@@ -360,7 +380,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 				{children}
 			</>
 		) : null,
-	DialogContent: ({
+	DialogContent: function Content({
 		children,
 		testID,
 		side,
@@ -370,16 +390,21 @@ jest.mock('@wcpos/components/dialog', () => ({
 		testID?: string;
 		side?: 'left' | 'right';
 		portalHost?: string | null;
-	}) => (
-		<div
-			data-testid={testID}
-			data-side={side}
-			data-portal={String(portalHost)}
-			data-host={portalHost ?? undefined}
-		>
-			{children}
-		</div>
-	),
+	}) {
+		// The host DialogContent resolves: a named one (`null` the root), else the nearest provided.
+		const ambient = jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost();
+		const host = portalHost === undefined ? (ambient ?? null) : portalHost;
+		return (
+			<div
+				data-testid={testID}
+				data-side={side}
+				data-portal={String(host)}
+				data-host={host ?? undefined}
+			>
+				{children}
+			</div>
+		);
+	},
 	DialogTitle: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<h2 data-testid={testID}>{children}</h2>
 	),
@@ -1371,13 +1396,21 @@ it("opens from the right whatever the products' position; takes the portal host 
 	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('pos');
 	view.unmount();
-	render(<RegisterPanel open onOpenChange={jest.fn()} portalHost={null} />);
+	render(
+		<Host name={null}>
+			<RegisterPanel open onOpenChange={jest.fn()} />
+		</Host>
+	);
 	expect(screen.getByTestId('register-panel').getAttribute('data-side')).toBe('right');
 	expect(screen.getByTestId('register-panel').getAttribute('data-portal')).toBe('null');
 });
 
 it('keeps the X-report print sheet on the panel side (right) and host', () => {
-	render(<RegisterPanel open onOpenChange={jest.fn()} portalHost="scene" />);
+	render(
+		<Host name="scene">
+			<RegisterPanel open onOpenChange={jest.fn()} />
+		</Host>
+	);
 	fireEvent.click(screen.getByTestId('register-panel-print'));
 	const sheet = screen.getByTestId('register-panel-print-sheet');
 	expect(sheet.getAttribute('data-side')).toBe('right');
@@ -1387,7 +1420,11 @@ it('keeps the X-report print sheet on the panel side (right) and host', () => {
 it.each(['scene', null] as const)(
 	'keeps movement dialogs on the panel side (right) and host %s',
 	(portalHost) => {
-		render(<RegisterPanel open onOpenChange={jest.fn()} portalHost={portalHost} />);
+		render(
+			<Host name={portalHost}>
+				<RegisterPanel open onOpenChange={jest.fn()} />
+			</Host>
+		);
 		fireEvent.click(screen.getByTestId('register-panel-paid-out'));
 		const movement = screen.getByTestId('movement-after').closest('[data-portal]');
 		expect(movement?.getAttribute('data-side')).toBe('right');

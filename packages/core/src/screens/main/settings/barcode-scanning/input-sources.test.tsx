@@ -21,9 +21,6 @@ jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
 jest.mock('@wcpos/components/badge', () => ({
 	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/dropdown-menu', () => ({
 	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
 	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,

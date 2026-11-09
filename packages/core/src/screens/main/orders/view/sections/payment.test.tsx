@@ -7,6 +7,7 @@ import { render, screen } from '@testing-library/react';
 
 import { createTestT } from '../../../../../../jest/translate';
 import { PaymentSection } from './payment';
+import { splitWith } from '../../../pos/checkout/tender/tender-figures.test-utils';
 
 import type { LedgerView } from '../../../pos/checkout/tender/use-ledger-view';
 
@@ -67,9 +68,7 @@ const viewWith = (rows: LedgerView['rows'], paidMinor: number): typeof mockView 
 	totalMinor: 770,
 	paidMinor,
 	balanceMinor: 770 - paidMinor,
-	allocations: {},
-	lines: [],
-	paidUnits: {},
+	split: splitWith(),
 	format: minorFormat,
 });
 const record = (payload: Record<string, unknown>) =>

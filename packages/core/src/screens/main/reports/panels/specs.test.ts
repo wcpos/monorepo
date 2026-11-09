@@ -1,37 +1,17 @@
 import { createTestT } from '../../../../../jest/translate';
-import {
-	cashiers,
-	categories,
-	channels,
-	registers,
-	stores,
-	taxesByRate,
-	tenders,
-	topProducts,
-} from '../cards/aggregate';
-import { calculateTotals } from '../report/utils';
-import { brands } from '../margin';
+import { salesFigures } from '../report/sales-figures';
 import { panelSpec } from './specs';
 
-import type { ReportOrder } from '../context';
+import type { RefundRow, ReportOrder } from '../context';
 
 const money = (value: number | null | undefined) => `£${Number(value).toFixed(2)}`;
-function inputs(orders: ReportOrder[]) {
-	const totals = calculateTotals({ orders });
+function inputs(orders: ReportOrder[], refunds?: RefundRow[]) {
 	return {
-		payments: tenders(orders, totals),
-		products: topProducts(orders, totals),
-		categories: categories(orders, [], totals),
-		cashiers: cashiers(totals),
-		channels: channels(orders, totals),
-		registers: registers(orders, totals),
-		registerNames: {},
-		stores: stores(orders, totals),
-		storeNames: {},
-		taxes: taxesByRate(orders, totals),
-		orders,
-		totals,
-		cashierNames: { '7': 'Sam' },
+		figures: salesFigures({ orders, refunds }),
+		view: {
+			orders,
+			names: { cashier: { '7': 'Sam' }, register: {}, store: {} },
+		} as Parameters<typeof panelSpec>[4],
 		formats: {
 			money,
 			number: String,
@@ -41,9 +21,11 @@ function inputs(orders: ReportOrder[]) {
 		t: createTestT(),
 	};
 }
+const specOf = (id: Parameters<typeof panelSpec>[0], data: ReturnType<typeof inputs>) =>
+	panelSpec(id, data.figures, data.formats, data.t, data.view);
 // Wrong columns, truncation, monetary quantity formatting, and per-order rather than per-refund rows break these.
 it('payments rows carry method, orders, amount and share with a total', () => {
-	const spec = panelSpec(
+	const spec = specOf(
 		'payments',
 		inputs([{ uuid: 'a', total: '10', payment_method: 'cash' }] as ReportOrder[])
 	);
@@ -52,7 +34,7 @@ it('payments rows carry method, orders, amount and share with a total', () => {
 	expect(spec.total).toEqual(['Total', '1', '£10.00', '']);
 });
 it('the products panel lists every product, not four', () => {
-	const spec = panelSpec(
+	const spec = specOf(
 		'products',
 		inputs([
 			{
@@ -73,29 +55,29 @@ it('the products panel lists every product, not four', () => {
 });
 it('taxes gross is net plus tax and a dash without a net', () => {
 	const data = inputs([]);
-	data.taxes = {
-		rows: [
-			{ rateId: 1, label: 'VAT', net: 10, tax: 2, share: 0.5 },
-			{ rateId: 2, label: '', net: null, tax: 2, share: 0.5 },
-		],
-		net: 10,
-		tax: 4,
-		gross: 14,
+	data.figures = {
+		...data.figures,
+		taxesByRate: {
+			rows: [
+				{ rateId: 1, label: 'VAT', net: 10, tax: 2, share: 0.5 },
+				{ rateId: 2, label: '', net: null, tax: 2, share: 0.5 },
+			],
+			net: 10,
+			tax: 4,
+			gross: 14,
+		},
 	};
-	const spec = panelSpec('taxes', data);
+	const spec = specOf('taxes', data);
 	expect(spec.rows.map((row) => row.cells)).toEqual([
 		['VAT', '£10.00', '£2.00', '£12.00'],
-		['Unknown', '—', '£2.00', '—'],
+		['Tax', '—', '£2.00', '—'],
 	]);
 	expect(spec.total).toEqual(['Total', '£10.00', '£4.00', '£14.00']);
 });
 it("one row per period refund with the parent's number when local", () => {
-	const data = inputs([
-		{ id: 4, uuid: 'a', number: '42', refunds: [{ total: '-90' }] },
-	] as ReportOrder[]);
-	const spec = panelSpec('refunds', {
-		...data,
-		periodRefunds: [
+	const data = inputs(
+		[{ id: 4, uuid: 'a', number: '42', refunds: [{ total: '-90' }] }] as ReportOrder[],
+		[
 			{
 				id: 1,
 				parent_id: 4,
@@ -105,9 +87,10 @@ it("one row per period refund with the parent's number when local", () => {
 				reason: 'Damaged',
 			},
 			{ id: 2, parent_id: 8, date_created_gmt: '2026-07-15T10:00:00', total: '-3' },
-		],
-		orderTime: () => '12:00',
-	});
+		]
+	);
+	data.view.orderTime = () => '12:00';
+	const spec = specOf('refunds', data);
 	expect(spec.rows.map((row) => row.cells)).toEqual([
 		['#42', '12:00', 'Damaged', '£2.00'],
 		['#8', '12:00', '—', '£3.00'],
@@ -116,20 +99,31 @@ it("one row per period refund with the parent's number when local", () => {
 });
 it('cashiers average is amount over orders', () => {
 	const data = inputs([]);
-	data.orders = [{ uuid: 'a' }, { uuid: 'b' }] as ReportOrder[];
-	data.cashiers = [{ key: '7', orders: 2, amount: 15, share: 1 }];
-	data.totals = { ...data.totals, total: 15, averageOrderValue: 7.5 };
-	const spec = panelSpec('cashiers', data);
+	data.view.orders = [{ uuid: 'a' }, { uuid: 'b' }] as ReportOrder[];
+	data.figures = {
+		...data.figures,
+		byCashier: [{ key: '7', orders: 2, amount: 15, share: 1 }],
+		gross: 15,
+		average: 7.5,
+	};
+	const spec = specOf('cashiers', data);
 	expect(spec.rows[0].cells).toEqual(['Sam', '2', '£7.50', '£15.00']);
 	expect(spec.total).toEqual(['Total', '2', '£7.50', '£15.00']);
 });
 it('categories retain unknown and uncategorised rows and fractional quantities', () => {
 	const data = inputs([]);
-	data.categories.parts = [
+	const parts = [
 		{ key: 'unknown', label: '', quantity: 1.5, amount: 3, share: 0.75 },
 		{ key: 'uncategorised', label: '', quantity: 1, amount: 1, share: 0.25 },
 	];
-	expect(panelSpec('categories', data).rows.map((row) => row.cells)).toEqual([
+	data.figures = {
+		...data.figures,
+		categories: {
+			...data.figures.categories,
+			netOfRefunds: () => ({ parts, unknownLines: 0, totalLines: 0 }),
+		},
+	};
+	expect(specOf('categories', data).rows.map((row) => row.cells)).toEqual([
 		['Unknown product', 'qty:1.5', '£3.00', '75.0%'],
 		['Uncategorised', 'qty:1', '£1.00', '25.0%'],
 	]);
@@ -142,9 +136,9 @@ it('the margin columns appear only when the feature is on', () => {
 			line_items: [{ product_id: 1, total: '100', quantity: 2, cost_of_goods_sold: { value: 25 } }],
 		},
 	] as ReportOrder[]);
-	expect(panelSpec('products', data).keys).toEqual(['product', 'qty', 'amount']);
-	data.orders[0].cost_of_goods_sold = { total_value: 25 };
-	const spec = panelSpec('products', data);
+	expect(specOf('products', data).keys).toEqual(['product', 'qty', 'amount']);
+	data.view.orders[0].cost_of_goods_sold = { total_value: 25 };
+	const spec = specOf('products', data);
 	expect(spec.keys).toEqual(['product', 'qty', 'amount', 'cost', 'profit', 'margin']);
 	expect(spec.rows[0].cells.slice(3)).toEqual(['£25.00', '£75.00', '75.0%']);
 	expect(spec.rows[0].raw.slice(3)).toEqual([25, 75, 75]);
@@ -152,7 +146,7 @@ it('the margin columns appear only when the feature is on', () => {
 	expect(spec.align.slice(3)).toEqual(['right', 'right', 'right']);
 });
 it('a row with every cost missing shows dashes', () => {
-	const spec = panelSpec(
+	const spec = specOf(
 		'products',
 		inputs([
 			{
@@ -166,7 +160,7 @@ it('a row with every cost missing shows dashes', () => {
 	expect(spec.rows[0].raw.slice(3)).toEqual(['', '', '']);
 });
 it('the total row sums cost and profit and carries the overall margin', () => {
-	const spec = panelSpec(
+	const spec = specOf(
 		'products',
 		inputs([
 			{
@@ -190,10 +184,8 @@ it('the brands spec', () => {
 			line_items: [{ product_id: 1, total: '10', quantity: 1.5, cost_of_goods_sold: { value: 4 } }],
 		},
 	] as ReportOrder[]);
-	const spec = panelSpec('brands', {
-		...data,
-		brands: brands(data.orders, [{ id: 1, brands: [{ id: 3, name: 'Acme' }] }], data.totals),
-	});
+	data.view.directory = [{ id: 1, brands: [{ id: 3, name: 'Acme' }] }];
+	const spec = specOf('brands', data);
 	expect(spec.head).toEqual(['Brand', 'Qty', 'Amount', 'Cost', 'Profit', 'Margin %', 'Share']);
 	expect(spec.rows[0].cells).toEqual([
 		'Acme',
@@ -215,22 +207,16 @@ it('category panels keep assigned categories and translated parent chains', () =
 			],
 		},
 	] as ReportOrder[]);
-	data.categories = categories(
-		data.orders,
-		[
-			{ id: 1, categories: [{ id: 2, name: 'Beans' }] },
-			{ id: 2, categories: [{ id: 3, name: 'Ground' }] },
-		],
-		data.totals
-	);
-	const spec = panelSpec('categories', {
-		...data,
-		categoryTree: new Map([
-			[1, { id: 1, name: 'Coffee', parent: 0 }],
-			[2, { id: 2, name: 'Beans', parent: 1 }],
-			[3, { id: 3, name: 'Ground', parent: 1 }],
-		]),
-	});
+	data.view.directory = [
+		{ id: 1, categories: [{ id: 2, name: 'Beans' }] },
+		{ id: 2, categories: [{ id: 3, name: 'Ground' }] },
+	];
+	data.view.categoryTree = new Map([
+		[1, { id: 1, name: 'Coffee', parent: 0 }],
+		[2, { id: 2, name: 'Beans', parent: 1 }],
+		[3, { id: 3, name: 'Ground', parent: 1 }],
+	]);
+	const spec = specOf('categories', data);
 	expect(spec.rows.map((row) => [row.key, row.cells[0]])).toEqual([
 		['3', 'Coffee › Ground'],
 		['2', 'Coffee › Beans'],
@@ -247,7 +233,7 @@ it('rounded totals sum their displayed rows at the store precision', () => {
 			],
 		},
 	] as ReportOrder[]);
-	const spec = panelSpec('products', data);
+	const spec = specOf('products', data);
 	expect(spec.totalRaw.slice(3)).toEqual([0, 2, 100]);
 });
 
@@ -257,8 +243,8 @@ it('channels spec: a row per channel, total sums its rows', () => {
 		{ total: '6', created_via: 'woocommerce-pos' },
 		{ total: '4', created_via: 'checkout' },
 	] as ReportOrder[]);
-	data.totals.total = 999;
-	const spec = panelSpec('channels', data);
+	data.figures = { ...data.figures, gross: 999 };
+	const spec = specOf('channels', data);
 	expect(spec.keys).toEqual(['channel', 'orders', 'amount', 'share']);
 	expect(spec.head).toEqual(['Channel', 'Orders', 'Amount', 'Share']);
 	expect(spec.rows.map((row) => row.cells)).toEqual([
@@ -268,15 +254,19 @@ it('channels spec: a row per channel, total sums its rows', () => {
 	expect(spec.total).toEqual(['Total', '2', '£10.00', '100.0%']);
 	expect(spec.totalRaw).toEqual(['Total', 2, 10, 100]);
 	expect(spec.types).toEqual(['text', 'number', 'money', 'number']);
-	expect(panelSpec('channels', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
+	expect(specOf('channels', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
 });
 it('registers spec: names through registerNames, unknown fallback', () => {
 	const data = inputs([]);
-	data.registers = [
-		{ key: 'front', orders: 2, amount: 6, share: 0.6 },
-		{ key: 'unresolved-id', orders: 1, amount: 4, share: 0.4 },
-	];
-	const spec = panelSpec('registers', { ...data, registerNames: { front: 'Front' } });
+	data.figures = {
+		...data.figures,
+		byRegister: [
+			{ key: 'front', orders: 2, amount: 6, share: 0.6 },
+			{ key: 'unresolved-id', orders: 1, amount: 4, share: 0.4 },
+		],
+	};
+	data.view.names.register = { front: 'Front' };
+	const spec = specOf('registers', data);
 	expect(spec.keys).toEqual(['register', 'orders', 'avg_order', 'amount']);
 	expect(spec.head).toEqual(['Register', 'Orders', 'Avg order', 'Amount']);
 	expect(spec.rows.map((row) => row.cells)).toEqual([
@@ -286,29 +276,37 @@ it('registers spec: names through registerNames, unknown fallback', () => {
 	expect(spec.total).toEqual(['Total', '3', '£3.33', '£10.00']);
 	expect(spec.totalRaw).toEqual(['Total', 3, 10 / 3, 10]);
 	expect(spec.types).toEqual(['text', 'number', 'money', 'money']);
-	expect(panelSpec('registers', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
+	expect(specOf('registers', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
 });
 it('registers spec: the online and no-register remainders are named rows, never Unknown', () => {
 	const data = inputs([]);
-	data.registers = [
-		{ key: 'front', orders: 1, amount: 6, share: 0.6 },
-		{ key: 'online', orders: 1, amount: 3, share: 0.3 },
-		{ key: 'unregistered', orders: 1, amount: 1, share: 0.1 },
-	];
-	const spec = panelSpec('registers', { ...data, registerNames: { front: 'Front' } });
+	data.figures = {
+		...data.figures,
+		byRegister: [
+			{ key: 'front', orders: 1, amount: 6, share: 0.6 },
+			{ key: 'online', orders: 1, amount: 3, share: 0.3 },
+			{ key: 'unregistered', orders: 1, amount: 1, share: 0.1 },
+		],
+	};
+	data.view.names.register = { front: 'Front' };
+	const spec = specOf('registers', data);
 	expect(spec.rows.map((row) => row.cells[0])).toEqual(['Front', 'Online', 'No register']);
 	expect(spec.total).toEqual(['Total', '3', '£3.33', '£10.00']);
 });
 
 it('stores spec names stores and remainders with averages and a total', () => {
 	const data = inputs([]);
-	data.stores = [
-		{ key: '7', orders: 2, amount: 10, share: 0.5 },
-		{ key: '99', orders: 1, amount: 5, share: 0.25 },
-		{ key: 'online', orders: 1, amount: 3, share: 0.15 },
-		{ key: 'unassigned', orders: 1, amount: 2, share: 0.1 },
-	];
-	const spec = panelSpec('stores', { ...data, storeNames: { '7': 'Front shop' } });
+	data.figures = {
+		...data.figures,
+		byStore: [
+			{ key: '7', orders: 2, amount: 10, share: 0.5 },
+			{ key: '99', orders: 1, amount: 5, share: 0.25 },
+			{ key: 'online', orders: 1, amount: 3, share: 0.15 },
+			{ key: 'unassigned', orders: 1, amount: 2, share: 0.1 },
+		],
+	};
+	data.view.names.store = { '7': 'Front shop' };
+	const spec = specOf('stores', data);
 	expect(spec.keys).toEqual(['store', 'orders', 'avg_order', 'amount']);
 	expect(spec.head).toEqual(['Store', 'Orders', 'Avg order', 'Amount']);
 	expect(spec.rows.map((row) => row.raw)).toEqual([
@@ -318,5 +316,5 @@ it('stores spec names stores and remainders with averages and a total', () => {
 		['No store', 1, 2, 2],
 	]);
 	expect(spec.totalRaw).toEqual(['Total', 5, 4, 20]);
-	expect(panelSpec('stores', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
+	expect(specOf('stores', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
 });

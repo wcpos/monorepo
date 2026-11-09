@@ -95,7 +95,7 @@ export function AddCouponFormDialog({
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} testID="add-new-coupon-dialog" size="xl" portalHost="pos">
+			<DialogContent side={side} testID="add-new-coupon-dialog" size="xl">
 				<DialogHeader>
 					<DialogTitle>{t('coupons.add_coupon')}</DialogTitle>
 				</DialogHeader>

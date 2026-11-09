@@ -48,10 +48,6 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedMark: ({ name }: { name: string }) => <span data-testid={`saved-${name}`} />,
 	useSavedName: () => mockSavedName,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: () => null,
-}));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
@@ -63,9 +59,6 @@ jest.mock('@wcpos/components/text', () => ({
 		<span onClick={onPress}>{children}</span>
 	),
 }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, options?: { label?: string }) =>
 		options?.label ? `${key}:${options.label}` : key,

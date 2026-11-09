@@ -35,8 +35,8 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => mockBinding,
 }));
-jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ session: { status: 'open' }, sessionsOn: true, overdue: false }),
+jest.mock('../../../../services/register-session/use-register-status', () => ({
+	useRegisterStatus: () => ({ session: { status: 'open' }, sessionsOn: true, overdue: false }),
 }));
 jest.mock('../../pos/checkout/use-awaiting-store', () => ({ useAwaitingStoreCount: () => 0 }));
 jest.mock('../cashier-entry/cashier-sheet-request', () => ({

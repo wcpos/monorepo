@@ -26,9 +26,8 @@ function mockView({ children, className, testID }: ViewProps) {
 		</div>
 	);
 }
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../jest/property-row.test-utils')
-);
+// This suite drives the real dialog; core's Jest maps the bare path to the fake.
+jest.mock('@wcpos/components/dialog', () => jest.requireActual('@wcpos/components/dialog/index'));
 jest.mock('react-native', () => ({
 	...jest.requireActual('react-native'),
 	View: mockView,
@@ -236,7 +235,13 @@ jest.mock('./reports/panels/specs', () => ({
 }));
 jest.mock('./reports/context', () => ({
 	useIncludedStatus: () => () => true,
-	useReportsData: () => ({ allOrders: [], selectedOrders: [], totals: {}, periodRefunds: [] }),
+	useReportsData: () => ({
+		allOrders: [],
+		selectedOrders: [],
+		// panelSpec is stubbed; the panel itself reads only the gross figure for its footer.
+		figures: { gross: 0 },
+		periodRefunds: [],
+	}),
 	useReportsHandles: () => ({}),
 	useReportsPeriod: () => ({
 		dateRange: { start: new Date(0), end: new Date(0) },

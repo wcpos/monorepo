@@ -6,21 +6,12 @@ import { render, screen } from '@testing-library/react';
 import { RefundOrderModal } from './modal';
 
 type Props = React.PropsWithChildren<{ testID?: string }>;
-function mockDiv({ children, testID }: Props) {
-	return <div data-testid={testID}>{children}</div>;
-}
 let mockPayload: { id: number; number?: string } = { id: 42, number: '1001' };
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: () => ({ uuid: 'one', payload: mockPayload }),
 }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (r: unknown, select: (r: unknown) => unknown) => (r ? select(r) : undefined),
-}));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: mockDiv,
-	DialogContent: mockDiv,
-	DialogHeader: mockDiv,
-	DialogTitle: mockDiv,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: Props) => <span>{children}</span>,

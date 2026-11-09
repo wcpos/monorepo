@@ -151,7 +151,6 @@ function LiveCartHeader() {
 			<AddCartItemsMenu />
 			<UISettingsDialog
 				side={side}
-				portalHost="pos"
 				title={t('pos_cart.cart_settings')}
 				triggerTestID="cart-settings-button"
 			>

@@ -25,6 +25,8 @@ function mockView({ children, className, testID }: ViewProps) {
 		</div>
 	);
 }
+// This suite drives the real dialog; core's Jest maps the bare path to the fake.
+jest.mock('@wcpos/components/dialog', () => jest.requireActual('@wcpos/components/dialog/index'));
 jest.mock('react-native', () => ({
 	...jest.requireActual('react-native'),
 	View: mockView,

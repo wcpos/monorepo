@@ -482,12 +482,10 @@ export function UserSheet({
 	open,
 	onOpenChange,
 	onOpenRegister,
-	portalHost = 'pos',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onOpenRegister?: (pane?: 'register' | 'count') => void;
-	portalHost?: string | null;
 }) {
 	const { site, store, storeDB, userDB, wpCredentials, logout } = useStoreSession();
 	const http = useRestHttpClient();
@@ -631,12 +629,7 @@ export function UserSheet({
 					onOpenChange(next);
 				}}
 			>
-				<DialogContent
-					side={side}
-					size="lg"
-					portalHost={portalHost ?? undefined}
-					testID="user-sheet"
-				>
+				<DialogContent side={side} size="lg" testID="user-sheet">
 					{pane !== 'sheet' ? (
 						<DialogHeader className="flex-row items-center gap-3">
 							<IconButton
@@ -827,7 +820,6 @@ export function UserSheet({
 				</DialogContent>
 				<SwitchConfirm
 					request={request}
-					portalHost={portalHost ?? undefined}
 					onOpenChange={(o) => {
 						if (!o) setRequest(null);
 					}}

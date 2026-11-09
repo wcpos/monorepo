@@ -320,8 +320,8 @@ it('registers its pay path as the checkout surface while mounted (roadmap#428)',
 });
 
 let mockSessionStatus = 'open';
-jest.mock('../../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ session: { status: mockSessionStatus } }),
+jest.mock('../../../../../services/register-session/use-register-status', () => ({
+	useRegisterStatus: () => ({ session: { status: mockSessionStatus } }),
 }));
 it.each(['counting', 'closed'])(
 	'holds Pay for a %s session, including the keyboard command',

@@ -151,7 +151,7 @@ export async function mintRunWriterAuthorization(
 	for (const storeUrl of storeUrls) {
 		if (!storeUrl) continue;
 		try {
-			const authorization = await loginProductWriter(
+			const authorization = await storeLoginAuthorization(
 				request,
 				storeUrl,
 				process.env.E2E_PRODUCT_WRITER_USER!,
@@ -233,7 +233,7 @@ export async function productWriterAuthorization(
 	) {
 		return published;
 	}
-	return loginProductWriter(request, storeUrl, user, pass);
+	return storeLoginAuthorization(request, storeUrl, user, pass);
 }
 
 /**
@@ -269,11 +269,17 @@ async function writerAuthorizationAccepted(
 	}
 }
 
-async function loginProductWriter(
+/**
+ * Mint a JWT for any store login through the wcpos-auth flow the app uses, with its transport
+ * resolved per store. `label` names the login in warnings and errors; the token is never logged.
+ * `expiresAt` is estimated from the attempt's start, so it is never later than the server's.
+ */
+export async function storeLoginAuthorization(
 	request: APIRequestContext,
 	storeUrl: string,
 	user: string,
-	pass: string
+	pass: string,
+	label = 'product-writer'
 ): Promise<WriterAuthorization> {
 	// The server keys auth sessions by state + redirect URI, so concurrent workers need distinct states.
 	const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe-${randomUUID()}`;
@@ -331,16 +337,16 @@ async function loginProductWriter(
 			if (action === 'retry' || (failure.kind === 'http' && attempt === 0)) continue;
 			const status = failure.status === null ? '' : ` (HTTP ${failure.status})`;
 			if (failure.kind === 'transport') {
-				log.warn('[search-probe] configured product-writer login transport failed');
+				log.warn(`[search-probe] configured ${label} login transport failed`);
 				throw new Error(
-					`Configured product-writer authentication transport failed after one retry${status}`
+					`Configured ${label} authentication transport failed after one retry${status}`
 				);
 			}
-			log.warn('[search-probe] configured product-writer login was rejected');
-			throw new Error(`Configured product-writer authentication failed${status}`);
+			log.warn(`[search-probe] configured ${label} login was rejected`);
+			throw new Error(`Configured ${label} authentication failed${status}`);
 		}
 	}
-	throw new Error('Configured product-writer authentication failed');
+	throw new Error(`Configured ${label} authentication failed`);
 }
 
 /**

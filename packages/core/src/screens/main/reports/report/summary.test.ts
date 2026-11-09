@@ -1,9 +1,8 @@
 import { createTestT } from '../../../../../jest/translate';
-import { tenders } from '../cards/aggregate';
+import { salesFigures } from './sales-figures';
 import { summarySpec } from './summary';
-import { calculateTotals } from './utils';
 
-import type { ReportOrder } from '../context';
+import type { RefundRow, ReportOrder } from '../context';
 
 const t = createTestT();
 const formats = {
@@ -24,13 +23,12 @@ const orders = ['cash', 'card'].map((method) => ({
 		{ key: '_pos_store', value: '1' },
 	],
 }));
+const figuresOf = (refunds?: RefundRow[]) =>
+	salesFigures({ orders: orders as ReportOrder[], refunds, decimals: 2 });
 const inputs = () => ({
-	totals: calculateTotals({ orders }),
-	orders: 2,
-	payments: tenders(orders as ReportOrder[], calculateTotals({ orders }), 2),
+	figures: figuresOf(),
 	registerNames: { front: 'Front', back: 'Back' },
 	cashierNames: { '7': 'Priya', '8': 'Alex' },
-	num_decimals: 2,
 });
 // Missing groups, wrong signs, or rendering identifiers instead of names changes the paper.
 it('groups two orders into Sales, Payment methods, Taxes and Orders with the sales subtotal', () => {
@@ -49,10 +47,17 @@ it('groups two orders into Sales, Payment methods, Taxes and Orders with the sal
 });
 it('includes both register names only for multiple registers', () => {
 	const input = inputs();
-	input.totals.registerArray = [
-		{ registerId: 'front', totalOrders: 1, totalAmount: 12 },
-		{ registerId: 'back', totalOrders: 1, totalAmount: 12 },
-	];
+	input.figures = {
+		...input.figures,
+		registersStamped: [
+			{ registerId: 'front', totalOrders: 1, totalAmount: 12 },
+			{ registerId: 'back', totalOrders: 1, totalAmount: 12 },
+		],
+		byRegister: [
+			{ key: 'front', orders: 1, amount: 12, share: 0.5 },
+			{ key: 'back', orders: 1, amount: 12, share: 0.5 },
+		],
+	};
 	const group = summarySpec(input, t, formats).groups?.find((group) => group.key === 'registers');
 	expect(group?.rows.map((row) => row.cells)).toEqual([
 		['Front', '1', '£12.00'],
@@ -61,21 +66,22 @@ it('includes both register names only for multiple registers', () => {
 });
 it('prints the period by store under All stores, in place of the registers', () => {
 	const input = inputs();
-	input.totals.registerArray = [
-		{ registerId: 'front', totalOrders: 1, totalAmount: 12 },
-		{ registerId: 'back', totalOrders: 1, totalAmount: 12 },
-	];
 	const spec = summarySpec(
 		{
 			...input,
-			stores: {
-				rows: [
-					{ key: '1', orders: 1, amount: 12 },
-					{ key: 'online', orders: 1, amount: 12 },
-					{ key: 'unassigned', orders: 1, amount: 3 },
+			figures: {
+				...input.figures,
+				registersStamped: [
+					{ registerId: 'front', totalOrders: 1, totalAmount: 12 },
+					{ registerId: 'back', totalOrders: 1, totalAmount: 12 },
 				],
-				names: { '1': 'Front shop' },
+				byStore: [
+					{ key: '1', orders: 1, amount: 12, share: 0 },
+					{ key: 'online', orders: 1, amount: 12, share: 0 },
+					{ key: 'unassigned', orders: 1, amount: 3, share: 0 },
+				],
 			},
+			storeNames: { '1': 'Front shop' },
 		},
 		t,
 		formats
@@ -91,24 +97,27 @@ it('prints the period by store under All stores, in place of the registers', () 
 	expect(group?.totalRaw).toEqual(['Total', 3, 27]);
 });
 it('uses known period refunds, otherwise embedded refunds, and omits zero refunds', () => {
-	const input = inputs();
-	input.totals.refundTotal = 9;
-	const sales = (extra = {}) => summarySpec({ ...input, ...extra }, t, formats).groups![0];
+	const sales = (refunds?: RefundRow[]) =>
+		summarySpec({ ...inputs(), figures: { ...figuresOf(refunds), embeddedRefunds: 9 } }, t, formats)
+			.groups![0];
 	expect(sales().rows.find((row) => row.key === 'refunds')?.raw).toEqual(['Refunded', '', -9]);
-	expect(sales({ periodRefunds: [] }).rows.some((row) => row.key === 'refunds')).toBe(false);
+	expect(sales([]).rows.some((row) => row.key === 'refunds')).toBe(false);
 	expect(
-		sales({ periodRefunds: [{ id: 1, parent_id: 42, amount: '3.456' }] }).rows.find(
+		sales([{ id: 1, parent_id: 42, amount: '3.456' }] as RefundRow[]).rows.find(
 			(row) => row.key === 'refunds'
 		)
 	).toMatchObject({ raw: ['Refunded', 1, -3.46], cells: ['Refunded', '1', '£-3.46'] });
 });
 it('includes shipping and cashier names, with empty cells left empty', () => {
 	const input = inputs();
-	input.totals.shippingTotalsArray = [{ method_id: 'pickup', total: 2, total_tax: 0 }];
-	input.totals.userStoreArray = [
-		{ cashierId: '7', storeId: '1', totalOrders: 1, totalAmount: 12 },
-		{ cashierId: '8', storeId: '1', totalOrders: 1, totalAmount: 12 },
-	];
+	input.figures = {
+		...input.figures,
+		shipping: [{ method_id: 'pickup', total: 2, total_tax: 0 }],
+		byCashier: [
+			{ key: '7', orders: 1, amount: 12, share: 0.5 },
+			{ key: '8', orders: 1, amount: 12, share: 0.5 },
+		],
+	};
 	const groups = summarySpec(input, t, formats).groups!;
 	expect(groups.find((group) => group.key === 'cashiers')?.rows.map((row) => row.cells[0])).toEqual(
 		['Priya', 'Alex']
@@ -141,9 +150,8 @@ it('prints a split sale by tender from the ledger, and Taken leaves out what is 
 		},
 		{ total: '25', needs_payment: true },
 	] as ReportOrder[];
-	const totals = calculateTotals({ orders: split });
 	const group = summarySpec(
-		{ ...inputs(), totals, orders: 2, payments: tenders(split, totals, 2) },
+		{ ...inputs(), figures: salesFigures({ orders: split, decimals: 2 }) },
 		t,
 		formats
 	).groups?.find((group) => group.key === 'payments');

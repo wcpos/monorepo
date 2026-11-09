@@ -24,7 +24,7 @@ import { Notice } from '@wcpos/components/notice';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
-import { readCarriedFrom } from '@wcpos/query/register-session';
+import { isLiveMovement, readCarriedFrom } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -56,11 +56,9 @@ export function RegisterPanel({
 	open,
 	onOpenChange,
 	initialPane = 'register',
-	portalHost = 'pos',
 }: {
 	open: boolean;
 	initialPane?: 'register' | 'count';
-	portalHost?: string | null;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const {
@@ -190,10 +188,7 @@ export function RegisterPanel({
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
 	// so it must not depend on there also being a current session or a written closure.
 	if (!session && !lastClosure && !written && refusedMovements.length === 0) return null;
-	const activeMovements = movements.filter(
-		(row) =>
-			row.type !== 'void' && !row.voided_by && !movements.some((entry) => entry.voids === row.id)
-	);
+	const activeMovements = movements.filter((row) => isLiveMovement(row, movements));
 	// A movement the server refused is cash in the drawer that the ledger will never show.
 	// Nothing in this pane used to read sync_status, so it went missing in silence. The list
 	// comes from the hook already scoped to this register and NOT to the current session, so
@@ -258,18 +253,17 @@ export function RegisterPanel({
 	if (pane === 'written' && written)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
-					<ClosureWritten count={written} onDone={() => close(false)} portalHost={portalHost} />
+				<DialogContent side={side} size="lg" testID="register-panel">
+					<ClosureWritten count={written} onDone={() => close(false)} />
 				</DialogContent>
 			</Dialog>
 		);
 	if (pane === 'count' && session)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
+				<DialogContent side={side} size="lg" testID="register-panel">
 					<RegisterCount
 						side={side}
-						portalHost={portalHost}
 						description={description}
 						onBusyChange={setCountBusy}
 						onBack={() => setPane('register')}
@@ -284,7 +278,7 @@ export function RegisterPanel({
 	if (pane === 'closure' && lastClosure)
 		return (
 			<Dialog open={open} onOpenChange={close}>
-				<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
+				<DialogContent side={side} size="lg" testID="register-panel">
 					<ClosurePanel
 						row={lastClosure}
 						onBack={() => setPane('register')}
@@ -296,7 +290,7 @@ export function RegisterPanel({
 
 	return (
 		<Dialog open={open} onOpenChange={close}>
-			<DialogContent side={side} size="lg" portalHost={portalHost} testID="register-panel">
+			<DialogContent side={side} size="lg" testID="register-panel">
 				<DialogHeader className="flex-row items-center gap-3">
 					<ToneDisc tone="muted" icon="register" size="sm" testID="register-panel-disc" />
 					<View className="min-w-0 flex-1">
@@ -637,13 +631,11 @@ export function RegisterPanel({
 						}
 					}}
 					side={side}
-					portalHost={portalHost ?? undefined}
 					testID="register-panel-print-sheet"
 				/>
 				{movement && (
 					<MovementSheet
 						side={side}
-						portalHost={portalHost}
 						type={movement}
 						onOpenChange={(value) => {
 							if (!value) setMovement(null);

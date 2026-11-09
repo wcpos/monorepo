@@ -48,15 +48,7 @@ jest.mock('@wcpos/components/form', () => {
 		useSavedName: () => '',
 	};
 });
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/collapsible', () => ({}));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: () => null,
-	useDialog: () => ({ close: jest.fn() }),
-}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));

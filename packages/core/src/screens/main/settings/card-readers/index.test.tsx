@@ -25,14 +25,10 @@ const mockReaderState = {
 };
 const mockStoreDB = { addState: jest.fn(async () => mockReaderState) };
 const mockBootstrap = jest.fn(async () => ({ token: 'connection' }));
-let mockProviderClose: (() => void) | undefined;
 let mockMethods: PaymentMethodDescriptor[] = [];
 let mockCaps = { canAcceptReaderTerms: true };
 const mockPlatform = jest.requireMock('react-native').Platform;
 
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
@@ -126,35 +122,6 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 // The provider sheet renders inline while it is mounted.
 jest.mock('@wcpos/components/portal', () => ({
 	Portal: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogFooter: (props: import('@wcpos/components/dialog').DialogFooterProps) => {
-		const Footer = jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter;
-		const close = typeof props.close === 'object' ? props.close : {};
-		return (
-			<Footer
-				{...props}
-				close={
-					props.close && {
-						...close,
-						onPress: (event: Parameters<NonNullable<typeof close.onPress>>[0]) => {
-							close.onPress?.(event);
-							mockProviderClose?.();
-						},
-					}
-				}
-			/>
-		);
-	},
-	Dialog: ({ children, onClose }: React.PropsWithChildren<{ onClose?: () => void }>) => {
-		mockProviderClose = onClose;
-		return <>{children}</>;
-	},
-	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
-		<div data-testid={testID}>{children}</div>
-	),
-	DialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	DialogTitle: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/badge', () => ({
 	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (

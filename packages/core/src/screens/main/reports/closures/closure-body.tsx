@@ -15,7 +15,7 @@ import { Text } from '@wcpos/components/text';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
-import type { ClosureRow } from '@wcpos/query/register-session';
+import { type ClosureRow, isLiveMovement } from '@wcpos/query/register-session';
 
 import { useT } from '../../../../contexts/translations';
 import { useViewedStore } from '../../../../hooks/use-store-day';
@@ -160,9 +160,7 @@ export function ClosureBody({
 		voided_by?: string | null;
 		voids?: string | null;
 	}[];
-	const active = movements.filter(
-		(m) => m.type !== 'void' && !m.voided_by && !movements.some((v) => v.voids === m.id)
-	);
+	const active = movements.filter((row) => isLiveMovement(row, movements));
 	const others = buildClosureDocument(
 		{ ...row, expected: settled.expected },
 		context
@@ -181,6 +179,7 @@ export function ClosureBody({
 	const correctionLabel: Record<Correction['type'], string> = {
 		recount: t('reports.correction_recount'),
 		late_sale: t('reports.late_sale'),
+		late_refund: t('reports.late_refund'),
 		late_movement: t('reports.late_movement'),
 	};
 	const documentError = doc.documentError && !doc.isOffline;
@@ -241,7 +240,7 @@ export function ClosureBody({
 				<Notice
 					testID="closure-settled"
 					tone="warning"
-					// A late sale or movement settles figures without a recount: say so, never "0 recounts".
+					// A late sale, refund or movement settles figures without a recount: say so, never "0 recounts".
 					title={
 						recounts > 0
 							? t('reports.recorded_settled_line', settledArgs)
@@ -299,7 +298,7 @@ export function ClosureBody({
 							</Text>
 						</View>
 					)}
-					{/* A late sale or movement moves Expected after the close: one signed term keeps the
+					{/* A late sale, refund or movement moves Expected after the close: one signed term keeps the
 					    ladder adding up, since the rows above are the recorded figures (Codex, #3036). */}
 					{touched.has('expected.cash') && (
 						<View testID="closure-late-corrections" className={STATIC_ROW}>

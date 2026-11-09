@@ -35,13 +35,6 @@ jest.mock('@wcpos/components/form', () => ({
 	FormSwitch: () => null,
 	FormSegmentedControl: () => null,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogBody: mockWrap,
-	DialogFooter: jest.requireActual('../../../../../../../jest/footer.test-utils').DialogFooter,
-	DialogClose: mockWrap,
-	DialogAction: mockWrap,
-	useDialog: () => ({ close: jest.fn() }),
-}));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: mockWrap }));
 jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 // A form's amount stands in as the form's own input mock: the rows are under test, not the field.
@@ -55,9 +48,6 @@ jest.mock('../../../../components/amount-field', () => ({
 }));
 jest.mock('../../../../components/tax-select', () => ({ TaxSelect: () => null }));
 jest.mock('../../../../components/amount-unit-toggle', () => ({ AmountUnitToggle: () => null }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../../../jest/property-row.test-utils')
-);
 jest.mock('../../../../components/meta-data-form', () => ({
 	MetaDataForm: () => null,
 	metaDataSchema: jest.requireActual('zod').array(jest.requireActual('zod').unknown()),

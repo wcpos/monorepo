@@ -30,9 +30,6 @@ const store = {
 	tax_total_display: 'itemized',
 };
 
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../jest/property-row.test-utils')
-);
 jest.mock('react-native', () => ({ View: ({ children }: React.PropsWithChildren) => children }));
 jest.mock('react-native-reanimated', () => ({ useReducedMotion: () => true }));
 jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));

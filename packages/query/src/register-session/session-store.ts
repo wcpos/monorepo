@@ -3,7 +3,6 @@ import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
 
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
-import { POS_META_KEYS } from '@wcpos/sync-core';
 import {
 	fromMinor,
 	isActiveCouponLine,
@@ -38,6 +37,7 @@ import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
 import { baselineContains } from './baseline';
+import { isSessionOrder, isUnsyncedMovement, unaccepted, unsyncedCount } from './drawer-rules';
 
 import type { DeepReadonly } from 'rxdb';
 import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
@@ -56,9 +56,6 @@ export class RegisterSessionRequiredError extends Error {
 	}
 }
 export const openSessionSelector = { status: 'open', sync_status: { $ne: 'failed' } } as const;
-/** A closure the store has not taken: neither accepted (`synced`) nor already on file there. */
-const unaccepted = (closure: { sync_status: string } | null | undefined) =>
-	!!closure && !['synced', 'superseded'].includes(closure.sync_status);
 /**
  * The open session for a register, or throws. A read: it changes nothing, so an action guard
  * may call it before `next`. `requireOpenSession` returns only its id.
@@ -441,12 +438,7 @@ export async function writeClosure({
 		});
 		return existing;
 	}
-	const bound = orders.filter(
-		(order) =>
-			order.payload.meta_data?.some(
-				({ key, value }) => key === POS_META_KEYS.session && value === session.id
-			) || readLedger(order.payload.meta_data).some((row) => row.session_id === session.id)
-	);
+	const bound = orders.filter((order) => isSessionOrder(order, session.id));
 	const sold = bound.filter((order) =>
 		readLedger(order.payload.meta_data).some(
 			(row) => row.session_id === session.id && row.status === 'captured'
@@ -544,9 +536,7 @@ export async function writeClosure({
 	}
 	const dirtyOrders = bound.filter(hasPendingLocalWork);
 	// A refused movement is cash the server's ledger does not hold: the closure records it (#3271).
-	const dirtyMovements = entries.filter(
-		(row) => row.sync_status === 'pending' || row.sync_status === 'failed'
-	);
+	const dirtyMovements = entries.filter(isUnsyncedMovement);
 
 	const counters = bound
 		.map((order) =>
@@ -589,11 +579,7 @@ export async function writeClosure({
 		),
 		perpetual_sales_total: '0',
 		perpetual_refunds_total: '0',
-		unsynced_count:
-			dirtyOrders.length +
-			dirtyMovements.length +
-			// A held retry (#3304) is `failed` until its closure is rewritten: still unsynced.
-			(['pending', 'failed'].includes(session.sync_status) ? 1 : 0),
+		unsynced_count: unsyncedCount(session, bound, entries),
 		unsynced_total: sum([
 			...dirtyMovements.map((row) => row.amount),
 			...dirtyOrders

@@ -19,6 +19,8 @@ const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
 let mockLines: object[] = [];
+// The order a press resolves; `undefined` means `mockOrder`.
+let mockCurrent: object | undefined;
 let mockVatExempt = false;
 const mockOrderLists: Partial<Record<'fee_lines' | 'shipping_lines' | 'coupon_lines', object[]>> =
 	{};
@@ -77,7 +79,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: () => mockCurrent ?? mockOrder }),
 }));
 
 const mockActionLog = jest.fn();
@@ -103,6 +105,7 @@ describe('useRemoveLineItem', () => {
 		mockLocalPatch.mockResolvedValue(true);
 		mockLines = [];
 		mockVatExempt = false;
+		mockCurrent = undefined;
 	});
 	const coffee = {
 		id: 11,
@@ -287,6 +290,23 @@ describe('useRemoveLineItem', () => {
 		});
 		await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
 		expect(mockLocalPatch).toHaveBeenLastCalledWith(expect.objectContaining({ document: saved }));
+	});
+
+	it('Undo restores to the order the line left, not the order selected when Undo is pressed', async () => {
+		mockLines = [coffee];
+		const { result } = renderHook(() => useRemoveLineItem());
+		await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+		const other = {
+			uuid: 'other-uuid',
+			payload: { id: 99, line_items: [] },
+			getLatest: () => other,
+		};
+		mockCurrent = other; // the cashier switched tabs before pressing Undo
+		mockLocalPatch.mockClear();
+		await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith(expect.objectContaining({ document: mockOrder }));
+		expect(mockLocalPatch).not.toHaveBeenCalledWith(expect.objectContaining({ document: other }));
 	});
 
 	it('a guard refusal leaves the line in the cart and presents the reason', async () => {

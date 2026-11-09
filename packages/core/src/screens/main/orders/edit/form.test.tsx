@@ -126,9 +126,6 @@ jest.mock('@wcpos/components/form', () => ({
 	FormTextarea: () => null,
 }));
 
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 function mockAction({
 	children,
 	onPress,

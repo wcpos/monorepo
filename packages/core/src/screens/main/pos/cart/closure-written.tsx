@@ -21,15 +21,7 @@ export type ClosureCount = {
 	blind: boolean;
 };
 
-export function ClosureWritten({
-	count,
-	onDone,
-	portalHost = 'pos',
-}: {
-	count: ClosureCount;
-	onDone: () => void;
-	portalHost?: string | null;
-}) {
+export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone: () => void }) {
 	const row = useDocField(count.closure, (value) => value)!;
 	// A closure printed at the close reprints from here; one never printed prints first.
 	const view = useClosureView(row, { isReprint: (row.print_count ?? 0) > 0 });
@@ -100,7 +92,6 @@ export function ClosureWritten({
 				printLabel={t('register.print_closure')}
 				error={error || doc.documentError?.message || null}
 				onPrint={() => void reprint()}
-				portalHost={portalHost ?? undefined}
 				testID="closure-written-print-sheet"
 			/>
 		</>

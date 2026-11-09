@@ -1,10 +1,12 @@
 import { DEFAULT_TRAITS, SYSTEM_TYPE } from './theme-traits';
 import {
+	DARK_RAIL_THEMES,
 	familiesForType,
 	hasDarkRail,
 	iconSetForTheme,
 	isLightTheme,
 	isThemeName,
+	LIGHT_THEMES,
 	THEME_ICON_SET,
 	THEME_TRAITS,
 	THEME_TYPE,
@@ -126,5 +128,63 @@ describe('isThemeName', () => {
 		expect(isThemeName('system')).toBe(false);
 		expect(isThemeName(undefined)).toBe(false);
 		expect(isThemeName('sepia')).toBe(false);
+	});
+});
+
+// The six tables are read off one rule per theme; these are the literals they replaced.
+describe('the tables read off the theme rules', () => {
+	it('keep the values the hand-kept tables had', () => {
+		expect(THEMES).toEqual([
+			'light',
+			'dark',
+			'ocean',
+			'sunset',
+			'monochrome',
+			'paper',
+			'warm',
+			'bold',
+			'market',
+		]);
+		expect(THEME_TYPE_SET).toEqual({
+			light: 'system',
+			dark: 'system',
+			ocean: 'system',
+			sunset: 'system',
+			monochrome: 'system',
+			paper: 'instrument',
+			warm: 'fraunces',
+			bold: 'grotesk',
+			market: 'manrope',
+		});
+		expect(THEME_TRAITS).toEqual({
+			light: DEFAULT_TRAITS,
+			dark: DEFAULT_TRAITS,
+			ocean: DEFAULT_TRAITS,
+			sunset: DEFAULT_TRAITS,
+			monochrome: { ...DEFAULT_TRAITS, linkUnderline: true },
+			paper: {
+				...DEFAULT_TRAITS,
+				media: 'initial',
+				wordsAlign: 'center',
+				tear: true,
+				linkUnderline: true,
+			},
+			bold: { ...DEFAULT_TRAITS, priceChip: true, paidFlash: true, linkUnderline: true },
+			warm: { ...DEFAULT_TRAITS, media: 'initial' },
+			market: { ...DEFAULT_TRAITS, media: 'initial', tear: true },
+		});
+		expect(THEME_ICON_SET).toEqual({
+			light: 'tabler',
+			dark: 'tabler',
+			monochrome: 'tabler',
+			ocean: 'phosphor',
+			sunset: 'phosphor',
+			paper: 'phosphor',
+			warm: 'hugeicons',
+			bold: 'phosphor',
+			market: 'hugeicons',
+		});
+		expect(LIGHT_THEMES).toEqual(['light', 'paper', 'warm', 'bold', 'market']);
+		expect(DARK_RAIL_THEMES).toEqual(['dark', 'ocean', 'sunset', 'monochrome', 'bold', 'market']);
 	});
 });

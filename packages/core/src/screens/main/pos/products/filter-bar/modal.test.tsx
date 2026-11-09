@@ -128,28 +128,6 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 		<button data-testid={confirm.testID} onClick={confirm.onPress} />
 	),
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({
-		intent,
-		close,
-	}: {
-		intent?: { testID: string; onPress: () => void; disabled: boolean };
-		close?: { testID: string };
-	}) => (
-		<>
-			{close && <button data-testid={close.testID} />}
-			{intent && (
-				<button data-testid={intent.testID} disabled={intent.disabled} onClick={intent.onPress} />
-			)}
-		</>
-	),
-	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogTitle: ({ children }: React.PropsWithChildren) => <h1>{children}</h1>,
-}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));

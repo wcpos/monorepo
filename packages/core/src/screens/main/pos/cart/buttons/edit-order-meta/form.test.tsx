@@ -157,9 +157,6 @@ let mockOnlineStatus = 'online-website-available';
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnlineStatus }),
 }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: mockWrap,
 	TooltipContent: mockWrap,

@@ -5,34 +5,30 @@ import { Text } from '@wcpos/components/text';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
-import { tenderLabel, tenders } from './aggregate';
+import { tenderLabel } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
 
 export function PaymentsCard() {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ selectedOrders, totals } = useReportsData(),
+		{ figures } = useReportsData(),
 		{ storeId } = useReportsPeriod();
-	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId),
-		decimals = store?.price_num_decimals;
-	const rows = React.useMemo(
-		() => tenders(selectedOrders, totals, decimals),
-		[selectedOrders, totals, decimals]
-	);
+	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId);
+	const rows = figures.takenByTender;
 	if (!store) return <CardSkeleton testID="card-payments" name={t('reports.card_payments')} />;
 	return (
 		<ReportCard
 			onOpen={() => setDetail('payments')}
 			testID="card-payments"
 			name={t('reports.card_payments')}
-			figure={money(totals.total)}
+			figure={money(figures.gross)}
 		>
 			{rows.length ? (
 				<Donut
 					testID="card-payments-donut"
 					centre={{
-						figure: moneyWhole(Math.round(totals.total)),
+						figure: moneyWhole(Math.round(figures.gross)),
 						label: t('reports.n_ways', { count: rows.length, n: number(rows.length) }),
 					}}
 					parts={rows.map((row) => ({

@@ -103,7 +103,13 @@ test('recognizes each document name and write method on identifiers and member c
 });
 
 test('recognizes both local mutation helpers and their context member forms', () => {
-	for (const helper of ['localPatch', 'localModify', 'ctx.localPatch', 'ctx.localModify']) {
+	for (const helper of [
+		'localPatch',
+		'localModify',
+		'settledWrite',
+		'ctx.localPatch',
+		'ctx.localModify',
+	]) {
 		for (const name of [
 			'order',
 			'orders',

@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { mockState, render } from '../cards/test-utils';
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
+import { figuresOf, mockState, render } from '../cards/test-utils';
 import { Reports } from '../reports';
-import { calculateTotals } from '../report/utils';
-import { PageSheetHostContext } from '../../components/page-sheet-host';
 
 import type * as Context from '../context';
 
@@ -141,7 +141,7 @@ export function preparePanel() {
 		return {
 			...mockState.data,
 			selectedOrders,
-			totals: calculateTotals({ orders: selectedOrders }),
+			figures: figuresOf(mockState.data, selectedOrders),
 		};
 	});
 }
@@ -149,7 +149,7 @@ function SelectionProvider({ children }: React.PropsWithChildren) {
 	const [unselectedRowIds, setUnselectedRowIds] = React.useState<
 		Context.ReportsSelection['unselectedRowIds']
 	>({ hidden: true });
-	const { statusMode, setStatusMode } = real.useReportsScope();
+	const { statusMode, setStatusMode, setDetail } = real.useReportsScope();
 	return (
 		<Selection.Provider value={{ unselectedRowIds, setUnselectedRowIds }}>
 			<button
@@ -157,19 +157,23 @@ function SelectionProvider({ children }: React.PropsWithChildren) {
 				onClick={() => setStatusMode(statusMode === 'all' ? 'done' : 'all')}
 			/>
 			<span data-testid="excluded">{JSON.stringify(unselectedRowIds)}</span>
+			{/* A card waiting on the refunds read has no head to open its panel from. */}
+			{(['products', 'categories', 'brands'] as const).map((id) => (
+				<button key={id} data-testid={`open-${id}`} onClick={() => setDetail(id)} />
+			))}
 			{children}
 		</Selection.Provider>
 	);
 }
 export const room = () =>
 	render(
-		<PageSheetHostContext.Provider value="scene:reports">
+		<OverlayHostProvider name="scene:reports" phoneUsesRoot>
 			<real.ReportsScopeProvider>
 				<SelectionProvider>
 					<Reports date="Sales" />
 				</SelectionProvider>
 			</real.ReportsScopeProvider>
-		</PageSheetHostContext.Provider>
+		</OverlayHostProvider>
 	);
 
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');

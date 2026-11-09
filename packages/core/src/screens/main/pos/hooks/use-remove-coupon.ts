@@ -8,8 +8,8 @@ import { useActionContext } from './use-action-context';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
 import { presentActionRefusal } from '../../../../extensions/actions';
-import { useCartWrite } from '../commands/use-cart-write';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCartCommand } from '../commands/use-cart-command';
+import { useCurrentOrderActions } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -21,24 +21,21 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  * After removal, recalculates all remaining coupon discounts from scratch.
  */
 export const useRemoveCoupon = () => {
-	const { currentOrderRecord } = useCurrentOrder();
-	const { localPatch } = useCartWrite();
+	// Resolved at the press, not subscribed in render (current-order ledger 1).
+	const { getCurrentOrderRecord } = useCurrentOrderActions();
+	const command = useCartCommand('cart.coupon.remove');
 	const t = useT();
 	const { recalculate } = useRecalculateCoupons();
-	const { ctx, actor } = useActionContext();
-
-	const orderLogger = React.useMemo(
-		() =>
-			cartLogger.with({
-				orderUUID: currentOrderRecord.uuid,
-				orderID: currentOrderRecord.payload.id,
-				orderNumber: currentOrderRecord.payload.number,
-			}),
-		[currentOrderRecord]
-	);
+	const { ctx } = useActionContext();
 
 	const removeCoupon = React.useCallback(
 		async (couponCode: string) => {
+			const currentOrderRecord = getCurrentOrderRecord();
+			const orderLogger = cartLogger.with({
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
+			});
 			const normalizedCode = couponCode.toLowerCase().trim();
 			const removedLine = (currentOrderRecord.getLatest().payload.coupon_lines ?? []).find(
 				(cl) => (cl.code ?? '').toLowerCase() === normalizedCode
@@ -48,11 +45,7 @@ export const useRemoveCoupon = () => {
 
 			let outcome: unknown;
 			try {
-				outcome = await removeCouponLine(
-					{ ctx, actor, recalculate, localPatch },
-					currentOrderRecord,
-					couponCode
-				);
+				outcome = await removeCouponLine({ command, recalculate }, currentOrderRecord, couponCode);
 			} catch (error) {
 				// The cart moved under the recalculation; the coupon is still on the order, and the
 				// cashier hears why (a removal has no field to carry the reason).
@@ -79,7 +72,7 @@ export const useRemoveCoupon = () => {
 				}
 			);
 		},
-		[currentOrderRecord, localPatch, t, orderLogger, recalculate, ctx, actor]
+		[getCurrentOrderRecord, command, t, recalculate, ctx]
 	);
 
 	return { removeCoupon };

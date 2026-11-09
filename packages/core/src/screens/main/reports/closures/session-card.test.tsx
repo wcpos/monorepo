@@ -562,20 +562,6 @@ jest.mock('../../receipt/receipt-body', () => ({
 	ReceiptBody: () => <div data-testid="sheet-preview" />,
 }));
 
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
-		open ? children : null,
-	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
-		<div data-testid={testID}>{children}</div>
-	),
-	DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
-	DialogTitle: ({ children }: React.PropsWithChildren) => <h1>{children}</h1>,
-	DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
-	DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
-}));
-
 // Reverting either preview gate or the sheet dispatch bypasses the remote document.
 it('opens a summary-mode remote card preview only with the sheet and dispatches its print', async () => {
 	const summary = {

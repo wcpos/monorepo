@@ -26,9 +26,6 @@ const currentOrderRecord = {
 
 // No provider is mounted here; avoid loading the settings provider's ESM-only dependencies.
 // The form's error band is a Notice, which loads ESM uniwind and expo-linking.
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../contexts/ui-settings', () => ({ useUISettings: jest.fn() }));
 
@@ -115,6 +112,7 @@ jest.mock('../hooks/use-action-context', () => ({
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord }),
+	useCurrentOrderActions: () => ({ getCurrentOrderRecord: () => currentOrderRecord }),
 }));
 
 describe('customer creation', () => {

@@ -8,14 +8,13 @@ import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { POS_SOURCE, useReportsFilterScope } from '../scope';
 import { useReportFormats } from '../use-report-formats';
-import { channels, registers, stores } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
 
 export function WhereSoldCard() {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ selectedOrders, totals } = useReportsData(),
+		{ figures } = useReportsData(),
 		{ storeId } = useReportsPeriod();
 	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId);
 	const {
@@ -26,19 +25,11 @@ export function WhereSoldCard() {
 		namesReady,
 	} = useReportsFilterScope();
 	const [view, setView] = React.useState('channels');
-	const canChoose = allStores || (register === undefined && totals.registerArray.length > 1);
+	const canChoose = allStores || (register === undefined && figures.registersStamped.length > 1);
 	const byStore = allStores && view === 'stores';
 	const byRegister = !allStores && canChoose && view === 'registers';
 	const activeView = byStore ? 'stores' : byRegister ? 'registers' : 'channels';
-	const rows = React.useMemo(
-		() =>
-			byStore
-				? stores(selectedOrders, totals)
-				: byRegister
-					? registers(selectedOrders, totals)
-					: channels(selectedOrders, totals),
-		[byStore, byRegister, selectedOrders, totals]
-	);
+	const rows = byStore ? figures.byStore : byRegister ? figures.byRegister : figures.byChannel;
 	const channelLabel = (key: string) =>
 		key === 'store' ? t('reports.in_store') : t('common.online');
 	// The two rows no register stamped: the site's online orders, and POS orders with no register.
@@ -67,7 +58,7 @@ export function WhereSoldCard() {
 			onOpen={() => setDetail(activeView)}
 			testID="card-where-sold"
 			name={t('reports.card_where_sold')}
-			figure={money(totals.total)}
+			figure={money(figures.gross)}
 			head={
 				canChoose && (
 					<SegmentedControl
@@ -94,7 +85,7 @@ export function WhereSoldCard() {
 				<Donut
 					testID="card-where-sold-donut"
 					centre={{
-						figure: moneyWhole(Math.round(totals.total)),
+						figure: moneyWhole(Math.round(figures.gross)),
 						label: byStore
 							? t('reports.n_stores', { count: registerCount, n: number(registerCount) })
 							: byRegister

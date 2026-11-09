@@ -15,6 +15,7 @@ import { useT } from '../../../../contexts/translations';
 import { useViewedStore } from '../../../../hooks/use-store-day';
 import { closureResult, resultWord } from '../../../../services/register-session/closure-result';
 import { varianceAmount } from '../../../../services/register-session/count-money';
+import { settledRow } from '../../../../services/register-session/settled-figures';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 import type { SessionSummary } from './session-card';
@@ -64,16 +65,17 @@ export function ClosureStats({
 		thousandSeparator: settings?.price_thousand_sep,
 	});
 	if (blind) return null;
-	const totals = closureTotals(rows);
+	// The stats show the SETTLED results, as the list does.
+	const settled = rows.map(settledRow);
+	const totals = closureTotals(settled);
 	// The cash the cashier counted in, not the float the card suggested (Codex, #3048).
 	const floats = sessions.reduce(
 		(sum, session) => sum + toMinor(session.counted_float ?? session.expected_float ?? '0', 4),
 		toMinor(totals.opening, 4)
 	);
 	const signed = (value: number) => `${value < 0 ? '−' : '+'}${format(Math.abs(value))}`;
-	// The stats show the RECORDED results, as the list does.
-	const result = closureResult({ recorded: rows }, 4);
-	const kinds = rows.map((row) => closureResult({ recorded: [row] }, 4).kind);
+	const result = closureResult({ recorded: settled }, 4);
+	const kinds = settled.map((row) => closureResult({ recorded: [row] }, 4).kind);
 	const results = (['short', 'over', 'exact'] as const)
 		.map((kind) => {
 			const n = kinds.filter((k) => k === kind).length;

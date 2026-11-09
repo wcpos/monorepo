@@ -29,14 +29,11 @@ import {
  */
 export function CashierEntry({
 	testID,
-	portalHost,
 	onOpenRegister,
 	headless = false,
 	bare = false,
 }: {
 	testID: string;
-	/** The POS host inside the till; elsewhere the drawer layout's `scene` host on wide (beside the rail) or the root (`null`) on a phone. */
-	portalHost: string | null;
 	onOpenRegister?: (pane?: 'register' | 'count') => void;
 	/** The sheet's host alone, no avatar: a till bar's while the desktop title bar carries the avatar. */
 	headless?: boolean;
@@ -78,18 +75,12 @@ export function CashierEntry({
 	// cell of its own pushing the controls out of line (Paul, 2026-10-09).
 	const sheet = (
 		<>
-			<UserSheet
-				open={open}
-				onOpenChange={setOpen}
-				portalHost={portalHost}
-				onOpenRegister={openRegister}
-			/>
+			<UserSheet open={open} onOpenChange={setOpen} onOpenRegister={openRegister} />
 			{!onOpenRegister && panel.mounted && (
 				<RegisterPanel
 					open={panel.open}
 					initialPane={panel.pane}
 					onOpenChange={(open) => setPanel((p) => ({ ...p, open }))}
-					portalHost={portalHost}
 				/>
 			)}
 		</>

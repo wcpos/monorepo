@@ -1,5 +1,4 @@
 import React from 'react';
-import { Platform, type ViewInstance } from 'react-native';
 
 import { Stack } from 'expo-router';
 
@@ -7,8 +6,7 @@ import { useDocField } from '@wcpos/query';
 import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen';
-import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
-import { PortalHost } from '@wcpos/components/portal';
+import { OverlayHost } from '@wcpos/components/lib/overlay-host/host';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { PersistedStateProvider } from '@wcpos/core/contexts/persisted-state';
@@ -142,11 +140,6 @@ const STRIP = ['strip'] as const;
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	// With no app strip above, the till takes only the desktop title-bar strip; its columns
-	// pad their own system edges. EdgeSurface skips any inset the drawer already owns.
-	const registerPOSContainer = React.useCallback((node: ViewInstance | null) => {
-		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
-	}, []);
 
 	return (
 		<TaxRatesProvider>
@@ -155,41 +148,41 @@ function POSStack() {
 			<CartConfigProvider>
 				<SettlementCoordinatorProvider />
 				<HeadlessAutoPrintHost />
-				<EdgeSurface ref={registerPOSContainer} edges={STRIP} className="bg-background flex-1">
-					<Stack
-						screenListeners={tillStackScreenListeners}
-						screenOptions={{
-							animation: 'none',
-							headerShown: false,
-							contentStyle: { backgroundColor: screenBackgroundColor },
-						}}
-					>
-						<Stack.Screen name="index" />
-						<Stack.Screen
-							name="(modals)/cart/[orderId]/checkout"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
+				{/* The till's `pos` host sits inside the CurrentOrderProvider and TaxRatesProvider, so
+				    dialogs like add/edit product can access their context; every `DialogContent` in
+				    the till takes it unless it names another. */}
+				<OverlayHost name="pos">
+					{/* With no app strip above, the till takes only the desktop title-bar strip; its
+					    columns pad their own system edges. EdgeSurface skips any inset the drawer owns. */}
+					<EdgeSurface edges={STRIP} className="bg-background flex-1">
+						<Stack
+							screenListeners={tillStackScreenListeners}
+							screenOptions={{
+								animation: 'none',
+								headerShown: false,
+								contentStyle: { backgroundColor: screenBackgroundColor },
 							}}
-						/>
-						<Stack.Screen
-							name="(modals)/cart/receipt/[orderId]"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
-							}}
-						/>
-					</Stack>
-				</EdgeSurface>
-				{/**
-				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
-				 * so that dialogs like add/edit product etc can access the context
-				 */}
-				<ErrorBoundary>
-					<PortalHost name="pos" />
-				</ErrorBoundary>
+						>
+							<Stack.Screen name="index" />
+							<Stack.Screen
+								name="(modals)/cart/[orderId]/checkout"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							<Stack.Screen
+								name="(modals)/cart/receipt/[orderId]"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+						</Stack>
+					</EdgeSurface>
+				</OverlayHost>
 			</CartConfigProvider>
 		</TaxRatesProvider>
 	);

@@ -48,6 +48,69 @@
 			"file": "search-heap.spec.ts",
 			"title": "committed searches neither retain per keystroke nor block the main thread",
 			"group": "G7"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "server-created-visibility.spec.ts",
+			"title": "a product created on the server reaches the products grid without a search",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "server-created-visibility.spec.ts",
+			"title": "an order created on the server reaches the orders grid without a search",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "server-created-visibility.spec.ts",
+			"title": "a customer created on the server reaches the customers grid without a search",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "free-authenticated",
+			"file": "update-required.spec.ts",
+			"title": "the gate refusal renders the blocking update screen and sync goes quiet",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "update-required.spec.ts",
+			"title": "the gate refusal renders the blocking update screen and sync goes quiet",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-latency.spec.ts",
+			"title": "a single-word search meets the latency budgets on a slow host",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-latency.spec.ts",
+			"title": "a single-word search meets the latency budgets on a slow host",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-walk.spec.ts",
+			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-walk.spec.ts",
+			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
+			"group": "G8",
+			"trunkOnly": true
 		}
 	]
 }

@@ -468,7 +468,7 @@ it.each([true, false, undefined])('guards cart and rail switching: %s', async (a
 				};
 	const blocked = attributed !== false;
 	const switchRegister = mockBind;
-	render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+	render(<UserSheet open onOpenChange={jest.fn()} />);
 	const button = screen.getByTestId('user-sheet-register-switch');
 	expect(button.getAttribute('aria-disabled') === 'true').toBe(blocked);
 	// The rail's sheet has no cart to finish: its reason is that the switch is not available here.
@@ -548,7 +548,7 @@ describe('store band', () => {
 		expect(screen.getByTestId('user-sheet-row-store').textContent).toContain('UK Store');
 	});
 	it('lists the other stores in the Store band when the login has more', () => {
-		render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		render(<UserSheet open onOpenChange={jest.fn()} />);
 		expect(screen.queryByTestId('user-sheet-store-band')).toBeNull();
 		fireEvent.click(screen.getByTestId('user-sheet-store-switch'));
 		expect(screen.getByTestId('user-sheet-store-store-a').getAttribute('aria-checked')).toBe(
@@ -756,14 +756,14 @@ describe('side and header', () => {
 	});
 	it('comes from the right on every screen, whichever host portals it and wherever the cart sits', () => {
 		mockCartSide = 'left';
-		let r = render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+		let r = render(<UserSheet open onOpenChange={jest.fn()} />);
 		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
 		r.unmount();
-		r = render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		r = render(<UserSheet open onOpenChange={jest.fn()} />);
 		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
 		r.unmount();
 		mockSegments = ['(app)', '(drawer)', 'orders'];
-		render(<UserSheet open onOpenChange={jest.fn()} portalHost={null} />);
+		render(<UserSheet open onOpenChange={jest.fn()} />);
 		expect(screen.getByTestId('user-sheet').getAttribute('data-side')).toBe('right');
 	});
 	it.each([
@@ -776,7 +776,7 @@ describe('side and header', () => {
 			mockStoreTimezone = 'UTC';
 			jest.useFakeTimers({ now: new Date(now) });
 			try {
-				render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+				render(<UserSheet open onOpenChange={jest.fn()} />);
 				expect(screen.getByTestId('user-sheet-description').textContent).toBe(line);
 			} finally {
 				jest.useRealTimers();
@@ -787,7 +787,7 @@ describe('side and header', () => {
 		mockT = createTestT();
 		mockLastAccess = 'not a date';
 		try {
-			render(<UserSheet open onOpenChange={jest.fn()} portalHost="pos" />);
+			render(<UserSheet open onOpenChange={jest.fn()} />);
 			expect(screen.getByTestId('user-sheet-description').textContent).toBe(
 				'UK Store · Front counter'
 			);
@@ -839,14 +839,7 @@ describe('drawer door', () => {
 	});
 	it('shows the drawer as a door and opens the register panel on the POS', () => {
 		const onOpenRegister = jest.fn();
-		render(
-			<UserSheet
-				open
-				onOpenChange={onOpenChange}
-				portalHost="pos"
-				onOpenRegister={onOpenRegister}
-			/>
-		);
+		render(<UserSheet open onOpenChange={onOpenChange} onOpenRegister={onOpenRegister} />);
 		expect(screen.getByTestId('user-sheet-drawer').textContent).toContain('345.03');
 		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
 		expect(onOpenRegister).toHaveBeenCalled();
@@ -855,7 +848,7 @@ describe('drawer door', () => {
 	// The one door to the register (Paul, 2026-10-29) reads as one: the row's chevron. The confirm's
 	// tile only shows, so it has none.
 	it('the door carries a chevron; the tile with no door does not', () => {
-		const { unmount } = render(<UserSheet open onOpenChange={onOpenChange} portalHost="pos" />);
+		const { unmount } = render(<UserSheet open onOpenChange={onOpenChange} />);
 		const chevron = '[data-icon="chevronRight"]';
 		expect(screen.getByTestId('user-sheet-drawer').querySelector(chevron)).not.toBeNull();
 		unmount();
@@ -902,7 +895,7 @@ describe('drawer door', () => {
 	});
 	it('the drawer door never navigates', () => {
 		mockSegments = ['(app)', '(drawer)', 'orders'];
-		render(<UserSheet open onOpenChange={onOpenChange} portalHost={null} />);
+		render(<UserSheet open onOpenChange={onOpenChange} />);
 		fireEvent.click(screen.getByTestId('user-sheet-drawer'));
 		expect(mockPush).not.toHaveBeenCalled();
 		expect(onOpenChange).toHaveBeenLastCalledWith(false);

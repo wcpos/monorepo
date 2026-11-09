@@ -10,20 +10,6 @@ import type { CommandContext } from '../commands';
 
 // The sheet takes its context as a prop; the provider and its router stay out of this suite.
 jest.mock('../commands/provider', () => ({}));
-jest.mock('@wcpos/components/dialog', () => {
-	function Wrapper({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
-		return <div data-testid={testID}>{children}</div>;
-	}
-	return {
-		...jest.requireActual('../../../jest/footer.test-utils'),
-		Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
-			open ? <>{children}</> : null,
-		DialogBody: Wrapper,
-		DialogContent: Wrapper,
-		DialogHeader: Wrapper,
-		DialogTitle: Wrapper,
-	};
-});
 jest.mock('../../screens/main/pos/contexts/overlay-side', () => ({
 	usePanelSide: () => 'right',
 }));

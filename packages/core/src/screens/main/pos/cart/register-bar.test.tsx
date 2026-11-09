@@ -125,8 +125,8 @@ it('opens the user sheet from the bar avatar', () => {
 	expect(screen.getByTestId('user-sheet')).toBeTruthy();
 });
 let mockSession: { status: string } | null = null;
-jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ session: mockSession, sessionsOn: true, overdue: false }),
+jest.mock('../../../../services/register-session/use-register-status', () => ({
+	useRegisterStatus: () => ({ session: mockSession, sessionsOn: true, overdue: false }),
 }));
 jest.mock('./register-panel', () => ({
 	RegisterPanel: ({ initialPane }: { initialPane: string }) => (

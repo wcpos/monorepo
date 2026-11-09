@@ -8,6 +8,7 @@ import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import { TerminalLegView } from './terminal-leg-view';
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
+import { splitWith } from './tender-figures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 
@@ -193,13 +194,16 @@ function renderLeg(changes: Partial<TerminalLegState> = {}, extra: Partial<Tende
 	const flow = {
 		terminalLeg: { ...base, ...changes },
 		dp: 2,
-		lines: [],
+		split: splitWith(),
 		tiles: [],
-		cancelTerminalLeg: jest.fn(),
-		releaseTerminalLeg: jest.fn(),
-		retryTerminalCapture: jest.fn(),
-		retryTerminalLeg: jest.fn(),
-		dismissTerminalLeg: jest.fn(),
+		figures: { plan: null },
+		terminal: {
+			cancelTerminalLeg: jest.fn(),
+			releaseTerminalLeg: jest.fn(),
+			retryTerminalCapture: jest.fn(),
+			retryTerminalLeg: jest.fn(),
+			dismissTerminalLeg: jest.fn(),
+		},
 		...extra,
 	} as unknown as TenderFlow;
 	const view = render(
@@ -296,7 +300,7 @@ it('merges logs oldest first and copies the displayed lines', async () => {
 		)
 	);
 	fireEvent.click(screen.getByTestId('checkout-terminal-cancel'));
-	expect(flow.cancelTerminalLeg).toHaveBeenCalledTimes(1);
+	expect(flow.terminal.cancelTerminalLeg).toHaveBeenCalledTimes(1);
 });
 
 it.each([
@@ -315,7 +319,16 @@ it.each([
 	};
 	render(
 		<TerminalLegView
-			flow={{ terminalLeg: leg, tiles: [], lines: [], dp: 2 } as unknown as TenderFlow}
+			flow={
+				{
+					terminalLeg: leg,
+					tiles: [],
+					split: splitWith(),
+					figures: { plan: null },
+					terminal: {},
+					dp: 2,
+				} as unknown as TenderFlow
+			}
 			format={String}
 		/>
 	);
@@ -455,19 +468,21 @@ it.each([
 ] as const)('keeps the %s action wired to %s', (changes, id, handler) => {
 	const flow = renderLeg(changes);
 	fireEvent.click(screen.getByTestId(`checkout-terminal-${id}`));
-	expect(flow[handler]).toHaveBeenCalledTimes(1);
+	expect(flow.terminal[handler]).toHaveBeenCalledTimes(1);
 });
 
 it('uses the flow order number, line count (not quantities), and plan label', () => {
 	renderLeg(
 		{},
 		{
-			plan: { kind: 'even', ways: 3, from: 0 },
+			figures: { plan: { kind: 'even', ways: 3, from: 0 } } as TenderFlow['figures'],
 			planLabel: 'Payment 2 of 3',
-			lines: [
-				{ id: 1, name: 'First', quantity: 4, totalMinor: 100 },
-				{ id: 2, name: 'Second', quantity: 2, totalMinor: 200 },
-			],
+			split: splitWith({
+				lines: [
+					{ id: 1, name: 'First', quantity: 4, totalMinor: 100 },
+					{ id: 2, name: 'Second', quantity: 2, totalMinor: 200 },
+				],
+			}),
 		}
 	);
 	expect(screen.getByTestId('checkout-terminal-leg').textContent).toContain(

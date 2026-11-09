@@ -30,7 +30,7 @@ export type PrintSheetProps = {
 	secondary?: FooterSlot | FooterSlot[];
 	onPrint: () => void | Promise<unknown>;
 	side?: 'left' | 'right';
-	portalHost?: string;
+	portalHost?: string | null;
 	testID?: string;
 	close?: DialogFooterProps['close'];
 	aside?: DialogFooterProps['aside'];

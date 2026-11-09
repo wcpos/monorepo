@@ -14,9 +14,15 @@ import {
 	COLD_START_STATE_NAME,
 	installThinCatalogueRoutes,
 } from './cold-start';
-import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
+import {
+	authenticateWithStore,
+	E2E_PASSWORD,
+	E2E_USERNAME,
+	stubStoreVersionForE2E,
+} from './fixtures';
 import { hasTillAnchor, restoreLocalStorageAsClone } from './indexeddb-helpers';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
+import { closeStaleRegisterSessions } from './register-session-cleanup';
 import { mintRunWriterAuthorization } from './search-probe';
 import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
 // Resolved by playwright.config, never re-derived here: these used to be two
@@ -515,6 +521,8 @@ async function globalSetup(config: FullConfig) {
 	// Trusting what it just saved syncs the free user once, each pro cashier once.
 	const sharedShards = Number(process.env.E2E_SHARED_SETUP_SHARDS);
 	if (Number.isInteger(sharedShards) && sharedShards > 0) {
+		// Before any shard sells: close the stale register sessions the run's cashiers left open.
+		await closeStaleRegisterSessions(runCashierLogins(sharedShards));
 		for (let index = 0; index < sharedShards; index++) await setupShard(baseURL, index, true);
 		fs.writeFileSync(SHARED_SETUP_MARKER, RUN_ATTEMPT);
 		return;
@@ -532,6 +540,26 @@ async function globalSetup(config: FullConfig) {
 	} finally {
 		await writerRequest.dispose();
 	}
+}
+
+/** Per store: one cashier login to close with, and every shard's cashier as an opener. */
+function runCashierLogins(shards: number) {
+	const variants: [StoreVariant, string][] = FREE_STORE_URL ? [['free', FREE_STORE_URL]] : [];
+	return [...variants, ['pro', PRO_STORE_URL] as [StoreVariant, string]].map(
+		([variant, storeUrl]) => {
+			const cashiers = Array.from({ length: shards }, (_, index) =>
+				getE2ECashierAuth(variant, index)
+			);
+			const login = cashiers[0] ?? { username: E2E_USERNAME, password: E2E_PASSWORD };
+			const openers = cashiers.map((cashier) => cashier?.username ?? E2E_USERNAME);
+			return {
+				storeUrl,
+				username: login.username,
+				password: login.password,
+				openers: [...new Set(openers)],
+			};
+		}
+	);
 }
 
 async function setupShard(baseURL: string, shardIndex: number, trust: boolean) {

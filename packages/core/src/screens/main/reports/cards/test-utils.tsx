@@ -5,10 +5,11 @@ import { BehaviorSubject, type Observable } from 'rxjs';
 
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 
-import { calculateTotals } from '../report/utils';
+import { salesFigures } from '../report/sales-figures';
 
 import type { LocalProduct } from './aggregate';
 import type { ReportOrder, ReportsData } from '../context';
+import type { SalesFigures } from '../report/sales-figures';
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeSiteCredentials: () => mockCredentials,
@@ -54,6 +55,8 @@ export const mockState = {
 	from: '2026-07-15',
 	to: '2026-07-15',
 	data: {} as ReportsData,
+	/** Named figures a test pins over the ones the orders give. */
+	figures: undefined as Partial<SalesFigures> | undefined,
 };
 export function setOrders(orders: ReportOrder[]) {
 	const dateRange = {
@@ -69,13 +72,23 @@ export function setOrders(orders: ReportOrder[]) {
 		comparisonOrders: [],
 		wholeComparisonOrders: [],
 		live: true,
-		totals: calculateTotals({ orders }),
+		figures: salesFigures({ orders }),
 	};
+	mockState.figures = undefined;
+}
+/** The figures the provider would build from the data as a test has left it. */
+export function figuresOf(data: ReportsData, orders = data.selectedOrders): SalesFigures {
+	const figures = salesFigures({
+		orders,
+		refunds: data.periodRefunds,
+		decimals: mockState.store?.price_num_decimals,
+	});
+	return mockState.figures ? { ...figures, ...mockState.figures } : figures;
 }
 setOrders([]);
 jest.mock('../context', () => ({
 	...jest.requireActual('../context'),
-	useReportsData: () => mockState.data,
+	useReportsData: () => ({ ...mockState.data, figures: figuresOf(mockState.data) }),
 	useReportsScope: () => ({ statusMode: mockState.statusMode }),
 	useIncludedStatus: () => (order: { status?: string }) =>
 		[
@@ -99,8 +112,8 @@ jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
 	useIsPhone: () => mockState.screenSize === 'sm',
 }));
-jest.mock('../../../../contexts/theme', () => ({
-	useTheme: () => ({ roomy: mockState.screenSize === 'lg' }),
+jest.mock('../../../../hooks/use-roomy', () => ({
+	useRoomy: () => mockState.screenSize === 'lg',
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ site: mockSite, store: mockState.store, wpCredentials: mockSite }),

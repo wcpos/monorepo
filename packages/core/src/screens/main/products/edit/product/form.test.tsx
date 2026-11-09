@@ -83,32 +83,8 @@ jest.mock('@wcpos/components/form', () => ({
 	FormSwitch: () => null,
 	FormTreeCombobox: () => null,
 }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({
-		destructive,
-		record,
-		close,
-	}: import('@wcpos/components/dialog').DialogFooterProps) => (
-		<>
-			{[destructive, record, typeof close === 'object' ? { ...close, label: 'Close' } : undefined]
-				.flat()
-				.filter((action): action is import('@wcpos/components/dialog').FooterButton => !!action)
-				.map((action) => (
-					<button key={action.testID} data-testid={action.testID}>
-						{action.label}
-					</button>
-				))}
-		</>
-	),
-	useDialog: () => ({ close: jest.fn() }),
 }));
 
 // A form's amount stands in as the form's own input mock: the rows are under test, not the field.

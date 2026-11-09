@@ -5,7 +5,7 @@ import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 
-import { useRegisterSession } from '../../../../services/register-session/use-register-session';
+import { useRegisterStatus } from '../../../../services/register-session/use-register-status';
 import { NoteRow } from './note-row';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -25,7 +25,7 @@ export function CartFoot({
 	 */
 	onOpenSheet: () => void;
 }) {
-	const { sessionsOn, session, overdue } = useRegisterSession();
+	const { sessionsOn, session, overdue } = useRegisterStatus();
 	const { currentOrderRecord } = useCurrentOrder();
 	const t = useT();
 	return (

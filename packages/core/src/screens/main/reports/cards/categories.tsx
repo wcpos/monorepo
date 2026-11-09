@@ -5,20 +5,17 @@ import { Text } from '@wcpos/components/text';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
-import { categories } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
 import { LocalProductsContext } from './use-local-products';
 import { useLocalCategories } from './use-local-categories';
-import { brands, topLevelOf } from '../margin';
 
 export function CategoriesCard({ group = 'categories' }: { group?: 'categories' | 'brands' }) {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ selectedOrders, totals } = useReportsData(),
+		{ figures, periodRefunds } = useReportsData(),
 		{ storeId } = useReportsPeriod();
-	const { store, money, moneyWhole, quantity, percent } = useReportFormats(storeId),
-		decimals = store?.price_num_decimals;
+	const { store, money, moneyWhole, quantity, percent } = useReportFormats(storeId);
 	const products = React.useContext(LocalProductsContext);
 	const tree = useLocalCategories(
 		group === 'categories'
@@ -29,20 +26,18 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 				)
 			: []
 	);
+	// Each card reads its panel's figure, net of the period refunds (ledger 36), and waits for them
+	// as its panel does.
 	const summary = React.useMemo(
 		() =>
 			group === 'brands'
-				? brands(selectedOrders, products ?? [], totals, decimals)
-				: categories(selectedOrders, products ?? [], totals, decimals, (product) => {
-						const category = product.categories?.[0];
-						return category?.id && tree?.has(category.id)
-							? topLevelOf(category.id, tree)
-							: category;
-					}),
-		[selectedOrders, products, totals, decimals, group, tree]
+				? figures.brands.netOfRefunds(products ?? [])
+				: figures.categories.netOfRefunds(products ?? [], tree),
+		[figures, group, products, tree]
 	);
 	const name = group === 'brands' ? t('reports.card_brands') : t('reports.card_categories');
-	if (!store || !products || !tree) return <CardSkeleton testID={`card-${group}`} name={name} />;
+	if (!store || !products || !tree || !periodRefunds)
+		return <CardSkeleton testID={`card-${group}`} name={name} />;
 	const count = { count: summary.parts.length, n: quantity(summary.parts.length) };
 	const labels: Record<string, string> = {
 		unknown: t('reports.unknown_product'),
@@ -54,13 +49,13 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 			onOpen={() => setDetail(group)}
 			testID={`card-${group}`}
 			name={name}
-			figure={money(totals.total)}
+			figure={money(figures.gross)}
 		>
 			{summary.parts.length ? (
 				<Donut
 					testID={`card-${group}-donut`}
 					centre={{
-						figure: moneyWhole(Math.round(totals.total)),
+						figure: moneyWhole(Math.round(figures.gross)),
 						label:
 							group === 'brands' ? t('reports.n_brands', count) : t('reports.n_categories', count),
 					}}

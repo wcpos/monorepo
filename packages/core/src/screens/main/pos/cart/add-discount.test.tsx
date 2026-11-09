@@ -114,9 +114,6 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 // The select's options as a native select: a change picks that option's value.
 jest.mock('@wcpos/components/select', () => ({
 	OptionSelect: ({

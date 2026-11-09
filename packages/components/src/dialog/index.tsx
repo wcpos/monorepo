@@ -26,6 +26,7 @@ import {
 	useOverlayPresentation,
 	useSheetInset,
 } from '../lib/overlay';
+import { useOverlayHost } from '../lib/overlay-host';
 import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
@@ -47,6 +48,7 @@ export type DialogContentProps = Omit<DialogPrimitive.ContentProps, 'children' |
 	ref?: React.Ref<DialogPrimitive.ContentRef>;
 	side?: DialogSide;
 	size?: DialogSize;
+	/** Omitted: the nearest `OverlayHost` (ledger line 33); `null`: the root; a name wins. */
 	portalHost?: string | null;
 	inline?: boolean;
 	closeLabel?: string;
@@ -113,7 +115,9 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 	const { route } = React.useContext(RouteContext);
 	const renderInline = route || (inline ?? false);
 	const { open } = DialogPrimitive.useRootContext();
-	const container = usePortalContainer(portalHost ?? undefined);
+	const ambient = useOverlayHost();
+	const host = portalHost === undefined ? ambient : (portalHost ?? undefined);
+	const container = usePortalContainer(host);
 	if (!open && !route && !OVERLAY_EXIT_MOUNTED) return null;
 	const shell = (
 		<OverlayShell
@@ -131,7 +135,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 	return renderInline ? (
 		shell
 	) : (
-		<DialogPrimitive.Portal hostName={portalHost ?? undefined} container={container}>
+		<DialogPrimitive.Portal hostName={host} container={container}>
 			{shell}
 		</DialogPrimitive.Portal>
 	);

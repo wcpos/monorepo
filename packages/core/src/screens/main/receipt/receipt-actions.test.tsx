@@ -7,6 +7,8 @@ import { Button } from '@wcpos/components/button';
 
 import { useReceiptActions } from './receipt-actions';
 
+// This suite drives the real dialog; core's Jest maps the bare path to the fake.
+jest.mock('@wcpos/components/dialog', () => jest.requireActual('@wcpos/components/dialog/index'));
 jest.mock('../hooks/use-sync-order', () => ({
 	useSyncOrder: () => ({ sync: jest.fn(), loading: false, disabled: false }),
 }));

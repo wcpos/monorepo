@@ -6,7 +6,7 @@ import { Query } from 'mingo';
 import type { ClosureRow } from '@wcpos/database';
 
 import { exportCsv } from './export-csv';
-import { useClosureRows } from './use-closure-rows';
+import { useClosureCorrections, useClosureRows } from './use-closure-rows';
 
 const source = new BehaviorSubject<{ toMutableJSON: () => ClosureRow }[]>([]);
 const collection = { find: () => ({ $: source }), findOne: jest.fn() };
@@ -532,3 +532,75 @@ it.each(['pending', 'failed'] as const)(
 		expect(result.current.rows.find((r) => r.id === 'local')).toEqual(local);
 	}
 );
+// Revert: read every corrected closure at once, or settle none (Paul 2026-11-09: settled everywhere).
+it('reads corrected closures’ corrections three at a time and carries them on the rows', async () => {
+	const pending: Record<string, (value: unknown) => void> = {};
+	get.mockImplementation((path: string) =>
+		path === 'closures'
+			? Promise.resolve({
+					data: [...['1', '2', '3', '4'].map((id) => row(id, { corrections_count: 1 })), row('5')],
+				})
+			: new Promise((resolve) => {
+					pending[path] = resolve;
+				})
+	);
+	const { result } = renderHook(() => useClosureRows(scope));
+	await waitFor(() => expect(Object.keys(pending)).toHaveLength(3));
+	expect(get).not.toHaveBeenCalledWith('closures/5');
+	await act(async () => pending['closures/1']({ data: { corrections: [{ id: 9 }] } }));
+	await waitFor(() => expect(Object.keys(pending)).toHaveLength(4));
+	expect(result.current.rows.find((r) => r.id === '1')).toMatchObject({ corrections: [{ id: 9 }] });
+});
+// Revert: read a closure whose retained document already holds its corrections, or touch an
+// uncorrected row.
+it('takes corrections from a retained document and leaves uncorrected rows alone', async () => {
+	const retained = row('local', {
+		corrections_count: 1,
+		receipt_snapshot: JSON.stringify({ closure: { corrections: [{ id: 3 }] } }),
+	});
+	const plain = row('plain', { number: 2 });
+	isPro = false;
+	source.next([{ toMutableJSON: () => retained }, { toMutableJSON: () => plain }]);
+	const { result } = renderHook(() => useClosureRows(scope));
+	await waitFor(() => expect(result.current.rows).toHaveLength(2));
+	expect(result.current.rows.find((r) => r.id === 'local')).toMatchObject({
+		corrections: [{ id: 3 }],
+	});
+	expect(result.current.rows.find((r) => r.id === 'plain')).toEqual(plain);
+	expect(get).not.toHaveBeenCalled();
+});
+// Revert: retry a failed read on every render, or never again after reconnecting.
+it('retries a failed corrections read once the store is reachable again', async () => {
+	isPro = false;
+	source.next([{ toMutableJSON: () => row('local', { corrections_count: 1 }) }]);
+	get.mockRejectedValueOnce(new Error('offline'));
+	const { result, rerender } = renderHook(() => useClosureRows(scope));
+	await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+	rerender();
+	expect(get).toHaveBeenCalledTimes(1);
+	online = false;
+	rerender();
+	get.mockResolvedValueOnce({ data: { corrections: [{ id: 4 }] } });
+	online = true;
+	rerender();
+	await waitFor(() => expect(result.current.rows[0]).toMatchObject({ corrections: [{ id: 4 }] }));
+	expect(get).toHaveBeenCalledTimes(2);
+});
+// Revert: drain the queue only when the wanted closures change (a new scope behind three reads stalls).
+it('gives a freed read slot to a closure the new rows want', async () => {
+	const pending: Record<string, (value: unknown) => void> = {};
+	get.mockImplementation(
+		(path: string) =>
+			new Promise((resolve) => {
+				pending[path] = resolve;
+			})
+	);
+	const corrected = (id: string) => row(id, { corrections_count: 1 });
+	const { rerender } = renderHook(({ rows }) => useClosureCorrections(rows), {
+		initialProps: { rows: ['1', '2', '3'].map(corrected) },
+	});
+	await waitFor(() => expect(Object.keys(pending)).toHaveLength(3));
+	rerender({ rows: [corrected('4')] });
+	await act(async () => pending['closures/1']({ data: { corrections: [] } }));
+	await waitFor(() => expect(get).toHaveBeenCalledWith('closures/4'));
+});

@@ -50,18 +50,6 @@ jest.mock('../../../../services/register-session/use-closure-document-context', 
 	// The viewed store's context: store 3 is a 3-place (fils) store.
 	useClosureDocumentContext: (storeId: number) => (storeId === 3 ? filsContext : context),
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	// The pane's Print closure door mounts a closed PrintSheet: a controlled Dialog that renders nothing while shut.
-	Dialog: ({ children, open }: React.PropsWithChildren<{ open?: boolean }>) =>
-		open ? children : null,
-	DialogContent: jest.requireActual('react-native').View,
-	DialogBody: jest.requireActual('react-native').View,
-	DialogHeader: jest.requireActual('react-native').View,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-	DismissIsClose: jest.requireActual('../../../../../jest/footer.test-utils').DismissIsClose,
-	DialogTitle: jest.requireActual('react-native').Text,
-	DialogDescription: jest.requireActual('react-native').Text,
-}));
 jest.mock('../../receipt/receipt-body', () => ({ ReceiptBody: () => null }));
 jest.mock('../../receipt/template-switcher', () => ({ TemplateSwitcher: () => null }));
 jest.mock('../../receipt/printer-switcher', () => ({ PrinterSwitcher: () => null }));
@@ -270,6 +258,33 @@ it('returns through onBack without a Reports host or footer Close', () => {
 	expect(screen.getByTestId('closure-panel-footer').textContent).not.toContain('Close');
 });
 
+// Revert: drop the late_refund label (the corrections list would show a blank heading).
+it('names a late refund in the corrections list and settles it off expected cash', () => {
+	const corrections: Correction[] = [
+		{
+			...correction,
+			id: 7,
+			type: 'late_refund',
+			figures: { expected_delta: { cash: '-5' }, refunds_delta: '5' },
+		},
+	];
+	const settled = deriveSettled(row, corrections);
+	render(
+		<ClosureBody
+			row={row}
+			doc={doc}
+			{...settled}
+			corrections={corrections}
+			blind={false}
+			context={context}
+		/>
+	);
+	expect(screen.getByTestId('closure-correction-7').textContent).toContain('Late refund');
+	expect(screen.getByTestId('closure-settled').textContent).toContain(
+		'late sale, refund or movement'
+	);
+	expect(settled.touched.has('expected.cash')).toBe(true);
+});
 // A correction can introduce a tender absent from the frozen baseline.
 it('lists a newly settled non-cash tender with its document label', () => {
 	const corrections: Correction[] = [

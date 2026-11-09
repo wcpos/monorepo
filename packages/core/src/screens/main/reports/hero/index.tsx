@@ -22,7 +22,6 @@ import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useQueryStateActions } from '../../../../query';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
-import { stores as storeRows, tenders } from '../cards/aggregate';
 import {
 	ReportsComparison,
 	useIncludedStatus,
@@ -32,7 +31,7 @@ import {
 	useReportsScope,
 	useReportsSelection,
 } from '../context';
-import { calculateTotals } from '../report/utils';
+import { salesFigures } from '../report/sales-figures';
 import { summarySpec } from '../report/summary';
 import { useReportCashier } from '../report/use-report-cashier';
 import { useReportPrint } from '../panels/use-report-print';
@@ -70,10 +69,10 @@ const tone = (value: number) =>
 	value > 0 ? 'text-ok' : value < 0 ? 'text-bad' : 'text-muted-foreground';
 const signed = (value: number, format: (value: number) => string) =>
 	value === 0 ? '±0' : `${value > 0 ? '+' : '−'}${format(Math.abs(value))}`;
-type Field = 'total' | 'orders' | 'averageOrderValue' | 'totalItemsSold';
+type Field = 'gross' | 'orders' | 'average' | 'items';
 /** The comparison figures, computed once per group from the comparison orders. */
 type Comparison =
-	{ count: number; totals: ReturnType<typeof calculateTotals> } | 'loading' | 'failed';
+	{ count: number; figures: ReturnType<typeof salesFigures> } | 'loading' | 'failed';
 function Difference({
 	id,
 	current,
@@ -100,20 +99,20 @@ function Difference({
 	// Money is compared at the displayed precision, with the currency formatter's own rounding
 	// (lodash), so two figures that read the same never differ.
 	const round = (value: number) =>
-		field === 'orders' || field === 'totalItemsSold' ? value : roundTo(value, numDecimals ?? 2);
+		field === 'orders' || field === 'items' ? value : roundTo(value, numDecimals ?? 2);
 	const previous =
 		comparison === 'failed'
 			? 0
-			: round(field === 'orders' ? comparison.count : comparison.totals[field]);
+			: round(field === 'orders' ? comparison.count : comparison.figures[field]);
 	const shown = round(current);
 	// No orders to compare with (or the comparison could not be read): every line reads "—",
 	// never a difference against nothing.
 	const none =
-		comparison === 'failed' || comparison.count === 0 || (field === 'total' && previous === 0);
+		comparison === 'failed' || comparison.count === 0 || (field === 'gross' && previous === 0);
 	// The percentage is rounded to its displayed tenth before the sign and tone are chosen.
 	const delta = none
 		? 0
-		: field === 'total'
+		: field === 'gross'
 			? Math.round(((shown - previous) / previous) * 1000) / 10
 			: shown - previous;
 	return (
@@ -124,7 +123,7 @@ function Difference({
 		>
 			{none
 				? '—'
-				: field === 'total'
+				: field === 'gross'
 					? `${signed(delta, percent ?? ((n) => n.toFixed(1)))}% ${label}`
 					: signed(delta, format)}
 		</Text>
@@ -133,8 +132,8 @@ function Difference({
 /** Reads the comparison once for the whole group (mounted inside ReportsComparison). */
 function ComparedFigures(props: Omit<React.ComponentProps<typeof Figures>, 'comparison'>) {
 	const { comparisonOrders } = useReportsData();
-	const totals = calculateTotals({ orders: comparisonOrders, num_decimals: props.numDecimals });
-	return <Figures {...props} comparison={{ count: comparisonOrders.length, totals }} />;
+	const figures = salesFigures({ orders: comparisonOrders, decimals: props.numDecimals });
+	return <Figures {...props} comparison={{ count: comparisonOrders.length, figures }} />;
 }
 /** The figure and its companions; the comparison is one value for all four lines. */
 function Figures({
@@ -173,7 +172,7 @@ function Figures({
 				<Difference
 					id="hero-delta"
 					current={total}
-					field="total"
+					field="gross"
 					format={number}
 					percent={percent}
 					label={label}
@@ -217,7 +216,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const host = usePageSheetHost();
 	const t = useT();
 	const phone = useIsPhone();
-	const { selectedOrders, totals, periodRefunds } = useReportsData();
+	const { figures } = useReportsData();
 	const { statusMode } = useReportsScope();
 	const formats = useReportFormats(storeId);
 	const { allStores, names, namesReady } = useReportsFilterScope();
@@ -226,16 +225,10 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const spec = summarySpec(
 		{
-			totals,
-			orders: selectedOrders.length,
-			payments: tenders(selectedOrders, totals, formats.store?.price_num_decimals),
-			periodRefunds,
+			figures,
 			registerNames: names.register,
-			stores: allStores
-				? { rows: storeRows(selectedOrders, totals), names: names.store }
-				: undefined,
 			cashierNames: names.cashier,
-			num_decimals: formats.store?.price_num_decimals,
+			storeNames: allStores ? names.store : undefined,
 		},
 		t,
 		formats
@@ -251,12 +244,12 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		dataReady:
 			!!formats.store &&
 			cashier.ready &&
-			(totals.userStoreArray.length < 2 || namesReady.cashier) &&
+			(figures.byCashier.length < 2 || namesReady.cashier) &&
 			(allStores ||
 				namesReady.register ||
 				!online ||
-				totals.registerArray.length < 2 ||
-				totals.registerArray.every(({ registerId }) => !!names.register[registerId])),
+				figures.registersStamped.length < 2 ||
+				figures.registersStamped.every(({ registerId }) => !!names.register[registerId])),
 		needsRefunds: true,
 	});
 	return (
@@ -417,7 +410,7 @@ export function Hero() {
 	const { period, timezone, storeId, dateRange } = useReportsPeriod();
 	const { store, money, number, quantity, percent } = useReportFormats(storeId);
 	const { formatDate } = useLocalDate();
-	const { selectedOrders, totals } = useReportsData();
+	const { selectedOrders, figures: sales } = useReportsData();
 	const weekday = formatDate(inZone(timezone, dateRange.start), 'EEEE');
 	const comparisons = [
 		{ value: 'yesterday', label: t('reports.vs_yesterday') },
@@ -461,7 +454,7 @@ export function Hero() {
 	);
 	const figures = {
 		phone,
-		total: totals.total,
+		total: sales.gross,
 		money,
 		number,
 		percent,
@@ -478,15 +471,15 @@ export function Hero() {
 			{
 				id: 'average',
 				label: t('reports.average_order'),
-				value: totals.averageOrderValue,
-				field: 'averageOrderValue' as const,
+				value: sales.average,
+				field: 'average' as const,
 				format: money,
 			},
 			{
 				id: 'items',
 				label: t('reports.items'),
-				value: totals.totalItemsSold,
-				field: 'totalItemsSold' as const,
+				value: sales.items,
+				field: 'items' as const,
 				format: quantity,
 			},
 		],

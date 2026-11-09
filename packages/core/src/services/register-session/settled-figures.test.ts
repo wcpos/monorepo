@@ -1,4 +1,4 @@
-import { type Correction, deriveSettled } from './settled-figures';
+import { type Correction, deriveSettled, settledRow } from './settled-figures';
 
 const recorded = {
 	expected: { cash: '100.0000', card: '20.0000' },
@@ -46,6 +46,18 @@ it('adds late cash/card sales and refund deltas to both total pairs', () => {
 	expect(result.settled.perpetual_refunds_total).toBe('50.1000');
 	expect(result.touched.has('counted.cash')).toBe(false);
 	expect(recorded.expected.cash).toBe('100.0000');
+});
+// Revert: ignore late_refund corrections (the plugin sends them since roadmap#329).
+it('takes a late refund off expected and adds it to both refund totals', () => {
+	const result = deriveSettled(recorded, [
+		correction(1, 'late_refund', { expected_delta: { cash: '-5.0000' }, refunds_delta: '5.0000' }),
+	]);
+	expect(result.settled.expected).toEqual({ cash: '95.0000', card: '20.0000' });
+	expect(result.settled.variance.cash).toBe('3.0000');
+	expect(result.settled.period_refunds_total).toBe('10.0000');
+	expect(result.settled.perpetual_refunds_total).toBe('55.0000');
+	expect(result.settled.period_sales_total).toBe('120.0000');
+	expect(result.touched.has('expected.cash')).toBe(true);
 });
 // Revert: infer movement signs from raw amounts instead of applying server-normalized cash_delta.
 it.each([
@@ -107,4 +119,17 @@ it('reports a shortfall for a tender introduced after counting', () => {
 	]);
 	expect(result.settled.variance.voucher).toBe('-12.3400');
 	expect(result.touched.has('variance.voucher')).toBe(true);
+});
+
+// Revert: settle a row with no corrections, or a blind view that carries no expected figures.
+it('settles a row only by the corrections it carries, and never a blind view', () => {
+	const recount = correction(1, 'recount', { counted: { cash: '101.0000' } });
+	expect(settledRow({ ...recorded, corrections: [recount] })).toMatchObject({
+		counted: { cash: '101.0000' },
+		variance: { cash: '1.0000' },
+	});
+	const plain = { ...recorded, corrections: [] };
+	expect(settledRow(plain)).toBe(plain);
+	const blind = { ...recorded, expected: undefined, corrections: [recount] };
+	expect(settledRow(blind as unknown as typeof recorded)).toBe(blind);
 });

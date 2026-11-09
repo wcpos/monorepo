@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
@@ -75,17 +77,6 @@ jest.mock('@wcpos/components/icon', () => ({
 		<span data-testid={testID} data-icon={name} className={className} />
 	),
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
-		open ? <>{children}</> : null,
-	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
-	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-	DialogHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
-	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-}));
 // The mark only draws its state: a press on it lands on its row, as on a device.
 jest.mock('@wcpos/components/checkbox', () => ({
 	Checkbox: ({ checked }: { checked?: boolean }) => <span aria-checked={!!checked} />,
@@ -128,7 +119,10 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		unsyncedCount,
 		refusedClose: mockRefusedClose,
 		lastClosure: mockLastClosure,
-		movements: mockMovements,
+		// The session's movements through the drawer read's refused-cash rule (query's).
+		refusedCash: jest
+			.requireActual('../../../../../../query/src/register-session/drawer-rules')
+			.refusedCashOf(mockMovements),
 		figuresPending,
 		actions: { closeSession, backToSelling },
 	}),
@@ -169,8 +163,15 @@ jest.mock('../../components/register-count/register-amount', () => ({
 	),
 }));
 jest.mock('./approve-sheet', () => ({
-	ApproveSheet: ({ side, portalHost }: { side?: 'left' | 'right'; portalHost?: string | null }) => (
-		<div data-testid="approve-sheet" data-side={side} data-portal={String(portalHost)} />
+	// The host its DialogContent takes: the nearest provided, else the root.
+	ApproveSheet: ({ side }: { side?: 'left' | 'right' }) => (
+		<div
+			data-testid="approve-sheet"
+			data-side={side}
+			data-portal={String(
+				jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost() ?? null
+			)}
+		/>
 	),
 }));
 const enter = (value: string) =>
@@ -442,13 +443,14 @@ it('requires manager over threshold', () => {
 it('forwards its side and host to the approval sheet', () => {
 	varianceThreshold = '5';
 	render(
-		<RegisterCount
-			description="Shop · open since 08:00 · Pat"
-			onBack={jest.fn()}
-			onClosed={jest.fn()}
-			side="right"
-			portalHost="scene"
-		/>
+		<OverlayHostProvider name="scene">
+			<RegisterCount
+				description="Shop · open since 08:00 · Pat"
+				onBack={jest.fn()}
+				onClosed={jest.fn()}
+				side="right"
+			/>
+		</OverlayHostProvider>
 	);
 	enter('463.30');
 	fireEvent.click(screen.getByTestId('count-close'));
@@ -897,5 +899,26 @@ describe('cash the store refused (#3271)', () => {
 			'£27.50 in cash was refused by the store'
 		);
 		expect(close().disabled).toBe(true);
+	});
+});
+
+describe('a stored amount seeds the count at the count decimals', () => {
+	const pane = () => <RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />;
+	it('cash stored at four decimals shows rounded half-up when the pane mounts', () => {
+		mockCounted = { cash: '40.0050' };
+		render(pane());
+		expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('40.01');
+	});
+	it('a refused close landing after mount keeps its count at the count decimals and retries with it', async () => {
+		const { rerender } = render(pane());
+		mockRefusedClose = true;
+		mockCounted = { cash: '63014.5600' };
+		mockLastClosure = { id: 's', counted: { cash: '63014.5600' }, breakdowns: {} };
+		rerender(pane());
+		expect((screen.getByTestId('count-amount') as HTMLInputElement).value).toBe('63014.56');
+		await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+		expect(closeSession).toHaveBeenCalledWith(
+			expect.objectContaining({ counted: { cash: '63014.56' } })
+		);
 	});
 });

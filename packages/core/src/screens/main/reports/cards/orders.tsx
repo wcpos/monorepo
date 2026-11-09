@@ -6,7 +6,7 @@ import { Text } from '@wcpos/components/text';
 import { useT } from '../../../../contexts/translations';
 import { useIncludedStatus, useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
-import { ordersSummary, statusCounts } from './aggregate';
+import { statusCounts } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Legend, ProportionalBar, StatGrid } from './primitives';
 
@@ -19,16 +19,12 @@ const colors = {
 };
 export function OrdersCard() {
 	const t = useT(),
-		{ allOrders, selectedOrders, totals } = useReportsData(),
+		{ allOrders, selectedOrders, figures } = useReportsData(),
 		included = useIncludedStatus(),
 		{ statusMode, setDetail } = useReportsScope();
 	const { storeId } = useReportsPeriod(),
 		{ store, money, number, quantity, percent } = useReportFormats(storeId);
-	const decimals = store?.price_num_decimals;
-	const summary = React.useMemo(
-		() => ordersSummary(selectedOrders, totals, decimals),
-		[selectedOrders, totals, decimals]
-	);
+	const summary = figures.orderStats;
 	const status = React.useMemo(
 		() => statusCounts(selectedOrders, statusMode),
 		[selectedOrders, statusMode]

@@ -1,39 +1,20 @@
 import sumBy from 'lodash/sumBy';
 
-import { refundsSummary, tenderLabel } from '../cards/aggregate';
+import { tenderLabel } from '../cards/aggregate';
 
-import type { tenders } from '../cards/aggregate';
-import type { RefundRow } from '../context';
 import type { PanelSpec } from '../panels/specs';
 import type { useReportFormats } from '../use-report-formats';
-import type { calculateTotals } from './utils';
+import type { SalesFigures } from './sales-figures';
 
 type Inputs = {
-	totals: ReturnType<typeof calculateTotals>;
-	orders: number;
-	/** The period's tenders from the payment ledger: the rows the Payments card and panel show. */
-	payments: ReturnType<typeof tenders>;
-	periodRefunds?: RefundRow[];
+	figures: SalesFigures;
 	registerNames: Record<string, string>;
 	cashierNames: Record<string, string>;
-	/** Under All stores: the period by store, in place of registers the bound directory cannot name. */
-	stores?: {
-		rows: { key: string; orders: number; amount: number }[];
-		names: Record<string, string>;
-	};
-	num_decimals?: number;
+	/** Under All stores: the store names, and the period prints by store in place of registers. */
+	storeNames?: Record<string, string>;
 };
 export function summarySpec(
-	{
-		totals,
-		orders,
-		payments,
-		periodRefunds,
-		registerNames,
-		cashierNames,
-		stores,
-		num_decimals,
-	}: Inputs,
+	{ figures, registerNames, cashierNames, storeNames }: Inputs,
 	t: (key: string) => string,
 	{
 		money,
@@ -56,23 +37,23 @@ export function summarySpec(
 		groups.push({ key, label, rows, total: subtotal.cells, totalRaw: subtotal.raw });
 	};
 	const totalLabel = t('reports.total_sales_line');
+	const payments = figures.takenByTender;
+	const stores = storeNames && figures.byStore;
 	const refunded =
-		periodRefunds === undefined
-			? totals.refundTotal
-			: refundsSummary(periodRefunds, totals, num_decimals).refunded;
+		figures.refundRows === undefined ? figures.embeddedRefunds : figures.refunds.refunded;
 	group(
 		'sales',
 		t('reports.sales'),
 		[
-			row('orders', t('common.orders'), orders),
-			row('net', t('reports.net_sales'), '', totals.total - totals.totalTax),
-			row('tax', t('common.tax'), '', totals.totalTax),
+			row('orders', t('common.orders'), figures.count),
+			row('net', t('reports.net_sales'), '', figures.net),
+			row('tax', t('common.tax'), '', figures.tax),
 			...(refunded > 0
-				? [row('refunds', t('reports.refunded'), periodRefunds?.length ?? '', -refunded)]
+				? [row('refunds', t('reports.refunded'), figures.refundRows?.length ?? '', -refunded)]
 				: []),
-			row('discounts', t('reports.discounts'), '', totals.discountTotal),
+			row('discounts', t('reports.discounts'), '', figures.discounts),
 		],
-		row('total', totalLabel, '', totals.total)
+		row('total', totalLabel, '', figures.gross)
 	);
 	group(
 		'payments',
@@ -89,87 +70,91 @@ export function summarySpec(
 			)
 		)
 	);
-	if (totals.taxTotalsArray.length)
+	// Taxes, Registers and Cashiers print the rows their cards and panels show.
+	const taxes = figures.taxesByRate;
+	if (taxes.rows.length)
 		group(
 			'taxes',
 			t('common.taxes'),
-			totals.taxTotalsArray.map((tax) => row(String(tax.rate_id), tax.label, '', tax.total)),
-			row('total', t('reports.tax_collected'), '', totals.totalTax)
+			taxes.rows.map((tax) => row(String(tax.rateId), tax.label || t('common.tax'), '', tax.tax)),
+			row('total', t('reports.tax_collected'), '', taxes.tax)
 		);
-	if (totals.shippingTotalsArray.length)
+	if (figures.shipping.length)
 		group(
 			'shipping',
 			t('common.shipping'),
-			totals.shippingTotalsArray.map((method) =>
-				row(method.method_id, method.method_id, '', method.total)
-			),
-			row('total', t('common.total'), '', sumBy(totals.shippingTotalsArray, 'total'))
+			figures.shipping.map((method) => row(method.method_id, method.method_id, '', method.total)),
+			row('total', t('common.total'), '', sumBy(figures.shipping, 'total'))
 		);
 	if (stores)
 		group(
 			'stores',
 			t('reports.panel_stores'),
-			stores.rows.map((store) =>
+			stores.map((store) =>
 				row(
 					store.key,
 					store.key === 'online'
 						? t('common.online')
 						: store.key === 'unassigned'
 							? t('reports.no_store_row')
-							: stores.names[store.key] || t('common.unknown'),
+							: storeNames[store.key] || t('common.unknown'),
 					store.orders,
 					store.amount
 				)
 			),
-			row('total', t('common.total'), sumBy(stores.rows, 'orders'), sumBy(stores.rows, 'amount'))
+			row('total', t('common.total'), sumBy(stores, 'orders'), sumBy(stores, 'amount'))
 		);
-	else if (totals.registerArray.length > 1)
+	else if (figures.registersStamped.length > 1)
 		group(
 			'registers',
 			t('reports.panel_registers'),
-			totals.registerArray.map((register) =>
+			figures.byRegister.map((register) =>
 				row(
-					register.registerId,
-					registerNames[register.registerId] || register.registerId.slice(0, 8),
-					register.totalOrders,
-					register.totalAmount
+					register.key,
+					register.key === 'online'
+						? t('common.online')
+						: register.key === 'unregistered'
+							? t('reports.no_register_row')
+							: registerNames[register.key] || register.key.slice(0, 8),
+					register.orders,
+					register.amount
 				)
 			),
 			row(
 				'total',
 				t('common.total'),
-				sumBy(totals.registerArray, 'totalOrders'),
-				sumBy(totals.registerArray, 'totalAmount')
+				sumBy(figures.byRegister, 'orders'),
+				sumBy(figures.byRegister, 'amount')
 			)
 		);
-	if (totals.userStoreArray.length > 1)
+	if (figures.byCashier.length > 1)
 		group(
 			'cashiers',
 			t('reports.panel_cashiers'),
-			totals.userStoreArray.map((cashier, i) =>
+			figures.byCashier.map((cashier) =>
 				row(
-					String(i),
-					cashierNames[cashier.cashierId] || t('common.unknown'),
-					cashier.totalOrders,
-					cashier.totalAmount
+					cashier.key,
+					cashierNames[cashier.key] || t('common.unknown'),
+					cashier.orders,
+					cashier.amount
 				)
 			),
 			row(
 				'total',
 				t('common.total'),
-				sumBy(totals.userStoreArray, 'totalOrders'),
-				sumBy(totals.userStoreArray, 'totalAmount')
+				sumBy(figures.byCashier, 'orders'),
+				sumBy(figures.byCashier, 'amount')
 			)
 		);
-	const items = row('items', t('reports.items_sold_line'), totals.totalItemsSold);
-	items.cells[1] = quantity(totals.totalItemsSold);
+	const items = row('items', t('reports.items_sold_line'), figures.items);
+	items.cells[1] = quantity(figures.items);
 	group(
 		'orders',
 		t('common.orders'),
-		[items, row('average', t('reports.average_order_line'), '', totals.averageOrderValue)],
+		[items, row('average', t('reports.average_order_line'), '', figures.average)],
 		row('total', '')
 	);
-	const total = row('total', totalLabel, orders, totals.total);
+	const total = row('total', totalLabel, figures.count, figures.gross);
 	return {
 		head: [t('reports.col_line'), t('reports.col_count'), t('common.amount')],
 		keys: ['line', 'count', 'amount'],

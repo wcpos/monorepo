@@ -20,7 +20,7 @@ import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
-import { useRegisterSession } from '../../../../services/register-session/use-register-session';
+import { useRegisterStatus } from '../../../../services/register-session/use-register-status';
 import { CameraScanButton } from './camera-scan-button';
 import { CameraScannerPanel } from './camera-scanner-panel';
 import { StorageOutageBanner } from '../components/storage-outage-banner';
@@ -196,7 +196,7 @@ function POSProductsContent({
 	initialFilters: Record<string, unknown>;
 }) {
 	const side = usePanelSide('products');
-	const { session, sessionsOn } = useRegisterSession();
+	const { session, sessionsOn } = useRegisterStatus();
 	// Under the desktop title bar the register bar is hidden, so its menu rides here (Paul, 2026-10-30).
 	const menu = useBarMenu();
 	const stripMenu = useTitleBarStrip().height > 0 ? menu : undefined;
@@ -582,7 +582,6 @@ function POSProductsContent({
 							<ViewModeToggle />
 							<UISettingsDialog
 								side={side}
-								portalHost="pos"
 								title={t('pos_products.product_settings')}
 								triggerTestID="products-settings-button"
 							>

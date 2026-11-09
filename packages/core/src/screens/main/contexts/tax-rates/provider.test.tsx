@@ -712,12 +712,12 @@ it('settles a queued command with new rates after its caller unmounts', async ()
 	order.patchPayload({ status: 'pos-open' });
 	const rate = { ...allRates[0], rate: '10', shipping: true };
 	activeResult = { hits: [{ record: { payload: rate } }] };
-	let write!: ReturnType<typeof useCartWrite>['localPatch'];
+	let write!: ReturnType<typeof useCartWrite>['settledWrite'];
 	function Tile() {
-		const { localPatch } = useCartWrite();
+		const { settledWrite } = useCartWrite();
 		React.useLayoutEffect(() => {
-			write = localPatch;
-		}, [localPatch]);
+			write = settledWrite;
+		}, [settledWrite]);
 		return null;
 	}
 	const tree = (mounted: boolean) => (

@@ -82,7 +82,7 @@ export function UnansweredGate({ flow }: { flow: TenderFlow }) {
 			actions={[
 				{
 					label: t('pos_checkout.try_again'),
-					onPress: () => void flow.retryCommand(),
+					onPress: () => void flow.commands.retryCommand(),
 					loading: flow.running === 'retryCommand',
 					testID: 'checkout-unanswered-retry',
 				},
@@ -229,15 +229,17 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	} = figures;
 	const { shownMinor, noChange, typed, restMinor, shareMinor } = figures;
 	const left = figures.afterThisPaymentMinor;
-	const locked = flow.lockToDefault || (flow.readers.length === 1 && flow.readers[0].isDefault);
-	const selectedReader = flow.readers.find(({ id }) => id === flow.state.readerId);
+	const locked =
+		flow.terminal.lockToDefault ||
+		(flow.terminal.readers.length === 1 && flow.terminal.readers[0].isDefault);
+	const selectedReader = flow.terminal.readers.find(({ id }) => id === flow.state.readerId);
 	const needsReader =
 		(server && (!selectedReader || selectedReader.inUseBy !== null)) ||
-		(method?.capture.mode === 'device' && !flow.deviceReady);
+		(method?.capture.mode === 'device' && !flow.terminal.deviceReady);
 	const reason = flow.tiles.find((tile) => tile.method.id === method?.id)?.reason;
 
 	const { extraMinor, shareOpen, doneOpen, pickerOpen } = flow.state;
-	const { splitOn, picked } = flow;
+	const { splitOn, picked } = flow.split;
 	const picking = Object.keys(picked).length > 0;
 	const pickedCount = Object.values(picked).reduce((sum, units) => sum + units, 0);
 	// On a phone there is no bill on screen: its picks are a list in the keypad's place.
@@ -246,7 +248,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const done = figures.legs.filter((leg) => leg.state === 'done');
 	const counted = flow.rows.filter(countsTowardPaid);
 	const name = (id: string | number) =>
-		decode(flow.lines.find((line) => String(line.id) === String(id))?.name ?? '');
+		decode(flow.split.lines.find((line) => String(line.id) === String(id))?.name ?? '');
 	const doneLeg = (row: TenderFlow['rows'][number]): PlanLeg => ({
 		minor: toMinor(row.amount, flow.dp),
 		state: 'done',
@@ -254,7 +256,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			flow.tiles.find((item) => item.method.id === row.method_id)?.method.title ?? row.method_id,
 	});
 	const setPlan = (next: NonNullable<typeof plan>) =>
-		flow.dispatch({ type: 'set-plan', plan: next, balanceMinor: flow.balanceMinor });
+		flow.commands.dispatch({ type: 'set-plan', plan: next, balanceMinor: flow.balanceMinor });
 	const exact = { amount: format(exactMinor) };
 	// A disabled tile, an offline reader included (only manual records journal offline), is listed as
 	// unavailable, never a pill whose commit button stays dead (CodeRabbit 4328362658).
@@ -270,7 +272,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				disabled={busy}
 				onPress={() => {
 					setChoosingReader(null);
-					flow.pickMethod(tile.method.id);
+					flow.commands.pickMethod(tile.method.id);
 				}}
 				title={tile.method.title}
 				sub={<MethodStatus tile={tile} selected={selected} />}
@@ -418,7 +420,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						disabled={busy}
 						// Off clears the plan and the picks; nothing taken is touched.
 						onPress={() =>
-							flow.dispatch(
+							flow.commands.dispatch(
 								splitOn
 									? { type: 'clear-plan', balanceMinor: flow.balanceMinor }
 									: { type: 'split-on' }
@@ -493,7 +495,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									testID={`checkout-plan-payment-${index}`}
 									leading={<Icon name="check" className="text-success" />}
 									title={decode(`${doneLeg(row).title} · ${format(toMinor(row.amount, flow.dp))}`)}
-									subtitle={Object.entries(flow.allocations[row.id] ?? {})
+									subtitle={Object.entries(flow.split.allocations[row.id] ?? {})
 										.map(([id, units]) =>
 											t('pos_checkout.units_of_name', { units, name: name(id) })
 										)
@@ -504,7 +506,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 											size="sm"
 											testID={`checkout-plan-payment-${index}-cancel`}
 											disabled={busy}
-											onPress={() => void flow.cancelOnePayment(row.id)}
+											onPress={() => void flow.commands.cancelOnePayment(row.id)}
 										>
 											<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>
 										</Button>
@@ -516,7 +518,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 								className="self-center"
 								testID="checkout-plan-hide"
 								disabled={busy}
-								onPress={() => flow.dispatch({ type: 'toggle-done' })}
+								onPress={() => flow.commands.dispatch({ type: 'toggle-done' })}
 							>
 								<ButtonText>{t('pos_checkout.hide')}</ButtonText>
 							</Button>
@@ -526,7 +528,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							testID="checkout-plan-done"
 							role="button"
 							disabled={busy}
-							onPress={() => flow.dispatch({ type: 'toggle-done' })}
+							onPress={() => flow.commands.dispatch({ type: 'toggle-done' })}
 							className="bg-success/20 border-success/30 min-h-ctl flex-row items-center gap-1 rounded-full border px-3"
 						>
 							<Icon name="check" size="xs" className="text-success" />
@@ -569,7 +571,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							disabled={busy}
 							// The even row comes back over what is left; payments taken never move.
 							onPress={() =>
-								flow.dispatch({
+								flow.commands.dispatch({
 									type: 'clear-plan',
 									balanceMinor: flow.balanceMinor,
 									keepSplit: true,
@@ -642,14 +644,14 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 
 			{/* The terminal choice sits with the amount, above the keypad: for a card
 			    leg the amount is already right and WHICH reader is the decision. */}
-			{method?.capture.mode === 'device' && flow.pickTransport ? (
+			{method?.capture.mode === 'device' && flow.terminal.pickTransport ? (
 				<ReaderConnection
-					bootstrap={flow.bootstrapReader}
-					remembered={flow.rememberedReaderId}
-					remember={flow.rememberReader}
+					bootstrap={flow.terminal.bootstrapReader}
+					remembered={flow.terminal.rememberedReaderId}
+					remember={flow.terminal.rememberReader}
 					method={method}
-					transport={flow.deviceTransport ?? null}
-					pickTransport={flow.pickTransport}
+					transport={flow.terminal.deviceTransport ?? null}
+					pickTransport={flow.terminal.pickTransport}
 					online={flow.online}
 					disabled={busy || (Boolean(reason) && reason !== 'offline')}
 				/>
@@ -657,17 +659,18 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			{server ? (
 				<VStack space="xs">
 					{locked ||
-					(!needsReader && (choosingReader !== method?.id || flow.readers.length === 1)) ? (
+					(!needsReader &&
+						(choosingReader !== method?.id || flow.terminal.readers.length === 1)) ? (
 						<HStack className="items-center gap-2">
 							<Text
 								testID={locked ? 'checkout-reader-locked' : 'checkout-reader-selected'}
 								variant="key"
 							>
 								{t('pos_checkout.reader_line', {
-									label: (locked ? flow.readers[0] : selectedReader)?.label ?? '',
+									label: (locked ? flow.terminal.readers[0] : selectedReader)?.label ?? '',
 								})}
 							</Text>
-							{!locked && flow.readers.length > 1 ? (
+							{!locked && flow.terminal.readers.length > 1 ? (
 								<Button
 									variant="outline"
 									size="sm"
@@ -681,7 +684,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						</HStack>
 					) : (
 						<View className="flex-row flex-wrap gap-2">
-							{flow.readers.map((reader) => (
+							{flow.terminal.readers.map((reader) => (
 								<VStack key={reader.id} space="xs">
 									{/* A selected choice is a Chip; a Button is never a toggle. */}
 									<Chip
@@ -689,7 +692,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 										on={flow.state.readerId === reader.id}
 										testID={`checkout-reader-${reader.id}`}
 										disabled={busy || reader.inUseBy !== null}
-										onPress={() => flow.pickReader(reader.id)}
+										onPress={() => flow.terminal.pickReader(reader.id)}
 									/>
 									{reader.inUseBy !== null ? (
 										<Text variant="help" testID={`checkout-reader-${reader.id}-reason`}>
@@ -709,7 +712,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					fields={fields}
 					values={flow.fieldValues}
 					errors={flow.fieldErrors}
-					onChange={flow.setFieldValues}
+					onChange={flow.commands.setFieldValues}
 					disabled={busy}
 				/>
 			) : null}
@@ -723,7 +726,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							on={pickerOpen}
 							testID="checkout-pick-items"
 							disabled={busy}
-							onPress={() => flow.dispatch({ type: 'toggle-picker' })}
+							onPress={() => flow.commands.dispatch({ type: 'toggle-picker' })}
 						/>
 					) : null}
 					{splitOn && !picking && !plan && !percent ? (
@@ -751,7 +754,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 											'checkout-percent',
 											t('pos_checkout.percent_tile'),
 											t('pos_checkout.percent_tile_sub'),
-											() => flow.dispatch({ type: 'set-entry-mode', mode: 'percent' })
+											() => flow.commands.dispatch({ type: 'set-entry-mode', mode: 'percent' })
 										),
 										...[2, 3, 4, 5, 6].map((count) =>
 											choice(
@@ -796,7 +799,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									on={flow.state.entryMinor === value}
 									testID={`checkout-percent-${value}`}
 									disabled={busy}
-									onPress={() => flow.dispatch({ type: 'set-entry', minor: value })}
+									onPress={() => flow.commands.dispatch({ type: 'set-entry', minor: value })}
 								/>
 							))}
 							<Chip
@@ -804,7 +807,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 								on={!PERCENTS.includes(flow.state.entryMinor)}
 								testID="checkout-percent-type"
 								disabled={busy}
-								onPress={() => flow.dispatch({ type: 'set-entry', minor: 0 })}
+								onPress={() => flow.commands.dispatch({ type: 'set-entry', minor: 0 })}
 							/>
 						</>
 					) : null}
@@ -817,7 +820,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							action={{
 								icon: 'close',
 								accessibilityLabel: t('common.remove'),
-								onPress: () => flow.dispatch({ type: 'pick-units', lineId, units: 0 }),
+								onPress: () => flow.commands.dispatch({ type: 'pick-units', lineId, units: 0 }),
 							}}
 						/>
 					))}
@@ -838,7 +841,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 								}
 								testID="checkout-plus-amount"
 								disabled={busy}
-								onPress={() => flow.dispatch({ type: 'arm-extra' })}
+								onPress={() => flow.commands.dispatch({ type: 'arm-extra' })}
 							/>
 							<Chip
 								add
@@ -846,7 +849,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 								label={t('pos_checkout.share')}
 								testID="checkout-share"
 								disabled={busy}
-								onPress={() => flow.dispatch({ type: 'toggle-share' })}
+								onPress={() => flow.commands.dispatch({ type: 'toggle-share' })}
 							/>
 						</>
 					) : null}
@@ -882,7 +885,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							label={t('pos_checkout.the_rest_amount', { amount: format(flow.balanceMinor) })}
 							testID="checkout-the-rest"
 							disabled={busy}
-							onPress={() => flow.dispatch({ type: 'set-entry', minor: flow.balanceMinor })}
+							onPress={() =>
+								flow.commands.dispatch({ type: 'set-entry', minor: flow.balanceMinor })
+							}
 						/>
 					) : null}
 					{(method && !fixedAmount && !percent && givesChange && !remote
@@ -894,7 +899,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							label={format(minor)}
 							testID={`checkout-quick-${fromMinor(minor, flow.dp)}`}
 							disabled={busy}
-							onPress={() => flow.dispatch({ type: 'set-entry', minor })}
+							onPress={() => flow.commands.dispatch({ type: 'set-entry', minor })}
 						/>
 					))}
 					{method && !fixedAmount && !percent ? (
@@ -908,7 +913,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							}
 							testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
 							disabled={busy}
-							onPress={() => flow.dispatch({ type: 'set-entry', minor: exactMinor })}
+							onPress={() => flow.commands.dispatch({ type: 'set-entry', minor: exactMinor })}
 						/>
 					) : null}
 				</View>
@@ -916,11 +921,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 
 			{pickList ? (
 				<View testID="checkout-pick-list" className="w-full gap-2">
-					{flow.lines.map((line) => {
+					{flow.split.lines.map((line) => {
 						const key = String(line.id);
 						const units = picked[key] ?? 0;
-						const unpaid = flow.unpaidUnits(line.id);
-						const paid = flow.paidUnits[key];
+						const unpaid = flow.split.unpaidUnits[key] ?? 0;
+						const paid = flow.split.paidUnits[key];
 						const paidN = paid?.units ?? 0;
 						const { totalMinor: total, quantity } = line;
 						return (
@@ -935,7 +940,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 												unpaid={unpaid}
 												testIDBase={`checkout-line-${key}`}
 												onChange={(next) =>
-													flow.dispatch({ type: 'pick-units', lineId: key, units: next })
+													flow.commands.dispatch({ type: 'pick-units', lineId: key, units: next })
 												}
 											/>
 											{units > 0 ? (
@@ -956,7 +961,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									minTarget
 									testID={`checkout-line-${key}-pick`}
 									disabled={busy || unpaid === 0}
-									onPress={() => flow.dispatch({ type: 'pick-units', lineId: key, units: unpaid })}
+									onPress={() =>
+										flow.commands.dispatch({ type: 'pick-units', lineId: key, units: unpaid })
+									}
 								>
 									<Text variant="subheading" className="leading-tight">
 										{decode(line.name)}
@@ -984,7 +991,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					rows={KEYPAD_ROWS.map((row) =>
 						row.map((key) => ({ ...key, disabled: busy || fixedAmount }))
 					)}
-					onPress={(name) => flow.dispatch({ type: 'key', key: name as TenderKey })}
+					onPress={(name) => flow.commands.dispatch({ type: 'key', key: name as TenderKey })}
 					fit={shrink ? 'shrink' : 'tile'}
 					testID="checkout-keypad"
 					onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
@@ -1009,7 +1016,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						noChange ||
 						missing !== null
 					}
-					onPress={() => void flow.takeTender()}
+					onPress={() => void flow.commands.takeTender()}
 				>
 					<ButtonText decodeHtml>
 						{saving ? t('pos_checkout.saving_order_commit') : commit}
@@ -1053,7 +1060,7 @@ function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 				testID="checkout-cancel-invoice"
 				loading={flow.running === 'cancelInvoice'}
 				disabled={busy || !flow.online}
-				onPress={() => void flow.cancelInvoice()}
+				onPress={() => void flow.commands.cancelInvoice()}
 			>
 				<ButtonText>{t('pos_checkout.cancel_invoice')}</ButtonText>
 			</Button>
@@ -1083,7 +1090,7 @@ function AttemptUnansweredLine({ flow, busy }: { flow: TenderFlow; busy: boolean
 				testID="checkout-clear-attempt"
 				loading={flow.running === 'clearAttempt'}
 				disabled={busy || !flow.online}
-				onPress={() => void flow.clearAttempt()}
+				onPress={() => void flow.commands.clearAttempt()}
 			>
 				<ButtonText>{t('pos_checkout.clear_attempt')}</ButtonText>
 			</Button>
