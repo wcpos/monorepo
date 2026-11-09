@@ -13,9 +13,8 @@ import type { RefundRow, ReportOrder } from '../context';
 import type { SalesFigures } from '../report/sales-figures';
 
 // Which named figure each card reads. A pin fails when a card starts reading another figure:
-// change the name it reads, and this table, on purpose. Top products and Categories read their
-// panels' figures, net of the period refunds (Paul 2026-11-09); each `decoy` is a figure the
-// card must not show.
+// change the name it reads, and this table, on purpose. Top products, Categories and Brands read
+// their panels' figures, net of the period refunds (Paul 2026-11-09).
 const pin = {
 	key: 'pin',
 	label: 'Pinned',
@@ -25,7 +24,6 @@ const pin = {
 	quantity: 1,
 	share: 1,
 };
-const decoy = { ...pin, key: 'decoy', label: 'Decoy', name: 'Decoy' };
 const parts = (row: typeof pin) => ({ parts: [row], unknownLines: 0, totalLines: 1 });
 beforeEach(() => {
 	setOrders([]);
@@ -38,7 +36,7 @@ beforeEach(() => {
 		byCashier: [pin],
 		products: { netOfRefunds: () => [pin] },
 		categories: { netOfRefunds: () => parts(pin) },
-		brands: { gross: () => parts(pin), netOfRefunds: () => parts(decoy) },
+		brands: { netOfRefunds: () => parts(pin) },
 		margin: { shownNetOfRefunds: () => true },
 		taxesByRate: { rows: [], net: 5, tax: 6, gross: 11 },
 		refunds: { refunded: 7, ordersWithRefunds: 1, orders: 1, kept: 0, keptShare: 0 },
@@ -57,12 +55,11 @@ it.each([
 	['card-payments-donut-row-pin', 'takenByTender'],
 	['card-where-sold-donut-row-pin', 'byChannel'],
 	['card-categories-donut-row-pin', 'categories.netOfRefunds'],
-	['card-brands-donut-row-pin', 'brands.gross (shown by margin.shownNetOfRefunds)'],
+	['card-brands-donut-row-pin', 'brands.netOfRefunds (shown by margin.shownNetOfRefunds)'],
 	['card-cashiers-donut-row-pin', 'byCashier'],
 ])('%s reads %s', (testID) => {
 	render(<PeriodSection />);
 	expect(screen.getByTestId(testID)).toBeTruthy();
-	expect(screen.queryByText('Decoy')).toBeNull();
 });
 it('Top products reads products.netOfRefunds, and its head reads items', () => {
 	render(<PeriodSection />);
@@ -120,9 +117,9 @@ describe('Top products and Categories show what their panels show', () => {
 		},
 	] as RefundRow[];
 	const directory = [
-		{ id: 1, categories: [{ id: 10, name: 'Tops' }] },
-		{ id: 2, categories: [{ id: 11, name: 'Hats' }] },
-		{ id: 3, categories: [{ id: 12, name: 'Scarves' }] },
+		{ id: 1, categories: [{ id: 10, name: 'Tops' }], brands: [{ id: 20, name: 'Acme' }] },
+		{ id: 2, categories: [{ id: 11, name: 'Hats' }], brands: [{ id: 21, name: 'Brim' }] },
+		{ id: 3, categories: [{ id: 12, name: 'Scarves' }], brands: [{ id: 22, name: 'Knit' }] },
 	];
 	beforeEach(() => {
 		setOrders(orders);
@@ -130,7 +127,7 @@ describe('Top products and Categories show what their panels show', () => {
 		mockProducts.next(directory);
 	});
 	afterEach(() => mockProducts.next([]));
-	const panel = (id: 'products' | 'categories') =>
+	const panel = (id: 'products' | 'categories' | 'brands') =>
 		panelSpec(id, salesFigures({ orders, refunds, decimals: 2 }), formats, t, {
 			orders,
 			names: { cashier: {}, register: {}, store: {} },
@@ -165,11 +162,27 @@ describe('Top products and Categories show what their panels show', () => {
 				)
 			).toBeTruthy();
 	});
-	it('both wait for the period refunds, as their panels do', () => {
+	it('Brands', async () => {
+		render(<PeriodSection />);
+		const rows = panel('brands').rows;
+		expect(rows.map((row) => [row.key, row.raw[2]])).toEqual([
+			['21', 20],
+			['20', 10],
+			['22', -5],
+		]);
+		for (const row of rows)
+			expect(
+				within(await screen.findByTestId(`card-brands-donut-row-${row.key}`)).getByText(
+					row.cells[2]
+				)
+			).toBeTruthy();
+	});
+	it('all three wait for the period refunds, as their panels do', () => {
 		mockState.data = { ...mockState.data, periodRefunds: undefined };
 		render(<PeriodSection />);
 		expect(screen.getByTestId('card-products-loading')).toBeTruthy();
 		expect(screen.getByTestId('card-categories-loading')).toBeTruthy();
+		expect(screen.getByTestId('card-brands-loading')).toBeTruthy();
 	});
 	it('the Brands slot opens on a cost only a refund line carries, as its panel margin does', async () => {
 		render(<PeriodSection />);

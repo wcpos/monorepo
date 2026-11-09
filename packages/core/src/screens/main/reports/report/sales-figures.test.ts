@@ -179,7 +179,7 @@ it('the figures that read no refunds keep their answers when the refunds arrive'
 	const before = salesFigures({ orders, decimals: 2 });
 	const after = before.withRefunds(refunds);
 	expect(after.takenByTender).toBe(before.takenByTender);
-	expect(after.brands.gross(directory)).toBe(before.brands.gross(directory));
+	expect(after.orderStats).toBe(before.orderStats);
 	expect(before.refunds.refunded).toBe(0);
 	expect(after.refunds.refunded).toBe(25);
 });

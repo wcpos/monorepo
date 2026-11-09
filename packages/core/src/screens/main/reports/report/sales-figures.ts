@@ -126,9 +126,7 @@ export function salesFigures(
 					),
 			},
 			brands: {
-				gross: kept('brands', (directory: LocalProduct[] = []) =>
-					brands(orders, directory, totals(), decimals)
-				),
+				/** Sale and period refund lines by first brand: the Brands card and panel. */
 				netOfRefunds: (directory: LocalProduct[] = []) =>
 					brands(orders, directory, totals(), decimals, refunds),
 			},

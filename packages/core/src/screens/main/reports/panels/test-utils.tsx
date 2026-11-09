@@ -157,7 +157,7 @@ function SelectionProvider({ children }: React.PropsWithChildren) {
 			/>
 			<span data-testid="excluded">{JSON.stringify(unselectedRowIds)}</span>
 			{/* A card waiting on the refunds read has no head to open its panel from. */}
-			{(['products', 'categories'] as const).map((id) => (
+			{(['products', 'categories', 'brands'] as const).map((id) => (
 				<button key={id} data-testid={`open-${id}`} onClick={() => setDetail(id)} />
 			))}
 			{children}

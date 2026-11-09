@@ -26,17 +26,17 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 				)
 			: []
 	);
-	// Categories reads its panel's figure, net of the period refunds (ledger 36), and waits for them
-	// as its panel does; Brands stays gross.
+	// Each card reads its panel's figure, net of the period refunds (ledger 36), and waits for them
+	// as its panel does.
 	const summary = React.useMemo(
 		() =>
 			group === 'brands'
-				? figures.brands.gross(products ?? [])
+				? figures.brands.netOfRefunds(products ?? [])
 				: figures.categories.netOfRefunds(products ?? [], tree),
 		[figures, group, products, tree]
 	);
 	const name = group === 'brands' ? t('reports.card_brands') : t('reports.card_categories');
-	if (!store || !products || !tree || (group === 'categories' && !periodRefunds))
+	if (!store || !products || !tree || !periodRefunds)
 		return <CardSkeleton testID={`card-${group}`} name={name} />;
 	const count = { count: summary.parts.length, n: quantity(summary.parts.length) };
 	const labels: Record<string, string> = {
