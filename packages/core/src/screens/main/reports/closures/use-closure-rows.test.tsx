@@ -6,7 +6,7 @@ import { Query } from 'mingo';
 import type { ClosureRow } from '@wcpos/database';
 
 import { exportCsv } from './export-csv';
-import { useClosureRows } from './use-closure-rows';
+import { useClosureCorrections, useClosureRows } from './use-closure-rows';
 
 const source = new BehaviorSubject<{ toMutableJSON: () => ClosureRow }[]>([]);
 const collection = { find: () => ({ $: source }), findOne: jest.fn() };
@@ -585,4 +585,22 @@ it('retries a failed corrections read once the store is reachable again', async 
 	rerender();
 	await waitFor(() => expect(result.current.rows[0]).toMatchObject({ corrections: [{ id: 4 }] }));
 	expect(get).toHaveBeenCalledTimes(2);
+});
+// Revert: drain the queue only when the wanted closures change (a new scope behind three reads stalls).
+it('gives a freed read slot to a closure the new rows want', async () => {
+	const pending: Record<string, (value: unknown) => void> = {};
+	get.mockImplementation(
+		(path: string) =>
+			new Promise((resolve) => {
+				pending[path] = resolve;
+			})
+	);
+	const corrected = (id: string) => row(id, { corrections_count: 1 });
+	const { rerender } = renderHook(({ rows }) => useClosureCorrections(rows), {
+		initialProps: { rows: ['1', '2', '3'].map(corrected) },
+	});
+	await waitFor(() => expect(Object.keys(pending)).toHaveLength(3));
+	rerender({ rows: [corrected('4')] });
+	await act(async () => pending['closures/1']({ data: { corrections: [] } }));
+	await waitFor(() => expect(get).toHaveBeenCalledWith('closures/4'));
 });

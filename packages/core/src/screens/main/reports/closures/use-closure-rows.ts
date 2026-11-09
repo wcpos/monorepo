@@ -191,7 +191,9 @@ export function useClosureCorrections<R extends ClosureRow>(rows: readonly R[]) 
 					setHeld((h) => ({ ...h, [id]: { count: Number(count), corrections } }));
 				});
 		}
-	}, [online, want, http]);
+		// `held` changes as each read lands: the freed slot takes the next wanted closure, even when
+		// the rows changed meanwhile and `want` did not (Codex, Greptile, #3471).
+	}, [online, want, http, held]);
 	return listed;
 }
 // Match the REST list default; a full final page costs one extra read, not a totals query.
