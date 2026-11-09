@@ -2,7 +2,6 @@ import { expect, test } from './test';
 import {
 	closeOpenRegisterSessions,
 	countedFromExpected,
-	SESSION_MIN_AGE_MS,
 	type SessionResponse,
 	type SessionTransport,
 } from './register-session-cleanup';
@@ -110,7 +109,6 @@ test.describe('register-session-cleanup', () => {
 		const result = await closeOpenRegisterSessions(store.transport, ['e2e-cashier-1'], NOW);
 		expect(result).toEqual({ closed: [], failed: [], skipped: null });
 		expect(store.posts()).toEqual([]);
-		expect(SESSION_MIN_AGE_MS).toBeGreaterThan(NOW - Date.parse(`${FRESH.replace(' ', 'T')}Z`));
 	});
 
 	test('a 404 sessions route (older plugin) is skipped with the reason', async () => {
@@ -131,7 +129,7 @@ test.describe('register-session-cleanup', () => {
 				: undefined
 		);
 		const result = await closeOpenRegisterSessions(store.transport, ['e2e-cashier-1'], NOW);
-		expect(result.skipped).toBe('wcpos/v2/sessions refused the writer credential (HTTP 403)');
+		expect(result.skipped).toBe('wcpos/v2/sessions refused the cashier credential (HTTP 403)');
 		expect(store.posts()).toEqual([]);
 	});
 

@@ -5,12 +5,12 @@ import {
 } from '@playwright/test';
 
 import { storeRequestOptions } from './probe-credential';
-import { productWriterAuthorization } from './search-probe';
+import { storeLoginAuthorization } from './search-probe';
 
 import type { StoreRequestAuth } from './order-cleanup';
 
 /**
- * E2E register-session teardown: close the register sessions this shard's cashier left open.
+ * E2E register-session cleanup: close the stale register sessions the run's cashiers left open.
  *
  * `ensureRegisterOpen` (fixtures.ts) opens a real session through the POS UI and leaves it open
  * for later runs, and nothing closed it, so every E2E sale landed on one session for hours or
@@ -22,20 +22,25 @@ import type { StoreRequestAuth } from './order-cleanup';
  * The close goes through the plugin's own routes, in the order the app's outbox sends it
  * (`packages/query/src/register-session/queue.ts`): POST `sessions/{id}/status` `counting`, then
  * `closed` with `counted` equal to the `expected` the session detail serves (the figures the
- * X-report reads), so the variance is zero and the server asks for no manager approval.
+ * X-report reads). The server re-sums `expected` when the close lands, so the variance is zero
+ * unless a sale lands between the two reads; then a store with a variance threshold refuses the
+ * close (logged as failed) and one without closes it with that variance.
  *
- * Best-effort like order-cleanup.ts: every miss is logged and swallowed, never thrown.
+ * It runs once per run, in the shared `e2e-setup` job before any shard sells (global-setup.ts),
+ * with the first shard's cashier login: that job carries `E2E_CASHIER_PASS` but no writer secret.
+ * Best-effort like order-cleanup.ts: every miss is logged and swallowed, never thrown. It cannot
+ * clear a session already too big to sum: both the detail read and the close sum it again.
  */
 
 /**
  * Only a session opened at least this long ago is closed. A till has ONE open session that every
- * shard and run shares, so a close lands under any sibling shard still selling on it; closing at
- * every shard's end would do that five times a run. Two hours bounds a session to roughly 250 E2E
- * sales (~130 an hour on 11-09), well under the ~700 that broke the 128 MB limit.
+ * run shares, and only PR runs queue for the shared store, so a close can land under another run
+ * still selling on it. Two hours bounds that to once per two hours and a session to roughly 250
+ * E2E sales (~130 an hour on 11-09), well under the ~700 that broke the 128 MB limit.
  */
-export const SESSION_MIN_AGE_MS = 2 * 60 * 60 * 1000;
+const SESSION_MIN_AGE_MS = 2 * 60 * 60 * 1000;
 
-/** Per request: the job's teardown margin is ten minutes, and a stalled store must not eat it. */
+/** Per request: the setup job has a 20-minute budget, and a stalled store must not eat it. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface SessionResponse {
@@ -68,9 +73,10 @@ const LOG = '[register-cleanup]';
 
 /** A refusal of the list or user lookup means this store cannot be cleaned by this credential. */
 function skipReason(route: string, response: SessionResponse): string | null {
-	if (response.status === 404) return `${route} is absent (plugin predates it)`;
+	if (response.status === 404 && route.startsWith('wcpos/'))
+		return `${route} is absent (plugin predates it)`;
 	if (response.status === 401 || response.status === 403)
-		return `${route} refused the writer credential (HTTP ${response.status})`;
+		return `${route} refused the cashier credential (HTTP ${response.status})`;
 	return response.status >= 300 ? `${route} answered HTTP ${response.status}` : null;
 }
 
@@ -126,6 +132,7 @@ export async function closeOpenRegisterSessions(
 	const openers = new Set((Array.isArray(users.body) ? users.body : []).map((user) => user?.id));
 	if (openers.size === 0) return skip(`no user named ${usernames.join(', ')}`);
 
+	// One page, newest first: E2E runs on a handful of tills, each with at most one open session.
 	const rows: SessionRow[] = [];
 	for (const status of ['open', 'counting']) {
 		const listed = await transport.get('wcpos/v2/sessions', { status, per_page: '100' });
@@ -178,34 +185,41 @@ function requestTransport(
 	};
 }
 
-/**
- * The run's teardown (returned by global-setup.ts): for each store this shard ran against, close
- * its cashier's stale sessions with the `e2e-product-writer` (shop_manager) credential, which holds
- * the cash and reports capabilities. Without writer credentials (local runs) it skips with a line.
- */
-export async function closeShardRegisterSessions(
-	stores: readonly { storeUrl: string; username: string }[]
-): Promise<void> {
-	const request = await playwrightRequest.newContext({ timeout: REQUEST_TIMEOUT_MS });
+export interface StoreLogin {
+	storeUrl: string;
+	username: string;
+	password: string;
+	/** The cashiers whose sessions may be closed. */
+	openers: string[];
+}
+
+/** For each store: log in as `username`, then close the stale sessions `openers` opened. */
+export async function closeStaleRegisterSessions(stores: readonly StoreLogin[]): Promise<void> {
+	const warn = (where: string, error: unknown) =>
+		console.warn(`${LOG} ${where}: ${error instanceof Error ? error.message : String(error)}`);
+	let request: APIRequestContext | null = null;
 	try {
-		for (const { storeUrl, username } of stores) {
+		request = await playwrightRequest.newContext({ timeout: REQUEST_TIMEOUT_MS });
+		for (const { storeUrl, username, password, openers } of stores) {
 			try {
-				const writer = await productWriterAuthorization(request, storeUrl);
-				if (!writer) {
-					console.log(
-						`${LOG} ${storeUrl}: skipped: no writer credentials (E2E_PRODUCT_WRITER_USER/_PASS)`
-					);
-					continue;
-				}
-				const transport = requestTransport(request, storeUrl, storeRequestOptions(writer));
-				await closeOpenRegisterSessions(transport, [username]);
-			} catch (error) {
-				console.warn(
-					`${LOG} ${storeUrl}: ${error instanceof Error ? error.message : String(error)}`
+				const login = await storeLoginAuthorization(
+					request,
+					storeUrl,
+					username,
+					password,
+					'cashier'
 				);
+				await closeOpenRegisterSessions(
+					requestTransport(request, storeUrl, storeRequestOptions(login)),
+					openers
+				);
+			} catch (error) {
+				warn(storeUrl, error);
 			}
 		}
+	} catch (error) {
+		warn('cleanup', error);
 	} finally {
-		await request.dispose();
+		await request?.dispose().catch(() => undefined);
 	}
 }
