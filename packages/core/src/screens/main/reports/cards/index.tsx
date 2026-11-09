@@ -36,13 +36,15 @@ const cards: { id: string; name: T; Component: React.ComponentType }[] = [
 const THREE_COLUMNS_MIN_WIDTH = 1000;
 const TWO_COLUMNS_MIN_WIDTH = 600;
 export function PeriodSection() {
-	const { selectedOrders, figures } = useReportsData();
+	const { selectedOrders, periodRefunds, figures } = useReportsData();
+	// The products the period's sale and refund lines name, as the grouped panels read them.
 	const products = useLocalProducts(
-		selectedOrders.flatMap((order) =>
+		[...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
 			(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 		)
 	);
-	const enabled = figures.margin.shown(products ?? []);
+	// The Brands slot reads the margin its panel reads: costs on a period refund line count too.
+	const enabled = figures.margin.shownNetOfRefunds(products ?? []);
 	// Brands follows the brands, not the costs: a store that labels its products by brand expects
 	// the card whether or not it enters costs; a store with neither sees no empty slot.
 	const branded = (products ?? []).some((product) => product.brands?.length);

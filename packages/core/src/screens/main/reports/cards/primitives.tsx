@@ -85,7 +85,8 @@ export function ShareBar({
 				</Text>
 				<Text className="font-semibold tabular-nums">{value}</Text>
 			</View>
-			<Progress value={Math.max(0.02, Math.min(1, share)) * 100} />
+			{/* A row a refund took below zero draws no bar: the bar shows sales, the value the sign. */}
+			<Progress value={share > 0 ? Math.max(0.02, Math.min(1, share)) * 100 : 0} />
 			<Text variant="key">{note}</Text>
 		</View>
 	);

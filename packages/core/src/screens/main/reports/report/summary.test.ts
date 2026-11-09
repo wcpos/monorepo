@@ -53,6 +53,10 @@ it('includes both register names only for multiple registers', () => {
 			{ registerId: 'front', totalOrders: 1, totalAmount: 12 },
 			{ registerId: 'back', totalOrders: 1, totalAmount: 12 },
 		],
+		byRegister: [
+			{ key: 'front', orders: 1, amount: 12, share: 0.5 },
+			{ key: 'back', orders: 1, amount: 12, share: 0.5 },
+		],
 	};
 	const group = summarySpec(input, t, formats).groups?.find((group) => group.key === 'registers');
 	expect(group?.rows.map((row) => row.cells)).toEqual([
@@ -109,9 +113,9 @@ it('includes shipping and cashier names, with empty cells left empty', () => {
 	input.figures = {
 		...input.figures,
 		shipping: [{ method_id: 'pickup', total: 2, total_tax: 0 }],
-		byCashierAndStore: [
-			{ cashierId: '7', storeId: '1', totalOrders: 1, totalAmount: 12 },
-			{ cashierId: '8', storeId: '1', totalOrders: 1, totalAmount: 12 },
+		byCashier: [
+			{ key: '7', orders: 1, amount: 12, share: 0.5 },
+			{ key: '8', orders: 1, amount: 12, share: 0.5 },
 		],
 	};
 	const groups = summarySpec(input, t, formats).groups!;

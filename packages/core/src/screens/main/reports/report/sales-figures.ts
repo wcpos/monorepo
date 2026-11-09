@@ -29,9 +29,9 @@ const named = <P extends object, T extends Record<string, () => unknown>>(thunks
  * summary read, built once per selection in the reports data.
  *
  * Every figure is named. Where two surfaces show different figures for one idea, the difference
- * is the name each reads: the Top products card reads `products.gross`, its panel
- * `products.netOfRefunds` (ledger 35, 36: the hero stays gross, margin nets refunds), so changing
- * what a surface shows is changing the name it reads. The arithmetic stays in `calculateTotals`,
+ * is the name each reads: the hero reads `gross`, the Top products card and its panel
+ * `products.netOfRefunds` (ledger 35, 36: the hero stays gross, margin nets refunds), so making two
+ * surfaces agree, or differ, is changing the name one of them reads. The arithmetic stays in `calculateTotals`,
  * `cards/aggregate.ts` and `margin.ts`.
  */
 export function salesFigures(
@@ -73,20 +73,16 @@ export function salesFigures(
 			orderStats: kept('orderStats', () => ordersSummary(orders, totals(), decimals)),
 			/** The payment ledger's tenders: the Payments card, panel and printed Payment methods. */
 			takenByTender: kept('takenByTender', () => tenders(orders, totals(), decimals)),
-			/** By cashier across stores: the Cashiers card and panel. */
+			/** By cashier across stores: the Cashiers card and panel, the printed Cashiers group. */
 			byCashier: kept('byCashier', () => cashiers(totals())),
-			/** By cashier and store: the printed Cashiers group. */
-			byCashierAndStore: () => totals().userStoreArray,
-			/** By register, with the online and no-register remainders: Where sold and its panel. */
+			/** By register, with the online and no-register remainders: Where sold, its panel, the paper. */
 			byRegister: kept('byRegister', () => registers(orders, totals())),
-			/** Only what a register stamped: the printed Registers group. */
+			/** Only what a register stamped: whether there is more than one register to show. */
 			registersStamped: () => totals().registerArray,
 			byStore: kept('byStore', () => stores(orders, totals())),
 			byChannel: kept('byChannel', () => channels(orders, totals())),
-			/** Rates with the net each taxed, rounded: the Taxes card and panel. */
+			/** Rates with the net each taxed, rounded: the Taxes card and panel, the printed Taxes group. */
 			taxesByRate: kept('taxesByRate', () => taxesByRate(orders, totals(), decimals)),
-			/** Rates as the tax lines carry them, unrounded: the printed Taxes group. */
-			taxLines: () => totals().taxTotalsArray,
 			shipping: () => totals().shippingTotalsArray,
 			/** The period refunds (ledger 35): the Refunds card and panel, the printed refund row. */
 			refunds: () =>
@@ -100,43 +96,43 @@ export function salesFigures(
 			refundRows: refunds,
 			withRefunds: (rows: RefundRow[]) =>
 				salesFigures({ orders, refunds: rows, decimals }, answers),
-			products: named(
-				/** Sale lines only: the Top products card. */
-				{ gross: kept('products', () => topProducts(orders, totals(), decimals)) },
-				{
-					/** Sale and period refund lines: the Products panel, narrowed by its chips. */
-					netOfRefunds: (
-						directory?: LocalProduct[],
-						lines: ReportOrder[] = orders,
-						refundLines: RefundRow[] = refunds ?? []
-					) => topProducts(lines, totals(), decimals, refundLines, directory),
-				}
-			),
+			products: {
+				/** Sale and period refund lines: the Top products card, and the Products panel narrowed by its chips. */
+				netOfRefunds: (
+					directory?: LocalProduct[],
+					lines: ReportOrder[] = orders,
+					refundLines: RefundRow[] = refunds ?? []
+				) => topProducts(lines, totals(), decimals, refundLines, directory),
+			},
 			categories: {
-				/** Sale lines by first category, rolled up its local chain: the card (ledger 33). */
-				gross: kept('categories', (directory: LocalProduct[] = [], tree?: CategoryTree) =>
-					categories(orders, directory, totals(), decimals, (product) => {
-						const category = product.categories?.[0];
-						return category?.id && tree?.has(category.id)
-							? topLevelOf(category.id, tree)
-							: category;
-					})
-				),
-				/** Sale and period refund lines by the assigned category: the panel. */
-				netOfRefunds: (directory: LocalProduct[] = []) =>
-					categories(orders, directory, totals(), decimals, undefined, undefined, refunds),
+				/**
+				 * Sale and period refund lines by first category: the panel by the assigned category, the
+				 * card (given the `tree`) rolled up its local chain (ledger 33).
+				 */
+				netOfRefunds: (directory: LocalProduct[] = [], tree?: CategoryTree) =>
+					categories(
+						orders,
+						directory,
+						totals(),
+						decimals,
+						(product) => {
+							const category = product.categories?.[0];
+							return category?.id && tree?.has(category.id)
+								? topLevelOf(category.id, tree)
+								: category;
+						},
+						undefined,
+						refunds
+					),
 			},
 			brands: {
-				gross: kept('brands', (directory: LocalProduct[] = []) =>
-					brands(orders, directory, totals(), decimals)
-				),
+				/** Sale and period refund lines by first brand: the Brands card and panel. */
 				netOfRefunds: (directory: LocalProduct[] = []) =>
 					brands(orders, directory, totals(), decimals, refunds),
 			},
 			margin: {
-				/** Costs on the sales or their products: the Brands card's slot (ledger 33). */
-				shown: (directory: LocalProduct[] = []) => cogsEnabled(orders, directory),
-				/** Or on a period refund line: the grouped panels' margin columns (ledger 36). */
+				/** Costs on the sales, their products or a period refund line: the Brands card's slot
+				 * (ledger 33) and the grouped panels' margin columns (ledger 36). */
 				shownNetOfRefunds: (directory: LocalProduct[] = []) =>
 					cogsEnabled(orders, directory) ||
 					(refunds ?? []).some((refund) =>

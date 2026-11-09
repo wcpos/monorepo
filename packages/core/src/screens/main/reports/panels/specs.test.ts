@@ -70,7 +70,7 @@ it('taxes gross is net plus tax and a dash without a net', () => {
 	const spec = specOf('taxes', data);
 	expect(spec.rows.map((row) => row.cells)).toEqual([
 		['VAT', '£10.00', '£2.00', '£12.00'],
-		['Unknown', '—', '£2.00', '—'],
+		['Tax', '—', '£2.00', '—'],
 	]);
 	expect(spec.total).toEqual(['Total', '£10.00', '£4.00', '£14.00']);
 });

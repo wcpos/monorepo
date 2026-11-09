@@ -149,7 +149,7 @@ function SelectionProvider({ children }: React.PropsWithChildren) {
 	const [unselectedRowIds, setUnselectedRowIds] = React.useState<
 		Context.ReportsSelection['unselectedRowIds']
 	>({ hidden: true });
-	const { statusMode, setStatusMode } = real.useReportsScope();
+	const { statusMode, setStatusMode, setDetail } = real.useReportsScope();
 	return (
 		<Selection.Provider value={{ unselectedRowIds, setUnselectedRowIds }}>
 			<button
@@ -157,6 +157,10 @@ function SelectionProvider({ children }: React.PropsWithChildren) {
 				onClick={() => setStatusMode(statusMode === 'all' ? 'done' : 'all')}
 			/>
 			<span data-testid="excluded">{JSON.stringify(unselectedRowIds)}</span>
+			{/* A card waiting on the refunds read has no head to open its panel from. */}
+			{(['products', 'categories', 'brands'] as const).map((id) => (
+				<button key={id} data-testid={`open-${id}`} onClick={() => setDetail(id)} />
+			))}
 			{children}
 		</Selection.Provider>
 	);

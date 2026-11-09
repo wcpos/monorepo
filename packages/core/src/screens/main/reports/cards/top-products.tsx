@@ -7,16 +7,20 @@ import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
 import { CardSkeleton, ReportCard } from './card';
 import { ShareBar } from './primitives';
+import { LocalProductsContext } from './use-local-products';
 
 export function TopProductsCard() {
 	const t = useT(),
-		{ figures } = useReportsData();
+		{ figures, periodRefunds } = useReportsData();
 	const { setDetail } = useReportsScope();
 	const { storeId } = useReportsPeriod(),
 		{ store, money, quantity, percent } = useReportFormats(storeId);
-	// The card is gross: its panel nets the period refunds (ledger 35, 36).
-	const rows = figures.products.gross;
-	if (!store) return <CardSkeleton testID="card-products" name={t('reports.card_top_products')} />;
+	const products = React.useContext(LocalProductsContext);
+	// The card reads its panel's figure, net of the period refunds (ledger 36), and waits for them
+	// as its panel does; the hero stays gross.
+	const rows = React.useMemo(() => figures.products.netOfRefunds(products), [figures, products]);
+	if (!store || !products || !periodRefunds)
+		return <CardSkeleton testID="card-products" name={t('reports.card_top_products')} />;
 	return (
 		<ReportCard
 			onOpen={() => setDetail('products')}
