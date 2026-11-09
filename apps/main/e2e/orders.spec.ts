@@ -26,7 +26,7 @@ import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
 
 /**
  * Layer 2 is live: pro-authenticated shards use one of 16 provisioned
- * e2e-cashier accounts. Serialized PR runs use band A (slots 1..8); push,
+ * e2e-cashier accounts. PR runs use band A (slots 1..8); push,
  * workflow_dispatch, and local runs use band B (slots 9..16). The normalized
  * shard index selects within the band. Two simultaneous non-PR runs can still
  * share band B (accepted residual); secretless runs keep the demo login.
