@@ -246,6 +246,13 @@ jest.mock('./reports/context', () => ({
 	useReportsScope: () => ({ detail: 'payments', setDetail: jest.fn() }),
 	useReportsSelection: () => ({ unselectedRowIds: {} }),
 }));
+jest.mock('./reports/scope', () => ({
+	useReportsFilterScope: () => ({
+		registerLabel: '',
+		names: { cashier: {}, register: {}, store: {} },
+		namesReady: { cashier: true, register: true, store: true },
+	}),
+}));
 
 function Printer({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
 	const form = useForm<PrinterFormValues>();

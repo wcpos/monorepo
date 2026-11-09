@@ -8,9 +8,11 @@ import {
 	statusCounts,
 	stores,
 	taxesByRate,
+	tenderLabel,
 	tenders,
 	topProducts,
 } from './aggregate';
+import { createTestT } from '../../../../../jest/translate';
 import { calculateTotals } from '../report/utils';
 
 import type { ReportOrder } from '../context';
@@ -284,6 +286,12 @@ describe('tenders', () => {
 			orders: 1,
 		});
 	});
+	it('an order with no method that needs no payment is the unknown tender', () => {
+		const rows = orders([{ total: '15', needs_payment: false }]);
+		expect(tenders(rows, totals(rows), 2)).toEqual([
+			{ key: 'unknown', label: '', amount: 15, orders: 1, share: 1 },
+		]);
+	});
 	it('a ledger row that is not captured is not a tender', () => {
 		const rows = orders([
 			{
@@ -328,6 +336,14 @@ describe('tenders', () => {
 		]);
 		expect(tenders(rows, totals(rows), 2)).toMatchObject([{ key: 'sumup', amount: 7, orders: 1 }]);
 	});
+});
+// The card, the panel and the paper name a tender through this one rule.
+it('tenderLabel keeps a title and names cash, unpaid and anything else', () => {
+	const t = createTestT();
+	expect(tenderLabel({ key: 'stripe', label: 'Card' }, t)).toBe('Card');
+	expect(tenderLabel({ key: 'cash', label: '' }, t)).toBe('Cash');
+	expect(tenderLabel({ key: 'unpaid', label: '' }, t)).toBe('UNPAID');
+	expect(tenderLabel({ key: 'unknown', label: '' }, t)).toBe('Unknown');
 });
 describe('channels', () => {
 	it('POS orders are in store, everything else online', () => {

@@ -77,7 +77,10 @@ case "$url" in
 		printf 200 ;;
 	*)
 		n=$(( $(cat "$MOCK_COUNT" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$MOCK_COUNT"
-		if [[ -n "${MOCK_BODY:-}" ]]; then
+		# With MOCK_BODY, an explicit MOCK_OK_AT clears it: a stale CDN verdict that ends.
+		cleared=false
+		if [[ -n "${MOCK_BODY:-}" && -n "${MOCK_OK_AT:-}" && "$n" -ge "${MOCK_OK_AT}" ]]; then cleared=true; fi
+		if [[ -n "${MOCK_BODY:-}" && "$cleared" == false ]]; then
 			printf '%s' "$MOCK_BODY" > "$body"
 		elif [[ "$n" -ge "${MOCK_OK_AT:-1}" || "$url" == */ready.js ]] && [[ "$url" != */"${MOCK_BAD_PATH:-__none__}" ]]; then
 			printf good > "$body"
@@ -85,7 +88,7 @@ case "$url" in
 			printf '429: Too Many Requests' > "$body"
 		fi
 		if [[ "$head" == true ]]; then printf 'x-jsd-version: %s\r\n' "${MOCK_VERSION:-1.11.1}" > "$body"; fi
-		printf '%s' "${MOCK_HTTP:-200}"
+		if [[ "$cleared" == true ]]; then printf 200; else printf '%s' "${MOCK_HTTP:-200}"; fi
 		exit "${MOCK_EXIT:-0}" ;;
 esac
 MOCK
@@ -168,6 +171,17 @@ MOCK_HTTP=403 MOCK_BODY='Forbidden' expect_status "ordinary 403 keeps the retrya
 expect_eq "ordinary 403 still uses FAIL" 1 "$(grep -c '^FAIL: ' "$tmpdir/out" || true)"
 MOCK_HTTP=503 MOCK_BODY="$size_body" expect_status "size text without 403 is not permanent" fail cdn verify_cdn_paths 1.11 0 <<<"$good_sha $entry"
 expect_eq "non-403 still uses FAIL" 1 "$(grep -c '^FAIL: ' "$tmpdir/out" || true)"
+# A tree the gate measured under the limit: the size 403 is jsDelivr's cached verdict, so keep probing.
+rm -f "$MOCK_COUNT"
+CDN_TREE_UNDER_GATE=1 MOCK_HTTP=403 MOCK_BODY="$size_body" MOCK_OK_AT=3 expect_status "a size 403 under the gate is stale and clears" pass \
+	cdn verify_cdn_paths 1.11 5 <<<"$good_sha $entry"
+expect_eq "a stale size verdict prints one STALE line across polls" 1 \
+	"$(grep -Fc "STALE: @1.11/build/$entry -> jsDelivr's size verdict predates this tree (measured under the gate); re-probing" "$tmpdir/out" || true)"
+expect_eq "a stale size verdict is not FAIL-HARD" 0 "$(grep -c 'FAIL-HARD' "$tmpdir/out" || true)"
+CDN_TREE_UNDER_GATE=1 MOCK_HTTP=403 MOCK_BODY="$size_body" MOCK_OK_AT=999 expect_status "a size 403 under the gate that never clears fails" fail \
+	cdn verify_cdn_paths 1.11 0 <<<"$good_sha $entry"
+expect_eq "it fails at the deadline with an ordinary FAIL" 1 "$(grep -Fc "FAIL: @1.11/build/$entry -> PERMANENT: HTTP 403" "$tmpdir/out" || true)"
+expect_eq "and not FAIL-HARD" 0 "$(grep -c 'FAIL-HARD' "$tmpdir/out" || true)"
 rm -f "$MOCK_COUNT" "$MOCK_LOG"
 MOCK_OK_AT=3 expect_status "wrong twice then correct passes" pass cdn verify_cdn_paths 1.11 5 <<<"$good_sha $entry"
 expect_eq "polling never purges (a re-purge extends jsDelivr's throttle)" 0 "$(grep -c 'purge.jsdelivr.net' "$MOCK_LOG" || true)"
@@ -289,6 +303,9 @@ expect_status "dry run truncated tree fails closed" fail run MOCK_TREE="$tmpdir/
 sed 's/46137344/100/' "$MOCK_TREE" > "$tmpdir/small-tree"
 cp "$tmpdir/small-tree" "$MOCK_TREE"
 expect_status "dry run under the tree limit passes" pass run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
+gate_flag() { (PATH="$tmpdir:$PATH"; CDN_TREE_UNDER_GATE="$1"; check_tree_size bundlesha >/dev/null || true; echo "flag=${CDN_TREE_UNDER_GATE:-}"); }
+expect_eq "a tree under the limit sets CDN_TREE_UNDER_GATE" flag=1 "$(gate_flag "")"
+expect_eq "a tree over the limit leaves it unset" flag= "$(MOCK_TREE="$tmpdir/oversize-tree" gate_flag 1)"
 lane_msg="chore(release): build web bundle (@1.11.x from monorepo $msha)"
 expect_status "matching lane-branch build passes" pass run MOCK_MSG="$lane_msg" MOCK_VERSION=1.11.5 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
 expect_status "mismatched lane-branch build fails" fail run MOCK_MSG="$lane_msg" MOCK_VERSION=2.0.0 MOCK_TAGS="$tags20" MOCK_PIN=17.6.0 "$TAG" bundlesha --dry-run
@@ -328,7 +345,7 @@ expect_status "a bundle with no vendored worker is refused" fail run MOCK_VERSIO
 # --- publish workflow retention and working-tree size gate ---
 # Exercise the actual shell block, stopping before it stages or publishes anything.
 publish_tree() {
-	env WB="${1:-$tmpdir/publish}" BUILD_DIR="${2:-$tmpdir/new-build}" BRANCH=main bash -euo pipefail -c \
+	env WB="${1:-$tmpdir/publish}" BUILD_DIR="${2:-$tmpdir/new-build}" BRANCH=main GITHUB_OUTPUT="$tmpdir/github-output" bash -euo pipefail -c \
 		"$(sed -n '/^          mkdir -p "\$WB\/build"/,/^          git add -A/{ /git add -A/d; p; }' "$SCRIPT_DIR/../../.github/workflows/publish-web-bundle.yml")"
 }
 init_publish_repo() {
@@ -357,14 +374,18 @@ init_publish_repo "$tmpdir/publish"
 )
 printf new > "$tmpdir/new-build/_expo/new.js"
 printf metadata > "$tmpdir/new-build/metadata.json"
+: > "$tmpdir/github-output"
 expect_status "workflow accepts a small working tree" pass publish_tree
+expect_eq "workflow outputs the measured tree size" 1 "$(grep -cE '^tree_bytes=[0-9]+$' "$tmpdir/github-output" || true)"
 expect_eq "workflow says it fell back without an inventory" 1 "$(grep -c '^no previous build/publish-inventory.txt; keeping' "$tmpdir/out" || true)"
 expect_status "workflow drops a hashed file older than the previous build" pass test ! -e "$tmpdir/publish/build/_expo/old.js"
 expect_status "workflow retains the previous build despite a later docs commit" pass test -f "$tmpdir/publish/build/_expo/previous.js"
 expect_status "workflow keeps the new build" pass test -f "$tmpdir/publish/build/_expo/new.js"
 expect_status "workflow keeps the root-file removal rule" pass test ! -e "$tmpdir/publish/build/old.worker.js"
 dd if=/dev/zero of="$tmpdir/new-build/_expo/large.js" bs=1048576 count=46 2>/dev/null
+: > "$tmpdir/github-output"
 expect_status "workflow refuses oversized new, untracked files" fail publish_tree
+expect_eq "workflow outputs no tree size over the gate" 0 "$(grep -c '^tree_bytes=' "$tmpdir/github-output" || true)"
 expect_eq "workflow size refusal names the branch" 1 "$(grep -c '::error::web-bundle@main would be .* MiB; jsDelivr refuses' "$tmpdir/out" || true)"
 expect_eq "workflow lists the largest new file" 1 "$(grep -c '^48234496 build/_expo/large.js$' "$tmpdir/out" || true)"
 

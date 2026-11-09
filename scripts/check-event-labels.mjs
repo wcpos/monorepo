@@ -398,11 +398,11 @@ export async function collectEmittedEventTypes(roots = EVENT_SOURCE_ROOTS, known
 		[...emitted.keys(), ...knownTypes].map((type) => type.slice(0, type.indexOf('.')))
 	);
 	for (const [file, source] of sources) {
-		// Operation kinds are persisted metadata, not event types.
-		const eventSource = source.replace(
-			/\boperationType\s*:\s*(['"])[^'"]*\1/g,
-			'operationType: ""'
-		);
+		// Operation kinds are persisted metadata, not event types; nor is a translation key
+		// handed to `t(…)`, which shares the `register.` namespace with the register's events.
+		const eventSource = source
+			.replace(/\boperationType\s*:\s*(['"])[^'"]*\1/g, 'operationType: ""')
+			.replace(/\bt\(\s*(['"])[^'"]*\1/g, 't(""');
 		for (const type of quotedTypesIn(eventSource)) {
 			if (namespaces.has(type.slice(0, type.indexOf('.')))) record(type, file);
 		}

@@ -19,6 +19,7 @@ import { Icon } from '../icon';
 import { useLayoutWidth } from './use-layout-width';
 import {
 	AnchoredOverlay,
+	CONTENT_LETS_CHILDREN_SCROLL,
 	type OverlayAnchor,
 	type OverlayScrimProps,
 	useOverlayPresentation,
@@ -189,7 +190,7 @@ function SelectSingleContent({
 /** The anchored adapter: Radix's positioned list, with the rows inside its viewport. */
 function SelectPanel({ position, children, ...props }: SelectPrimitive.ContentProps) {
 	return (
-		<SelectPrimitive.Content position={position} {...props}>
+		<SelectPrimitive.Content position={position} {...CONTENT_LETS_CHILDREN_SCROLL} {...props}>
 			<SelectPrimitive.Viewport
 				className={cn('p-0', position === 'popper' && 'h-(--radix-select-trigger-height) w-full')}
 			>

@@ -28,6 +28,7 @@ import {
 import { Switch } from '@wcpos/components/switch';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { allowedOrderStatuses, readLedger } from '@wcpos/order-math';
 import { OPEN_ORDER_STATUSES, useDocField, useRecordField } from '@wcpos/query';
 import {
 	isPushableOrderStatus,
@@ -191,9 +192,16 @@ export function EditOrderMetaForm({
 	});
 	// Offer only what a till may push (ADR 0040 D4); a server-owned status shows read-only.
 	const statusPushable = isPushableOrderStatus(handOverData.status);
-	const allowedStatuses = statusPushable
-		? PUSHABLE_ORDER_STATUSES
-		: [...PUSHABLE_ORDER_STATUSES, handOverData.status];
+	const paymentFacts = useRecordField(order, ({ payload }) => ({
+		total: payload.total,
+		refunds: payload.refunds,
+		rows: readLedger(payload.meta_data),
+	}));
+	const allowedStatuses = allowedOrderStatuses(
+		statusPushable ? PUSHABLE_ORDER_STATUSES : [...PUSHABLE_ORDER_STATUSES, handOverData.status],
+		handOverData.status,
+		paymentFacts
+	);
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 	const { label: cashierBefore } = useCashierLabel(base.cashier_id);
 	const { getLabel: statusLabel } = useOrderStatusLabel();
@@ -312,6 +320,21 @@ export function EditOrderMetaForm({
 		const previous = order.getLatest().payload;
 		const identity = wooMetaCarrier.readIdentity(previous.meta_data);
 		const { cashier_id, status, store_id, register_id, statusEdit: statusChanged } = pending;
+		// A payment captured while confirmation was open makes cancellation unavailable.
+		if (
+			status === 'cancelled' &&
+			statusChanged &&
+			allowedOrderStatuses(['cancelled'], previous.status ?? '', {
+				total: previous.total,
+				refunds: previous.refunds,
+				rows: readLedger(previous.meta_data),
+			}).length === 0
+		) {
+			setLoading(false);
+			setPending(null);
+			handOverForm.setValue('status', previous.status ?? '');
+			return;
+		}
 		// Status is an intent, never an echo (ADR 0040): only a status the cashier changed goes
 		// out, judged when the hand-off was staged. A cashier-only hand-off sends none, so a stale
 		// open copy (or a completion a pull adopted meanwhile) cannot reopen a sale another till

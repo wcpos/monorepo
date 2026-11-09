@@ -2,7 +2,13 @@
  * These fixtures pin the balance and status decisions shared with the server ledger.
  */
 
-import { derive } from './derive';
+import {
+	allowedOrderStatuses,
+	availableForRefund,
+	derive,
+	hasRefundableMoney,
+	netRefundable,
+} from './derive';
 
 import type { CaptureMode, PaymentKind, PaymentMethodDescriptor, PaymentRow } from './types';
 
@@ -342,5 +348,199 @@ describe('derive', () => {
 			balance: '0.00',
 			status: 'pos-open',
 		});
+	});
+});
+
+describe('allowedOrderStatuses', () => {
+	const base = ['pos-open', 'pending', 'on-hold', 'cancelled'] as const;
+
+	it('hides Cancelled while a row has refundable money', () => {
+		expect(
+			allowedOrderStatuses(base, 'pos-open', { total: '100', rows: [row({ amount: '10.00' })] })
+		).toEqual(['pos-open', 'pending', 'on-hold']);
+	});
+
+	it('offers Cancelled after an unallocated Woo refund exhausts the captured money', () => {
+		expect(
+			allowedOrderStatuses(base, 'pos-open', {
+				total: '100',
+				refunds: [{ total: '-20' }],
+				rows: [row({ amount: '20' })],
+			})
+		).toEqual(base);
+	});
+
+	it('keeps Cancelled when unpaid', () => {
+		expect(allowedOrderStatuses(base, 'pos-open', { rows: [] })).toEqual(base);
+	});
+
+	it('keeps the current Cancelled status even when paid', () => {
+		expect(
+			allowedOrderStatuses(base, 'cancelled', { total: '100', rows: [row({ amount: '10.00' })] })
+		).toEqual(base);
+	});
+
+	it.each(['voided', 'failed'] as const)('does not hide Cancelled for a %s row', (status) => {
+		expect(
+			allowedOrderStatuses(base, 'pos-open', { total: '100', rows: [row({ status })] })
+		).toEqual(base);
+	});
+
+	it.each([
+		['fully', '10.000001', true],
+		['partially', '10.000000', false],
+	] as const)(
+		'offers Cancelled only after a %s refunded captured row',
+		(_name, amount, allowed) => {
+			const payment = row({
+				amount: '10.000001',
+				refunds: [{ id: 1, amount, status: 'succeeded', provider_ref: null }],
+			});
+			expect(
+				allowedOrderStatuses(base, 'pos-open', { total: '100', rows: [payment] }).includes(
+					'cancelled'
+				)
+			).toBe(allowed);
+		}
+	);
+});
+
+describe('refund availability', () => {
+	it.each([
+		['16.83', 16.83],
+		['1.000001', 1.000001],
+		['0.0000004', 0],
+		['0.0000005', 0.000001],
+	] as const)('returns %s in major units at server precision', (amount, expected) => {
+		const payment = row({ amount });
+		expect(availableForRefund(payment)).toBe(expected);
+		expect(hasRefundableMoney([payment])).toBe(expected > 0);
+	});
+
+	it.each(['succeeded', 'pending'] as const)('reserves a full %s refund', (status) => {
+		const payment = row({
+			amount: '16.83',
+			refunds: [
+				{ id: 1, amount: '16.80', status, provider_ref: null },
+				{ id: 2, amount: '0.03', status, provider_ref: null },
+			],
+		});
+		expect(availableForRefund(payment)).toBe(0);
+		expect(hasRefundableMoney([payment])).toBe(false);
+	});
+
+	it('offers only the remainder after succeeded and pending allocations, ignoring failed ones', () => {
+		const payment = row({
+			amount: '42.50',
+			refunds: [
+				{ id: 1, amount: '10.10', status: 'succeeded', provider_ref: null },
+				{ id: 2, amount: '2.40', status: 'pending', provider_ref: null },
+				{ id: 3, amount: '30.00', status: 'failed', provider_ref: null },
+			],
+		});
+		expect(availableForRefund(payment)).toBe(30);
+		expect(hasRefundableMoney([payment])).toBe(true);
+	});
+
+	it.each(['succeeded', 'pending'] as const)(
+		'keeps a one-micro-unit remainder after a %s refund',
+		(status) => {
+			const payment = row({
+				amount: '16.830001',
+				refunds: [{ id: 1, amount: '16.83', status, provider_ref: null }],
+			});
+			expect(availableForRefund(payment)).toBe(0.000001);
+			expect(hasRefundableMoney([payment])).toBe(true);
+		}
+	);
+
+	it.each(['n/a', 'NaN', 'Infinity'])('treats non-finite amount %s as zero', (amount) => {
+		expect(availableForRefund(row({ amount }))).toBe(0);
+		expect(hasRefundableMoney([row({ amount })])).toBe(false);
+		expect(
+			availableForRefund(
+				row({
+					amount: '16.83',
+					refunds: [{ id: 1, amount, status: 'pending', provider_ref: null }],
+				})
+			)
+		).toBe(16.83);
+	});
+
+	it('never counts a voided row', () => {
+		expect(hasRefundableMoney([row({ amount: '42.50', status: 'voided' })])).toBe(false);
+	});
+
+	it('clamps overallocated refunds to zero', () => {
+		const payment = row({
+			amount: '1',
+			refunds: [{ id: 1, amount: '2', status: 'succeeded', provider_ref: null }],
+		});
+		expect(availableForRefund(payment)).toBe(0);
+	});
+});
+
+describe('netRefundable', () => {
+	it('keeps the order-total bound when the ledger holds only failed rows', () => {
+		expect(
+			netRefundable('100', [{ total: '-10' }], [row({ amount: '20', status: 'failed' })])
+		).toBe(90);
+	});
+
+	it('subtracts an unallocated manual Woo refund from part-paid money', () => {
+		expect(netRefundable('100', [{ total: '-10' }], [row({ amount: '20' })])).toBe(10);
+	});
+
+	it('reserves pending allocations separately from an unallocated manual Woo refund', () => {
+		const payment = row({
+			amount: '20',
+			refunds: [{ id: 1, amount: '10', status: 'pending', provider_ref: null }],
+		});
+		expect(netRefundable('100', [{ total: '-10' }], [payment])).toBe(0);
+	});
+
+	it('does not subtract an allocated Woo refund twice from part-paid money', () => {
+		const payment = row({
+			amount: '20',
+			refunds: [{ id: 1, amount: '10', status: 'succeeded', provider_ref: null }],
+		});
+		expect(netRefundable('100', [{ total: '-10' }], [payment])).toBe(10);
+	});
+
+	it('nets a full Woo refund even without ledger allocations', () => {
+		expect(netRefundable('16', [{ total: '-16.000000' }], [row({ amount: '16' })])).toBe(0);
+		expect(netRefundable('100', [{ total: '-16.000000' }], [row({ amount: '16' })])).toBe(0);
+	});
+
+	it('nets partial Woo refunds at micro-unit precision', () => {
+		expect(
+			netRefundable(
+				'16.830001',
+				[{ total: '-10' }, { total: '-6.83' }],
+				[row({ amount: '16.830001' })]
+			)
+		).toBe(0.000001);
+	});
+
+	it('sums available paid money when there are no Woo refunds', () => {
+		expect(
+			netRefundable(
+				'100',
+				[],
+				[
+					row({
+						amount: '16.83',
+						refunds: [{ id: 1, amount: '10', status: 'pending', provider_ref: null }],
+					}),
+					row({ amount: '3.17' }),
+					row({ amount: '50', status: 'failed' }),
+				]
+			)
+		).toBe(10);
+	});
+
+	it('uses absolute total minus Woo refunds when no rows exist', () => {
+		expect(netRefundable('-16.83', [{ total: '-10' }, {}, { total: null }], [])).toBe(6.83);
+		expect(netRefundable('16', [{ total: '-20' }], [])).toBe(0);
 	});
 });

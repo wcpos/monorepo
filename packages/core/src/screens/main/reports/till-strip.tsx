@@ -1,13 +1,10 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { filter } from 'rxjs';
 import { format as formatDate } from 'date-fns/format';
 import { subDays } from 'date-fns/subDays';
 import { useIsFocused } from 'expo-router/react-navigation';
-import { useObservableState } from 'observable-hooks';
 
-import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -15,15 +12,22 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { TextClassContext } from '@wcpos/components/text/context';
+import { TONE } from '@wcpos/components/lib/tone';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 import type { ClosureRow } from '@wcpos/query/register-session';
 
+import { usePageSheetHost } from '../components/page-sheet-host';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useTheme } from '../../../contexts/theme';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../hooks/use-local-date';
 import { inZone, useStoreDay, useViewedStore, zoneOptions } from '../../../hooks/use-store-day';
+import {
+	closureResult,
+	resultAmount,
+	resultText,
+} from '../../../services/register-session/closure-result';
 import { useRegisterSession } from '../../../services/register-session/use-register-session';
 import { useSessionReport } from '../../../services/register-session/use-session-report';
 import { useCurrencyFormat } from '../hooks/use-currency-format';
@@ -31,6 +35,7 @@ import { useReceiptDocument } from '../receipt/use-receipt-document';
 import { PrintSheet } from '../receipt/print-sheet';
 import { normalizeClosureRow } from './closures/use-closure-rows';
 import { useLastClosure } from './closures/use-last-closure';
+import { useReportsDirectories } from './scope';
 
 type Term = [id: string, sign: string, label: string, amount: string];
 
@@ -41,12 +46,13 @@ export function TillStrip({
 	onOpenClosures?: () => void;
 	onOpenClosure?: (closure: ClosureRow) => void;
 }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const { roomy } = useTheme();
 	const phone = useIsPhone();
 	const { session, binding, terms, expected, blind, lastClosure, sessionsOn } =
 		useRegisterSession();
-	const { store, site } = useStoreSession();
+	const { store } = useStoreSession();
 	const bound = sessionsOn && !!binding.registerId;
 	const active = bound && (session?.status === 'open' || session?.status === 'counting');
 	const remote = useLastClosure(
@@ -98,11 +104,7 @@ export function TillStrip({
 		storeId: store.id,
 		autoPrintAllowed: false,
 	});
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
-	const cashiers = useObservableState(source, []);
+	const cashiers = useReportsDirectories().cashiers ?? [];
 	const settings = useDocField(useViewedStore(store.id), (value) => value);
 	const { format } = useCurrencyFormat({
 		currency: settings?.currency,
@@ -131,12 +133,10 @@ export function TillStrip({
 				: closure
 					? date(closure.closed_at, 'EEE d MMM')
 					: '';
-	const variance = Number(closure?.variance.cash ?? 0);
-	const result = variance
-		? `${format(Math.abs(variance))} ${variance < 0 ? t('register.short') : t('register.over')}`
-		: t('reports.exact');
-	const resultColor =
-		variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground';
+	// The last closure's RECORDED result, as the closures list shows it.
+	const last = closureResult({ recorded: closure ? [closure] : [] }, 4);
+	const result = resultText(last, format(resultAmount(last, 4)), t);
+	const resultColor = TONE[last.tone].text;
 	const rows: Term[] = [];
 	const money = (amount: string) => format(Number(amount));
 	if (bound && !blind) {
@@ -398,6 +398,7 @@ export function TillStrip({
 				</Text>
 			)}
 			<PrintSheet
+				portalHost={host}
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
 				doc={printDoc}

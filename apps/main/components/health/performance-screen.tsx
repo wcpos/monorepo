@@ -35,7 +35,7 @@ import {
 import { TrendLine } from './trend-line';
 import { UptimeStrip } from './uptime-strip';
 
-const DOCS_URL = 'https://docs.wcpos.com/products/sync';
+const DOCS_URL = 'https://docs.wcpos.com/support/store-health#performance';
 
 /** Load averages read best with a consistent decimal; counts use locale formatting. */
 const formatLoad = (value: number) =>

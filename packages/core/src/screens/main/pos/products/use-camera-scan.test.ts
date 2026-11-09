@@ -12,6 +12,7 @@ let mockSegments: string[] = ['(app)', '(drawer)', '(pos)'];
 
 jest.mock('expo-router', () => ({
 	useSegments: () => mockSegments,
+	useGlobalSearchParams: () => ({}),
 }));
 jest.mock('../../hooks/barcodes/scan-hub-context', () => ({
 	useScanHub: () => ({

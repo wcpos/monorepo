@@ -1,7 +1,7 @@
 appId: com.wcpos.main.dev
 env:
-  # The lane's store — see flow 02 for why this is dev-next on `next`.
-  STORE_URL: https://dev-next.wcpos.com
+  # The lane's store: see flow 02.
+  STORE_URL: https://dev-pro.wcpos.com
   INVALID_URL: https://not-a-real-store.invalid
 ---
 # P0-1: clean launch → connect screen renders; invalid URL does not connect.

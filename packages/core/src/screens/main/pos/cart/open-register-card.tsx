@@ -24,7 +24,7 @@ import { credentialsListResource } from '../../../../hooks/user-db-list-resource
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { RegisterAmount } from './movement-sheet';
+import { RegisterAmount } from '../../components/register-count';
 
 export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void }) {
 	const { binding, lastClosed, lastClosure, actions, blind, closedElsewhere } =

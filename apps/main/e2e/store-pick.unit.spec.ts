@@ -1,5 +1,5 @@
 import { expect, test } from './test';
-import { storePickLocator } from './fixtures';
+import { storeIdForVariant, storePickLocator } from './fixtures';
 
 /**
  * Unit-style pin for the harness's store pick — a static page, no store.
@@ -47,5 +47,13 @@ test.describe('storePickLocator', () => {
 	test('a requested store is picked by its WooCommerce id', async ({ page }) => {
 		await page.setContent(CONNECT_SCREEN);
 		expect(await landsIn(storePickLocator(page, 24129))).toBe('store-option-24129');
+	});
+});
+
+test.describe('storeIdForVariant', () => {
+	test('only the pro project takes a target store id', () => {
+		expect(storeIdForVariant('pro', '24128')).toBe('24128');
+		expect(storeIdForVariant('free', '24128')).toBeNull();
+		expect(storeIdForVariant('pro', null)).toBeNull();
 	});
 });

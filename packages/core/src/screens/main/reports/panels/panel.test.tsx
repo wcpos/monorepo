@@ -68,7 +68,7 @@ it('opens the payments panel with its title, scope line and footer count', async
 	fireEvent.click(screen.getByTestId('card-payments-open'));
 	expect(screen.getByTestId('dialog-shell').dataset).toMatchObject({
 		side: 'right',
-		host: 'reports',
+		host: 'scene:reports',
 	});
 	expect(screen.getByTestId('detail-panel').textContent).toContain('Sales by payment method');
 	expect(screen.getByTestId('detail-panel-scope').textContent).toBe('Today · Wed 15 Jul · Front');
@@ -147,17 +147,7 @@ it('an export failure shows the message', async () => {
 		)
 	);
 });
-// Each gate prevents a blank/incomplete report; its reason must be visible, not a dead button.
-it('Print waits for the templates with a reason', () => {
-	mockPrintDocument.templatesReady = false;
-	room();
-	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading templates');
-	fireEvent.click(screen.getByTestId('detail-panel-print'));
-	expect(mockPrintDocument.print).not.toHaveBeenCalled();
-});
-
+// The panel's readiness is its own input to useReportPrint; the gates themselves are use-report-print.test.tsx's.
 it.each(['categories', 'cashiers', 'orders'])(
 	"Print waits for the panel's data: %s",
 	async (panel) => {
@@ -181,58 +171,6 @@ it.each(['categories', 'cashiers', 'orders'])(
 		);
 	}
 );
-it('no local template is said, not silently disabled', () => {
-	mockPrintDocument.templates = [];
-	room();
-	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
-		'No template can print offline · manage templates in WP Admin'
-	);
-});
-it('a print that resolves false or rejects shows the message', async () => {
-	mockPrintDocument.print
-		.mockResolvedValueOnce(false)
-		.mockRejectedValueOnce(new Error('printer unavailable'));
-	room();
-	fireEvent.click(screen.getByTestId('card-payments-open'));
-	for (let attempt = 0; attempt < 2; attempt++) {
-		fireEvent.click(screen.getByTestId('detail-panel-print'));
-		await waitFor(() =>
-			expect(screen.getByTestId('print-sheet-error').textContent).toBe(
-				'Could not print. Try again.'
-			)
-		);
-	}
-	fireEvent.click(screen.getByTestId('detail-panel-print'));
-	await waitFor(() => expect(screen.queryByTestId('print-sheet-error')).toBeNull());
-});
-it('shows a document error in the print sheet', () => {
-	mockPrintDocument.documentError = new Error('document unavailable');
-	room();
-	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect(screen.getByTestId('print-sheet-error').textContent).toBe('document unavailable');
-});
-
-it('Print waits while the orders lane is still downloading, and for a printer that can print the template', () => {
-	mockSalesHandle.set({ laneProgress: { downloaded: 40, total: 100 } });
-	room();
-	fireEvent.click(screen.getByTestId('card-taxes-open'));
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
-		'Still loading orders for this range'
-	);
-	act(() => mockSalesHandle.set({ laneProgress: null }));
-	mockPrintDocument.mismatch = 'html-template-prints-default-layout';
-	mockPrintDocument.resolvedPrinter = { id: 'raw-printer' };
-	fireEvent.click(screen.getByTestId('detail-panel-close'));
-	fireEvent.click(screen.getByTestId('card-taxes-open'));
-	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe(
-		'The saved printer cannot print this template'
-	);
-	mockPrintDocument.mismatch = null;
-	mockPrintDocument.resolvedPrinter = null;
-});
 it('the footer names the items missing a cost', () => {
 	setOrders([
 		{
@@ -385,7 +323,7 @@ it("a single-store install's sentinel scope is not All stores", () => {
 	fireEvent.click(screen.getByTestId('card-payments-open'));
 	expect(screen.getByTestId('detail-panel-scope').textContent).toBe('Today · Wed 15 Jul · Front');
 });
-it('the Stores panel waits for store names before Export and Print', () => {
+it('the Stores panel reads the names the card already has, with Export and Print ready', () => {
 	mockState.storeFilter = 'woocommerce-pos';
 	mockState.register = undefined;
 	mockStores.next([
@@ -394,18 +332,9 @@ it('the Stores panel waits for store names before Export and Print', () => {
 	]);
 	room();
 	fireEvent.click(screen.getByTestId('card-where-sold-view-segment-stores'));
-	// The card has names; the newly mounted panel must wait for its own directory read.
+	// One directory read for the room: a pending re-read never reaches a panel opened after it answered.
 	act(() => mockStores.next(PENDING_USER_DB_READ));
 	fireEvent.click(screen.getByTestId('card-where-sold-open'));
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
-	expect(screen.getByTestId('print-sheet-waiting').textContent).toBe('Loading the report');
-	act(() =>
-		mockStores.next([
-			{ id: 7, name: 'Front shop' },
-			{ id: 9, name: 'Back shop' },
-		])
-	);
 	expect(screen.getByTestId('detail-panel-export')).toBeTruthy();
 	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 	expect(screen.getByTestId('detail-panel-scope').textContent).toContain('All stores');

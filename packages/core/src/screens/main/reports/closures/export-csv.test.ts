@@ -58,3 +58,20 @@ it('exports an expected-only tender with zero counted and its shortage', () => {
 	);
 	expect(csv).toContain('"40.0000","0","40.0000 short"');
 });
+
+// Pins the figure the CSV shows: the RECORDED (written) variance the closures list shows, not
+// counted less expected (Exact here). Moving it to settled is a ruling, not a refactor.
+it('exports the RECORDED result', () => {
+	const csv = exportCsv(
+		[
+			{
+				...row,
+				expected: { cash: '100.0000' },
+				counted: { cash: '100.0000' },
+				variance: { cash: '-1.0000' },
+			},
+		],
+		createTestT()
+	);
+	expect(csv).toContain('"100.0000","100.0000","1.0000 short"');
+});

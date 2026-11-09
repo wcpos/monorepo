@@ -11,6 +11,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { TenderCheckout } from './tender-checkout';
 import { initialTenderState } from './tender-state';
+import { withFigures } from './tender-figures.test-utils';
 
 import type { TenderFlow } from './use-tender-flow';
 
@@ -87,6 +88,8 @@ jest.mock('@wcpos/components/lib/device', () => ({
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
+// The covered sale's unanswered-attempt line formats its send time; its focus hook stays out of jsdom.
+jest.mock('../../../hooks/use-date-format', () => ({ useDateFormat: () => 'Oct 8, 10:35 PM' }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({
@@ -222,17 +225,32 @@ jest.mock('@wcpos/components/button', () => ({
 
 const order = { uuid: 'order-1' } as EngineRecord<'orders'>;
 
+const reopenedPaid = {
+	totalMinor: 1683,
+	balanceMinor: 0,
+	paidMinor: 1683,
+	allocations: {},
+	rows: [
+		{ id: 'r1', method_id: 'pos_cash', amount: '16.83', status: 'captured', kind: 'cash' },
+	] as TenderFlow['rows'],
+};
+const strandedAttempt = {
+	id: 'attempt-9',
+	methodId: 'wcpos_email_invoice',
+	cashierId: 7,
+	sentAtGmt: '2026-10-08T10:35:00.000Z',
+	awaiting: null,
+	flagged: false,
+	title: 'Email Invoice',
+} as TenderFlow['unansweredAttempt'];
 function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
-	return {
+	return withFigures({
 		state: initialTenderState,
 		dispatch: jest.fn(),
 		dp: 2,
 		totalMinor: 9295,
 		paidMinor: 0,
-		thisPaymentMinor: 9295,
-		afterThisPaymentMinor: 0,
 		plan: null,
-		planLegs: [],
 		planLabel: null,
 		lines: [],
 		picked: {},
@@ -248,12 +266,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 			{ method: method(), disabled: false, reason: null, worksOffline: true, settlesLater: false },
 		],
 		legacyMethods: [],
-		methodsLoaded: true,
-		unsupportedSchema: false,
 		method: null,
-		entryAppliedMinor: 0,
-		entryChangeMinor: 0,
-		quickAmountsMinor: [],
 		busy: false,
 		saveState: null,
 		terminalLeg: null,
@@ -265,7 +278,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
 		...overrides,
-	} as TenderFlow;
+	} as TenderFlow);
 }
 
 describe('TenderCheckout', () => {
@@ -278,6 +291,19 @@ describe('TenderCheckout', () => {
 		mockOnClose = undefined;
 		mockLineItems = [];
 		mockFlow = makeFlow();
+	});
+
+	it('shows the whole-bill restriction only while a payment leg is live', () => {
+		const { rerender } = render(<TenderCheckout order={order} />);
+		expect(screen.queryByTestId('checkout-legacy-whole-bill')).toBeNull();
+		mockFlow = makeFlow({ hasLiveLeg: true });
+		rerender(<TenderCheckout order={order} />);
+		expect(screen.getByTestId('checkout-legacy-whole-bill').textContent).toBe(
+			'pos_checkout.whole_bill_only'
+		);
+		mockFlow = makeFlow();
+		rerender(<TenderCheckout order={order} />);
+		expect(screen.queryByTestId('checkout-legacy-whole-bill')).toBeNull();
 	});
 
 	it('replaces the phone tenders with the receipt and finishes on close', () => {
@@ -453,6 +479,27 @@ describe('TenderCheckout', () => {
 		expect(takeTender).toHaveBeenCalledTimes(1);
 	});
 
+	// A paid sale re-opened from Orders: its captured payments cover it, so Done completes it.
+	it('offers the completion action for a re-opened sale its payments cover', () => {
+		const takeTender = jest.fn();
+		mockFlow = makeFlow({ ...reopenedPaid, takeTender });
+		render(<TenderCheckout order={order} />);
+
+		expect(screen.queryByTestId('checkout-commit')).toBeNull();
+		fireEvent.click(screen.getByTestId('checkout-complete-order'));
+
+		expect(takeTender).toHaveBeenCalledTimes(1);
+	});
+
+	// The covered sale's unanswered attempt is cleared in the pane first, then the sale completes.
+	it('keeps the pane for a covered sale with an unanswered attempt', () => {
+		mockFlow = makeFlow({ ...reopenedPaid, unansweredAttempt: strandedAttempt });
+		render(<TenderCheckout order={order} />);
+
+		expect(screen.queryByTestId('checkout-complete-order')).toBeNull();
+		expect(screen.getByTestId('checkout-commit')).not.toBeNull();
+	});
+
 	// C5-S1: Done spins only for the press, never for another command holding the gate.
 	it.each([
 		['takeTender', true],
@@ -495,7 +542,7 @@ it('reader chips require an explicit choice when there is no default', () => {
 	});
 	mockFlow = makeFlow({
 		method: server,
-		entryAppliedMinor: 500,
+		state: { ...initialTenderState, view: 'amount', methodId: server.id, entryMinor: 500 },
 		readers: [
 			{ id: 'free', label: 'Front', isDefault: false, inUseBy: null },
 			{ id: 'busy', label: 'Back', isDefault: false, inUseBy: '123' },

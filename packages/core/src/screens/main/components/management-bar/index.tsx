@@ -45,7 +45,8 @@ export function ManagementBar({
 				onMenu={menu}
 			>
 				{children}
-				{/* The root host: the POS host sits inside the POS screen, which is hidden (web) or
+				{/* On wide the page host (the drawer layout's per-screen Scene host, beside the rail),
+				    the root on a phone: the POS host sits inside the POS screen, which is hidden (web) or
 				    detached (native) while a management page is on screen. Switch register raises the
 				    same request the rail's sheet does (ruling 2026-10-16, decision 6). */}
 				{(controls === 'all' || phone) && <BarControls testID={testID} />}

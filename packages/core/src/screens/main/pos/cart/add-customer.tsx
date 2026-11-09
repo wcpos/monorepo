@@ -11,10 +11,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { IconButton } from '@wcpos/components/icon-button';
-import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { useQueryRuntime } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
@@ -181,43 +177,8 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 }
 
 /**
- *
- */
-export function AddNewCustomer() {
-	const side = usePanelSide('cart');
-	const t = useT();
-	const [open, setOpen] = React.useState(false);
-	const close = React.useCallback(() => setOpen(false), []);
-
-	return (
-		<ErrorBoundary>
-			<Dialog open={open} onOpenChange={setOpen}>
-				<Tooltip>
-					<TooltipTrigger asChild onPress={() => setOpen(true)}>
-						<IconButton
-							testID="add-customer-button"
-							name="addCustomer"
-							accessibilityLabel={t('common.add_new_customer')}
-						/>
-					</TooltipTrigger>
-					<TooltipContent>
-						<Text>{t('common.add_new_customer')}</Text>
-					</TooltipContent>
-				</Tooltip>
-				<DialogContent side={side} testID="add-new-customer-dialog" size="lg" portalHost="pos">
-					<DialogHeader>
-						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
-					</DialogHeader>
-					<AddCustomerFormBody onClose={close} />
-				</DialogContent>
-			</Dialog>
-		</ErrorBoundary>
-	);
-}
-
-/**
- * Controlled version of the AddNewCustomer dialog, for use when an external
- * component (e.g. a dropdown menu) needs to manage open/close state.
+ * The new-customer dialog. Its owner (the cart's add menu) holds the open
+ * state, so a dropdown item can open it.
  */
 interface AddCustomerDialogProps {
 	open: boolean;

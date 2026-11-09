@@ -37,7 +37,10 @@ import {
 import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
+import { baselineContains } from './baseline';
 
+import type { DeepReadonly } from 'rxdb';
+import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
 import type { ReadonlyClosureDocument } from './reads';
 
 export const pending = {
@@ -133,23 +136,51 @@ export function openSession(
 		...pending,
 	});
 }
+type SessionStatus = RegisterSessionRow['status'];
+/**
+ * The statuses each local move may start from, read from today's callers. Counting starts from
+ * open, and again over a count (Sign out while the session is counting). Selling resumes from a
+ * count, or from a close the store refused (#2016). The close comes from a count, from open (a
+ * refresh can reopen the row under the count pane), and again from closed (a refused close's
+ * retry, #3304). A second abandon and a count over a closed session are refused.
+ */
+const ALLOWED_FROM: Record<SessionStatus, readonly SessionStatus[]> = {
+	counting: ['open', 'counting'],
+	open: ['counting', 'closed'],
+	closed: ['open', 'counting', 'closed'],
+};
+export class IllegalSessionTransitionError extends Error {
+	constructor(
+		readonly from: SessionStatus,
+		readonly to: SessionStatus
+	) {
+		super(`register_session_illegal_transition: ${from} -> ${to}`);
+		this.name = 'IllegalSessionTransitionError';
+	}
+}
 async function transition(
 	sessions: RegisterSessionCollection,
 	id: string,
-	status: RegisterSessionRow['status'],
+	status: SessionStatus,
 	extra: Partial<RegisterSessionRow> = {}
 ) {
 	const row = await sessions.findOne(id).exec();
 	if (!row) throw new RegisterSessionRequiredError();
 	const at = new Date().toISOString();
-	return row.incrementalPatch({
-		...pending,
-		...extra,
-		status,
-		pending_status: status,
-		status_at: at,
-		...(status === 'counting' ? { counting_started_at_gmt: at } : {}),
-		...(status === 'closed' ? { closed_at_gmt: at } : {}),
+	// Checked inside the write: a refresh landing after the read is the status the move sees.
+	return row.incrementalModify((data) => {
+		if (!ALLOWED_FROM[status].includes(data.status))
+			throw new IllegalSessionTransitionError(data.status, status);
+		return {
+			...data,
+			...pending,
+			...extra,
+			status,
+			pending_status: status,
+			status_at: at,
+			...(status === 'counting' ? { counting_started_at_gmt: at } : {}),
+			...(status === 'closed' ? { closed_at_gmt: at } : {}),
+		};
 	});
 }
 export const startCounting = (storeDB: RegisterStoreDatabase, id: string) =>
@@ -347,7 +378,7 @@ export async function writeClosure({
 	otherTenders,
 	movements,
 	orders,
-	tillExpected,
+	baseline,
 	refundRecords = [],
 	labels,
 	resolveCashierName,
@@ -386,7 +417,11 @@ export async function writeClosure({
 	otherTenders: Record<string, string>;
 	movements: readonly CashMovementRow[];
 	orders: readonly ClosureOrder[];
-	tillExpected?: Record<string, string>;
+	/** The session as it stands now and its refunds: what the server's snapshot already counts. */
+	baseline?: {
+		session: RegisterSessionRow;
+		refundSources: readonly ReadonlyEngineRecord<'refunds'>[];
+	};
 	refundRecords?: readonly RefundDocumentType[];
 	resolveCashierName?: (id: number) => string;
 	labels?: {
@@ -433,9 +468,15 @@ export async function writeClosure({
 		(row) => row.session_id === session.id && row.status === 'captured'
 	);
 	const entries = movements.filter((row) => row.session_id === session.id);
-	const till_expected =
-		tillExpected ??
-		deriveExpected({ session, movements: entries, ledgerRowsBySession: ledgerRows, refundRecords });
+	const till_expected = deriveExpected(
+		{
+			session: baseline?.session ?? session,
+			movements: entries,
+			ledgerRowsBySession: ledgerRows,
+			refundRecords,
+		},
+		baseline && baselineContains(orders, baseline.refundSources, entries, baseline.session)
+	);
 	const counts = { cash: counted, ...otherTenders };
 	const sum = (values: (string | null | undefined)[]) =>
 		fromMinor(
@@ -661,17 +702,7 @@ export async function writeClosure({
 		await mintClosureNumber(userDB, siteUuid, session.register_id, draft);
 		const reserved = (await readRegister(userDB))!.sites[siteUuid].registers![session.register_id]
 			.closure_reservation!.row;
-		try {
-			row = await closures.insert({
-				...reserved,
-				order_ids: [...reserved.order_ids],
-				movement_ids: [...reserved.movement_ids],
-			});
-		} catch (error) {
-			const winner = await closures.findOne(reserved.id).exec();
-			if (!winner) throw error;
-			row = winner;
-		}
+		row = await insertReserved(storeDB, reserved);
 	}
 	await advancePerpetual(userDB, siteUuid, session.register_id, {
 		sales: row.period_sales_total,
@@ -679,6 +710,38 @@ export async function writeClosure({
 		closureId: row.id,
 	});
 	return row;
+}
+
+/** The reserved closure as the local row; a concurrent writer's row is the row. */
+async function insertReserved(storeDB: RegisterStoreDatabase, reserved: DeepReadonly<ClosureRow>) {
+	const closures = registerCollections(storeDB).closures;
+	try {
+		return await closures.insert({
+			...reserved,
+			order_ids: [...reserved.order_ids],
+			movement_ids: [...reserved.movement_ids],
+		});
+	} catch (error) {
+		const winner = await closures.findOne(reserved.id).exec();
+		if (!winner) throw error;
+		return winner;
+	}
+}
+
+/** Finish a close a restart interrupted after its reservation: the reserved row is the closure. */
+export async function recoverClosureReservation(
+	ctx: { storeDB: RegisterStoreDatabase; userDB: UserDatabase; siteUuid: string },
+	reserved: DeepReadonly<ClosureRow>
+) {
+	const { register_sessions: sessions, closures } = registerCollections(ctx.storeDB);
+	if (!(await sessions.findOne(reserved.session_id).exec())) return;
+	const row =
+		(await closures.findOne(reserved.id).exec()) ?? (await insertReserved(ctx.storeDB, reserved));
+	await advancePerpetual(ctx.userDB, ctx.siteUuid, row.register_id, {
+		sales: row.period_sales_total,
+		refunds: row.period_refunds_total,
+		closureId: row.id,
+	});
 }
 
 type ClosureOrder = {

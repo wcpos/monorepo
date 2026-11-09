@@ -1,7 +1,8 @@
 import sumBy from 'lodash/sumBy';
 
-import { refundsSummary } from '../cards/aggregate';
+import { refundsSummary, tenderLabel } from '../cards/aggregate';
 
+import type { tenders } from '../cards/aggregate';
 import type { RefundRow } from '../context';
 import type { PanelSpec } from '../panels/specs';
 import type { useReportFormats } from '../use-report-formats';
@@ -10,6 +11,8 @@ import type { calculateTotals } from './utils';
 type Inputs = {
 	totals: ReturnType<typeof calculateTotals>;
 	orders: number;
+	/** The period's tenders from the payment ledger: the rows the Payments card and panel show. */
+	payments: ReturnType<typeof tenders>;
 	periodRefunds?: RefundRow[];
 	registerNames: Record<string, string>;
 	cashierNames: Record<string, string>;
@@ -21,7 +24,16 @@ type Inputs = {
 	num_decimals?: number;
 };
 export function summarySpec(
-	{ totals, orders, periodRefunds, registerNames, cashierNames, stores, num_decimals }: Inputs,
+	{
+		totals,
+		orders,
+		payments,
+		periodRefunds,
+		registerNames,
+		cashierNames,
+		stores,
+		num_decimals,
+	}: Inputs,
 	t: (key: string) => string,
 	{
 		money,
@@ -65,19 +77,17 @@ export function summarySpec(
 	group(
 		'payments',
 		t('reports.payment_methods'),
-		totals.paymentMethodsArray.map((method) =>
-			row(
-				method.payment_method,
-				method.payment_method === 'unpaid'
-					? t('reports.unpaid')
-					: method.payment_method === 'unknown'
-						? t('common.unknown')
-						: method.payment_method_title,
-				'',
-				method.total
+		payments.map((tender) => row(tender.key, tenderLabel(tender, t), '', tender.amount)),
+		// Taken is money taken: what an order still owes is not in it.
+		row(
+			'total',
+			t('reports.taken'),
+			'',
+			sumBy(
+				payments.filter((tender) => tender.key !== 'unpaid'),
+				'amount'
 			)
-		),
-		row('total', t('reports.taken'), '', sumBy(totals.paymentMethodsArray, 'total'))
+		)
 	);
 	if (totals.taxTotalsArray.length)
 		group(

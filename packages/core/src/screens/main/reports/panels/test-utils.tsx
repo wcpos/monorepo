@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
-
-import { mockState } from '../cards/test-utils';
+import { mockState, render } from '../cards/test-utils';
 import { Reports } from '../reports';
 import { calculateTotals } from '../report/utils';
+import { PageSheetHostContext } from '../../components/page-sheet-host';
 
 import type * as Context from '../context';
 
@@ -164,11 +163,13 @@ function SelectionProvider({ children }: React.PropsWithChildren) {
 }
 export const room = () =>
 	render(
-		<real.ReportsScopeProvider>
-			<SelectionProvider>
-				<Reports date="Sales" />
-			</SelectionProvider>
-		</real.ReportsScopeProvider>
+		<PageSheetHostContext.Provider value="scene:reports">
+			<real.ReportsScopeProvider>
+				<SelectionProvider>
+					<Reports date="Sales" />
+				</SelectionProvider>
+			</real.ReportsScopeProvider>
+		</PageSheetHostContext.Provider>
 	);
 
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');

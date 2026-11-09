@@ -1,11 +1,15 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as renderTree, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { RemoteSessionCard, SessionCard, type SessionCardData } from './session-card';
 import { Closures } from './index';
+import { ReportsDirectoriesProvider } from '../scope';
+
+/** Every reader names cashiers and stores from the room's one directory read. */
+const render = (ui: React.ReactElement) => renderTree(ui, { wrapper: ReportsDirectoriesProvider });
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>

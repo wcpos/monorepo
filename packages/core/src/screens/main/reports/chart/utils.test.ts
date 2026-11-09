@@ -40,6 +40,8 @@ import type { DateRange, OrderPayload } from '../context';
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { id: 9, timezone: 'Europe/London' } }),
 }));
+// The decoded `store: '9'` filter of the rendered case below; the decoding has its own tests.
+jest.mock('../scope', () => ({ useReportsFilterScope: () => ({ storeId: 9 }) }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (
 		source: Record<string, unknown> | undefined,

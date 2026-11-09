@@ -4,6 +4,8 @@
 # 45 MiB, under jsDelivr's 50 MB limit whichever unit they mean, and under it
 # with one retained previous build.
 WEB_BUNDLE_TREE_LIMIT_BYTES=47185920
+# Set by check_tree_size; a jsDelivr size 403 on a tree measured under the gate is its cached verdict, not this tree.
+CDN_TREE_UNDER_GATE=""
 : "${CDN_POLL_INTERVAL:=20}" # Give jsDelivr time to refresh after each purge.
 # shellcheck disable=SC2034 # Used by the sourcing release script/workflow.
 CDN_HASHED_DEADLINE_SECONDS=600 # Origin rate limiting lasted minutes on 2026-10-14; then ask a human.
@@ -43,6 +45,7 @@ tree_size_bytes() (
 
 check_tree_size() {
 	local bytes mib limit
+	CDN_TREE_UNDER_GATE=""
 	bytes=$(tree_size_bytes "$1") || { echo "FAIL-HARD: could not measure tree $1" >&2; return 1; }
 	mib=$(awk -v n="$bytes" 'BEGIN { printf "%.2f", n / 1048576 }')
 	limit=$((WEB_BUNDLE_TREE_LIMIT_BYTES / 1048576))
@@ -54,6 +57,7 @@ check_tree_size() {
 			sort_by(.size) | reverse | .[:10][] | "\(.size) \(.path)"'
 		return 1
 	fi
+	CDN_TREE_UNDER_GATE=1
 }
 
 is_unhashed_path() {
@@ -118,10 +122,10 @@ cdn_refresh_advice() {
 # only polls by content (re-purging would extend jsDelivr's throttle). Only retry outstanding paths.
 verify_cdn_paths() {
 	local ref="$1" deadline=$((SECONDS + $2)) sha path i diagnosis remaining=0
-	local paths=() shas=() diagnoses=()
+	local paths=() shas=() diagnoses=() stale=()
 	while read -r sha path; do
 		[[ -n "$sha" && -n "$path" ]] || continue
-		paths+=("$path"); shas+=("$sha"); diagnoses+=("not attempted before deadline")
+		paths+=("$path"); shas+=("$sha"); diagnoses+=("not attempted before deadline"); stale+=("")
 		remaining=$((remaining + 1))
 	done
 	[[ "$remaining" -gt 0 ]] || { echo 'FAIL: no CDN paths to verify'; return 1; }
@@ -135,7 +139,11 @@ verify_cdn_paths() {
 			else
 				diagnoses[i]="$diagnosis"
 				echo "@${ref}/build/${path} -> $diagnosis"
-				if [[ "$diagnosis" == PERMANENT:* ]]; then
+				# Runs 42441099287 and 42478472683 (2026-11-08): 32 MiB trees, the file served minutes later.
+				if [[ "$diagnosis" == PERMANENT:* && "${CDN_TREE_UNDER_GATE:-}" == 1 ]]; then
+					[[ -n "${stale[i]}" ]] || echo "STALE: @${ref}/build/${path} -> jsDelivr's size verdict predates this tree (measured under the gate); re-probing"
+					stale[i]=1
+				elif [[ "$diagnosis" == PERMANENT:* ]]; then
 					echo "FAIL-HARD: @${ref} is refused by jsDelivr (tree over its 50 MB limit); re-probing cannot help, a smaller tag/branch must be published"
 					return 1
 				fi

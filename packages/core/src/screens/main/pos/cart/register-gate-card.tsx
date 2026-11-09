@@ -6,7 +6,8 @@ import { useDocField } from '@wcpos/query';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
-const REGISTER_DOCS_URL = 'https://docs.wcpos.com/stores/registers-and-devices';
+const REGISTER_DOCS_URL =
+	'https://docs.wcpos.com/stores/registers-and-devices#choosing-a-store-and-a-register';
 
 /**
  * The cart column while this store has no register, or its register list could not be read.

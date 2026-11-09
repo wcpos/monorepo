@@ -192,6 +192,7 @@ let mockLastAccess = '2026-10-28T13:05:00Z';
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace, push: mockPush }),
 	useSegments: () => mockSegments,
+	useGlobalSearchParams: () => ({}),
 }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/query/local-data-reset', () => ({

@@ -1,5 +1,7 @@
 import type { ClosureRow } from '@wcpos/query/register-session';
-import { fromMinor, toMinor } from '@wcpos/order-math';
+import { fromMinor } from '@wcpos/order-math';
+
+import { closureResult, resultWord } from '../../../../services/register-session/closure-result';
 
 export function csvCell(value: unknown) {
 	const text = String(value ?? '');
@@ -52,17 +54,12 @@ export function exportCsv(
 			...tenders.flatMap((method) => {
 				const expected = row.expected[method];
 				const counted = row.counted[method] ?? (expected === undefined ? '' : '0');
-				const value =
-					row.variance[method] ??
-					(expected === undefined
-						? undefined
-						: fromMinor(toMinor(counted, 4) - toMinor(expected, 4), 4));
+				// The RECORDED result the closures list shows, at the stored four decimals.
+				const result = closureResult({ recorded: row }, 4, method);
 				return [
 					expected ?? '',
 					counted,
-					value === undefined
-						? ''
-						: `${value.replace(/^-/, '')} ${Number(value) < 0 ? t('register.short') : Number(value) > 0 ? t('register.over') : t('reports.exact')}`,
+					result ? `${fromMinor(Math.abs(result.minor), 4)} ${resultWord(result.kind, t)}` : '',
 				];
 			}),
 			!row.synced_rows_at

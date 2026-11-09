@@ -282,6 +282,7 @@ const meta = [
 ];
 const payload = {
 	status: 'pos-open',
+	total: '100',
 	meta_data: meta,
 	currency: 'USD',
 	transaction_id: '',
@@ -1048,5 +1049,86 @@ describe('the Tax exempt row', () => {
 		);
 		expect(wooMetaCarrier.vatExempt(resident.payload.meta_data)).toBe(true);
 		expect(mockSetTaxExempt).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('paid order status choices', () => {
+	// Mirrors the legacy JSON ledger fixture in order-math/src/payments/ledger.test.ts.
+	const capturedMeta = [
+		{
+			key: '_wcpos_payments',
+			value: JSON.stringify({
+				schema: 1,
+				payments: [
+					{
+						id: 'p1',
+						source: 'app',
+						order_id: 0,
+						method_id: 'pos_cash',
+						provider: null,
+						kind: 'cash',
+						capture_mode: 'manual',
+						transport: null,
+						recorded_offline: false,
+						amount: '16.83',
+						currency: 'USD',
+						tendered: null,
+						change: null,
+						tip: null,
+						status: 'captured',
+						failure_reason: null,
+						refunded_amount: '0.00',
+						refunds: [],
+						provider_refs: {},
+						receipt: {},
+						cashier_id: 1,
+						store_id: null,
+						created_at_gmt: '2026-01-01T00:00:00Z',
+						captured_at_gmt: '2026-01-01T00:00:00Z',
+						updated_at_gmt: '2026-01-01T00:00:00Z',
+					},
+				],
+			}),
+		},
+	];
+
+	it('refuses a staged cancellation when money is captured before confirmation', async () => {
+		const props = formProps({ ...payload, cashier_id: '7' });
+		const view = render(<EditOrderMetaForm order={order as never} {...props} />);
+		await stage({ status: 'cancelled' });
+		await act(async () => fireEvent.click(screen.getByTestId('order-meta-send')));
+		expect(screen.getByTestId('order-meta-send-confirm')).toBeTruthy();
+
+		order.payload = { ...payload, meta_data: [...meta, ...capturedMeta] };
+		view.rerender(<EditOrderMetaForm order={order as never} {...props} />);
+		await confirm();
+
+		expect(mockPatch).not.toHaveBeenCalled();
+		expect(mockPush).not.toHaveBeenCalled();
+		expect(screen.queryByTestId('order-meta-send-confirm')).toBeNull();
+		const [picker] = mockSelectProps.mock.calls
+			.filter(([props]) => props.name === 'status')
+			.at(-1)!;
+		expect(picker.value).toBe('pos-open');
+	});
+
+	it.each([
+		['hides Cancelled with captured money', 'pos-open', capturedMeta, false],
+		['keeps Cancelled without payments', 'pos-open', [], true],
+		['keeps the current Cancelled status when paid', 'cancelled', capturedMeta, true],
+	] as const)('%s', (_name, status, payments, includesCancelled) => {
+		order.payload = { ...payload, status, meta_data: [...meta, ...payments] };
+		render(
+			<EditOrderMetaForm
+				order={order as never}
+				{...formProps({ ...payload, status, cashier_id: '7' })}
+			/>
+		);
+		const [picker] = mockSelectProps.mock.calls.find(([props]) => props.name === 'status')!;
+		expect(picker.allowed).toEqual(
+			includesCancelled
+				? ['pos-open', 'pending', 'on-hold', 'cancelled']
+				: ['pos-open', 'pending', 'on-hold']
+		);
 	});
 });

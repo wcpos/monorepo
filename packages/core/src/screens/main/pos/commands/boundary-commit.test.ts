@@ -24,7 +24,7 @@ import { completeSale, type SaleContext } from '../checkout/sale-completion';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { enqueueCartAction } from '../hooks/enqueue-cart-action';
 import { settleCartWrite } from './settle-cart-write';
-import { commitAtBoundary } from './boundary-commit';
+import { type BoundaryReason, commitAtBoundary, retryable } from './boundary-commit';
 import { createSettlementCoordinator } from './settlement-coordinator';
 
 import type { CartConfigInputs } from './cart-config-for-order';
@@ -153,7 +153,6 @@ it.each(['4', '3'])(
 	'completes %s in one stamped write, journals first and audits in the same slot',
 	async (total) => {
 		const order = orderFor(total);
-		const result = settleAggregate(snapshotFromOrderJSON(order.payload), config);
 		await enqueueOrderMutation(order.uuid, async (queue) => {
 			await commitAtBoundary(
 				{
@@ -167,7 +166,7 @@ it.each(['4', '3'])(
 						return completeSale(ctx, target, outcome, { host: 'background' }, slot);
 					},
 				},
-				{ order, result, queue, write: (changes) => write({ document: order, changes }) }
+				{ order, queue, write: (changes) => write({ document: order, changes }) }
 			);
 		});
 		expect(write).toHaveBeenCalledTimes(1);
@@ -214,7 +213,6 @@ describe('an answered close', () => {
 				},
 				{
 					order,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					queue,
 					write: (changes) => write({ document: order, changes }),
 				}
@@ -236,7 +234,7 @@ describe('an answered close', () => {
 		Object.assign(order.payload, { id: 42 });
 		answeredWithoutMirror();
 		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('refreshed');
-		expect(await run(order)).toBeUndefined();
+		expect(await run(order)).toEqual({ kind: 'closed' });
 		expect(order.payload.status).toBe('pos-partial');
 		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 		expect(rows('settlement.boundary-not-closed')).toEqual([]);
@@ -248,7 +246,7 @@ describe('an answered close', () => {
 		Object.assign(order.payload, { id: 42 });
 		answeredWithoutMirror();
 		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('timed-out');
-		expect(await run(order)).toBeUndefined();
+		expect(await run(order)).toEqual({ kind: 'closed' });
 		expect((await pendingCompletions(ctx.storeDB))[order.uuid]).toMatchObject({
 			awaitingAdoption: true,
 		});
@@ -261,7 +259,7 @@ describe('an answered close', () => {
 		Object.assign(order.payload, { id: 42 });
 		answeredWithoutMirror({ cause: new Error('mirror_failed') });
 		jest.mocked(refreshOrderRecord).mockResolvedValueOnce('timed-out');
-		await expect(run(order)).resolves.toBeUndefined();
+		await expect(run(order)).resolves.toEqual({ kind: 'closed' });
 		expect((await pendingCompletions(ctx.storeDB))[order.uuid]).toMatchObject({
 			awaitingAdoption: true,
 		});
@@ -271,7 +269,10 @@ describe('an answered close', () => {
 	it('a close the store answers outstanding logs the not-closed row and keeps the attempt', async () => {
 		const order = orderFor();
 		closeSale.close.mockImplementationOnce(async () => ({ kind: 'outstanding', order: null }));
-		expect(await run(order)).toEqual({ kind: 'outstanding', order: null });
+		expect(await run(order)).toEqual({
+			kind: 'unclosed',
+			close: { kind: 'outstanding', order: null },
+		});
 		expect(getLogger(['test']).debug).toHaveBeenCalledWith('settlement.boundary-not-closed', {
 			context: { orderId: order.uuid, outcome: 'outstanding' },
 		});
@@ -296,7 +297,6 @@ it('an offline boundary returns offline and leaves no completion attempt behind'
 			},
 			{
 				order,
-				result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 				queue,
 				write: (changes) => write({ document: order, changes }),
 			}
@@ -325,7 +325,6 @@ it.each(['session', 'register'])(
 				},
 				{
 					order,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					queue,
 					write: (changes) => write({ document: order, changes }),
 				}
@@ -353,7 +352,6 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 	'supersedes a boundary when %s changes during guards',
 	async (change) => {
 		const order = orderFor();
-		const result = settleAggregate(snapshotFromOrderJSON(order.payload), config);
 		resolveSession.mockImplementationOnce(async () => {
 			if (change === 'lines') order.payload.line_items = [{ total: '8', subtotal: '8' }];
 			if (change === 'status') order.payload.status = 'completed';
@@ -381,10 +379,10 @@ it.each(['lines', 'status', 'ownership', 'refund'])(
 					bindingStatus: 'bound',
 					complete,
 				},
-				{ order, result, queue, write: (changes) => write({ document: order, changes }) }
+				{ order, queue, write: (changes) => write({ document: order, changes }) }
 			)
 		);
-		expect(outcome).toBe('superseded');
+		expect(outcome).toEqual({ kind: 'superseded', retry: false });
 		expect(order.payload.total).toBe('10');
 		expect(complete).not.toHaveBeenCalled();
 		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
@@ -422,7 +420,6 @@ it.each([undefined, 'system'] as const)(
 				{
 					order,
 					queue,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
@@ -480,13 +477,13 @@ it.each(['amount', 'status', 'refund'])(
 						},
 						{
 							order,
-							result,
 							queue,
 							write: (changes) => write({ document: order, changes }),
 						}
 					)
 				);
 			else Object.assign(order.payload, settlementPatch(result));
+			return undefined; // the coordinator does not act on this outcome here
 		});
 		const observe = jest.fn();
 		const coordinator = createSettlementCoordinator({
@@ -511,7 +508,7 @@ it.each(['amount', 'status', 'refund'])(
 			await enqueueOrderMutation(order.uuid, async () => {});
 			await new Promise((resolve) => setTimeout(resolve, 0));
 			expect(observe).not.toHaveBeenCalled();
-			expect(outcomes).toEqual(['superseded']);
+			expect(outcomes).toEqual([{ kind: 'superseded', retry: false }]);
 			expect(complete).not.toHaveBeenCalled();
 			expect(settle).toHaveBeenCalledTimes(2);
 			expect(order.payload).toMatchObject({ status: 'pos-partial', total: '4' });
@@ -537,7 +534,7 @@ it('presents a refused boundary to the cashier while retaining the cart edit', a
 						Object.assign(order.payload, changes(order.payload));
 						return order;
 					},
-					commitAtBoundary: (target, result, slot) =>
+					commitAtBoundary: (target, slot) =>
 						commitAtBoundary(
 							{
 								...ctx,
@@ -548,7 +545,6 @@ it('presents a refused boundary to the cashier while retaining the cart edit', a
 							},
 							{
 								order: target as EngineRecord<'orders'>,
-								result,
 								queue: slot,
 								write: (changes) => write({ document: order, changes }),
 							}
@@ -587,7 +583,6 @@ it('supersedes coupon completion when references change during the guard window'
 			{
 				order,
 				queue,
-				result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 				allowed: () => generation === 0,
 				coupons: {
 					coupons: new Map([
@@ -600,7 +595,7 @@ it('supersedes coupon completion when references change during the guard window'
 			}
 		)
 	);
-	expect(outcome).toBe('superseded');
+	expect(outcome).toEqual({ kind: 'superseded', retry: false });
 	expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
 	expect(complete).not.toHaveBeenCalled();
 	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
@@ -662,13 +657,12 @@ it.each(['product', 'variation', 'read-once', 'read-twice'] as const)(
 				{
 					order,
 					queue,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
 		);
 		const reason = scenario === 'read-twice' ? 'catalog_changed' : 'pos_products.out_of_stock';
-		expect(outcome).toEqual({ superseded: true, reason });
+		expect(outcome).toEqual({ kind: 'superseded', reason, retry: true });
 		expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
 		expect(complete).not.toHaveBeenCalled();
 		expect(getLogger(['test']).warn).toHaveBeenCalledWith(
@@ -699,7 +693,6 @@ it.each([false, true])(
 					order,
 					queue,
 					allowed: () => valid,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
@@ -732,13 +725,16 @@ it.each(['none', 'choose'] as const)(
 				{
 					order,
 					queue,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
 		);
 		if (resolved === 'choose') {
-			expect(outcome).toMatchObject({ deny: { reasonKey: 'pos_checkout.choose_register_first' } });
+			expect(outcome).toMatchObject({
+				kind: 'refused',
+				refusal: { deny: { reasonKey: 'pos_checkout.choose_register_first' } },
+				retry: false,
+			});
 			expect(order.payload).toMatchObject({ total: '10', status: 'pos-partial' });
 			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 		} else expect(order.payload.status).toBe('completed');
@@ -760,10 +756,7 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 			);
 		};
 		const complete = jest.fn();
-		const commit = (
-			result: Parameters<typeof commitAtBoundary>[1]['result'],
-			queue: Parameters<typeof commitAtBoundary>[1]['queue']
-		) =>
+		const commit = (queue: Parameters<typeof commitAtBoundary>[1]['queue']) =>
 			commitAtBoundary(
 				{
 					...ctx,
@@ -774,7 +767,6 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 				},
 				{
 					order,
-					result,
 					queue,
 					write: (changes) => write({ document: order, changes }),
 				}
@@ -782,7 +774,7 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 		const data = { line_items: [{ total: '4', subtotal: '4' }] };
 		if (scenario.startsWith('cart')) {
 			authorize();
-			const dispatch = jest.fn((_order, result, queue) => commit(result, queue));
+			const dispatch = jest.fn((_order, queue) => commit(queue));
 			await enqueueOrderMutation(order.uuid, (queue) =>
 				settleCartWrite(
 					{ document: order, data, queue },
@@ -804,10 +796,8 @@ it.each(['cart-live', 'cart-offline', 'guard-live', 'guard-offline'])(
 				authorize();
 				return { registerId: 'register', sessionId: 'session' };
 			});
-			const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
-				commit(settleAggregate(snapshotFromOrderJSON(order.payload), config), queue)
-			);
-			expect(outcome).toBe('superseded');
+			const outcome = await enqueueOrderMutation(order.uuid, (queue) => commit(queue));
+			expect(outcome).toEqual({ kind: 'superseded', retry: false });
 		}
 		expect(order.payload).toMatchObject({
 			...data,
@@ -861,7 +851,6 @@ it.each(['stock', 'predicate', 'unchanged'])(
 					order,
 					queue,
 					allowed: () => allowed,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			)
@@ -873,7 +862,11 @@ it.each(['stock', 'predicate', 'unchanged'])(
 		);
 		expect(complete).toHaveBeenCalledTimes(change === 'unchanged' ? 1 : 0);
 		if (change === 'stock')
-			expect(outcome).toEqual({ superseded: true, reason: 'pos_products.out_of_stock' });
+			expect(outcome).toEqual({
+				kind: 'superseded',
+				reason: 'pos_products.out_of_stock',
+				retry: true,
+			});
 		// No counter-release API exists and the resident resolver cannot await allocation.
 		expect(nextSaleCounter).toHaveBeenCalledTimes(1);
 	}
@@ -915,7 +908,6 @@ it('completes a refunded partial sale through the coordinator using net paid', a
 					order,
 					queue,
 					allowed,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: (changes) => write({ document: order, changes }),
 				}
 			),
@@ -982,7 +974,6 @@ it.each([
 							queue,
 							allowed,
 							coupons,
-							result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 							write: async (changes) => {
 								await Promise.resolve(); // applyLocalPatch awaits resolveEngineResident before the modifier.
 								if (change === 'catalog') catalog.next({});
@@ -995,12 +986,17 @@ it.each([
 						}
 					)
 				);
+				return undefined; // the coordinator does not act on this outcome here
 			},
 		});
 		try {
 			await new Promise((resolve) => setTimeout(resolve, 20));
 			expect(outcomes).toEqual([
-				{ superseded: true, reason: change === 'catalog' ? 'catalog_changed' : 'in_checkout' },
+				{
+					kind: 'superseded',
+					reason: change === 'catalog' ? 'catalog_changed' : 'in_checkout',
+					retry: true,
+				},
 			]);
 			expect(order.payload).toMatchObject({
 				status: 'pos-partial',
@@ -1046,7 +1042,6 @@ it.each(['register_changed', 'session_changed', 'session_replaced', 'unchanged']
 				{
 					order,
 					queue,
-					result: settleAggregate(snapshotFromOrderJSON(order.payload), config),
 					write: async (changes) => {
 						if (change === 'register_changed') registerId = 'other';
 						if (change === 'session_changed') mockSession.status = 'closed';
@@ -1059,10 +1054,11 @@ it.each(['register_changed', 'session_changed', 'session_replaced', 'unchanged']
 		const unchanged = change === 'unchanged';
 		expect(outcome).toEqual(
 			unchanged
-				? undefined
+				? { kind: 'closed' }
 				: {
-						superseded: true,
+						kind: 'superseded',
 						reason: change === 'register_changed' ? change : 'session_changed',
+						retry: true,
 					}
 		);
 		expect(order.payload).toMatchObject({
@@ -1071,4 +1067,23 @@ it.each(['register_changed', 'session_changed', 'session_replaced', 'unchanged']
 		});
 		expect(complete).toHaveBeenCalledTimes(unchanged ? 1 : 0);
 	}
+);
+
+// Typed by BoundaryReason: a new reason does not compile here until its retry decision is written.
+const RETRY_DECISIONS: Record<BoundaryReason, boolean> = {
+	catalog_changed: true,
+	register_changed: true,
+	session_changed: true,
+	in_checkout: true,
+	'pos_cart.only_n_available': true,
+	'pos_products.out_of_stock': true,
+	'pos_checkout.choose_register_first': false,
+	'pos_checkout.open_register_first': false,
+};
+it.each(Object.entries(RETRY_DECISIONS))('%s retries on new inputs: %s', (reason, retry) => {
+	expect(retryable(reason)).toBe(retry);
+});
+it.each(['actions.hook_failed', 'pos_checkout.order_changed_retry', 'toString'])(
+	'a refusal reason the table does not name (%s) is never retried',
+	(reason) => expect(retryable(reason)).toBe(false)
 );

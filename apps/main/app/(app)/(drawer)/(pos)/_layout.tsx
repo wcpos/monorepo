@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform, type ViewInstance } from 'react-native';
 
-import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 
 import { useDocField } from '@wcpos/query';
 import { EdgeSurface } from '@wcpos/components/edge-surface';
@@ -32,9 +32,9 @@ import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
 import { tillStackScreenListeners } from '@wcpos/core/screens/main/pos/till-stack';
+import { useTillLocation, useTillOrderId } from '@wcpos/core/screens/main/pos/use-till-location';
 import { useRegisterBinding } from '@wcpos/core/services/register/use-register-binding';
 
-import { tillOrderIdForRoute } from '../../../../components/pos-till-order-id';
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
 export const unstable_settings = {
@@ -49,44 +49,10 @@ export default function POSLayout() {
 	useResetCheckoutModeOnStoreChange(storeID);
 	useRejectedOrderSavesSync(storeID);
 	useStoreDeletedOrdersSettler(storeID);
-	const segments: string[] = useSegments();
-	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
-	const params = useGlobalSearchParams<{ orderId: string | string[] }>();
-	useCheckoutUrlSeed(params.orderId);
-
-	// Extract orderId: handle array (catch-all) vs string, and handle empty array
-	let orderIdFromParams: string | undefined;
-	if (Array.isArray(params.orderId)) {
-		// Catch-all route: empty array means /cart (new order), non-empty means /cart/uuid
-		orderIdFromParams = params.orderId.length > 0 ? params.orderId[0] : undefined;
-	} else {
-		orderIdFromParams = params.orderId;
-	}
-
-	// Check if we're currently in the POS route structure
-	const isInPOSRoute = segments.includes('(pos)');
-
-	// Check if we're at a /cart route (with or without orderId)
-	const isAtCartRoute = segments.includes('cart');
-
-	// Remember the last valid orderId when at a cart route with an orderId.
-	// This prevents losing the orderId when a modal (like settings) is opened, which
-	// navigates away from the POS routes. We only remember when explicitly at a cart
-	// route with an orderId so that /cart (new order) still shows a new order.
-	//
-	// This uses React's "adjusting state during render" pattern: when a new candidate
-	// orderId is observed we store it immediately during render (no effect, no ref), so
-	// the value survives the transition out of the POS routes when a modal opens.
-	const [lastOrderId, setLastOrderId] = React.useState<string | undefined>(undefined);
-	if (isInPOSRoute && isAtCartRoute && orderIdFromParams && orderIdFromParams !== lastOrderId) {
-		setLastOrderId(orderIdFromParams);
-	}
-
-	// The sheets carry their own order id; the provider follows the till (see tillOrderIdForRoute).
-	const [tillOrderId, setTillOrderId] = React.useState<string | undefined>(undefined);
-	const resolved = tillOrderIdForRoute({ segments, orderIdFromParams, tillOrderId, lastOrderId });
-	if (resolved.tillOrderId !== tillOrderId) setTillOrderId(resolved.tillOrderId);
-	const orderId = resolved.orderId;
+	const location = useTillLocation();
+	useCheckoutUrlSeed(location.seed);
+	// The provider follows the till, never a sheet's order (#3150).
+	const tillOrderId = useTillOrderId(location);
 
 	// The open orders are scoped IN STORAGE by cashier, store and register (#2242, `openOrdersSelector`).
 	const { registerId } = useRegisterBinding();
@@ -139,7 +105,7 @@ export default function POSLayout() {
 							handle={openOrdersHandle}
 							scope={`${cashierID}:${storeID}:${registerId}`}
 							defaultCustomerResource={defaultCustomerResource}
-							currentOrderUUID={orderId}
+							currentOrderUUID={tillOrderId}
 						>
 							<ErrorBoundary FallbackComponent={FallbackScreen}>
 								{/* Spans both register layouts (tabs, columns): the products screen's query and

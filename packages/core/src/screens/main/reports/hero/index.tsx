@@ -1,17 +1,9 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { filter } from 'rxjs';
-import { format } from 'date-fns/format';
 import roundTo from 'lodash/round';
-import { useObservableState } from 'observable-hooks';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import {
-	observeCredentialStores,
-	observeSiteCredentials,
-	PENDING_USER_DB_READ,
-} from '@wcpos/query/user-db';
 import { Card } from '@wcpos/components/card';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Chip } from '@wcpos/components/chip';
@@ -23,14 +15,14 @@ import { Text } from '@wcpos/components/text';
 import { TileGrid } from '@wcpos/components/tile-grid';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 
-import { useStoreSession } from '../../../../contexts/app-state';
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useT } from '../../../../contexts/translations';
-import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
+import { inZone } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
-import { useQueryHandleFields, useQueryState, useQueryStateActions } from '../../../../query';
+import { useQueryStateActions } from '../../../../query';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
-import { stores as storeRows } from '../cards/aggregate';
+import { stores as storeRows, tenders } from '../cards/aggregate';
 import {
 	ReportsComparison,
 	useIncludedStatus,
@@ -43,16 +35,8 @@ import {
 import { calculateTotals } from '../report/utils';
 import { summarySpec } from '../report/summary';
 import { useReportCashier } from '../report/use-report-cashier';
-import { buildReportDocument } from '../panels/document';
-import { usePrintWaiting } from '../panels/use-print-waiting';
-import { periodLabel } from '../date-button';
-import {
-	useRegisterNames,
-	useRegisterNamesReady,
-} from '../../../../services/register/use-register-names';
-import { useRegisterBinding } from '../../../../services/register/use-register-binding';
-import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
-import { useReceiptDocument } from '../../receipt/use-receipt-document';
+import { useReportPrint } from '../panels/use-report-print';
+import { useReportsDirectories, useReportsFilterScope } from '../scope';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { ReportsSyncProgress } from '../sync-progress';
 import { ScopeRow } from '../scope-row';
@@ -60,15 +44,10 @@ import { MenuChip } from '../menu-chip';
 
 function CashierChip({ stretch }: { stretch?: boolean }) {
 	const t = useT();
-	const { site } = useStoreSession();
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
 	// Undefined until the directory emits: a chip built from an empty list would offer Everyone
 	// as the only choice while the credentials are still being read.
-	const cashiers = useObservableState(source);
-	const value = useQueryState<'orders'>().filters.cashier;
+	const { cashiers } = useReportsDirectories();
+	const value = useReportsFilterScope().cashierId;
 	const actions = useQueryStateActions<'orders'>();
 	if (!cashiers) return <Skeleton shape="chip" testID="hero-cashier-loading" />;
 	return (
@@ -77,7 +56,7 @@ function CashierChip({ stretch }: { stretch?: boolean }) {
 			name="cashier"
 			icon="cashier"
 			scroll
-			value={value === undefined ? 'all' : String(value)}
+			value={value ?? 'all'}
 			defaultValue="all"
 			onChange={(next) => actions.setFilter('cashier', next === 'all' ? undefined : next)}
 			choices={[
@@ -235,130 +214,51 @@ export function HeroShell() {
 }
 /** Printing has its own boundary so a loading directory never blanks the sales figure. */
 function HeroPrint({ storeId }: { storeId?: number }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const phone = useIsPhone();
 	const { selectedOrders, totals, periodRefunds } = useReportsData();
-	const { dateRange, timezone } = useReportsPeriod();
 	const { statusMode } = useReportsScope();
 	const formats = useReportFormats(storeId);
-	const { presets } = useStoreDay(storeId),
-		{ formatDate } = useLocalDate();
-	const scope = {
-		from: format(dateRange.start, 'yyyy-MM-dd', zoneOptions(timezone)),
-		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
-	};
-	const { text: period } = periodLabel({ scope, timezone, ranges: presets(), t, formatDate });
-	const { register: registerId, store: storeFilter } = useQueryState<'orders'>().filters;
-	const names = useRegisterNames(storeId),
-		namesLoaded = useRegisterNamesReady(storeId);
-	const binding = useRegisterBinding();
-	const { site, wpCredentials } = useStoreSession();
-	const storesSource = React.useMemo(
-		() =>
-			observeCredentialStores(wpCredentials).pipe(
-				filter((value) => value !== PENDING_USER_DB_READ)
-			),
-		[wpCredentials]
-	);
-	const storeDirectory = useObservableState(storesSource);
-	// The sentinel is also a single-store install's own scope (store 0); All stores needs stores to choose from.
-	const allStores = storeFilter === 'woocommerce-pos' && (storeDirectory?.length ?? 0) > 1;
-	const storeNames = Object.fromEntries(
-		(storeDirectory ?? []).map((row) => [String(row.id), row.name || t('common.unknown')])
-	);
-	const register = allStores
-		? t('reports.all_stores')
-		: registerId
-			? names[registerId] ||
-				(binding.registerId === registerId ? binding.registerName : '') ||
-				t('common.unknown')
-			: t('reports.all_registers');
+	const { allStores, names, namesReady } = useReportsFilterScope();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const cashier = useReportCashier();
-	const source = React.useMemo(
-		() => observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ)),
-		[site]
-	);
-	const directory = useObservableState(source);
-	const [generatedAt] = React.useState(() => new Date().toISOString());
-	const [printError, setPrintError] = React.useState('');
 	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const spec = summarySpec(
 		{
 			totals,
 			orders: selectedOrders.length,
+			payments: tenders(selectedOrders, totals, formats.store?.price_num_decimals),
 			periodRefunds,
-			registerNames: names,
+			registerNames: names.register,
 			stores: allStores
-				? { rows: storeRows(selectedOrders, totals), names: storeNames }
+				? { rows: storeRows(selectedOrders, totals), names: names.store }
 				: undefined,
-			cashierNames: Object.fromEntries(
-				(directory ?? []).map((user) => [String(user.id), user.display_name || t('common.unknown')])
-			),
+			cashierNames: names.cashier,
 			num_decimals: formats.store?.price_num_decimals,
 		},
 		t,
 		formats
 	);
-	const context = useClosureDocumentContext(storeId);
-	const document = buildReportDocument(
+	const { doc, waiting, print, error, scopeLine } = useReportPrint({
+		key: 'summary',
+		title: t('reports.summary_title'),
 		spec,
-		spec.keys.map((key, i) => ({
-			key,
-			label: spec.head[i],
-			type: spec.types[i],
-			align: spec.align[i],
-		})),
-		{
-			key: 'summary',
-			title: t('reports.summary_title'),
-			label: [
-				t('reports.panel_scope', { period, register }),
-				cashier.name,
-				statusMode === 'all' ? t('reports.every_status') : t('reports.completed_processing'),
-			].join(' · '),
-			storeId: storeId ?? 0,
-			registerId: registerId ?? '',
-			registerName: register,
-			from: dateRange.start.toISOString(),
-			to: dateRange.end.toISOString(),
-			generatedAt,
-		},
-		context
-	);
-	const doc = useReceiptDocument({
-		autoPrintAllowed: false,
-		templateType: 'report',
-		storeId,
-		localReport: document,
-	});
-	const { handle: salesHandle, refundsHandle } = useReportsHandles();
-	const sales = useQueryHandleFields(salesHandle, ['laneProgress']);
-	const refunds = useQueryHandleFields(refundsHandle, ['laneProgress']);
-	const { waiting, label } = usePrintWaiting({
-		doc,
-		storeReady: !!formats.store,
+		scope: [
+			cashier.name,
+			statusMode === 'all' ? t('reports.every_status') : t('reports.completed_processing'),
+		],
 		dataReady:
 			!!formats.store &&
 			cashier.ready &&
-			(totals.userStoreArray.length < 2 || !!directory) &&
+			(totals.userStoreArray.length < 2 || namesReady.cashier) &&
 			(allStores ||
-				namesLoaded ||
+				namesReady.register ||
 				!online ||
 				totals.registerArray.length < 2 ||
-				totals.registerArray.every(({ registerId }) => !!names[registerId])),
-		salesLane: sales.ready && !!sales.laneProgress,
-		refundsLane: refunds.ready && !!refunds.laneProgress,
+				totals.registerArray.every(({ registerId }) => !!names.register[registerId])),
 		needsRefunds: true,
 	});
-	const print = async () => {
-		setPrintError('');
-		try {
-			if ((await doc.print()) === false) setPrintError(t('reports.print_failed'));
-		} catch {
-			setPrintError(t('reports.print_failed'));
-		}
-	};
 	return (
 		<View className="items-end gap-2">
 			{phone ? (
@@ -379,14 +279,15 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 				</Button>
 			)}
 			<PrintSheet
+				portalHost={host}
 				open={sheetOpen}
 				onOpenChange={setSheetOpen}
 				doc={doc}
 				title={t('reports.summary_title')}
-				description={t('reports.panel_scope', { period, register })}
+				description={scopeLine}
 				printLabel={t('reports.print_summary')}
-				waiting={waiting ? label : null}
-				error={printError || doc.documentError?.message || null}
+				waiting={waiting}
+				error={error}
 				onPrint={print}
 				testID="hero-print-sheet"
 			/>

@@ -6,7 +6,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { enterCheckout, setTenderMethod } from './checkout-mode';
-import { readCheckoutSeed } from './pos-url';
+import { type CheckoutSeed } from './pos-url';
 
 /**
  * Cold-load seed: `/cart/<uuid>/checkout[/<methodId>]` re-enters checkout for that order
@@ -17,8 +17,8 @@ import { readCheckoutSeed } from './pos-url';
  * Same gate as Pay and `CheckoutScreen`: a store without the payment-methods contract keeps
  * its legacy modal, so the link is routed there instead of into an unusable tender column.
  */
-export function useCheckoutUrlSeed(orderIdParam: string | string[] | undefined) {
-	const { orderId, checkout, methodId } = readCheckoutSeed(orderIdParam);
+export function useCheckoutUrlSeed(seed: CheckoutSeed) {
+	const { orderId, checkout, methodId } = seed;
 	const phone = useIsPhone();
 	const { loaded, unsupportedSchema } = usePaymentMethods();
 	const router = useRouter();

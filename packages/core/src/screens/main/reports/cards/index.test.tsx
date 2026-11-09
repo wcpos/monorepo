@@ -1,9 +1,9 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 
-import { mockState, setOrders } from './test-utils';
+import { mockState, render, setOrders } from './test-utils';
 import { PeriodSection } from './index';
 
 beforeEach(() => {

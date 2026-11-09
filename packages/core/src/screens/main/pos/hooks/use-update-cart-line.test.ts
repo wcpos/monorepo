@@ -343,6 +343,7 @@ it('refuses an increase queued behind completion and returns refusal to the hook
 		.spyOn(jest.requireMock('../commands/use-boundary-commit'), 'useBoundaryCommit')
 		.mockReturnValueOnce(async () => {
 			Object.assign(mockOrder.payload, { status: 'completed', total: '10' });
+			return { kind: 'closed' };
 		});
 	const { result } = renderHook(() => useWriter());
 	await act(async () => {

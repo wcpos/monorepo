@@ -19,20 +19,19 @@ import { useDocField } from '@wcpos/query';
 import { fromMinor } from '@wcpos/order-math';
 import { type ClosureRow, mintUuid } from '@wcpos/query/register-session';
 
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useAppState } from '../../../../contexts/app-state';
 import { useViewedStore } from '../../../../hooks/use-store-day';
 import { useT } from '../../../../contexts/translations';
 import { useExclusive } from '../../hooks/use-exclusive';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-import { ApprovalFields } from '../../pos/cart/approve-sheet';
-import { RegisterAmount } from '../../pos/cart/movement-sheet';
-import { DenominationTile } from '../../pos/cart/register-count';
-import { denominations } from '../../pos/cart/register-count.denominations';
+import { ApprovalFields, DenominationTile, RegisterAmount } from '../../components/register-count';
 import {
 	countDecimals,
 	denominationTotal,
 	validAmount,
-} from '../../pos/cart/register-count.helpers';
+} from '../../../../services/register-session/count-money';
+import { denominations } from '../../../../services/register-session/count-denominations';
 import {
 	type Correction,
 	deriveSettled,
@@ -52,6 +51,7 @@ export function RecountSheet({
 	onSaved: () => void | Promise<void>;
 	onOpenChange: (open: boolean) => void;
 }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	const http = useRestHttpClient();
 	const { wpCredentials } = useAppState();
@@ -128,6 +128,7 @@ export function RecountSheet({
 			}}
 		>
 			<DialogContent
+				portalHost={host}
 				side={phone ? 'bottom' : 'right'}
 				testID="recount-sheet"
 				closeLabel={t('common.close')}

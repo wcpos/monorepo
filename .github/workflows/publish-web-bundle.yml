@@ -382,6 +382,7 @@ jobs:
             echo "::error::web-bundle@$BRANCH would be $mib MiB; jsDelivr refuses every file of a version over 50 MB. Drop the retained files listed above or publish to a lane branch."
             exit 1
           fi
+          echo "tree_bytes=$total" >> "$GITHUB_OUTPUT"
 
           git add -A
           if git diff --staged --quiet; then
@@ -401,9 +402,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.inputs.bundle_branch }}
+          TREE_BYTES: ${{ steps.web-bundle.outputs.tree_bytes }}
         run: |
           set -euo pipefail
           source "$RUNNER_TEMP/cdn-verify.sh"
+          # A size 403 on a tree the gate measured is jsDelivr's stale verdict (runs 42441099287, 42478472683).
+          # On a re-dispatch of an already-published SHA the publish step is skipped and its output is
+          # empty, so measure the branch this step verifies (check_tree_size sets the same flag).
+          # shellcheck disable=SC2034 # Read by verify_cdn_paths.
+          if [[ -n "$TREE_BYTES" ]]; then
+            if ((TREE_BYTES <= WEB_BUNDLE_TREE_LIMIT_BYTES)); then CDN_TREE_UNDER_GATE=1; fi
+          else
+            check_tree_size "$BRANCH" || true
+          fi
           BUILD_DIR="$GITHUB_WORKSPACE/apps/web/build"
           purge_cdn_root "$BRANCH"
           if [ -f "$BUILD_DIR/metadata.json" ]; then

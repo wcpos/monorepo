@@ -1,9 +1,9 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 
-import { mockProducts, setOrders } from './test-utils';
+import { mockProducts, render, setOrders } from './test-utils';
 import { PeriodSection } from './index';
 
 import type { ReportOrder } from '../context';

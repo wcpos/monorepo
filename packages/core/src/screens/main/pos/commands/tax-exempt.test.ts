@@ -101,7 +101,7 @@ function setup(overrides: OrderPayload = {}) {
 		}),
 		actor: { userId: 1, registerId: null, sessionId: null },
 		localPatch,
-		commitAtBoundary: jest.fn(async () => undefined),
+		commitAtBoundary: jest.fn(async () => ({ kind: 'closed' as const })),
 		configForOrder: (payload) =>
 			createCartConfig({ ...config, vatExempt: wooMetaCarrier.vatExempt(payload.meta_data) }),
 		serverOwnsMoney: () => false,
@@ -550,7 +550,6 @@ it.each(['repair', 'user'] as const)('couponed paid-balance crossing from %s', a
 	} else {
 		expect(h.deps.commitAtBoundary).toHaveBeenCalledWith(
 			h.order,
-			expect.objectContaining({ totals: expect.objectContaining({ total: '14' }) }),
 			expect.anything(),
 			expect.objectContaining({
 				context: expect.objectContaining({
