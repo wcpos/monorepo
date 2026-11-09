@@ -72,14 +72,6 @@ interface Props {
 	slow?: boolean;
 }
 
-/**
- * A command sent and never answered gates the whole checkout (ADR 0040): each host shows this
- * before any routing, the zero-total Done, the Legacy tab and the tiles alike (Codex 4346411060,
- * 4346556708). A live terminal leg keeps its own view; the terminal service owns its commands.
- */
-export const gatesCheckout = (flow: Pick<TenderFlow, 'unansweredCommand' | 'terminalLeg'>) =>
-	flow.unansweredCommand && !flow.terminalLeg;
-
 export function UnansweredGate({ flow }: { flow: TenderFlow }) {
 	const t = useT();
 	return (

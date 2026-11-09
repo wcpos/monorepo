@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { useIsPhone } from '@wcpos/components/lib/device';
-import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import {
 	Dialog,
@@ -13,7 +12,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
-import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
@@ -22,10 +20,10 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { leaveCheckout, useOrderCheckoutStage } from '../checkout-mode';
 import { ReceiptStage } from '../receipt-stage/receipt-stage';
 import { useFinishSale } from '../receipt-stage/use-finish-sale';
-import { CancelPaymentView } from './cancel-payment-view';
-import { LegacyTab } from './legacy-tab';
+import { leaveOrCancel } from './checkout-body';
+import { CancelPaymentButton, CheckoutBodyView, TenderTabs } from './checkout-body-view';
 import { LedgerPane } from './ledger-pane';
-import { gatesCheckout, TenderPane, UnansweredGate } from './tender-pane';
+import { TenderPane } from './tender-pane';
 import { useTenderFlow } from './use-tender-flow';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
@@ -69,20 +67,13 @@ export function TenderCheckout({ order }: Props) {
 		router.back();
 	}, [router, order.uuid]);
 
-	// Closing on a half-paid order is the same decision as pressing Cancel
-	// payment: money has been taken and something has to happen to it. Dropping
-	// straight back to the cart would leave the cashier holding cash the order
-	// still counts as paid.
+	// The receipt stage finishes the sale; otherwise close is the shared back decision.
 	const handleClose = React.useCallback(() => {
 		if (stage === 'receipt') {
 			finishSale();
 			return;
 		}
-		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) {
-			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
-			return;
-		}
-		leave();
+		leaveOrCancel(flow, { leave });
 	}, [flow, leave, stage, finishSale]);
 
 	const lines = React.useMemo(
@@ -96,54 +87,30 @@ export function TenderCheckout({ order }: Props) {
 		[payload.line_items, formatCurrency]
 	);
 
-	const body = (() => {
-		if (gatesCheckout(flow)) return <UnansweredGate flow={flow} />;
-		// A live terminal leg is never hidden behind another view: the pane below
-		// shows it (with its own Cancel) until the server says the leg is over.
-		if (flow.state.view === 'cancel' && !flow.hasLiveTerminalLeg) {
-			return <CancelPaymentView flow={flow} format={format} />;
-		}
-		if (flow.state.tab === 'legacy' && !flow.terminalLeg) {
-			return <LegacyTab flow={flow} order={order} />;
-		}
-		// Nothing left to take: a free sale, or a re-opened sale its payments already cover. The
-		// press completes it (zero-balance close). An unanswered attempt keeps the pane (it is cleared first),
-		// and so does a terminal leg still on screen (a live leg is never hidden behind another view).
-		if (flow.balanceMinor === 0 && !flow.unansweredAttempt && !flow.terminalLeg) {
-			return (
-				<View className="p-4">
-					<Button
-						// The sale button: primary, never green (green is a status colour, not an action).
-						size="lg"
-						testID="checkout-complete-order"
-						loading={flow.running === 'takeTender'}
-						disabled={flow.busy}
-						onPress={() => void flow.takeTender()}
-					>
-						<ButtonText>{t('common.done')}</ButtonText>
-					</Button>
-				</View>
-			);
-		}
-		if (compact) {
-			return (
-				// The pane's own label row now carries the balance; no bar above it on a phone.
-				<View className="bg-card flex-1 px-3">
-					<TenderPane flow={flow} format={format} compact onLeave={leave} />
-				</View>
-			);
-		}
-		return (
-			<View className="flex-1 flex-row">
-				<View className="border-border bg-muted/40 w-80 border-r p-4">
-					<LedgerPane flow={flow} lines={lines} format={format} />
-				</View>
-				<View className="flex-1 p-4">
-					<TenderPane flow={flow} format={format} onLeave={leave} />
-				</View>
-			</View>
-		);
-	})();
+	const body = (
+		<CheckoutBodyView
+			flow={flow}
+			order={order}
+			format={format}
+			pane={
+				compact ? (
+					// The pane's own label row now carries the balance; no bar above it on a phone.
+					<View className="bg-card flex-1 px-3">
+						<TenderPane flow={flow} format={format} compact onLeave={leave} />
+					</View>
+				) : (
+					<View className="flex-1 flex-row">
+						<View className="border-border bg-muted/40 w-80 border-r p-4">
+							<LedgerPane flow={flow} lines={lines} format={format} />
+						</View>
+						<View className="flex-1 p-4">
+							<TenderPane flow={flow} format={format} onLeave={leave} />
+						</View>
+					</View>
+				)
+			}
+		/>
+	);
 
 	if (stage === 'receipt' && uiSettings.autoShowReceipt) {
 		return (
@@ -157,46 +124,9 @@ export function TenderCheckout({ order }: Props) {
 		);
 	}
 
-	const tabs = (
-		<View className={compact ? 'flex-1' : undefined}>
-			<SegmentedControl
-				// The header row beside the title: hug, or Yoga hands the control the whole row.
-				hug={!compact}
-				value={flow.state.tab}
-				onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
-				segments={[
-					{
-						value: 'payments',
-						label: t('pos_checkout.payments_tab'),
-						testID: 'checkout-tab-payments',
-					},
-					{
-						value: 'legacy',
-						label: t('pos_checkout.legacy_tab'),
-						testID: 'checkout-tab-legacy',
-					},
-				]}
-			/>
-			{flow.hasLiveLeg ? (
-				<Text variant="help" className="text-right" testID="checkout-legacy-whole-bill">
-					{t('pos_checkout.whole_bill_only')}
-				</Text>
-			) : null}
-		</View>
-	);
-	const cancelPayment =
-		flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
-			<Button
-				variant="outline-destructive"
-				size={compact ? undefined : 'sm'}
-				testID="checkout-cancel-payment"
-				// The flow drops every action while a payment is in progress; the button says so.
-				disabled={flow.busy}
-				onPress={() => flow.dispatch({ type: 'request-cancel' })}
-			>
-				<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>
-			</Button>
-		) : null;
+	// The header row beside the title: hug, or Yoga hands the control the whole row.
+	const tabs = <TenderTabs flow={flow} hug={!compact} className={compact ? 'flex-1' : undefined} />;
+	const cancelPayment = <CancelPaymentButton flow={flow} size={compact ? undefined : 'sm'} />;
 
 	return (
 		<Dialog route onClose={handleClose}>

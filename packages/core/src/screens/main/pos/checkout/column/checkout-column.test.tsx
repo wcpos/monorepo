@@ -326,6 +326,15 @@ it.each([false, true])('Escape uses the same back action: live %s', (live) => {
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(live);
 	if (live) expect(mockFlow.dispatch).toHaveBeenCalledWith({ type: 'request-cancel' });
 });
+// The shared back decision (checkout-body): with the cancel view already open, back stays put.
+it('does not re-request cancel while the cancel view is open', () => {
+	mockFlow = makeFlow({ hasLiveLeg: true, state: { ...initialTenderState, view: 'cancel' } });
+	mountColumn();
+	expect(screen.getByTestId('checkout-cancel-confirm')).not.toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-close'));
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(true);
+	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+});
 it('leaves Escape to dialogs and editable fields', () => {
 	mountColumn();
 	const dialog = document.createElement('div');
