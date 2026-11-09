@@ -62,7 +62,8 @@ export type TenderAction =
 	| { type: 'back' }
 	| {
 			type: 'tender-recorded';
-			rowsSinceFrom: { title: string; amountMinor: number }[];
+			/** The legs the plan has taken (`rowsSince`). */
+			rowsSinceFrom: { minor: number; title: string }[];
 			/** The order's balance once this row counts, so the next leg can be pre-typed. */
 			balanceMinor: number;
 	  }
@@ -197,13 +198,9 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 		case 'tender-recorded': {
 			// The method stays chosen for the next leg (the selector is always on screen now);
 			// the entry pre-types the next planned leg, or the balance when no plan is left.
-			const rows = action.rowsSinceFrom.map((row) => ({
-				minor: row.amountMinor,
-				title: row.title,
-			}));
-			const plan = activePlan(state.plan, rows.length, action.balanceMinor);
+			const plan = activePlan(state.plan, action.rowsSinceFrom.length, action.balanceMinor);
 			const entryMinor = plan
-				? planLegs(plan, rows, action.balanceMinor).thisPaymentMinor
+				? planLegs(plan, action.rowsSinceFrom, action.balanceMinor).thisPaymentMinor
 				: action.balanceMinor;
 			return {
 				...state,

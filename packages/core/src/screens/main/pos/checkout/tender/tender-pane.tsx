@@ -237,7 +237,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const reason = flow.tiles.find((tile) => tile.method.id === method?.id)?.reason;
 
 	const { extraMinor, shareOpen, doneOpen, pickerOpen } = flow.state;
-	const { splitOn, picked } = flow;
+	const { splitOn, picked } = flow.split;
 	const picking = Object.keys(picked).length > 0;
 	const pickedCount = Object.values(picked).reduce((sum, units) => sum + units, 0);
 	// On a phone there is no bill on screen: its picks are a list in the keypad's place.
@@ -246,7 +246,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const done = figures.legs.filter((leg) => leg.state === 'done');
 	const counted = flow.rows.filter(countsTowardPaid);
 	const name = (id: string | number) =>
-		decode(flow.lines.find((line) => String(line.id) === String(id))?.name ?? '');
+		decode(flow.split.lines.find((line) => String(line.id) === String(id))?.name ?? '');
 	const doneLeg = (row: TenderFlow['rows'][number]): PlanLeg => ({
 		minor: toMinor(row.amount, flow.dp),
 		state: 'done',
@@ -493,7 +493,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 									testID={`checkout-plan-payment-${index}`}
 									leading={<Icon name="check" className="text-success" />}
 									title={decode(`${doneLeg(row).title} · ${format(toMinor(row.amount, flow.dp))}`)}
-									subtitle={Object.entries(flow.allocations[row.id] ?? {})
+									subtitle={Object.entries(flow.split.allocations[row.id] ?? {})
 										.map(([id, units]) =>
 											t('pos_checkout.units_of_name', { units, name: name(id) })
 										)
@@ -916,11 +916,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 
 			{pickList ? (
 				<View testID="checkout-pick-list" className="w-full gap-2">
-					{flow.lines.map((line) => {
+					{flow.split.lines.map((line) => {
 						const key = String(line.id);
 						const units = picked[key] ?? 0;
-						const unpaid = flow.unpaidUnits(line.id);
-						const paid = flow.paidUnits[key];
+						const unpaid = flow.split.unpaidUnits[key] ?? 0;
+						const paid = flow.split.paidUnits[key];
 						const paidN = paid?.units ?? 0;
 						const { totalMinor: total, quantity } = line;
 						return (

@@ -6,7 +6,7 @@ import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
-import { pickUnits, usePickedUnits, useSplitOn } from '../checkout/checkout-mode';
+import { pickUnits } from '../checkout/checkout-mode';
 import { LedgerLegs } from '../checkout/tender/ledger-pane';
 import { type TenderLineId, unitsMinor } from '../checkout/tender/tender-state';
 import { useLedgerView } from '../checkout/tender/use-ledger-view';
@@ -44,17 +44,16 @@ export function StilledCart({ order }: { order: EngineRecord<'orders'> }) {
 function StilledCartBody({ order }: { order: EngineRecord<'orders'> }) {
 	const t = useT();
 	const view = useLedgerView(order);
-	const splitOn = useSplitOn(order.uuid);
-	const picked = usePickedUnits(order.uuid);
+	const { split } = view;
 	// While Split is on the bill is the picker; the pane (the other column) reads the same picks.
-	const picker = splitOn
+	const picker = split.splitOn
 		? {
-				picked: picked ?? {},
-				paid: view.paidUnits,
+				picked: split.picked,
+				paid: split.paidUnits,
 				// What `units` more add after the paid ones: the cents ride on the last unit, as in the pane.
 				unitMinor: (key: TenderLineId, units: number) => {
-					const line = view.lines.find(({ id }) => String(id) === String(key));
-					const paid = view.paidUnits[key]?.units ?? 0;
+					const line = split.lines.find(({ id }) => String(id) === String(key));
+					const paid = split.paidUnits[key]?.units ?? 0;
 					return line
 						? unitsMinor(line.totalMinor, line.quantity, paid + units) -
 								unitsMinor(line.totalMinor, line.quantity, paid)
@@ -73,7 +72,7 @@ function StilledCartBody({ order }: { order: EngineRecord<'orders'> }) {
 				<ErrorBoundary>
 					<CartTable
 						readOnly
-						paid={view.paidUnits}
+						paid={split.paidUnits}
 						picker={picker}
 						footer={
 							<View>

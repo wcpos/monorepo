@@ -44,7 +44,7 @@ export function LedgerPane({ flow, lines, format }: Props) {
 				lines={lines}
 				totalMinor={flow.totalMinor}
 				format={format}
-				paid={flow.paidUnits}
+				paid={flow.split.paidUnits}
 			/>
 			<LedgerLegs view={flow} format={format} />
 		</VStack>
@@ -60,7 +60,7 @@ export function LedgerLines({
 }: Pick<Props, 'lines' | 'format'> & {
 	totalMinor: number;
 	withTotal?: boolean;
-	paid?: TenderFlow['paidUnits'];
+	paid?: TenderFlow['split']['paidUnits'];
 }) {
 	const t = useT();
 	return (
@@ -237,11 +237,11 @@ function LedgerLeg({
 				}
 			: null;
 	// What the payment paid for, from its allocation: `1 Flat white, 1 Burger`.
-	const paidFor = Object.entries(view.allocations[row.id] ?? {})
+	const paidFor = Object.entries(view.split.allocations[row.id] ?? {})
 		.map(([id, units]) =>
 			t('pos_checkout.units_of_name', {
 				units,
-				name: view.lines.find((line) => String(line.id) === id)?.name ?? '',
+				name: view.split.lines.find((line) => String(line.id) === id)?.name ?? '',
 			})
 		)
 		.join(', ');
