@@ -49,7 +49,7 @@ beforeEach(() => {
 // ADR 0040 D2: the server completes the sale through close; the till never writes `completed`.
 it('completes through close and never writes status', async () => {
 	const { input, written, result } = run(true);
-	await result;
+	expect(await result).toEqual({ kind: 'closed' });
 	expect(written).toEqual([{ meta_data: [{ key: '_wcpos_sale_counter', value: '7' }] }]);
 	expect(written[0]).not.toHaveProperty('status');
 	expect(input.close).toHaveBeenCalledWith(order);
@@ -124,4 +124,24 @@ it('a close with no answer keeps the completion attempt for the re-send', async 
 	input.close.mockRejectedValueOnce(new Error('Network Error'));
 	await expect(result).rejects.toThrow('Network Error');
 	expect(mockResolve).not.toHaveBeenCalled();
+});
+
+it.each([
+	['an obsolete boundary', null, undefined, { kind: 'superseded' }],
+	[
+		'a failed revalidation',
+		{},
+		'catalog_changed',
+		{ kind: 'superseded', reason: 'catalog_changed' },
+	],
+])('%s supersedes before any write or close', async (_name, patch, reason, expected) => {
+	const { input } = run(true);
+	const ctx = { storeDB: 'store-db' } as never;
+	const changes = () => patch;
+	const revalidate = async () => reason;
+	expect(await writeZeroBalanceCompletion(ctx, { ...input, changes, revalidate } as never)).toEqual(
+		expected
+	);
+	expect(input.write).not.toHaveBeenCalled();
+	expect(input.close).not.toHaveBeenCalled();
 });

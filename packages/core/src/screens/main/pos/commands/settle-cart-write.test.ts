@@ -151,6 +151,7 @@ it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', asyn
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(order.payload.line_items).toEqual(data.line_items);
 		expect(order.payload.total).toBe('99');
+		return { kind: 'closed' as const };
 	});
 	await settleCartWrite(
 		{ document: order, data, queue },

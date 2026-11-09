@@ -1,14 +1,16 @@
 import * as React from 'react';
 
-import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 
 import { setTaxExempt, type TaxExemptDeps } from './tax-exempt';
 import { waitForCouponReferences } from './coupon-continuation';
 import { useBoundaryCommit } from './use-boundary-commit';
+import { useBoundaryCommitter } from './use-boundary-committer';
+import { useOrderLockReaders } from './use-order-lock-readers';
+import { orderLocked } from './paid-balance-boundary';
+import { writeOrderChanges } from './write-order-changes';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCartConfigReader } from '../hooks/use-cart-config';
-import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
-import { getCheckoutModeSnapshot, getOrderSaveState } from '../checkout/checkout-mode';
 import { useActionContext } from '../hooks/use-action-context';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { readCatalogTaxStatuses, readCouponContext } from '../hooks/use-coupon-context';
@@ -33,7 +35,7 @@ export function useTaxExemptDeps(): TaxExemptDeps {
 	const { localPatch } = useLocalMutation();
 	const commitAtBoundary = useBoundaryCommit(localPatch);
 	const configForOrder = useCartConfigReader();
-	const serverOwnsMoney = useServerOwnsMoneyReader();
+	const locks = useOrderLockReaders();
 	const { ctx, actor } = useActionContext();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const runtime = useQueryRuntime();
@@ -43,13 +45,11 @@ export function useTaxExemptDeps(): TaxExemptDeps {
 			localPatch,
 			commitAtBoundary,
 			configForOrder,
-			serverOwnsMoney,
+			...locks,
 			ctx,
 			actor,
 			reportEngineWarnings,
 			wcVersion,
-			orderSaveState: getOrderSaveState,
-			inCheckout: (uuid) => getCheckoutModeSnapshot().checkoutOrders.has(uuid),
 			readCoupons: (payload) =>
 				readCouponContext(runtime, {
 					lineItems: payload.line_items ?? [],
@@ -62,7 +62,7 @@ export function useTaxExemptDeps(): TaxExemptDeps {
 			localPatch,
 			commitAtBoundary,
 			configForOrder,
-			serverOwnsMoney,
+			locks,
 			ctx,
 			actor,
 			reportEngineWarnings,
@@ -85,20 +85,35 @@ export function useSetTaxExempt() {
 	);
 }
 
-/** A repair runs with nobody at the till: the coordinator's system boundary commit, never the cashier's. */
-export function useRepairTaxExempt(
-	commitAtBoundary: (
-		...args: [...Parameters<TaxExemptDeps['commitAtBoundary']>, valid: () => boolean]
-	) => Promise<unknown>
-) {
+/** A repair runs with nobody at the till: the system boundary commit, never the cashier's. */
+export function useRepairTaxExempt() {
 	const deps = useTaxExemptDeps();
+	const commit = useBoundaryCommitter('system');
+	const runtime = useQueryRuntime();
 	return React.useCallback(
 		(record: CurrentOrderRecord, exempt: boolean, valid: () => boolean = () => true) =>
 			setTaxExempt(
-				{ ...deps, commitAtBoundary: (o, q, c) => commitAtBoundary(o, q, c, valid) },
+				{
+					...deps,
+					commitAtBoundary: (order, queue, coupons) =>
+						commit({
+							order: order as EngineRecord<'orders'>,
+							queue,
+							write: (changes) => writeOrderChanges(runtime, { document: order, changes }),
+							coupons: coupons && {
+								...coupons.context,
+								taxStatusFor: coupons.taxStatusFor ?? coupons.context.taxStatusFor,
+							},
+							allowed: (payload, ignoreCheckout) =>
+								valid() &&
+								!orderLocked(payload, order, deps, deps.configForOrder(payload).dp, {
+									ignoreCheckout,
+								}),
+						}),
+				},
 				record,
 				{ exempt, source: 'repair', valid }
 			),
-		[deps, commitAtBoundary]
+		[deps, commit, runtime]
 	);
 }

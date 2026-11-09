@@ -6,6 +6,8 @@ import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import { observeCatalogByWooIds } from '@wcpos/query';
 
 import { waitForCouponReferences } from './coupon-continuation';
+import { enterCheckout, leaveCheckout } from '../checkout/checkout-mode';
+import { writeOrderChanges } from './write-order-changes';
 import {
 	acquireReferenceDemandHandle,
 	whenReferencesSettled,
@@ -26,6 +28,7 @@ let site: { wc_version?: string } | undefined;
 jest.mock('../../../../contexts/app-state', () => ({ useStoreSession: () => ({ site }) }));
 const runtime = { engine: {} };
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useQueryRuntime: () => runtime,
 	observeCatalogByWooIds: jest.fn(),
 	readCoverageGeneration: (_engine: unknown, collection: string) =>
@@ -114,6 +117,13 @@ const ctx = {};
 const actor = {};
 jest.mock('./tax-exempt', () => ({ setTaxExempt: jest.fn() }));
 jest.mock('./use-boundary-commit', () => ({ useBoundaryCommit: () => boundary }));
+const systemCommit = jest.fn(async (_input: unknown) => ({ kind: 'closed' as const }));
+const userCommit = jest.fn();
+// Only the system committer answers: a repair through the cashier's commit fails the assertions.
+jest.mock('./use-boundary-committer', () => ({
+	useBoundaryCommitter: (source: string) => (source === 'system' ? systemCommit : userCommit),
+}));
+jest.mock('./write-order-changes', () => ({ writeOrderChanges: jest.fn() }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch }),
 }));
@@ -128,9 +138,8 @@ it.each(['user', 'repair'] as const)('returns refusal and presents only for %s',
 	const refusal = { deny: { reasonKey: 'pos_cart.tax_exempt_locked' } };
 	jest.mocked(setTaxExempt).mockResolvedValueOnce(refusal);
 	const order = { uuid: 'target' } as CurrentOrderRecord;
-	const systemBoundary = jest.fn();
 	const { result } = renderHook(() =>
-		source === 'user' ? useSetTaxExempt() : useRepairTaxExempt(systemBoundary)
+		source === 'user' ? useSetTaxExempt() : useRepairTaxExempt()
 	);
 	expect(await result.current(order, true)).toBe(refusal);
 	expect(setTaxExempt).toHaveBeenLastCalledWith(
@@ -217,19 +226,55 @@ it('returns undefined when catalog is unavailable', async () => {
 	expect(read({ product_id: 1 })).toBeUndefined();
 });
 
-it('threads the repair validity and coupons into its system boundary', async () => {
-	const systemBoundary = jest.fn(async () => undefined);
-	const valid = () => false;
-	const order = { uuid: 'target' } as CurrentOrderRecord;
-	const { result } = renderHook(() => useRepairTaxExempt(systemBoundary));
-	await result.current(order, true, valid);
-	const [deps, , input] = jest.mocked(setTaxExempt).mock.lastCall!;
-	expect(input.valid).toBe(valid);
-	const queue = {} as Parameters<typeof deps.commitAtBoundary>[1];
-	const coupons = {
-		context: { coupons: new Map(), productCategories: new Map() },
-		missing: { deny: { reasonKey: 'missing' } },
-	};
-	await deps.commitAtBoundary(order, queue, coupons);
-	expect(systemBoundary).toHaveBeenCalledWith(order, queue, coupons, valid);
-});
+it.each([false, true])(
+	'threads the repair validity, the locks and coupons (override=%s) into its system boundary',
+	async (override) => {
+		config.mockReturnValue({ dp: 2 });
+		const valid = jest.fn(() => true);
+		const order = { uuid: 'target' } as CurrentOrderRecord;
+		const { result } = renderHook(() => useRepairTaxExempt());
+		await result.current(order, true, valid);
+		const [deps, , input] = jest.mocked(setTaxExempt).mock.lastCall!;
+		expect(input.valid).toBe(valid);
+		const queue = {} as Parameters<typeof deps.commitAtBoundary>[1];
+		const taxStatusFor = () => 'taxable' as const;
+		const context = {
+			coupons: new Map(),
+			productCategories: new Map(),
+			taxStatusFor: () => 'none' as const,
+		};
+		const coupons = {
+			context,
+			missing: { deny: { reasonKey: 'missing' } },
+			...(override && { taxStatusFor }),
+		};
+		await deps.commitAtBoundary(order, queue, coupons);
+		expect(userCommit).not.toHaveBeenCalled();
+		expect(systemCommit).toHaveBeenLastCalledWith({
+			order,
+			queue,
+			write: expect.any(Function),
+			coupons: { ...context, taxStatusFor: override ? taxStatusFor : context.taxStatusFor },
+			allowed: expect.any(Function),
+		});
+		const { allowed, write } = systemCommit.mock.lastCall![0] as {
+			allowed: (payload: object, ignoreCheckout?: boolean) => boolean;
+			write: (changes: unknown) => unknown;
+		};
+		const payload = { status: 'pos-open' };
+		expect(allowed(payload)).toBe(true);
+		enterCheckout(order.uuid);
+		try {
+			expect(allowed(payload)).toBe(false);
+			expect(allowed(payload, true)).toBe(true);
+		} finally {
+			leaveCheckout(order.uuid);
+		}
+		valid.mockReturnValue(false);
+		expect(allowed(payload)).toBe(false);
+		expect(allowed(payload, true)).toBe(false);
+		const changes = () => ({});
+		await write(changes);
+		expect(writeOrderChanges).toHaveBeenCalledWith(runtime, { document: order, changes });
+	}
+);
