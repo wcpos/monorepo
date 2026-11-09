@@ -240,7 +240,7 @@ export function ClosureBody({
 				<Notice
 					testID="closure-settled"
 					tone="warning"
-					// A late sale or movement settles figures without a recount: say so, never "0 recounts".
+					// A late sale, refund or movement settles figures without a recount: say so, never "0 recounts".
 					title={
 						recounts > 0
 							? t('reports.recorded_settled_line', settledArgs)
@@ -298,7 +298,7 @@ export function ClosureBody({
 							</Text>
 						</View>
 					)}
-					{/* A late sale or movement moves Expected after the close: one signed term keeps the
+					{/* A late sale, refund or movement moves Expected after the close: one signed term keeps the
 					    ladder adding up, since the rows above are the recorded figures (Codex, #3036). */}
 					{touched.has('expected.cash') && (
 						<View testID="closure-late-corrections" className={STATIC_ROW}>

@@ -192,7 +192,7 @@
 	"reports.settled": "settled",
 	"reports.recorded_settled_line_one": "Recorded {recorded} · {result}. Settled at {settled} after {count} recount.",
 	"reports.recorded_settled_line_other": "Recorded {recorded} · {result}. Settled at {settled} after {count} recounts.",
-	"reports.recorded_settled_late": "Recorded {recorded} · {result}. Settled at {settled} after a late sale or movement.",
+	"reports.recorded_settled_late": "Recorded {recorded} · {result}. Settled at {settled} after a late sale, refund or movement.",
 	"reports.correction_recount": "Recount",
 	"reports.late_corrections": "Late corrections",
 	"reports.printed_once": "printed once",

@@ -292,6 +292,9 @@ it('names a late refund in the corrections list and settles it off expected cash
 		/>
 	);
 	expect(screen.getByTestId('closure-correction-7').textContent).toContain('Late refund');
+	expect(screen.getByTestId('closure-settled').textContent).toContain(
+		'late sale, refund or movement'
+	);
 	expect(settled.touched.has('expected.cash')).toBe(true);
 });
 // A correction can introduce a tender absent from the frozen baseline.
