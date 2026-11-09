@@ -14,6 +14,7 @@ import {
 	startCustomerDisplayService,
 	stopCustomerDisplayService,
 } from '../../../../services/customer-display';
+import { type IceServer, parseIceServers } from '../../../../services/customer-display/ice-servers';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 const logger = getLogger(['wcpos', 'customer-display', 'hook']);
@@ -46,10 +47,14 @@ export function useCustomerDisplayService(): void {
 		receiptI18n: value.receipt_i18n,
 		// Pro advertises the resolved logo URL on the store; the schema types only contract/signaling.
 		logo: (value.display as { logo?: unknown } | undefined)?.logo,
+		snapshot: (value.display as { snapshot?: unknown } | undefined)?.snapshot,
+		iceServers: (value.display as { iceServers?: unknown } | undefined)?.iceServers,
 	}));
 	const hasDisplay = Boolean(fields?.display);
 	const displayContract = fields?.display?.contract;
 	const displaySignaling = fields?.display?.signaling;
+	const snapshotFallback = fields?.snapshot === 1;
+	const iceServersJson = JSON.stringify(parseIceServers(fields?.iceServers) ?? null);
 
 	const locale = fields?.locale || 'en_US';
 	const config: DisplayConfigInput = React.useMemo(
@@ -88,6 +93,7 @@ export function useCustomerDisplayService(): void {
 			return;
 		}
 		const { signaling } = display;
+		const iceServers = JSON.parse(iceServersJson) as IceServer[] | null;
 		const httpBinding = { store, site, client: latestRestHttpRef.current };
 		serviceHttpRef.current = httpBinding;
 		const http: HttpFunction = async <T>(request: HttpRequest): Promise<{ data: T }> => {
@@ -111,6 +117,8 @@ export function useCustomerDisplayService(): void {
 					deviceId,
 					storeId: fields.id ?? 0,
 					siteRestRoot: signaling.slice(WCPOS_V2_PREFIX.length),
+					iceServers: iceServers ?? undefined,
+					snapshotFallback,
 				});
 				// startCustomerDisplayService has already told subscribers; a config
 				// failure must not turn a running service into a silent one.
@@ -135,7 +143,16 @@ export function useCustomerDisplayService(): void {
 				stopCustomerDisplayService();
 			}
 		};
-	}, [displayContract, displaySignaling, fields?.id, hasDisplay, site, store]);
+	}, [
+		displayContract,
+		displaySignaling,
+		fields?.id,
+		hasDisplay,
+		iceServersJson,
+		site,
+		snapshotFallback,
+		store,
+	]);
 
 	React.useEffect(() => {
 		if (fields?.display) getCustomerDisplayService()?.configure(config);

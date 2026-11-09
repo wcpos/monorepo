@@ -14,6 +14,8 @@ import {
 	type PairingCode,
 } from './signaling-client';
 
+import type { IceServer } from './ice-servers';
+
 const logger = getLogger(['wcpos', 'customer-display', 'service']);
 // Five seconds is the POS-side signaling and pairing-registry cadence in contract v1.
 const REGISTRY_POLL_MS = 5000;
@@ -26,6 +28,8 @@ export interface CustomerDisplayServiceOptions {
 	storeId: number;
 	siteRestRoot: string;
 	createPeer?: () => OffererPeer;
+	iceServers?: IceServer[];
+	snapshotFallback?: boolean;
 	now?: () => Date;
 }
 export interface CustomerDisplayState {
@@ -96,7 +100,8 @@ export class CustomerDisplayService {
 						display,
 						deviceId: this.options.deviceId,
 						signaling: this.signaling,
-						createPeer: this.options.createPeer ?? createOfferer,
+						createPeer: this.options.createPeer ?? (() => createOfferer(this.options.iceServers)),
+						snapshotFallback: this.options.snapshotFallback === true,
 						getConfig: () => this.config,
 						getCurrentState: () => this.currentState,
 						onConnectionChange: () => {

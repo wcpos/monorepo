@@ -137,6 +137,56 @@ describe('CustomerDisplayService', () => {
 	beforeEach(() => jest.useFakeTimers());
 	afterEach(() => jest.useRealTimers());
 
+	test('posts snapshots only when snapshotFallback is set', async () => {
+		for (const snapshotOptions of [{ snapshotFallback: true }, {}]) {
+			const requests: Parameters<HttpFunction>[0][] = [];
+			const http: HttpFunction = async <T>(request: Parameters<HttpFunction>[0]) => {
+				requests.push(request);
+				if (request.method === 'GET' && request.url.endsWith('/displays')) {
+					return {
+						data: [
+							{
+								id: 'display-1',
+								name: 'Counter',
+								device_id: 'device-1',
+								store_id: 7,
+								paired_at: 1,
+								last_seen: 1,
+								connected: true,
+							},
+						] as T,
+					};
+				}
+				if (request.method === 'GET' && request.url.endsWith('/signal'))
+					return { data: { messages: [] } as T };
+				return { data: {} as T };
+			};
+			const service = new CustomerDisplayService({
+				http,
+				deviceId: 'device-1',
+				storeId: 7,
+				siteRestRoot: '/wcpos/v2/display',
+				createPeer: () => new FakePeer(),
+				...snapshotOptions,
+			});
+			service.configure({
+				store: { id: 7, name: 'Shop', currency: 'EUR', locale: 'en-IE' },
+				presentation_hints: {},
+				i18n: {},
+			});
+			service.publish({ action: 'display.idle', payload: {} });
+			service.start();
+			await jest.advanceTimersByTimeAsync(1000);
+			expect(
+				requests.some(
+					(request) =>
+						request.method === 'POST' && (request.data as { type?: unknown })?.type === 'snapshot'
+				)
+			).toBe(snapshotOptions.snapshotFallback === true);
+			service.stop();
+		}
+	});
+
 	test('polls only while a display is disconnected', async () => {
 		const { service, peers } = setup([registryRow('one')]);
 		await service.refreshDisplays();

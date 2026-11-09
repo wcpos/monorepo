@@ -96,6 +96,53 @@ test('starts for an advertised store and stops when the advertisement disappears
 	expect(mockStopCustomerDisplayService).toHaveBeenCalledTimes(1);
 });
 
+test('passes the advertised snapshot flag and ICE servers to the service', async () => {
+	mockStore.display = {
+		contract: 1,
+		signaling: '/wcpos/v2/display',
+		snapshot: 1,
+		iceServers: [{ urls: 'stun:a.test:3478' }],
+	};
+	renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockStart).toHaveBeenCalledWith(
+		expect.objectContaining({
+			snapshotFallback: true,
+			iceServers: [{ urls: 'stun:a.test:3478' }],
+		})
+	);
+});
+
+test('an advertisement without the new keys starts with defaults', async () => {
+	renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockStart).toHaveBeenCalledWith(
+		expect.objectContaining({ snapshotFallback: false, iceServers: undefined })
+	);
+});
+
+test('does not restart when the same ICE server list arrives as a new array', async () => {
+	mockStore.display = {
+		contract: 1,
+		signaling: '/wcpos/v2/display',
+		iceServers: [{ urls: 'stun:a.test:3478' }],
+	};
+	const { rerender } = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	mockStore.display = {
+		contract: 1,
+		signaling: '/wcpos/v2/display',
+		iceServers: [{ urls: 'stun:a.test:3478' }],
+	};
+	rerender();
+	await flushEffects();
+
+	expect(mockStart).toHaveBeenCalledTimes(1);
+});
+
 test('adapts the REST client to the service HttpFunction contract', async () => {
 	renderHook(() => useCustomerDisplayService());
 	await flushEffects();
