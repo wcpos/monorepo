@@ -15,9 +15,6 @@ const mockLoggerError = jest.fn();
 const mockRouterBack = jest.fn();
 
 // The form's error band is a Notice, which loads ESM uniwind and expo-linking.
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../jest/property-row.test-utils')
-);
 jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('@hookform/resolvers/zod', () => ({
 	zodResolver: () => undefined,
@@ -36,14 +33,6 @@ jest.mock('react-hook-form', () => ({
 
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
 jest.mock('@wcpos/components/text', () => ({

@@ -126,9 +126,6 @@ jest.mock('@wcpos/components/form', () => ({
 	FormTextarea: () => null,
 }));
 
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 function mockAction({
 	children,
 	onPress,
@@ -143,13 +140,6 @@ function mockAction({
 	return <>{children}</>;
 }
 jest.mock('@wcpos/components/button', () => ({ Button: mockAction }));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogAction: mockAction,
-	DialogClose: mockAction,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-	useDialog: () => ({ close: mockDialogClose }),
-}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));

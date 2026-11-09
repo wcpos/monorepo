@@ -30,15 +30,6 @@ jest.mock('../../components/coupon/coupon-form', () => ({
 		return <DialogFooter {...footer} />;
 	},
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children, open }: React.PropsWithChildren<{ open: boolean }>) =>
-		open ? <>{children}</> : null,
-	DialogContent: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
-		<div data-testid={testID}>{children}</div>
-	),
-	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));

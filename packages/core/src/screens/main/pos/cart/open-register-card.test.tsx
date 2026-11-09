@@ -111,11 +111,6 @@ it('prefills default, selects last count, shows only differing variance, and ope
 	);
 });
 
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: () => null,
-	DialogContent: () => null,
-	DialogTitle: () => null,
-}));
 jest.mock('@wcpos/printer', () => ({ usePrint: () => ({ print }) }));
 jest.mock('../../receipt/hooks/use-resolved-printer', () => ({
 	useResolvedPrinter: () => ({ resolvedPrinter: null }),

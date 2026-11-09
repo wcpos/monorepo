@@ -55,17 +55,10 @@ jest.mock('@wcpos/components/form', () => {
 		useSavedName: () => '',
 	};
 });
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: () => <div data-testid="collapsible" />,
 	CollapsibleContent: () => null,
 	CollapsibleTrigger: () => null,
-}));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: () => null,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,

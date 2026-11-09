@@ -100,13 +100,6 @@ jest.mock('@wcpos/components/form', () => ({
 	FormItem: mockWrap,
 	FormLabel: mockWrap,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	useDialog: () => ({ close: mockClose }),
-	DialogBody: mockWrap,
-	DialogFooter: jest.requireActual('../../../../../../../jest/footer.test-utils').DialogFooter,
-	DialogClose: mockButton,
-	DialogAction: mockButton,
-}));
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
 		open ? <>{children}</> : null,
@@ -157,9 +150,6 @@ let mockOnlineStatus = 'online-website-available';
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnlineStatus }),
 }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: mockWrap,
 	TooltipContent: mockWrap,

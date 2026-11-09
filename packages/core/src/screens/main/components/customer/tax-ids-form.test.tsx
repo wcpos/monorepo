@@ -27,9 +27,6 @@ jest.mock('@wcpos/query', () => ({
 		selector(mockStore),
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));

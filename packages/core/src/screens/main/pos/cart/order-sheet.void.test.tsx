@@ -982,30 +982,6 @@ it('registers no void surface: the cart column owns it (roadmap#428, PR 1b)', as
 jest.mock('./buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../hooks/use-sync-order', () => ({ useSyncOrder: () => ({ sync: jest.fn() }) }));
-jest.mock('@wcpos/components/dialog', () => {
-	function Pass({ children }: React.PropsWithChildren) {
-		return <>{children}</>;
-	}
-	return {
-		Dialog: Pass,
-		DialogContent: Pass,
-		DialogHeader: Pass,
-		DialogTitle: Pass,
-		DialogFooter: ({ destructive }: import('@wcpos/components/dialog').DialogFooterProps) => {
-			const first = Array.isArray(destructive) ? destructive[0] : destructive;
-			const action = first || undefined;
-			return (
-				<button
-					data-testid={action?.testID}
-					disabled={action?.disabled}
-					onClick={action?.onPress as unknown as React.MouseEventHandler}
-				>
-					{action?.label}
-				</button>
-			);
-		},
-	};
-});
 function Sheet({ onBeforeVoid = () => {} }: { onBeforeVoid?: () => void }) {
 	return (
 		<OrderSheet

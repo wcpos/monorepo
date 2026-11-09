@@ -25,14 +25,6 @@ jest.mock('@wcpos/components/icon', () => ({ Icon: 'Icon' }));
 jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: 'DocsLink' }));
 jest.mock('../copy-setup-report', () => ({ CopySetupReport: 'CopySetupReport' }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: 'Stack' }));
-jest.mock('@wcpos/components/dialog', () => ({
-	...jest.requireActual('../../../../../../jest/footer.test-utils'),
-	Dialog: 'Dialog',
-	DialogBody: 'Body',
-	DialogContent: 'Content',
-	DialogHeader: 'Header',
-	DialogTitle: 'Title',
-}));
 jest.mock('@wcpos/components/form', () => ({
 	Form: 'Form',
 	FormField: () => null,

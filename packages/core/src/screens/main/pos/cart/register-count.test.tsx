@@ -77,17 +77,6 @@ jest.mock('@wcpos/components/icon', () => ({
 		<span data-testid={testID} data-icon={name} className={className} />
 	),
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
-		open ? <>{children}</> : null,
-	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
-	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-	DialogHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
-	DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
-	DialogFooter: jest.requireActual('../../../../../jest/footer.test-utils').DialogFooter,
-}));
 // The mark only draws its state: a press on it lands on its row, as on a device.
 jest.mock('@wcpos/components/checkbox', () => ({
 	Checkbox: ({ checked }: { checked?: boolean }) => <span aria-checked={!!checked} />,

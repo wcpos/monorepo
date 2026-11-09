@@ -38,16 +38,9 @@ jest.mock('@wcpos/components/form', () => {
 		useMarkFailed: () => jest.fn(),
 	};
 });
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children, testID }: Pressable) => <button data-testid={testID}>{children}</button>,
 	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-jest.mock('@wcpos/components/dialog', () => ({
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: () => null,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,

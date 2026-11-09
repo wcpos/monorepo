@@ -47,20 +47,6 @@ jest.mock('../../screens/main/pos/checkout/checkout-mode', () => ({
 	selectReceipt: (id: string | null) => mockSelectReceipt(id),
 }));
 // The help sheet's host components (see help-sheet.test.tsx).
-jest.mock('@wcpos/components/dialog', () => {
-	function Wrapper({ children, testID }: React.PropsWithChildren<{ testID?: string }>) {
-		return <div data-testid={testID}>{children}</div>;
-	}
-	return {
-		...jest.requireActual('../../../jest/footer.test-utils'),
-		Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
-			open ? <>{children}</> : null,
-		DialogBody: Wrapper,
-		DialogContent: Wrapper,
-		DialogHeader: Wrapper,
-		DialogTitle: Wrapper,
-	};
-});
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children, testID }: React.PropsWithChildren<{ testID: string }>) => (
 		<button data-testid={testID}>{children}</button>

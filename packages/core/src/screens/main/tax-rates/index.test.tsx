@@ -86,14 +86,6 @@ jest.mock('@wcpos/components/suspense', () => ({
 		<React.Suspense fallback={<div data-testid="tax-rates-fallback" />}>{children}</React.Suspense>
 	),
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogFooter: jest.requireActual('../../../../jest/footer.test-utils').DialogFooter,
-	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
 jest.mock('@wcpos/components/tabs', () => ({
 	Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	ScrollableTabsList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

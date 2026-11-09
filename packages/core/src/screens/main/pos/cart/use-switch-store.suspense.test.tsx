@@ -43,15 +43,6 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../checkout/payments/payment-in-flight', () => ({ usePaymentInFlight: () => false }));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: passthrough,
-	DialogContent: passthrough,
-	DialogHeader: passthrough,
-	DialogTitle: passthrough,
-	DialogDescription: passthrough,
-	DialogBody: passthrough,
-	DialogFooter: passthrough,
-}));
 jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: passthrough }));
 
 let populateCalls = 0;

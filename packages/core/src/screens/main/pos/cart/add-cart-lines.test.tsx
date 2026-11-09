@@ -51,10 +51,6 @@ jest.mock('@wcpos/components/form', () => ({
 	FormTreeCombobox: () => null,
 }));
 
-jest.mock('@wcpos/components/property-row', () =>
-	jest.requireActual('../../../../../jest/property-row.test-utils')
-);
-
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
