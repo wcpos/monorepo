@@ -3,16 +3,23 @@ import * as React from 'react';
 import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
 
-import type { TranslationsState, UserDatabase } from '@wcpos/query/user-db';
+import { cacheTranslations, type TranslationsState, type UserDatabase } from '@wcpos/query/user-db';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { RxDBBackend } from './rxdb-backend';
+import { RxDBBackend, type RxDBBackendOptions } from './rxdb-backend';
+import translationVersion from './translation-version.json';
 import en from './locales/en/core.json';
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
 
 const translationLogger = getLogger(['wcpos', 'translations']);
+
+// The wcpos/translations ref to load. update-translations.yml writes the release's CalVer tag
+// into translation-version.json. `next` is the dev lane's moving branch ref (refreshed by jsDelivr
+// within about 12 hours), so its content changes under the same name and must be re-fetched.
+const ROLLING_REF = 'next';
+const { version } = translationVersion;
 
 type I18nInstance = ReturnType<typeof createInstance>;
 // One instance per translations state (one per user database), created outside React.
@@ -48,9 +55,14 @@ function instanceFor(
 				suffix: '}',
 			},
 			backend: {
-				userDB,
-				translationsState,
-			},
+				version,
+				rolling: version === ROLLING_REF,
+				cache: {
+					get: (key) => translationsState.get(key),
+					set: (key, catalogue, cached) =>
+						void cacheTranslations(userDB, key, catalogue, { cached }),
+				},
+			} satisfies RxDBBackendOptions,
 		})
 		.catch((error) =>
 			translationLogger.error('Failed to initialize translations', {

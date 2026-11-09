@@ -24,8 +24,12 @@ jobs:
         env:
           VERSION: ${{ github.event.client_payload.version }}
         run: |
+          # A release is a CalVer tag; refuse an empty or branch-ref payload rather than commit it.
+          [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]+\.[0-9]+$ ]] || { echo "Not a CalVer version: '$VERSION'"; exit 1; }
           echo "Updating translation version to $VERSION"
-          sed -i "s/TRANSLATION_VERSION = '.*'/TRANSLATION_VERSION = '${VERSION}'/" packages/core/src/contexts/translations/rxdb-backend.ts
+          FILE=packages/core/src/contexts/translations/translation-version.json
+          jq --tab --arg v "$VERSION" '.version = $v' "$FILE" > "$FILE.tmp"
+          mv "$FILE.tmp" "$FILE"
 
       - name: Create PR
         env:
@@ -34,7 +38,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add packages/core/src/contexts/translations/rxdb-backend.ts
+          git add packages/core/src/contexts/translations/translation-version.json
           if ! git diff --staged --quiet; then
             BRANCH="chore/translation-version-${VERSION}"
             git checkout -b "$BRANCH"
