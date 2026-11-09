@@ -423,3 +423,23 @@ it('tones the heading in the store’s decimals: a fil short on a 3-place store 
 	render(<ClosureHeading row={fils} {...deriveSettled(fils, [])} blind={false} />);
 	expect(screen.getByTestId('tone-disc').dataset.tone).toBe('bad');
 });
+
+// Pins the figure the detail shows: the SETTLED result. The recorded row is a dollar short; the
+// recount settles it a dollar over, and the heading and the hero say so.
+it('the detail shows the SETTLED result, never the recorded one', () => {
+	const corrections = [correction];
+	render(<ClosureHeading row={row} {...deriveSettled(row, corrections)} blind={false} />);
+	expect(screen.getByTestId('tone-disc').dataset.tone).toBe('ok');
+	render(
+		<ClosureBody
+			row={row}
+			doc={doc}
+			{...deriveSettled(row, corrections)}
+			corrections={corrections}
+			blind={false}
+			context={context}
+		/>
+	);
+	expect(screen.getByTestId('closure-figure-result').textContent).toBe('+$5.00');
+	expect(screen.getByTestId('closure-settled').textContent).toContain('−$1.00 short');
+});

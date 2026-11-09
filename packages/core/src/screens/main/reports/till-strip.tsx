@@ -15,6 +15,7 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { TextClassContext } from '@wcpos/components/text/context';
+import { TONE } from '@wcpos/components/lib/tone';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 import type { ClosureRow } from '@wcpos/query/register-session';
@@ -25,6 +26,11 @@ import { useTheme } from '../../../contexts/theme';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../hooks/use-local-date';
 import { inZone, useStoreDay, useViewedStore, zoneOptions } from '../../../hooks/use-store-day';
+import {
+	closureResult,
+	resultAmount,
+	resultText,
+} from '../../../services/register-session/closure-result';
 import { useRegisterSession } from '../../../services/register-session/use-register-session';
 import { useSessionReport } from '../../../services/register-session/use-session-report';
 import { useCurrencyFormat } from '../hooks/use-currency-format';
@@ -133,12 +139,10 @@ export function TillStrip({
 				: closure
 					? date(closure.closed_at, 'EEE d MMM')
 					: '';
-	const variance = Number(closure?.variance.cash ?? 0);
-	const result = variance
-		? `${format(Math.abs(variance))} ${variance < 0 ? t('register.short') : t('register.over')}`
-		: t('reports.exact');
-	const resultColor =
-		variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground';
+	// The last closure's RECORDED result, as the closures list shows it.
+	const last = closureResult({ recorded: closure ? [closure] : [] }, 4);
+	const result = resultText(last, format(resultAmount(last, 4)), t);
+	const resultColor = TONE[last.tone].text;
 	const rows: Term[] = [];
 	const money = (amount: string) => format(Number(amount));
 	if (bound && !blind) {

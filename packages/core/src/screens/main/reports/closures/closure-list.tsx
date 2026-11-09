@@ -9,6 +9,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
+import { TONE } from '@wcpos/components/lib/tone';
 import { Card } from '@wcpos/components/card';
 import { Badge } from '@wcpos/components/badge';
 import { ListRow } from '@wcpos/components/list-row';
@@ -19,6 +20,13 @@ import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { useT } from '../../../../contexts/translations';
 import { useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
+import {
+	closureResult,
+	resultAmount,
+	resultText,
+	resultWord,
+} from '../../../../services/register-session/closure-result';
+import { varianceAmount } from '../../../../services/register-session/count-money';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { ClosureStats, closureTotals } from './closure-stats';
 
@@ -91,14 +99,10 @@ export function ClosureList({
 	const inPeriod = !scopeFrom || !scopeTo || (scopeFrom <= today && today <= scopeTo);
 	const sessions = inPeriod ? allSessions : [];
 	const todayRows = rows.filter((row) => row.business_day === today);
-	const result = (variance: number) =>
-		variance
-			? `${format(Math.abs(variance))} ${variance < 0 ? t('register.short') : t('register.over')}`
-			: t('reports.exact');
-	const tone = (variance: number) =>
-		variance < 0 ? 'text-bad' : variance > 0 ? 'text-ok' : 'text-muted-foreground';
+	// Closure money is stored at four decimals; the list shows the RECORDED result throughout.
 	const dayHeading = (day: string | undefined, dayRows: readonly ClosureRow[]) => {
 		const total = closureTotals(dayRows);
+		const result = closureResult({ recorded: dayRows }, 4);
 		return (
 			<View
 				testID={`closure-day-${day}`}
@@ -108,7 +112,9 @@ export function ClosureList({
 				{!!dayRows.length && (
 					<Text className="text-muted-foreground tabular-nums">
 						{format(total.counted)} {t('reports.counted').toLocaleLowerCase()} ·{' '}
-						<Text className={tone(total.variance)}>{result(total.variance)}</Text>
+						<Text className={TONE[result.tone].text}>
+							{resultText(result, format(resultAmount(result, 4)), t)}
+						</Text>
 					</Text>
 				)}
 			</View>
@@ -173,25 +179,15 @@ export function ClosureList({
 			)}
 
 			{visibleRows.map((row, index) => {
-				const variance = Number(row.variance.cash ?? 0);
+				// As a sum of one: a row with no cash figure reads Exact.
+				const result = closureResult({ recorded: [row] }, 4);
 				const expected = format(Number(row.expected.cash ?? 0));
 				const counted = format(Number(row.counted.cash ?? 0));
-				const signed = variance
-					? `${variance < 0 ? '−' : '+'}${format(Math.abs(variance))}`
-					: format(0);
-				const toneClass = tone(variance);
+				const signed = varianceAmount(result.minor, 4, format);
+				const toneClass = TONE[result.tone].text;
 				const resultBadge = (
-					<Badge
-						testID={`closure-result-${row.id}`}
-						tinted
-						size="lg"
-						variant={variance < 0 ? 'bad' : variance > 0 ? 'ok' : 'muted'}
-					>
-						{variance < 0
-							? t('reports.document.short')
-							: variance > 0
-								? t('reports.document.over')
-								: t('reports.exact')}
+					<Badge testID={`closure-result-${row.id}`} tinted size="lg" variant={result.tone}>
+						{resultWord(result.kind, t, 'label')}
 					</Badge>
 				);
 				const destination = get(row.breakdowns, 'labels.carried_to_store_name');

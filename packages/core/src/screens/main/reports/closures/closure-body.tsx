@@ -26,12 +26,12 @@ import {
 	formatClosureDate,
 } from '../../../../services/register-session/closure-document';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
+import { closureResult, resultWord } from '../../../../services/register-session/closure-result';
 import {
 	countDecimals,
-	countVariance,
 	varianceAmount,
 	varianceText,
-} from '../../pos/cart/register-count.helpers';
+} from '../../../../services/register-session/count-money';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { PrinterSwitcher } from '../../receipt/printer-switcher';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
@@ -70,16 +70,12 @@ export function ClosureHeading({ row, settled, blind, title, leading, testID }: 
 		opened.date_ymd === closed.date_ymd
 			? `${opened.weekday_short} ${Number(opened.day)} ${opened.month_short} ${opened.time}–${closed.time}`
 			: `${opened.date} ${opened.time} → ${closed.date} ${closed.time}`;
-	const decimals = countDecimals(context.store.price_num_decimals);
-	const variance = countVariance(
-		settled.counted.cash ?? '0',
-		settled.expected.cash ?? '0',
-		decimals
-	);
+	// The detail shows the SETTLED result: the closure after its corrections.
+	const result = closureResult({ settled }, countDecimals(context.store.price_num_decimals));
 	return (
 		<>
 			{leading}
-			<ToneDisc size="sm" tone={blind ? 'muted' : variance < 0 ? 'bad' : 'ok'} />
+			<ToneDisc size="sm" tone={blind ? 'muted' : result.kind === 'short' ? 'bad' : 'ok'} />
 			<View testID={testID} className="min-w-0 flex-1 gap-1">
 				<View className="flex-row items-center gap-2">
 					<DialogTitle>
@@ -140,9 +136,12 @@ export function ClosureBody({
 	const counted = settled.counted.cash ?? '0',
 		expected = settled.expected.cash ?? '0';
 	const decimals = countDecimals(context.store.price_num_decimals);
-	const variance = countVariance(counted, expected, decimals);
-	const signed = varianceAmount(variance, decimals, format);
+	// The detail shows the SETTLED result: the closure after its corrections.
+	const result = closureResult({ settled }, decimals);
+	const signed = varianceAmount(result.minor, decimals, format);
 	const recorded = get(doc.receiptData, 'closure', row) as RecordedFigures;
+	// The notice's recorded result is derived as the settled one is, so the two compare like with like.
+	const before = closureResult({ settled: recorded }, decimals);
 	// A row read back always carries breakdowns; a bare fixture may not.
 	const breakdowns = row.breakdowns ?? {};
 	const discounts = breakdowns.discounts as { count: number; amount: string } | undefined;
@@ -174,12 +173,7 @@ export function ClosureBody({
 	const recounts = corrections.filter((c) => c.type === 'recount').length;
 	const settledArgs = {
 		recorded: context.formatMoney(recorded.counted?.cash ?? '0'),
-		result: varianceText(
-			countVariance(recorded.counted?.cash ?? '0', recorded.expected?.cash ?? '0', decimals),
-			decimals,
-			format,
-			t
-		),
+		result: varianceText(before.minor, decimals, format, t),
 		settled: context.formatMoney(counted),
 		count: recounts,
 	};
@@ -221,8 +215,8 @@ export function ClosureBody({
 					testID="closure-figure-result"
 					size="hero"
 					center
-					tone={variance < 0 ? 'bad' : variance > 0 ? 'ok' : 'default'}
-					eyebrow={`${t('register.variance')} · ${variance < 0 ? t('register.short') : variance > 0 ? t('register.over') : t('register.exact')}`}
+					tone={result.tone === 'muted' ? 'default' : result.tone}
+					eyebrow={`${t('register.variance')} · ${resultWord(result.kind, t, 'register')}`}
 				>
 					{signed}
 				</AmountFigure>
@@ -357,11 +351,7 @@ export function ClosureBody({
 												blind
 													? ''
 													: varianceText(
-															countVariance(
-																settled.counted[name],
-																settled.expected[name] ?? '0',
-																decimals
-															),
+															closureResult({ settled }, decimals, name).minor,
 															decimals,
 															format,
 															t
