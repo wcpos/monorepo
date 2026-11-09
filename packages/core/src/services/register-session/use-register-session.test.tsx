@@ -253,6 +253,20 @@ it.each(['synced', 'pending'])(
 	}
 );
 
+// The pane shows this under the closure's own unsynced line (session-store.ts counts the same):
+// a held retry (#3304) is `failed` until its closure is rewritten, still unsynced.
+it.each([
+	['synced', 0],
+	['pending', 1],
+	['failed', 1],
+])('counts the session itself as unsynced while %s', async (sync_status, count) => {
+	active = [{ ...session, status: 'closed', sync_status }];
+	entries = [];
+	closureRows = [{ id: session.id, session_id: session.id, sync_status: 'pending' }];
+	const result = await settled();
+	expect(result.current.unsyncedCount).toBe(count);
+});
+
 describe('refusedMovements', () => {
 	const refused = { ...movement, sync_status: 'failed', sync_error: 'rest_invalid_param' };
 	// A session that has been counted and written: the hook stops treating it as current.

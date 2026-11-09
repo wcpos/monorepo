@@ -1463,6 +1463,20 @@ describe('#2016: a refused close', () => {
 		view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
 		expect(screen.getByTestId('closure-done')).toBeTruthy();
 	});
+	it('× from the count on a refused close already back at open abandons nothing', async () => {
+		currentSession = { ...currentSession, status: 'counting', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		const onOpenChange = jest.fn();
+		const view = render(<RegisterPanel open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+		// The store's row lands the session back at open, the closure still unaccepted.
+		currentSession = { ...currentSession, status: 'open' };
+		view.rerender(<RegisterPanel open onOpenChange={onOpenChange} />);
+		expect(screen.getByTestId('count-back')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('panel-x'));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(mockBackToSelling).not.toHaveBeenCalled();
+	});
 	it('× on a refused close that reads closed abandons it to selling', async () => {
 		currentSession = { ...currentSession, status: 'closed', counted: { cash: '155' } };
 		mockRefusedClose = true;

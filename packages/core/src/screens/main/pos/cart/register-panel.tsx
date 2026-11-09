@@ -36,6 +36,7 @@ import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { ClosurePanel } from '../../reports/closures/closure-panel';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { RegisterCount } from './register-count';
+import { mayAbandonCount } from './register-count.helpers';
 import { RefusedCloseNotice } from './refused-close-notice';
 import { ageLabel } from './register-bar.helpers';
 import { Ticking } from './ticking';
@@ -143,7 +144,7 @@ export function RegisterPanel({
 			// ×, Escape and an outside tap wait for a close in flight: resuming selling under it
 			// would write `open` over the closed session.
 			if (!next && countBusy) return;
-			if (!next && pane === 'count' && (session?.status === 'counting' || refusedClose))
+			if (!next && pane === 'count' && mayAbandonCount(session, refusedClose))
 				await actions.backToSelling();
 			if (!next) {
 				setPane('register');
