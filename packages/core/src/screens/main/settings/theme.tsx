@@ -158,9 +158,10 @@ function ThemeGrid({
 const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
 
 /**
- * The Scale section, shaped as Icons is: a section title, then its description as the row
- * that carries the Saved mark. The step itself reaches the screens through `ScaleProvider`,
- * which reads this field off the store document — nothing here touches a token.
+ * The Scale section, shaped as Appearance is: a section title with its description under it, then
+ * the status line as the row that carries the Saved mark. The step itself reaches the screens
+ * through `ScaleProvider`, which reads this field off the store document — nothing here touches
+ * a token.
  */
 function ScaleSection({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
@@ -187,8 +188,14 @@ function ScaleSection({ t }: { t: ReturnType<typeof useT> }) {
 	};
 
 	return (
-		<SettingsSection title={t('settings.scale')}>
-			<PropertyRow stacked name="scale" label={t('settings.scale.description')}>
+		<SettingsSection title={t('settings.scale')} description={t('settings.scale.description')}>
+			<PropertyRow
+				stacked
+				name="scale"
+				label={t('settings.current_scale', {
+					scale: labels[scale as keyof typeof labels] ?? scale,
+				})}
+			>
 				<SegmentedControl
 					segments={
 						SCALE_OPTIONS.map((option) => ({
@@ -248,9 +255,15 @@ function IconsSection({ t }: { t: ReturnType<typeof useT> }) {
 	);
 
 	return (
-		<SettingsSection title={t('settings.icons')}>
-			{/* The description keys the list, and the list's Saved mark sits on that line. */}
-			<PropertyRow stacked name="icons" label={t('settings.icons.description')} />
+		<SettingsSection title={t('settings.icons')} description={t('settings.icons.description')}>
+			{/* The status line keys the list, and the list's Saved mark sits on that line. */}
+			<PropertyRow
+				stacked
+				name="icons"
+				label={t('settings.current_icons', {
+					icons: labels[icons as keyof typeof labels] ?? icons,
+				})}
+			/>
 			{/* The shared radio group: on web it is Radix, so Tab lands once, arrows move
 			    and Space selects; the radio dot is the selected state. */}
 			<RadioGroup
@@ -336,8 +349,14 @@ function FontsSection({ t }: { t: ReturnType<typeof useT> }) {
 	);
 
 	return (
-		<SettingsSection title={t('settings.fonts')}>
-			<PropertyRow stacked name="fonts" label={t('settings.fonts.description')} />
+		<SettingsSection title={t('settings.fonts')} description={t('settings.fonts.description')}>
+			<PropertyRow
+				stacked
+				name="fonts"
+				label={t('settings.current_fonts', {
+					fonts: labels[fonts as keyof typeof labels] ?? fonts,
+				})}
+			/>
 			<RadioGroup
 				value={fonts}
 				onValueChange={(value) => {

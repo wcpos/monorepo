@@ -112,8 +112,15 @@ jest.mock('@wcpos/query/user-db', () => ({
 	patchStoreSettings: (document: unknown, data: unknown) => mockLocalPatch({ document, data }),
 }));
 jest.mock('./components/settings-section', () => ({
-	SettingsSection: ({ title, children }: React.PropsWithChildren<{ title?: string }>) => (
-		<section aria-label={title}>{children}</section>
+	SettingsSection: ({
+		title,
+		description,
+		children,
+	}: React.PropsWithChildren<{ title?: string; description?: string }>) => (
+		<section aria-label={title}>
+			<p>{description}</p>
+			{children}
+		</section>
 	),
 }));
 
@@ -128,11 +135,13 @@ beforeEach(() => {
 });
 
 describe('the Scale section', () => {
-	// Theme, Scale, Icons: three titled sections, never a lone key row between two of them.
-	it('is a titled section whose description is the row that keys the steps', () => {
+	// Theme, Scale, Icons, Fonts: four sections of one shape, the description under the heading and
+	// the status line as the row that keys the control and carries its Saved mark.
+	it('is a titled section: the description under the heading, the status line keying the steps', () => {
 		const { getByRole } = render(<ThemeSettings />);
 		const section = getByRole('region', { name: 'settings.scale' });
-		expect(section.textContent).toContain('settings.scale.description');
+		expect(section.querySelector('p')!.textContent).toBe('settings.scale.description');
+		expect(section.textContent).toContain('settings.current_scale');
 		expect(section.querySelector('[data-testid="settings-scale-auto"]')).not.toBeNull();
 	});
 
@@ -259,10 +268,11 @@ describe('the Icons section', () => {
 describe('the Fonts section', () => {
 	const options = ['auto', 'system', 'instrument', 'grotesk', 'fraunces', 'manrope'];
 
-	it('is a titled section whose description keys the list', () => {
+	it('is a titled section: the description under the heading, the status line keying the list', () => {
 		const { getByRole } = render(<ThemeSettings />);
 		const section = getByRole('region', { name: 'settings.fonts' });
-		expect(section.textContent).toContain('settings.fonts.description');
+		expect(section.querySelector('p')!.textContent).toBe('settings.fonts.description');
+		expect(section.textContent).toContain('settings.current_fonts');
 		expect(section.querySelector('[data-testid="settings-fonts-auto"]')).not.toBeNull();
 	});
 
