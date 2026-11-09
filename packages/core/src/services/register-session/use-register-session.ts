@@ -2,40 +2,39 @@ import * as React from 'react';
 
 import { TZDate } from '@date-fns/tz';
 import { useObservableState } from 'observable-hooks';
-import { combineLatest, distinctUntilChanged, filter, firstValueFrom, map, of, timer } from 'rxjs';
+import { combineLatest, distinctUntilChanged, map, of, timer } from 'rxjs';
 
 import { observeSiteCredentials, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
-import { type ReadonlyEngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { readLedger } from '@wcpos/order-math';
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import {
-	backToSelling,
-	closeSession,
-	createSessionAccountingState,
+	abandonCount,
+	afterBaseline,
+	baselineContains,
+	beginCount,
+	closeRegister,
 	deriveDrawerTerms,
 	deriveExpected,
-	markCountingHere,
 	observeCashMovements,
 	observeRegister$,
 	observeRegisterClosures,
 	observeRegisterSessions,
 	observeSessionAccounting,
 	openSession,
+	outsideBaseline,
 	readClosedElsewhere,
 	readLiveSession,
 	readMovement,
 	recordLiveSession,
 	recordMovement,
+	type RegisterCount,
 	RegisterSessionRequiredError,
-	requeueClose,
 	requireOpenSession,
 	retryMovement,
 	sessionRefreshRequests,
-	startCounting,
 	voidMovement,
-	writeClosure,
 } from '@wcpos/query/register-session';
 
 import { DEVICE_ZONE, inZone } from '../../hooks/store-zone';
@@ -45,73 +44,11 @@ import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
 
-const logger = getLogger(['wcpos', 'registerSession']);
-// A drain that has not answered in fifteen seconds is offline or stalled, and the till must
-// still close; the closure then carries the fallback and the parent arrives later.
-const REFUND_PARENT_WAIT_MS = 15_000;
-
 /** A closure the store has not taken: neither accepted (`synced`) nor already on file there. */
 const unacceptedIn = (id: string, closures?: { id: string; sync_status: string }[] | null) =>
 	!!closures?.some((row) => row.id === id && !['synced', 'superseded'].includes(row.sync_status));
 function pendingMoney(record: { local?: unknown; remoteId?: unknown }) {
 	return hasPendingLocalWork(record) || record.remoteId === null;
-}
-
-function afterBaseline(at?: string | null, baselineAt?: string | null) {
-	baselineAt = baselineAt?.replace(/Z?$/, 'Z');
-	return (
-		!!at && !!baselineAt && Date.parse(at.endsWith('Z') ? at : `${at}Z`) > Date.parse(baselineAt)
-	);
-}
-function outsideBaseline(
-	record: {
-		remoteId?: unknown;
-		payload: { id?: number; date_created_gmt?: string };
-	},
-	baselineAt?: string | null,
-	orderIds?: readonly number[] | null
-) {
-	if (orderIds != null) return !orderIds.some((id) => id === record.payload.id);
-	return record.remoteId === null || afterBaseline(record.payload.date_created_gmt, baselineAt);
-}
-function baselineContains(
-	orders: readonly ReadonlyEngineRecord<'orders'>[],
-	refunds: readonly ReadonlyEngineRecord<'refunds'>[],
-	movements: readonly { id: string }[],
-	baselineAt?: string | null,
-	movementIds: readonly string[] = [],
-	ledgerRowIds?: readonly string[] | null,
-	refundIds?: readonly number[] | null
-) {
-	if (!baselineAt) return undefined;
-	const pending = new Set<string | number | null | undefined>([
-		...refunds
-			.filter((row) => outsideBaseline(row, baselineAt, refundIds))
-			.map((row) => row.payload.id),
-		...movements.filter((row) => !movementIds.includes(row.id)).map((row) => row.id),
-		...orders.flatMap((order) =>
-			readLedger(order.payload.meta_data).flatMap((row) =>
-				(row.refunds ?? [])
-					.filter((refund) => {
-						const at = (refund as { created_at_gmt?: string }).created_at_gmt;
-						return refundIds != null
-							? !refundIds.includes(refund.id)
-							: !at || afterBaseline(at, baselineAt);
-					})
-					.map(({ id }) => id)
-			)
-		),
-		...orders.flatMap((order) =>
-			readLedger(order.payload.meta_data)
-				.filter((row) =>
-					ledgerRowIds != null
-						? !ledgerRowIds.includes(row.id)
-						: afterBaseline(row.created_at_gmt, baselineAt)
-				)
-				.map(({ id }) => id)
-		),
-	]);
-	return (id: string | number | null | undefined) => !pending.has(id);
 }
 
 /**
@@ -174,7 +111,6 @@ export function useRegisterSession() {
 	const varianceThreshold = useDocField(store, (value) => value.variance_threshold);
 	const closeTime = useDocField(store, (value) => value.expected_close_time);
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
-	const [accountingState] = React.useState(createSessionAccountingState);
 	const source = React.useMemo(() => {
 		const sessions$ = observeRegisterSessions(storeDB, binding.registerId);
 		const closures$ = observeRegisterClosures(storeDB, binding.registerId);
@@ -191,18 +127,12 @@ export function useRegisterSession() {
 							) ??
 							rows.closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced'))
 				)
-			),
-			accountingState
+			)
 		);
 		const stream =
 			!binding.registerId || !sessionsOn
 				? of(null)
-				: combineLatest([
-						sessions$,
-						observeCashMovements(storeDB),
-						accounting.stream,
-						closures$,
-					]).pipe(
+				: combineLatest([sessions$, observeCashMovements(storeDB), accounting, closures$]).pipe(
 						map(([rows, entries, accounting, closureRows]) =>
 							rows && entries && accounting && closureRows
 								? {
@@ -216,11 +146,10 @@ export function useRegisterSession() {
 								: null
 						)
 					);
-		return { ...accounting, stream };
-		// Locale historically rebinds the reads; the close's state must survive that rebind.
-	}, [storeDB, binding.registerId, sessionsOn, runtime.engine, runtime.locale, accountingState]);
-	const { missingParentKey, pendingParents, accountingChanges, latestAccounting } = source;
-	const observed = useObservableState(source.stream, null);
+		return stream;
+		// Locale historically rebinds the reads.
+	}, [storeDB, binding.registerId, sessionsOn, runtime.engine, runtime.locale]);
+	const observed = useObservableState(source, null);
 	const data =
 		observed?.storeDB === storeDB &&
 		observed?.registerId === binding.registerId &&
@@ -304,10 +233,7 @@ export function useRegisterSession() {
 		accountingOrders.map(({ record }) => record),
 		data?.refundSources ?? [],
 		entries,
-		session?.server_expected_at,
-		session?.server_movement_ids,
-		session?.server_ledger_row_ids,
-		session?.server_refund_ids
+		session
 	);
 	// Snapshot-counted voids debit the baseline even offline. Other in-place edits keep
 	// the baseline plus deltas until refreshed rather than inventing their prior state.
@@ -442,198 +368,31 @@ export function useRegisterSession() {
 			startCounting: async () => {
 				if (figuresPending) throw new Error('register_figures_pending');
 				if (!session) throw new RegisterSessionRequiredError();
-				const row = await startCounting(storeDB, session.id);
-				const opener = readLiveSession(site.uuid!, row.register_id)?.opened_by;
-				await recordLiveSession(userDB, site.uuid!, row.register_id, {
-					session_id: row.id,
-					status: 'counting',
-					opened_at_gmt: row.opened_at_gmt,
-					opened_by:
-						row.opened_by == null
-							? null
-							: {
-									id: row.opened_by,
-									name:
-										opener?.id === row.opened_by
-											? opener.name
-											: row.opened_by === wpCredentials.id
-												? (wpCredentials.display_name ?? '')
-												: '',
-								},
-					acknowledged: session.sync_status === 'synced' || session.server_status != null,
-					expected_float: row.expected_float ?? null,
-					counted_float: row.counted_float ?? null,
-					business_day: row.business_day ?? null,
-				});
-				await markCountingHere(userDB, site.uuid!, row.register_id, true);
-				recordRegisterFact({
-					kind: 'counting-started',
-					actor,
-					sessionId: row.id,
-					registerId: row.register_id,
-				});
-				return row;
+				return beginCount({ storeDB, userDB, siteUuid: site.uuid!, actor }, session.id);
 			},
 			backToSelling: async () => {
 				if (!session) throw new RegisterSessionRequiredError();
-				const row = await backToSelling(storeDB, session.id);
-				const opener = readLiveSession(site.uuid!, row.register_id)?.opened_by;
-				await recordLiveSession(userDB, site.uuid!, row.register_id, {
-					session_id: row.id,
-					status: 'open',
-					opened_at_gmt: row.opened_at_gmt,
-					opened_by:
-						row.opened_by == null
-							? null
-							: {
-									id: row.opened_by,
-									name:
-										opener?.id === row.opened_by
-											? opener.name
-											: row.opened_by === wpCredentials.id
-												? (wpCredentials.display_name ?? '')
-												: '',
-								},
-					acknowledged: session.sync_status === 'synced' || session.server_status != null,
-					expected_float: row.expected_float ?? null,
-					counted_float: row.counted_float ?? null,
-					business_day: row.business_day ?? null,
-				});
-				recordRegisterFact({
-					kind: 'counting-abandoned',
-					actor,
-					sessionId: row.id,
-					registerId: row.register_id,
-				});
-				return row;
+				return abandonCount({ storeDB, userDB, siteUuid: site.uuid!, actor }, session.id);
 			},
-			closeSession: async (input: {
-				counted: Record<string, string>;
-				note?: string;
-				denominations?: { value: string; pieces: number }[];
-			}) => {
+			closeSession: async (input: RegisterCount) => {
 				if (!session) throw new RegisterSessionRequiredError();
 				// A seeded `counting` row skips `startCounting`; the close is the second door (§ 4.9).
 				if (figuresPending) throw new Error('register_figures_pending');
-				// A retry of a refused close (#3304) closes again, so a corrected count reaches the
-				// status POST; closeSession holds it out of the outbox until the closure below is rewritten.
-				const closed =
-					session!.status === 'closed' && session!.sync_status !== 'failed'
-						? session!
-						: await closeSession(storeDB, session!.id, {
-								...input,
-								closedBy: wpCredentials.id,
-								timezone,
-							});
-				const handles = pendingParents.current;
-				if (handles.length > 0) {
-					let timeout: ReturnType<typeof setTimeout> | undefined;
-					let timedOut = false;
-					const deadline = new Promise<void>((resolve) => {
-						timeout = setTimeout(() => {
-							timedOut = true;
-							logger.warn('Refund parent wait timed out; closing with available accounting');
-							resolve();
-						}, REFUND_PARENT_WAIT_MS);
-					});
-					try {
-						let generation = handles;
-						do {
-							await Promise.race([
-								Promise.allSettled(generation.map((handle) => handle.ready)),
-								deadline,
-							]);
-							if (timedOut || !missingParentKey.current) break;
-							if (pendingParents.current === generation) {
-								// Readiness precedes RxDB's query emission. Unrelated accounting
-								// emissions must not end the wait for a changed missing-parent set.
-								const key = missingParentKey.current;
-								let subscription: ReturnType<typeof accountingChanges.subscribe> | undefined;
-								try {
-									await Promise.race([
-										new Promise<void>((resolve) => {
-											subscription = accountingChanges.subscribe(() => {
-												if (missingParentKey.current !== key) resolve();
-											});
-										}),
-										deadline,
-									]);
-								} finally {
-									subscription?.unsubscribe();
-								}
-							}
-							generation = pendingParents.current;
-						} while (!timedOut && generation.length > 0);
-					} finally {
-						clearTimeout(timeout);
-					}
-				}
-				const cashiers: { id?: number; display_name?: string }[] = await firstValueFrom(
-					observeSiteCredentials(site).pipe(filter((value) => value !== PENDING_USER_DB_READ))
-				);
-				const actorName = (id: number | null | undefined) =>
-					(id === wpCredentials.id ? wpCredentials : cashiers.find((row) => row.id === id))
-						?.display_name ?? '';
-				const accounting = latestAccounting.current;
-				const latestSession = session!.getLatest();
-				const refundRecords = accounting?.refundRecords ?? data?.refundRecords;
-				const closure = await writeClosure({
-					storeDB,
-					resolveCashierName: actorName,
-					timezone,
-					labels: {
-						register_name: binding.registerName ?? '',
-						closed_by_name: actorName(closed.closed_by),
-						opened_by_name: actorName(closed.opened_by),
-						approved_by_name: actorName(closed.approved_by),
+				return closeRegister(
+					{
+						storeDB,
+						userDB,
+						siteUuid: site.uuid!,
+						actor,
+						engine: runtime.engine,
+						site,
+						credentials: wpCredentials,
+						timezone,
+						registerName: binding.registerName ?? '',
 					},
-					tillExpected: deriveExpected(
-						{
-							session: latestSession,
-							movements: entries,
-							refundRecords,
-							ledgerRowsBySession: (
-								accounting?.orders ?? accountingOrders.map(({ record }) => record)
-							).flatMap((record) => readLedger(record.payload.meta_data)),
-						},
-						baselineContains(
-							accounting?.orders ?? [],
-							accounting?.refundSources ?? [],
-							entries,
-							latestSession.server_expected_at,
-							latestSession.server_movement_ids,
-							latestSession.server_ledger_row_ids,
-							latestSession.server_refund_ids
-						)
-					),
-					userDB,
-					siteUuid: site.uuid!,
-					session: closed,
-					counted: input.counted.cash,
-					note: input.note ?? closed.count_note ?? '',
-					denominations: input.denominations ?? closed.count_denominations ?? [],
-					otherTenders: Object.fromEntries(
-						Object.entries(input.counted).filter(([method]) => method !== 'cash')
-					),
-					movements: entries,
-					orders: accounting?.orders ?? accountingOrders.map(({ record }) => record),
-					refundRecords,
-					revise: true,
-				});
-				// The closure now matches this close: let the outbox send both.
-				if (closed.sync_status === 'failed')
-					await requeueClose(storeDB, session!.id, closed.toMutableJSON());
-				await recordLiveSession(userDB, site.uuid!, closed.register_id, null);
-				recordRegisterFact({
-					kind: 'session-closed',
-					actor,
-					sessionId: closed.id,
-					registerId: closed.register_id,
-					closureId: closure.id,
-					counted: closure.counted,
-					variance: closure.variance,
-				});
-				return closure;
+					session.id,
+					input
+				);
 			},
 			recordMovement: async (input: {
 				type: 'paid_in' | 'paid_out' | 'no_sale';

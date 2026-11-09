@@ -3,8 +3,6 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { backToSelling as resumeSelling, startCounting } from '@wcpos/query/register-session';
-
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
@@ -571,20 +569,10 @@ it('requires approval for the same count after returning to selling and counting
 	varianceThreshold = '5';
 	approved_counted = { cash: '463.30' };
 	approval_required = true;
-	const sessions = {
-		findOne: () => ({
-			exec: async () => ({
-				incrementalPatch: async (patch: Record<string, unknown>) => {
-					if ('approved_counted' in patch)
-						approved_counted = patch.approved_counted as typeof approved_counted;
-					if ('approval_required' in patch) approval_required = patch.approval_required as boolean;
-				},
-			}),
-		}),
-	};
-	const storeDB = { collections: { register_sessions: sessions } };
+	// What query's abandon does to the row (count.test.ts pins it): the approval snapshot goes,
+	// the server's approval_required stays; counting again changes neither.
 	backToSelling.mockImplementationOnce(async () => {
-		await resumeSelling(storeDB, 's');
+		approved_counted = null;
 	});
 	const view = render(
 		<RegisterCount
@@ -594,7 +582,6 @@ it('requires approval for the same count after returning to selling and counting
 		/>
 	);
 	await act(async () => fireEvent.click(screen.getByTestId('count-back')));
-	await startCounting(storeDB, 's');
 	view.unmount();
 	render(
 		<RegisterCount
