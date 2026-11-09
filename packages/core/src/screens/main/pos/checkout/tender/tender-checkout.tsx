@@ -106,7 +106,10 @@ export function TenderCheckout({ order }: Props) {
 		if (flow.state.tab === 'legacy' && !flow.terminalLeg) {
 			return <LegacyTab flow={flow} order={order} />;
 		}
-		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
+		// Nothing left to take: a free sale, or a re-opened sale its payments already cover. The
+		// press completes it (zero-balance close). An unanswered attempt keeps the pane (it is cleared first),
+		// and so does a terminal leg still on screen (a live leg is never hidden behind another view).
+		if (flow.balanceMinor === 0 && !flow.unansweredAttempt && !flow.terminalLeg) {
 			return (
 				<View className="p-4">
 					<Button
@@ -155,23 +158,31 @@ export function TenderCheckout({ order }: Props) {
 	}
 
 	const tabs = (
-		<SegmentedControl
-			className={compact ? 'flex-1' : undefined}
-			value={flow.state.tab}
-			onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
-			segments={[
-				{
-					value: 'payments',
-					label: t('pos_checkout.payments_tab'),
-					testID: 'checkout-tab-payments',
-				},
-				{
-					value: 'legacy',
-					label: t('pos_checkout.legacy_tab'),
-					testID: 'checkout-tab-legacy',
-				},
-			]}
-		/>
+		<View className={compact ? 'flex-1' : undefined}>
+			<SegmentedControl
+				// The header row beside the title: hug, or Yoga hands the control the whole row.
+				hug={!compact}
+				value={flow.state.tab}
+				onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
+				segments={[
+					{
+						value: 'payments',
+						label: t('pos_checkout.payments_tab'),
+						testID: 'checkout-tab-payments',
+					},
+					{
+						value: 'legacy',
+						label: t('pos_checkout.legacy_tab'),
+						testID: 'checkout-tab-legacy',
+					},
+				]}
+			/>
+			{flow.hasLiveLeg ? (
+				<Text variant="help" className="text-right" testID="checkout-legacy-whole-bill">
+					{t('pos_checkout.whole_bill_only')}
+				</Text>
+			) : null}
+		</View>
 	);
 	const cancelPayment =
 		flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (

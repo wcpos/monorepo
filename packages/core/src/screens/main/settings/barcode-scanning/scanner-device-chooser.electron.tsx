@@ -10,7 +10,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 
-const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
+const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanners/setup-wizard';
 
 /**
  * Electron device chooser for direct scanner connection (#742). In a browser

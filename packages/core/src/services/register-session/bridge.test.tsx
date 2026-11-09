@@ -59,7 +59,7 @@ jest.mock('../register/use-register-binding', () => ({
 const mockRefreshRequests = new Subject<unknown>();
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
-	observeSessionAccounting: () => ({ stream: of({ orders: { hits: [] } }) }),
+	observeSessionAccounting: () => of({ orders: { hits: [] } }),
 	get sessionRefreshRequests() {
 		return mockRefreshRequests;
 	},
@@ -72,7 +72,7 @@ jest.mock('../../../../query/src/register-session/register-document', () => ({
 }));
 jest.mock('../../../../query/src/register-session/session-store', () => ({
 	...jest.requireActual('../../../../query/src/register-session/session-store'),
-	writeClosure: (...args: unknown[]) => closure(...args),
+	recoverClosureReservation: (...args: unknown[]) => closure(...args),
 }));
 jest.mock('../../../../query/src/register-session/queue', () => ({
 	...jest.requireActual('../../../../query/src/register-session/queue'),
@@ -120,7 +120,10 @@ it.each([
 		render(<RegisterSessionBridge />);
 
 		await waitFor(() => expect(closure).toHaveBeenCalledTimes(1));
-		expect(closure.mock.calls[0][0]).toMatchObject({ session: { id: 'session' }, counted: '10' });
+		expect(closure.mock.calls[0][1]).toMatchObject({
+			session_id: 'session',
+			counted: { cash: '10' },
+		});
 	}
 );
 

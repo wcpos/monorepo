@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { useSegments } from 'expo-router';
 import { useSubscription } from 'observable-hooks';
 
 import {
@@ -27,6 +26,7 @@ import { useBarcodeSearch } from '../../hooks/barcodes/use-barcode-search';
 import { useActionContext } from '../hooks/use-action-context';
 import { showCountingNotice, useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
+import { useTillLocation } from '../use-till-location';
 import { resolveStock } from '../../components/product/resolve-stock';
 import { useScanFeedback } from './use-scan-feedback';
 
@@ -112,9 +112,8 @@ function withBarcodeLookupDeadline(fetcher: BarcodeResolveFetcher): BarcodeResol
 }
 
 export const useBarcode = (setSearch: (search: string) => void, clearSearch: () => void) => {
-	const segments: string[] = useSegments();
 	// The POS section owns scans (#1438 ruling): Cart and checkout still add products to the cart.
-	const posSectionActive = segments.includes('(pos)');
+	const { inPos: posSectionActive } = useTillLocation();
 	const { scanEvents$, onKeyPress } = useBarcodeDetection({ isActive: posSectionActive });
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();

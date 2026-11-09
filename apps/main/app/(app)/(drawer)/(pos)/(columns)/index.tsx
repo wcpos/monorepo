@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { ObserveInteractiveMarker } from 'expo-observe';
-import { useSegments } from 'expo-router';
 
 import { EdgeSurface } from '@wcpos/components/edge-surface';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -11,6 +10,7 @@ import { FallbackScreen } from '@wcpos/components/error-boundary/fallback-screen
 import { Suspense } from '@wcpos/components/suspense';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
+import { useTillLocation } from '@wcpos/core/screens/main/pos/use-till-location';
 
 import { POSPhoneTabBar } from '../../../../../components/pos-phone-tab-bar';
 import { POSProductsPane } from '../../../../../components/pos-products-pane';
@@ -20,12 +20,8 @@ const TOP = ['top'] as const;
 
 export default function ResizablePOSColumns() {
 	const phone = useIsPhone();
-	const segments: string[] = useSegments();
-
-	// Check if we're at a /cart route (with or without orderId)
-	// If at cart route, default to cart tab; otherwise products tab
-	const isAtCartRoute = segments.includes('cart');
-	const isInPOSRoute = segments.includes('(pos)');
+	// At a /cart route (with or without orderId) the cart tab opens; otherwise products.
+	const { inPos: isInPOSRoute, atCart: isAtCartRoute } = useTillLocation();
 	const [activeTab, setActiveTab] = React.useState<'products' | 'cart'>(
 		isAtCartRoute ? 'cart' : 'products'
 	);

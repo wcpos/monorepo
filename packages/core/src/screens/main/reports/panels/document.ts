@@ -3,12 +3,6 @@ import { formatClosureDate } from '../../../../services/register-session/closure
 import type { ClosureContext } from '../../../../services/register-session/closure-document';
 import type { PanelSpec } from './specs';
 
-type Column = {
-	key: string;
-	label: string;
-	type: PanelSpec['types'][number];
-	align: 'left' | 'right';
-};
 type Meta = {
 	key: string;
 	title: string;
@@ -20,13 +14,17 @@ type Meta = {
 	to: string;
 	generatedAt: string;
 };
-/** Receipt_Data_Schema owns the wire shape: even numeric cell values are strings. */
-export function buildReportDocument(
-	spec: PanelSpec,
-	columns: Column[],
-	meta: Meta,
-	context: ClosureContext
-) {
+/**
+ * The `report` document a spec prints as; its columns are the spec's own.
+ * Receipt_Data_Schema owns the wire shape: even numeric cell values are strings.
+ */
+export function buildReportDocument(spec: PanelSpec, meta: Meta, context: ClosureContext) {
+	const columns = spec.keys.map((key, i) => ({
+		key,
+		label: spec.head[i],
+		type: spec.types[i],
+		align: spec.align[i],
+	}));
 	// `is_label`: the first cell merely repeats the heading a narrow template prints above the row
 	// (a row's label is its first cell; a subtotal or total's first column is text), so that
 	// template may omit it. Same flag the server puts on its reports.

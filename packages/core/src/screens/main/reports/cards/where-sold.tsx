@@ -1,21 +1,12 @@
 import * as React from 'react';
 
-import { filter } from 'rxjs';
-import { useObservableState } from 'observable-hooks';
-
-import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { Text } from '@wcpos/components/text';
 
-import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useQueryState } from '../../../../query';
-import {
-	useRegisterNames,
-	useRegisterNamesReady,
-} from '../../../../services/register/use-register-names';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
+import { POS_SOURCE, useReportsFilterScope } from '../scope';
 import { useReportFormats } from '../use-report-formats';
 import { channels, registers, stores } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
@@ -27,19 +18,13 @@ export function WhereSoldCard() {
 		{ selectedOrders, totals } = useReportsData(),
 		{ storeId } = useReportsPeriod();
 	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId);
-	const names = useRegisterNames(storeId),
-		ready = useRegisterNamesReady(storeId);
-	const { register, store: storeFilter } = useQueryState<'orders'>().filters;
-	const { wpCredentials } = useStoreSession();
-	const source = React.useMemo(
-		() =>
-			observeCredentialStores(wpCredentials).pipe(
-				filter((value) => value !== PENDING_USER_DB_READ)
-			),
-		[wpCredentials]
-	);
-	const directory = useObservableState(source);
-	const allStores = storeFilter === 'woocommerce-pos' && (directory?.length ?? 0) > 1;
+	const {
+		allStores,
+		registerId: register,
+		store: storeFilter,
+		names,
+		namesReady,
+	} = useReportsFilterScope();
 	const [view, setView] = React.useState('channels');
 	const canChoose = allStores || (register === undefined && totals.registerArray.length > 1);
 	const byStore = allStores && view === 'stores';
@@ -62,13 +47,13 @@ export function WhereSoldCard() {
 			? t('common.online')
 			: key === 'unregistered'
 				? t('reports.no_register_row')
-				: names[key] || t('common.unknown');
+				: names.register[key] || t('common.unknown');
 	const storeLabel = (key: string) =>
 		key === 'online'
 			? t('common.online')
 			: key === 'unassigned'
 				? t('reports.no_store_row')
-				: directory?.find((row) => String(row.id) === key)?.name || t('common.unknown');
+				: names.store[key] || t('common.unknown');
 	// The centre counts stores and registers (or channels); the remainder rows are not registers.
 	const registerCount =
 		byRegister || byStore
@@ -87,6 +72,7 @@ export function WhereSoldCard() {
 				canChoose && (
 					<SegmentedControl
 						testID="card-where-sold-view"
+						hug
 						value={activeView}
 						onValueChange={setView}
 						segments={[
@@ -101,7 +87,8 @@ export function WhereSoldCard() {
 		>
 			{!rows.length ? (
 				<Text testID="card-where-sold-empty">{t('reports.no_sales_in_period')}</Text>
-			) : (byRegister && !ready) || (storeFilter === 'woocommerce-pos' && !directory) ? (
+			) : (byRegister && !namesReady.register) ||
+			  (storeFilter === POS_SOURCE && !namesReady.store) ? (
 				rows.map((row) => <Skeleton key={row.key} shape="line" className="w-full" />)
 			) : (
 				<Donut

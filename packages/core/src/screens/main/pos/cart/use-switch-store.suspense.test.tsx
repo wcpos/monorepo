@@ -91,6 +91,7 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
 	useSegments: () => [],
+	useGlobalSearchParams: () => ({}),
 }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),

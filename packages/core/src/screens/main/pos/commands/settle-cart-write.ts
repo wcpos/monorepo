@@ -1,19 +1,12 @@
 import cloneDeep from 'lodash/cloneDeep';
 
-import {
-	hasLiveSettlementLeg,
-	serverOwnsMoney,
-	settleAggregate,
-	settleCart,
-	settlementPatch,
-	snapshotFromOrderJSON,
-} from '@wcpos/order-math';
 import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 import type { CartConfig, CouponContext, SettleOptions } from '@wcpos/order-math';
 
-import { type BoundaryResult, crossesPaidBalanceBoundary } from './paid-balance-boundary';
+import { type SettleOutcome, settlePayload } from './settle-payload';
 import { type ActionRefusal, isActionRefusal } from '../../../../extensions/actions';
 
+import type { BoundaryOutcome } from './boundary-commit';
 import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
@@ -37,10 +30,9 @@ export type Deps<T> = {
 };
 export type BoundaryCommit = (
 	order: CurrentOrderRecord,
-	result: BoundaryResult,
 	queue: OrderMutationContext,
 	coupons?: Input['coupons']
-) => Promise<unknown>;
+) => Promise<BoundaryOutcome>;
 
 // Birth intents remain synchronous; persisted cart commands await completion in their held slot.
 export function settleCartWrite<T>(
@@ -56,7 +48,7 @@ export function settleCartWrite<T>(
 	input: Input,
 	deps: Deps<T> & { commitAtBoundary?: BoundaryCommit }
 ): T | Promise<unknown> {
-	let boundary: BoundaryResult | undefined;
+	let boundary = false;
 	let closed = false;
 	let refusal: ActionRefusal | undefined;
 	const document = input.document.getLatest();
@@ -64,7 +56,7 @@ export function settleCartWrite<T>(
 		document,
 		changes: (currentPayload) => {
 			closed = false;
-			boundary = undefined;
+			boundary = false;
 			refusal = undefined;
 			const data = typeof input.data === 'function' ? input.data(currentPayload) : input.data;
 			if (isActionRefusal(data)) {
@@ -87,27 +79,28 @@ export function settleCartWrite<T>(
 				intent.meta_data = [...intent.meta_data, hint];
 			}
 			const after = { ...payload, ...intent };
-			const owned = serverOwnsMoney(payload.meta_data) || deps.serverOwnsMoney(document.uuid);
-			const config = deps.configForOrder(after);
 			const hasCoupons = after.coupon_lines?.some((line) => line.code != null);
 			// Without an explicit context, coupon continuation still owns redistribution.
-			const result =
-				owned || hasLiveSettlementLeg(after.meta_data) || (hasCoupons && !input.coupons)
-					? undefined
-					: hasCoupons && input.coupons
-						? settleCart(snapshotFromOrderJSON(after), config, {
-								coupons: input.coupons.context,
-								taxStatusFor: input.coupons.taxStatusFor,
-							})
-						: settleAggregate(snapshotFromOrderJSON(after), config);
-			if (result && 'error' in result) {
+			const outcome: SettleOutcome =
+				hasCoupons && !input.coupons
+					? { kind: 'owned' }
+					: settlePayload({
+							payload: after,
+							config: deps.configForOrder(after),
+							coupons: hasCoupons
+								? {
+										...input.coupons!.context,
+										taxStatusFor:
+											input.coupons!.taxStatusFor ?? input.coupons!.context.taxStatusFor,
+									}
+								: undefined,
+							owner: { uuid: document.uuid, serverOwnsMoney: deps.serverOwnsMoney },
+						});
+			if (outcome.kind === 'error') {
 				refusal = input.coupons!.missing;
 				return {};
 			}
-			boundary =
-				result && crossesPaidBalanceBoundary({ payload: after, result, dp: config.dp })
-					? result
-					: undefined;
+			boundary = outcome.kind === 'boundary';
 			if (boundary && hasCoupons && input.coupons!.boundary) {
 				refusal = input.coupons!.boundary;
 				return {};
@@ -117,7 +110,7 @@ export function settleCartWrite<T>(
 			return {
 				...data,
 				...intent,
-				...(result?.changed && !boundary ? settlementPatch(result) : {}),
+				...(outcome.kind === 'patch' ? outcome.changes : {}),
 			};
 		},
 	});
@@ -126,8 +119,8 @@ export function settleCartWrite<T>(
 		if (refusal) return refusal;
 		if (closed) return { deny: { reasonKey: 'pos_checkout.order_changed_retry' } };
 		if (boundary && value) {
-			const outcome = await deps.commitAtBoundary!(document, boundary, input.queue!, input.coupons);
-			if (isActionRefusal(outcome)) return outcome;
+			const outcome = await deps.commitAtBoundary!(document, input.queue!, input.coupons);
+			if (outcome.kind === 'refused') return outcome.refusal;
 		}
 		return value;
 	});

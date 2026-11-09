@@ -40,6 +40,7 @@ import { isCanonicalUuid, normalizeUuid, scannerDeviceKey } from '@wcpos/scanner
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { usePageSheetHost } from '../../components/page-sheet-host';
 import { useT } from '../../../../contexts/translations';
 import { useDeviceScanControls } from '../../hooks/barcodes/scan-hub-context';
 import { useScannerRegistration } from '../../hooks/barcodes/use-scanner-registration';
@@ -62,7 +63,7 @@ function reportScannerSettingFailure(action: string, error: unknown): void {
 		context: { action, error: getErrorMessage(error) },
 	});
 }
-const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
+const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanners/setup-wizard';
 
 /**
  * What a saved scanner's status line says.
@@ -182,6 +183,7 @@ function DirectConnection(props: {
 	onOpenChange: (open: boolean) => void;
 	children: React.ReactNode;
 }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	return (
 		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -197,7 +199,7 @@ function DirectConnection(props: {
 			>
 				{props.none ? <Text className="text-muted-foreground">{t('common.none')}</Text> : null}
 			</PropertyRow>
-			<DialogContent side="right" size="lg" closeLabel={t('common.close')}>
+			<DialogContent portalHost={host} side="right" size="lg" closeLabel={t('common.close')}>
 				<DialogHeader>
 					<DialogTitle>{props.label}</DialogTitle>
 				</DialogHeader>

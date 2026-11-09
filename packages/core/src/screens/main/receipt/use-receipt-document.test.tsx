@@ -14,6 +14,7 @@ import {
 } from '../pos/checkout/checkout-mode';
 import { useReceiptDocument } from './use-receipt-document';
 import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card';
+import { ReportsDirectoriesProvider } from '../reports/scope';
 
 const mockPrint = jest.fn<Promise<boolean>, []>();
 // The receipt page read. jsdom has no network: by default the read never answers (the preview
@@ -117,7 +118,7 @@ const mockCashiers = of([]);
 const mockSession = {
 	store: { id: 5, currency: 'USD', wc_price_decimals: 2, name: 'Shop', timezone: 'UTC' },
 	site: { wcpos_version: 'plugin', populate$: () => mockCashiers },
-	wpCredentials: { capabilities: [], populate$: () => mockCashiers },
+	wpCredentials: { capabilities: [], populate$: () => mockCashiers, get$: () => mockCashiers },
 };
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => mockSession,
@@ -756,7 +757,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 				jest.requireActual('../../../services/register-session/use-session-report').useSessionReport
 			);
 		render(
-			<>
+			<ReportsDirectoriesProvider>
 				<SessionCard summary={{ session: session as never, closure: null, status: 'ready' }} />
 				{['a', 'b', 'c'].map((id, index) => (
 					<RemoteSessionCard
@@ -778,7 +779,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 						}}
 					/>
 				))}
-			</>
+			</ReportsDirectoriesProvider>
 		);
 		await act(async () => {});
 		expect(mockGet).not.toHaveBeenCalled();

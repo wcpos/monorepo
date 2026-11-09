@@ -1,20 +1,15 @@
 import * as React from 'react';
-import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
-import { filter, of } from 'rxjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
-import { useObservableState } from 'observable-hooks';
 
-import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import type { ClosureRow } from '@wcpos/query/register-session';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { PortalHost } from '@wcpos/components/portal';
-import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import type { SortFieldsByCollection } from '@wcpos/query/query-state';
@@ -40,6 +35,12 @@ import { TillStrip } from './till-strip';
 import { Closures } from './closures';
 import { ClosurePanel } from './closures/closure-panel';
 import { ReportsProvider, ReportsRefunds, ReportsScopeProvider, useReportsPeriod } from './context';
+import {
+	ReportsDirectoriesProvider,
+	ReportsFilterScopeProvider,
+	useReportsDirectories,
+	useReportsFilterScope,
+} from './scope';
 import { HeroShell, SalesScope } from './hero';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
@@ -135,24 +136,12 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		[search, limit, dateRange]
 	);
 	const refundsHandle = useCollectionQueryHandle('refunds', refundsState);
-	const storeId = Number.isFinite(Number(state.filters.store))
-		? Number(state.filters.store)
-		: undefined;
+	// All stores keeps the bound till's day, zone and formats (`useStoreDay(0)` could pick a
+	// directory store 0).
+	const { storeId, allStores } = useReportsFilterScope();
 	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
-	const { wpCredentials, store, site } = useAppState();
-	const storesSource = React.useMemo(
-		() =>
-			wpCredentials
-				? observeCredentialStores(wpCredentials).pipe(
-						filter((value) => value !== PENDING_USER_DB_READ)
-					)
-				: of([]),
-		[wpCredentials]
-	);
-	const stores = useObservableState(storesSource, []);
-	// The sentinel is also store 0's own scope: All stores only with stores to choose from. The
-	// day, zone and formats stay the bound till's (`useStoreDay(0)` could pick a directory store 0).
-	const allStores = state.filters.store === 'woocommerce-pos' && stores.length > 1;
+	const { store, site } = useAppState();
+	const stores = useReportsDirectories().stores ?? [];
 	const range = state.filters.dateRange;
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
@@ -204,14 +193,6 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 			onOpenClosure={onOpenClosure}
 		/>
 	);
-	// The Free pane portals into the `reports` host, which the settled page owns; while the first
-	// orders load, the fallback holds the host so the pane is never homeless (CodeRabbit, #3058).
-	const registerContainer = React.useCallback((node: ViewInstance | null) => {
-		registerPortalContainer(
-			'reports',
-			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
-		);
-	}, []);
 	return (
 		<>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
@@ -226,13 +207,12 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 						fallback={
 							// The same scrolling shell as the settled page: on a short phone the strip
 							// can push the date button below the fold (Codex, #2720).
-							<View ref={registerContainer} className="min-h-0 flex-1">
+							<View className="min-h-0 flex-1">
 								<ScrollView className="flex-1" contentContainerClassName={cn(ground.gap, ground.p)}>
 									{strip}
 									<SalesScope date={date} settled={false} />
 									<HeroShell />
 								</ScrollView>
-								<PortalHost name="reports" />
 							</View>
 						}
 					>
@@ -303,14 +283,16 @@ function SalesScreen({ hasRoom, onRoomChange, onOpenClosure, page }: SalesScreen
 		>
 			<ErrorBoundary>
 				<Suspense>
-					<ReportsScopeProvider>
-						<ReportsScreenContent
-							hasRoom={hasRoom}
-							onRoomChange={onRoomChange}
-							onOpenClosure={onOpenClosure}
-							page={page}
-						/>
-					</ReportsScopeProvider>
+					<ReportsFilterScopeProvider>
+						<ReportsScopeProvider>
+							<ReportsScreenContent
+								hasRoom={hasRoom}
+								onRoomChange={onRoomChange}
+								onOpenClosure={onOpenClosure}
+								page={page}
+							/>
+						</ReportsScopeProvider>
+					</ReportsFilterScopeProvider>
 				</Suspense>
 			</ErrorBoundary>
 		</QueryStateProvider>
@@ -479,7 +461,9 @@ export function ReportsScreen() {
 	const t = useT();
 	const ground = useGround();
 	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
-		<ReportsShell key={link.key} pressed={pressed} onOpenClosure={openClosure} />
+		<ReportsDirectoriesProvider>
+			<ReportsShell key={link.key} pressed={pressed} onOpenClosure={openClosure} />
+		</ReportsDirectoriesProvider>
 	) : (
 		<View className="flex-1">
 			<ManagementBar title={t('common.reports')} testID="reports-bar" />

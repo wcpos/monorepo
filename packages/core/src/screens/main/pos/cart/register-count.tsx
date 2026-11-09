@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
@@ -26,9 +26,8 @@ import { Icon } from '@wcpos/components/icon';
 import { Notice } from '@wcpos/components/notice';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
-import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
-import { fromMinor, toMinor } from '@wcpos/order-math';
+import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
@@ -36,72 +35,23 @@ import { recordRegisterFact, useRegisterActor } from '../../../../services/regis
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
-import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { ApproveSheet } from './approve-sheet';
-import { keptCount, RefusedCloseNotice } from './refused-close-notice';
-import { RegisterAmount } from './movement-sheet';
-import { denominations } from './register-count.denominations';
+import { RefusedCloseNotice } from './refused-close-notice';
+import { DenominationTile, RegisterAmount } from '../../components/register-count';
+import { denominations } from '../../../../services/register-session/count-denominations';
+import {
+	countDecision,
+	keptCount,
+	mayAbandonCount,
+} from '../../../../services/register-session/count-decision';
 import {
 	countDecimals,
-	countVariance,
 	denominationTotal,
-	overThreshold,
-	validAmount,
 	varianceAmount,
-} from './register-count.helpers';
-import { isSameCount } from '../../../../services/register-session/same-count';
+} from '../../../../services/register-session/count-money';
 
 import type { ClosureCount } from './closure-written';
-
-export function DenominationTile({
-	currencyOptions,
-	value,
-	pieces,
-	add,
-}: {
-	currencyOptions?: CurrencyFormatOptions;
-	value: string;
-	pieces: number;
-	add: (pieces: number) => void;
-}) {
-	const { format } = useCurrencyFormat(currencyOptions);
-	const held = React.useRef(false);
-	const timer = React.useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-	const stop = () => clearInterval(timer.current);
-	// A held tile must stop ticking when the fold or count view unmounts.
-	React.useEffect(() => () => clearInterval(timer.current), []);
-	return (
-		<Tile
-			testID={`den-tile-${value}`}
-			badge={pieces}
-			accessibilityLabel={format(Number(value))}
-			// Web otherwise adds its default 50 ms press-in delay to the hold duration.
-			{...(Platform.OS === 'web' ? { delayPressIn: 0 } : {})}
-			delayLongPress={400}
-			onPressIn={() => {
-				held.current = false;
-			}}
-			onLongPress={() => {
-				held.current = true;
-				add(10);
-				timer.current = setInterval(() => add(10), 150);
-			}}
-			onPressOut={stop}
-			onPress={() => {
-				if (!held.current) add(1);
-			}}
-		>
-			<Text
-				variant="key"
-				className="max-w-full tabular-nums"
-				numberOfLines={1}
-				adjustsFontSizeToFit
-			>
-				{format(Number(value))}
-			</Text>
-		</Tile>
-	);
-}
 
 export function RegisterCount({
 	description,
@@ -193,50 +143,27 @@ export function RegisterCount({
 	const amount = Object.keys(pieces).length
 		? fromMinor(denominationTotal(pieces, decimals), decimals)
 		: cash;
-	const valid = validAmount(amount, decimals);
-	// This session's cash the store refused: the closure records it as not on the server (#3271),
-	// and Close waits for the cashier to say so once. A refused no-sale moves no cash.
-	const refusedCash = movements.filter(
-		(row) => row.sync_status === 'failed' && Number(row.amount) > 0
-	);
-	const refusedTotal = fromMinor(
-		refusedCash.reduce((total, row) => total + toMinor(row.amount, 4), 0),
-		4
-	);
-	// Keyed by the refused rows, so a further refusal after the tick asks again.
-	const refusedKey = refusedCash
-		.map((row) => row.id)
-		.sort()
-		.join();
 	const [acknowledgedKey, setAcknowledgedKey] = React.useState('');
-	const acknowledged = refusedKey === '' || acknowledgedKey === refusedKey;
-	const toggleAcknowledged = () => setAcknowledgedKey(acknowledged ? '' : refusedKey);
+	const decision = countDecision(
+		session,
+		{ expected, movements, figuresPending, refusedClose },
+		{ cash: amount, others, decimals, acknowledgedKey },
+		{ blind, varianceThreshold }
+	);
+	const { valid, variance, counted, acknowledged, refusedCash } = decision;
+	const toggleAcknowledged = () => setAcknowledgedKey(acknowledged ? '' : (refusedCash?.key ?? ''));
 	// The sheet's confirm closes the session, so a refusal that lands while it is open sends the
 	// count back for a new tick.
 	React.useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- the refusal is the store's async reply; it lands while the sheet is open, so there is no event handler to close it from.
 		if (!acknowledged) setApproving(false);
 	}, [acknowledged]);
-	const variance = countVariance(amount, expected.cash ?? '0', decimals);
 	const tone = variance < 0 ? TONE.bad : variance > 0 ? TONE.ok : TONE.muted;
 	const bandClass = tone.band;
 	const faces = denominations[currency ?? ''] ?? denominations.default;
-	const counted = {
-		cash: amount,
-		...Object.fromEntries(Object.entries(others).filter(([, value]) => value !== '')),
-	};
 	const countedDenominations = faces
 		.filter((value) => (pieces[value] ?? 0) > 0)
 		.map((value) => ({ value, pieces: pieces[value] }));
-	// A manager who already approved exactly this count is not asked again (a failed close or
-	// a restart keeps the approval); a changed count or an unapproved over-threshold variance is.
-	const approvedThisCount =
-		!!session?.approved_counted && isSameCount(session.approved_counted, counted);
-	const needsManager =
-		!approvedThisCount &&
-		(!!session?.approval_required ||
-			!!session?.approved_counted ||
-			(!blind && valid && overThreshold(variance, decimals, varianceThreshold)));
 	const completed = (closure: ClosureCount['closure']) =>
 		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {
@@ -363,7 +290,7 @@ export function RegisterCount({
 					testID="count-figures-pending"
 				/>
 			)}
-			{needsManager && (
+			{decision.approvalNeeded && (
 				<Notice
 					tone="warning"
 					icon="lock"
@@ -448,12 +375,12 @@ export function RegisterCount({
 							/>
 						</View>
 					))}
-			{refusedCash.length > 0 && (
+			{refusedCash && (
 				<Notice
 					tone="warning"
 					live={false}
 					testID="count-refused-cash"
-					title={t('register.refused_cash_title', { amount: format(Number(refusedTotal)) })}
+					title={t('register.refused_cash_title', { amount: format(Number(refusedCash.total)) })}
 					description={t('register.refused_cash_body')}
 				>
 					{/* The row is the checkbox; the mark only draws its state. */}
@@ -516,11 +443,7 @@ export function RegisterCount({
 					accessibilityLabel={t('register.back_to_selling')}
 					onPress={() =>
 						attempt(async () => {
-							// A closed session awaiting its closure write is not one to reopen; a close the
-							// store refused is (#2016): back to selling is its abandon, the count kept. One
-							// already back at open needs no second abandon.
-							if (session?.status === 'counting' || (refusedClose && session?.status !== 'open'))
-								await actions.backToSelling();
+							if (mayAbandonCount(session, refusedClose)) await actions.backToSelling();
 							onBack();
 						})
 					}
@@ -537,20 +460,16 @@ export function RegisterCount({
 			<DialogFooter
 				size="lg"
 				intent={{
-					label: needsManager
-						? t('register.approve_and_close')
-						: refusedClose
-							? t('register.retry')
-							: t('register.close_and_print'),
+					label: {
+						approve: t('register.approve_and_close'),
+						retry: t('register.retry'),
+						close: t('register.close_and_print'),
+					}[decision.intent],
 					testID: 'count-close',
 					loading: busy,
-					disabled:
-						!valid ||
-						figuresPending ||
-						!acknowledged ||
-						Object.values(others).some((value) => value !== '' && !validAmount(value, decimals)),
+					disabled: !decision.closeAllowed,
 					onPress: () => {
-						if (!blind && valid && overThreshold(variance, decimals, varianceThreshold))
+						if (decision.overThreshold)
 							recordRegisterFact({
 								kind: 'variance-over-threshold',
 								actor,
@@ -559,7 +478,7 @@ export function RegisterCount({
 								variance: fromMinor(variance, decimals),
 								threshold: varianceThreshold,
 							});
-						if (needsManager) setApproving(true);
+						if (decision.intent === 'approve') setApproving(true);
 						else
 							void attempt(async () => {
 								completed(

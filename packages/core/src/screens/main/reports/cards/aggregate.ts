@@ -200,6 +200,13 @@ export function tenders(orders: ReportOrder[], totals: Totals, num_decimals = 2)
 		}))
 		.sort((a, b) => b.amount - a.amount);
 }
+/** A tender row's printed name: one rule for the Payments card, the panel and the paper. */
+export function tenderLabel(row: { key: string; label: string }, t: (key: string) => string) {
+	if (row.label) return row.label;
+	if (row.key === 'cash') return t('common.cash');
+	if (row.key === 'unpaid') return t('reports.unpaid');
+	return t('common.unknown');
+}
 export function channels(orders: ReportOrder[], totals: Totals) {
 	return ['store', 'online']
 		.map((key) => {

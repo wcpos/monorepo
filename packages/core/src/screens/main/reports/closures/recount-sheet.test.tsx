@@ -5,7 +5,7 @@ import { of } from 'rxjs';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { createTestT } from '../../../../../jest/translate';
-import { RegisterAmount } from '../../pos/cart/movement-sheet';
+import { RegisterAmount } from '../../components/register-count';
 import { RecountSheet } from './recount-sheet';
 
 import type { Correction } from '../../../../services/register-session/settled-figures';

@@ -10,6 +10,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderOptional } from '../../pos/contexts/current-order/context';
 import { CashierEntry } from '../cashier-entry';
+import { usePageSheetHost } from '../page-sheet-host';
 import { NotificationBell } from '../notification-bell/notification-bell';
 
 /**
@@ -58,21 +59,21 @@ export function BarControls({
 }: {
 	/** The bar's testID: the bell is `<testID>-bell`, the avatar `<testID>-avatar`. */
 	testID: string;
-	/** The POS host inside the till; elsewhere the root, and the cashier sheet the drawer layout's `scene` host on wide. */
+	/** The POS host inside the till; elsewhere the bell and cashier sheet share the page host. */
 	portalHost?: string | null;
 	/** The register bar's: the cashier sheet's drawer figure opens its panel (the one door). */
 	onOpenRegister?: (pane?: 'register' | 'count') => void;
 	/** The desktop title bar's own pair (`TitleBarStripContent`). */
 	inTitleBar?: boolean;
 }) {
-	const phone = useIsPhone();
+	const pageHost = usePageSheetHost();
 	// While the desktop title bar shows it is the one home of the bell and the avatar on the
 	// window (Paul, 2026-10-29): every other bar draws neither. Full screen (0) gives them back.
 	const titleBarShown = useTitleBarStrip().height > 0;
 	const inTill = useCurrentOrderOptional() !== undefined;
-	// With the rail on screen (wide) the sheet opens beside it, never over it (#3061; the 10-28
-	// map); the POS host is already beside it. A phone has no rail: the root.
-	const entryHost = portalHost ?? (phone ? null : 'scene');
+	// The bell and cashier sheet share the page host: beside the rail on wide (#3061),
+	// the root on a phone. The POS keeps its own host inside the till.
+	const entryHost: string | null = portalHost ?? pageHost ?? null;
 	if (titleBarShown && !inTitleBar) {
 		// A till bar keeps the sheet's host, avatarless: the title bar's requests open it with the order.
 		return inTill ? (
@@ -88,7 +89,7 @@ export function BarControls({
 		<>
 			<NotificationBell
 				testID={`${testID}-bell`}
-				portalHost={portalHost ?? undefined}
+				portalHost={portalHost ?? pageHost}
 				bare={inTitleBar}
 			/>
 			<CashierEntry

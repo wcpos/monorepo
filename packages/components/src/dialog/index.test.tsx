@@ -31,6 +31,7 @@ const mockAutoFocusEvents: { preventDefault: jest.Mock }[] = [];
 const mockScrimProps: Primitive.OverlayProps[] = [];
 const mockPressableProps: PressableProps[] = [];
 const mockInteractOutside: NonNullable<Primitive.ContentProps['onInteractOutside']>[] = [];
+const mockResponders: Primitive.ContentProps['onStartShouldSetResponder'][] = [];
 
 jest.mock('react-native', () => {
 	const actual = jest.requireActual<typeof import('react-native')>('react-native');
@@ -159,9 +160,11 @@ jest.mock('@rn-primitives/dialog', () => {
 		children,
 		onOpenAutoFocus,
 		onInteractOutside,
+		onStartShouldSetResponder,
 		ref,
 	}: Omit<Primitive.ContentProps, 'ref'> & { ref?: React.Ref<HTMLDivElement> }) {
 		const { open } = useRootContext();
+		mockResponders.push(onStartShouldSetResponder);
 		if (onInteractOutside) mockInteractOutside.push(onInteractOutside);
 		const autofocus = React.useRef(onOpenAutoFocus);
 		// Keep the event callback current without retriggering the primitive's mount event.
@@ -277,6 +280,7 @@ beforeEach(() => {
 	mockScrimProps.length = 0;
 	mockPressableProps.length = 0;
 	mockInteractOutside.length = 0;
+	mockResponders.length = 0;
 });
 afterEach(() => jest.useRealTimers());
 
@@ -969,4 +973,35 @@ it('uses the root portal when its host is explicitly null', () => {
 	expect(mockPortalCalls).toContainEqual(
 		expect.objectContaining({ hostName: undefined, container: undefined })
 	);
+});
+
+// The native primitive's Content claims the touch responder (`() => true`), which on RN 0.88
+// starved the body's ScrollView: a long dialog did not scroll on iOS (owner, iPad, 2026-11-08).
+it('21. a native panel never claims the touch responder, so its body scrolls', () => {
+	// The shared constant as the native build evaluates it.
+	let native: typeof overlay.CONTENT_LETS_CHILDREN_SCROLL = null;
+	const { Platform } = jest.requireMock<typeof import('react-native')>('react-native');
+	jest.replaceProperty(Platform, 'OS', 'ios');
+	jest.isolateModules(() => {
+		native = jest.requireActual<typeof overlay>('../lib/overlay').CONTENT_LETS_CHILDREN_SCROLL;
+	});
+	jest.restoreAllMocks();
+	// The web build declines nothing; the native build declines the claim.
+	expect(overlay.CONTENT_LETS_CHILDREN_SCROLL).toBeNull();
+	expect(native).toEqual({ onStartShouldSetResponder: expect.any(Function) });
+	jest.replaceProperty(overlay, 'CONTENT_LETS_CHILDREN_SCROLL', native);
+	try {
+		render(
+			<Dialog open>
+				<DialogContent inline testID="d">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		const claim = mockResponders.at(-1);
+		expect(claim).toBeInstanceOf(Function);
+		expect(claim?.({} as never)).toBe(false);
+	} finally {
+		jest.restoreAllMocks();
+	}
 });

@@ -44,9 +44,11 @@ type CustomerValueRef = { current: CustomerRecord | null };
 const customerResources = new Map<number, { valueRef$$: Subject<CustomerValueRef> }>();
 const mockMarkSaved = jest.fn();
 const mockFlush = jest.fn();
+const mockFormSelect = jest.fn();
+const mockSaveOrderFields = jest.fn();
 let capturedChange: ((changes: Record<string, unknown>) => Promise<boolean>) | undefined;
 let draft: Record<string, unknown>;
-let mockStatus = 'processing';
+let mockStatus = 'on-hold';
 const fieldOnChange = jest.fn();
 let selectCustomer: (value: string) => void = () => undefined;
 
@@ -62,9 +64,22 @@ const form = {
 };
 const statusForm = {
 	control: {},
+	reset: jest.fn(),
 	handleSubmit: (callback: (data: { status: string }) => unknown) => () =>
 		callback({ status: mockStatus }),
 };
+
+jest.mock('../commands/use-order-record', () => {
+	const actual = jest.requireActual('../commands/use-order-record');
+	return {
+		...actual,
+		useOrderRecord: () => {
+			const commands = actual.useOrderRecord();
+			mockSaveOrderFields.mockImplementation(commands.saveOrderFields);
+			return { ...commands, saveOrderFields: mockSaveOrderFields };
+		},
+	};
+});
 
 jest.mock('react-hook-form', () => ({
 	useForm: (options: { values?: unknown }) => (options.values ? statusForm : form),
@@ -104,7 +119,10 @@ jest.mock('@wcpos/components/form', () => ({
 		return { flush: mockFlush };
 	},
 	FormInput: () => null,
-	FormSelect: () => null,
+	FormSelect: (props: unknown) => {
+		mockFormSelect(props);
+		return null;
+	},
 	FormTextarea: () => null,
 }));
 
@@ -197,10 +215,12 @@ jest.mock('../../hooks/use-guest-customer', () => ({
 const orderPayload = {
 	id: 50,
 	status: 'pending',
+	total: '100',
+	refunds: [] as { total: string }[],
 	customer_id: 1,
 	billing: { first_name: 'Previous' },
 	shipping: { first_name: 'Previous' },
-	meta_data: [],
+	meta_data: [] as { key: string; value: string }[],
 	tax_ids: [],
 };
 const order = {
@@ -277,7 +297,12 @@ beforeEach(() => {
 	mockLocalPatch.mockReset().mockResolvedValue({ changes: {}, document: order });
 	mockPushDocument.mockReset().mockResolvedValue(order);
 	mockFlush.mockReset().mockResolvedValue(true);
-	mockStatus = 'processing';
+	mockFormSelect.mockReset();
+	mockStatus = 'on-hold';
+	orderPayload.status = 'pending';
+	orderPayload.meta_data = [];
+	orderPayload.total = '100';
+	orderPayload.refunds = [];
 	draft = { ...orderPayload };
 	capturedChange = undefined;
 	modalActions.clear();
@@ -491,6 +516,124 @@ describe('EditOrderForm while storage is degraded', () => {
 });
 
 describe('EditOrderForm Update status', () => {
+	// Mirrors the legacy JSON ledger fixture in order-math/src/payments/ledger.test.ts.
+	const capturedMeta = [
+		{
+			key: '_wcpos_payments',
+			value: JSON.stringify({
+				schema: 1,
+				payments: [
+					{
+						id: 'p1',
+						source: 'app',
+						order_id: 0,
+						method_id: 'pos_cash',
+						provider: null,
+						kind: 'cash',
+						capture_mode: 'manual',
+						transport: null,
+						recorded_offline: false,
+						amount: '16.83',
+						currency: 'USD',
+						tendered: null,
+						change: null,
+						tip: null,
+						status: 'captured',
+						failure_reason: null,
+						refunded_amount: '0.00',
+						refunds: [],
+						provider_refs: {},
+						receipt: {},
+						cashier_id: 1,
+						store_id: null,
+						created_at_gmt: '2026-01-01T00:00:00Z',
+						captured_at_gmt: '2026-01-01T00:00:00Z',
+						updated_at_gmt: '2026-01-01T00:00:00Z',
+					},
+				],
+			}),
+		},
+	];
+
+	it.each([
+		[
+			'hides Cancelled with captured money',
+			'pos-open',
+			capturedMeta,
+			['pos-open', 'pending', 'on-hold'],
+			false,
+		],
+		[
+			'offers Cancelled without payments',
+			'pos-open',
+			[],
+			['pos-open', 'pending', 'on-hold', 'cancelled'],
+			false,
+		],
+		[
+			'keeps the current Cancelled status with captured money',
+			'cancelled',
+			capturedMeta,
+			['pos-open', 'pending', 'on-hold', 'cancelled'],
+			false,
+		],
+		[
+			'keeps a non-pushable status read-only with captured money',
+			'completed',
+			capturedMeta,
+			['pos-open', 'pending', 'on-hold', 'completed'],
+			true,
+		],
+	] as const)('%s', (_name, status, meta, allowed, disabled) => {
+		orderPayload.status = status;
+		orderPayload.meta_data = [...meta];
+		render(<EditOrderForm order={order} />);
+		const [picker] = mockFormSelect.mock.calls.find(([props]) => props.name === 'status')!;
+		expect(picker).toEqual(expect.objectContaining({ name: 'status', allowed, disabled }));
+	});
+
+	it('offers Cancelled after the captured row is fully refunded', () => {
+		const ledger = JSON.parse(capturedMeta[0].value);
+		ledger.payments[0].refunds = [
+			{ id: 1, amount: '16.83', status: 'succeeded', provider_ref: null },
+		];
+		orderPayload.meta_data = [{ key: '_wcpos_payments', value: JSON.stringify(ledger) }];
+		render(<EditOrderForm order={order} />);
+		const [picker] = mockFormSelect.mock.calls.find(([props]) => props.name === 'status')!;
+		expect(picker.allowed).toContain('cancelled');
+	});
+
+	it('offers Cancelled after an unallocated Woo refund exhausts the captured money', () => {
+		const ledger = JSON.parse(capturedMeta[0].value);
+		ledger.payments[0].amount = '20';
+		orderPayload.status = 'pos-open';
+		orderPayload.total = '100';
+		orderPayload.refunds = [{ total: '-20' }];
+		orderPayload.meta_data = [{ key: '_wcpos_payments', value: JSON.stringify(ledger) }];
+		render(<EditOrderForm order={order} />);
+		const [picker] = mockFormSelect.mock.calls.find(([props]) => props.name === 'status')!;
+		expect(picker.allowed).toContain('cancelled');
+	});
+
+	it('does not save Cancelled when a payment lands after it was picked', async () => {
+		const view = render(<EditOrderForm order={order} />);
+		const [picker] = mockFormSelect.mock.calls.find(([props]) => props.name === 'status')!;
+		expect(picker.allowed).toContain('cancelled');
+		mockStatus = 'cancelled';
+		view.rerender(<EditOrderForm order={order} />);
+		orderPayload.meta_data = capturedMeta;
+		view.rerender(<EditOrderForm order={order} />);
+
+		await updateStatus();
+
+		expect(mockFlush).toHaveBeenCalled();
+		expect(mockSaveOrderFields).not.toHaveBeenCalled();
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		expect(statusForm.reset).toHaveBeenCalledWith({ status: 'pending' });
+		expect(modalActions.get('order-edit-update-status')?.disabled).toBe(false);
+	});
+
 	it('flushes, writes only the changed status and pushes without closing the modal', async () => {
 		render(<EditOrderForm order={order} />);
 		await updateStatus();
@@ -499,7 +642,7 @@ describe('EditOrderForm Update status', () => {
 		);
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: order,
-			data: { status: 'processing' },
+			data: { status: 'on-hold' },
 		});
 		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
 			mockPushDocument.mock.invocationCallOrder[0]
@@ -507,7 +650,7 @@ describe('EditOrderForm Update status', () => {
 		expect(mockPushDocument).toHaveBeenCalledTimes(1);
 		expect(testLogger.success).toHaveBeenCalledWith('orders.status_updated', {
 			showToast: true,
-			context: { orderId: 50, status: 'processing' },
+			context: { orderId: 50, status: 'on-hold' },
 		});
 		expect(mockDialogClose).not.toHaveBeenCalled();
 	});

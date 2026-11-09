@@ -17,12 +17,8 @@ import { Input } from '@wcpos/components/input';
 import { decimalRow, DIGIT_ROWS, Keypad } from '@wcpos/components/keypad';
 import { typeDecimal } from '@wcpos/components/lib/decimal-entry';
 import { useIsPhone } from '@wcpos/components/lib/device';
-import { cn } from '@wcpos/components/lib/utils';
-import { amountFigure } from '@wcpos/components/amount-figure';
-import { PressableSurface } from '@wcpos/components/pressable-surface';
 import { Text } from '@wcpos/components/text';
 import { TileGrid } from '@wcpos/components/tile-grid';
-import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
@@ -36,60 +32,9 @@ import {
 	normalizeAmount,
 } from '../../../../services/register-session/movement-input';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
-import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useExclusive } from '../../hooks/use-exclusive';
-
-/** The figure typed in place: the amount figure's hero step on the input itself. */
-const HERO = amountFigure({ size: 'hero' });
-const SYMBOL = 'text-2xl text-muted-foreground tabular-nums';
-
-/** One framed figure for every editable register amount. */
-export function RegisterAmount({
-	currencyOptions,
-	ref,
-	...props
-}: {
-	currencyOptions?: CurrencyFormatOptions;
-	value: string;
-	onChangeText: (v: string) => void;
-	testID: string;
-	ref?: React.Ref<TextInputInstance>;
-} & Pick<
-	React.ComponentProps<typeof Input.InputField> & React.AriaAttributes,
-	'onBlur' | 'onFocus' | 'onPressIn' | 'aria-invalid' | 'aria-describedby'
->) {
-	const { prefix, suffix, format } = useCurrencyFormat(currencyOptions);
-	// The locale's own zero, without the symbol that already sits beside it.
-	const zero = format(0).replace(prefix, '').replace(suffix, '').trim();
-	const inputRef = React.useRef<TextInputInstance>(null);
-	const mergedRef = useMergedRef(ref ?? null, inputRef);
-	// The symbol sits inside the field's border, so a tap on it is a tap on the field (as the
-	// Input's own leading glyph): it focuses the numerals rather than being a dead strip.
-	const symbol = (text: string) => (
-		<PressableSurface
-			wash="none"
-			accessible={false}
-			tabIndex={-1}
-			testID={`${props.testID}-symbol`}
-			onPress={() => inputRef.current?.focus()}
-		>
-			<Text className={SYMBOL}>{text}</Text>
-		</PressableSurface>
-	);
-	return (
-		<Input.Root figure>
-			{!!prefix && <Input.Left>{symbol(prefix)}</Input.Left>}
-			<Input.InputField
-				{...props}
-				ref={mergedRef}
-				type="decimal"
-				placeholder={zero}
-				className={cn(HERO, 'placeholder:font-normal', !!prefix && 'pl-1.5', !!suffix && 'pr-1.5')}
-			/>
-			{!!suffix && <Input.Right className="pr-3">{symbol(suffix)}</Input.Right>}
-		</Input.Root>
-	);
-}
+import { RegisterAmount } from '../../components/register-count';
 
 /** The store's common reasons, as chips; "Other…" clears the field and focuses it. */
 const REASONS: Record<MovementType, string[]> = {

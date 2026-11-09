@@ -7,6 +7,8 @@ test('public value surface is exactly the spec', () => {
 			.sort()
 	).toEqual([
 		'activeAwaitingCustomer',
+		'allowedOrderStatuses',
+		'availableForRefund',
 		'calculateCartLine',
 		'captureEntry',
 		'countsTowardPaid',
@@ -15,6 +17,7 @@ test('public value surface is exactly the spec', () => {
 		'fromMinor',
 		'getNetPaymentTotal',
 		'hasLiveSettlementLeg',
+		'hasRefundableMoney',
 		'hasSaleProvenance',
 		'hasSaleTime',
 		'isActiveCouponLine',
@@ -35,6 +38,7 @@ test('public value surface is exactly the spec', () => {
 		'mintDevicePayment',
 		'mintManualPayment',
 		'mintServerPayment',
+		'netRefundable',
 		// Added 2026-11-08 (split V1 slice 1): per-payment item provenance, read back for the receipt's "n of m paid" mark.
 		'paidUnitsMeta',
 		'parsePaymentsContract',

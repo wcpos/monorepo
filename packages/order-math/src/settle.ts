@@ -116,7 +116,16 @@ const MONEY_KEYS: ReadonlySet<string> = new Set([
 /** Clone comparison values only; never rewrite the emitted patch or the snapshot. */
 function canonicalMoney(value: unknown, key = 'total'): unknown {
 	if (key === 'meta_data') return value;
-	if (Array.isArray(value)) return value.map((entry) => canonicalMoney(entry, key));
+	if (Array.isArray(value)) {
+		const entries = value.map((entry) => canonicalMoney(entry, key));
+		if (key === 'taxes') {
+			entries.sort(
+				(a, b) =>
+					(Number((a as { id: number })?.id) || 0) - (Number((b as { id: number })?.id) || 0)
+			);
+		}
+		return entries;
+	}
 	if (value !== null && typeof value === 'object') {
 		return Object.fromEntries(
 			// Woo emits empty money slots as absent; undefined fields are absent too.
@@ -194,7 +203,7 @@ function settleOverLines(args: {
 		warnings.push(...result.warnings);
 		// Same rule as the shipping pass below: recomputed is not changed, and an
 		// unchanged array must not ride along in an asynchronous whole-field write.
-		if (JSON.stringify(result.line) !== JSON.stringify(fee)) {
+		if (!sameLineMoney(fee, result.line)) {
 			percentFeeRecomputed = true;
 		}
 		return result.line;
@@ -208,7 +217,7 @@ function settleOverLines(args: {
 	// chose it". That premise was false: WooCommerce has no per-line shipping tax class
 	// (see `extractShippingLineData`), so the class now always comes from the store and
 	// there is no per-line choice left to respect. The recompute is idempotent for a line
-	// already on the store's class; the JSON compare below keeps it from writing.
+	// already on the store's class; the money compare below keeps it from writing.
 	let shippingRecomputed = false;
 	const postShippingLines = shippingLines.map((shipping) => {
 		if (!isActiveShippingLine(shipping)) return shipping;
@@ -221,7 +230,7 @@ function settleOverLines(args: {
 		// asynchronous whole-field write, so attaching an array that recomputed to
 		// identical values turns a money-only settle into another line write — one that
 		// can land on top of a shipping edit the cashier made in the meantime.
-		if (JSON.stringify(result.line) !== JSON.stringify(shipping)) {
+		if (!sameLineMoney(shipping, result.line)) {
 			shippingRecomputed = true;
 		}
 		return result.line;

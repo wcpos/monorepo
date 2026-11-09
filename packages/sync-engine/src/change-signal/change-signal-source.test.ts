@@ -602,3 +602,32 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 		expect(urls.filter((url) => url.includes('/changes/sequence-log'))).toHaveLength(2);
 	});
 });
+
+describe('createLiveChangeSignalSource — hash-checksum scan scope', () => {
+	// The products list serves published rows only, so the scan that audits it must digest the
+	// same set. Without `status=publish` the server counts every live row (a draft, a private
+	// product, an import placeholder), the client requests ids the list never returns, prunes
+	// them and re-requests them on the next cycle: a prune/pull/delete loop on every tick.
+	it('asks the scan and its drill-down for the published scope', async () => {
+		const urls: string[] = [];
+		const source = createLiveChangeSignalSource({
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			fetcher: async (url) => {
+				urls.push(String(url));
+				return response({ after_id: 1000 });
+			},
+		});
+
+		await source.hashChecksumScan({ bucketSize: 1000, afterId: 0, limitBuckets: 5 });
+		await source.drillDownBucket({
+			detector: 'hash-checksum',
+			collection: 'products',
+			bucketSize: 1000,
+			bucket: 3,
+		});
+
+		const scans = urls.filter((url) => new URL(url).pathname.endsWith('/integrity/scan'));
+		expect(scans).toHaveLength(2);
+		for (const url of scans) expect(new URL(url).searchParams.get('status')).toBe('publish');
+	});
+});

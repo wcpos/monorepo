@@ -461,3 +461,36 @@ it('marks the hand-over as an unnumbered X-report naming the handing-over cashie
 	expect(doc.closure.breakdowns.labels.cashier_name).toBe('Pat');
 	expect(buildXReportDocument(session, context).closure.breakdowns.labels.cashier_name).toBe('');
 });
+
+// Moved from the hook's suite with the close (query owns the names it persists).
+// Revert: persist transaction cashier ids instead of credential display names.
+it('prints the persisted closer and cashier names', () => {
+	const named: ClosureRow = {
+		...row,
+		breakdowns: {
+			...row.breakdowns,
+			closed_by_name: 'Pat',
+			cashiers: [
+				{ id: 7, name: 'Pat' },
+				{ id: 8, name: 'Alex' },
+				{ id: 99, name: '99' },
+			],
+		},
+	};
+	const document = buildClosureDocument(named, {
+		store: {},
+		currency: 'USD',
+		timezone: 'UTC',
+		locale: 'en-US',
+		printedAt: '2026-09-17T12:00:00Z',
+		formatMoney: (value) => value,
+		i18n: {},
+	});
+	expect(document.closure.breakdowns.labels.closed_by_name).toBe('Pat');
+	expect(
+		renderLogiclessTemplate(
+			'{{#closure.breakdowns.cashiers}}{{name}};{{/closure.breakdowns.cashiers}}',
+			document
+		)
+	).toBe('Pat;Alex;99;');
+});

@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@wcpos/components/dialog';
-import { Input } from '@wcpos/components/input';
 import { Toast } from '@wcpos/components/toast';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -12,6 +11,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { ApprovalFields } from '../../components/register-count';
 import { usePanelSide } from '../contexts/overlay-side';
 import { isSameCount } from '../../../../services/register-session/same-count';
 
@@ -112,42 +112,5 @@ export function ApproveSheet({
 				/>
 			</DialogContent>
 		</Dialog>
-	);
-}
-
-export function ApprovalFields({
-	username,
-	password,
-	setUsername,
-	setPassword,
-}: {
-	username: string;
-	password: string;
-	setUsername: (value: string) => void;
-	setPassword: (value: string) => void;
-}) {
-	const t = useT();
-	return (
-		<>
-			<Text>{t('register.username')}</Text>
-			<Input
-				testID="approve-username"
-				className="min-h-row border-border"
-				value={username}
-				onChangeText={setUsername}
-				autoCapitalize="none"
-				autoCorrect={false}
-			/>
-			<Text>{t('register.password')}</Text>
-			<Input
-				testID="approve-password"
-				className="min-h-row border-border"
-				value={password}
-				onChangeText={setPassword}
-				secureTextEntry
-				autoCapitalize="none"
-				autoCorrect={false}
-			/>
-		</>
 	);
 }

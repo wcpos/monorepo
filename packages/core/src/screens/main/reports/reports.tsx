@@ -1,10 +1,8 @@
 import * as React from 'react';
-import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useEdgeInsets } from '@wcpos/components/edge-surface';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { PortalHost } from '@wcpos/components/portal';
-import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
@@ -30,15 +28,8 @@ export function Reports({
 	const { detail } = useReportsScope(),
 		phone = useIsPhone();
 	const phonePanel = !!detail && phone;
-	const registerContainer = React.useCallback((node: ViewInstance | null) => {
-		registerPortalContainer(
-			'reports',
-			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
-		);
-	}, []);
 	return (
 		<View
-			ref={registerContainer}
 			testID="screen-reports"
 			className="h-full gap-2"
 			// A phone panel in the page's place pads the home indicator in its own colour.
@@ -73,7 +64,6 @@ export function Reports({
 					</ErrorBoundary>
 				)}
 			</View>
-			<PortalHost name="reports" />
 		</View>
 	);
 }

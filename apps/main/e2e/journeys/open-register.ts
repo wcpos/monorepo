@@ -4,7 +4,8 @@
  */
 import { expect, type Page, test } from '@playwright/test';
 
-import { ensureRegisterOpen } from '../fixtures';
+import { becomesVisible, ensureRegisterOpen } from '../fixtures';
+import { cashInputs } from './cash-figure';
 
 /** Phone when the tab bar's Products tab is on screen, else the columns layout. */
 export async function posLayout(page: Page): Promise<'phone' | 'columns'> {
@@ -101,15 +102,24 @@ export async function closeRegister(page: Page): Promise<void> {
 		});
 		// The figure reads '—' until the session's figures arrive.
 		await expect(drawer).toHaveText(/\d/, { timeout: 30_000 });
-		const expected = cashInput((await drawer.textContent()) ?? '');
+		const candidates = cashInputs((await drawer.textContent()) ?? '');
 		await page.getByTestId('register-panel-close-register').click();
 		const count = page.getByTestId('count-amount');
 		await expect(count).toBeVisible({ timeout: 15_000 });
-		await count.fill(expected);
-		await expect(
-			page.getByTestId('count-exact'),
-			`a count of ${expected} must match the expected cash`
-		).toBeVisible({ timeout: 10_000 });
+		// A three-digit tail is ambiguous: try each reading. `count-exact` stays the only guard, so
+		// nothing is closed until it shows and a wrong candidate cannot record a variance.
+		const exact = page.getByTestId('count-exact');
+		let expected: string | undefined;
+		for (const [index, candidate] of candidates.entries()) {
+			await count.fill(candidate);
+			if (await becomesVisible(exact, index < candidates.length - 1 ? 5_000 : 10_000)) {
+				expected = candidate;
+				break;
+			}
+		}
+		if (!expected) {
+			throw new Error(`a count of ${candidates.join(' or ')} must match the expected cash`);
+		}
 		const pushed = page.waitForResponse(
 			(response) => {
 				const url = new URL(response.url());

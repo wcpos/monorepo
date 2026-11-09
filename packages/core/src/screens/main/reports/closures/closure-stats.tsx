@@ -13,6 +13,8 @@ import type { ClosureRow } from '@wcpos/query/register-session';
 
 import { useT } from '../../../../contexts/translations';
 import { useViewedStore } from '../../../../hooks/use-store-day';
+import { closureResult, resultWord } from '../../../../services/register-session/closure-result';
+import { varianceAmount } from '../../../../services/register-session/count-money';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 import type { SessionSummary } from './session-card';
@@ -29,12 +31,10 @@ export function closureTotals(rows: readonly ClosureRow[]) {
 		)
 	);
 	const counted = sum((row) => row.counted.cash ?? '0');
-	const variance = sum((row) => row.variance.cash ?? '0');
 	return {
 		opening: Number(fromMinor(opening, 4)),
 		activity: Number(fromMinor(sum((row) => row.expected.cash ?? '0') - opening, 4)),
 		counted: Number(fromMinor(counted, 4)),
-		variance: Number(fromMinor(variance, 4)),
 	};
 }
 
@@ -71,14 +71,15 @@ export function ClosureStats({
 		toMinor(totals.opening, 4)
 	);
 	const signed = (value: number) => `${value < 0 ? '−' : '+'}${format(Math.abs(value))}`;
-	const short = rows.filter((row) => Number(row.variance.cash ?? 0) < 0).length;
-	const over = rows.filter((row) => Number(row.variance.cash ?? 0) > 0).length;
-	const exact = rows.length - short - over;
-	const results = [
-		short ? `${short} ${t('register.short')}` : '',
-		over ? `${over} ${t('register.over')}` : '',
-		exact ? `${exact} ${t('reports.exact').toLocaleLowerCase()}` : '',
-	]
+	// The stats show the RECORDED results, as the list does.
+	const result = closureResult({ recorded: rows }, 4);
+	const kinds = rows.map((row) => closureResult({ recorded: [row] }, 4).kind);
+	const results = (['short', 'over', 'exact'] as const)
+		.map((kind) => {
+			const n = kinds.filter((k) => k === kind).length;
+			const word = resultWord(kind, t);
+			return n ? `${n} ${kind === 'exact' ? word.toLocaleLowerCase() : word}` : '';
+		})
 		.filter(Boolean)
 		.join(' · ');
 
@@ -89,7 +90,7 @@ export function ClosureStats({
 	const cells = {
 		discrepancy: [
 			t('reports.stat_discrepancy'),
-			totals.variance ? signed(totals.variance) : '—',
+			result.minor ? varianceAmount(result.minor, 4, format) : '—',
 			results,
 		],
 		sessions: [
@@ -133,9 +134,7 @@ export function ClosureStats({
 						<AmountFigure
 							testID="closure-stat-discrepancy"
 							size="headline"
-							tone={
-								partial || totals.variance === 0 ? 'default' : totals.variance < 0 ? 'bad' : 'ok'
-							}
+							tone={partial || result.tone === 'muted' ? 'default' : result.tone}
 						>
 							{value}
 						</AmountFigure>

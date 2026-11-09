@@ -5,7 +5,7 @@ import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import { Uniwind, useUniwind } from 'uniwind';
+import { useUniwind } from 'uniwind';
 
 import { isLightTheme } from '@wcpos/components/lib/themes';
 import { GalleryRootLayout, IS_GALLERY_BUILD } from '@wcpos/main/components/gallery/registry';
@@ -29,39 +29,13 @@ import {
 import { DesktopWindowChrome } from '../components/desktop-window-chrome';
 import { LiveTabGate } from '../components/live-tab-gate';
 import { RootError } from '../components/root-error';
+import { useThemeRestorer } from '../components/use-theme-restorer';
 // Configures EAS Observe at import, before any screen mounts (see lib/observe.ts).
 import { useObserveConsent } from '../lib/observe';
 import '../global.css';
 import '../polyfills';
 
 WebBrowser.maybeCompleteAuthSession();
-
-/**
- * Restores the saved theme from the store document on app startup.
- * Returns true when theme restoration is complete.
- */
-function useThemeRestorer() {
-	const { store } = useAppState();
-	const [restoredForStore, setRestoredForStore] = React.useState<unknown>(null);
-	const [isThemeReady, setIsThemeReady] = React.useState(false);
-
-	// Adjust state during render — sanctioned pattern, not an effect, not flagged.
-	if (store && restoredForStore !== store) {
-		setRestoredForStore(store);
-		setIsThemeReady(true);
-	}
-
-	// External mutation belongs in a pre-paint effect; read store.theme directly.
-	React.useLayoutEffect(() => {
-		if (!store) return;
-		const savedTheme = store.theme;
-		if (savedTheme && savedTheme !== 'system') {
-			Uniwind.setTheme(savedTheme as Parameters<typeof Uniwind.setTheme>[0]);
-		}
-	}, [store]);
-
-	return { isThemeReady, hasStore: !!store };
-}
 
 /**
  * Determines the appropriate toast theme based on the current Uniwind theme.

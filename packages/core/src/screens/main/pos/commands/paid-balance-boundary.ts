@@ -13,7 +13,7 @@ import { OPEN_ORDER_STATUSES } from '@wcpos/query';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
 
-export type BoundaryResult = Parameters<typeof settlementPatch>[0];
+type BoundaryResult = Parameters<typeof settlementPatch>[0];
 
 export function netPaidForBoundary(payload: OrderPayload, dp: number) {
 	const rows = readLedger(payload.meta_data);

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { type RenderOptions, render as renderTree } from '@testing-library/react';
 import { BehaviorSubject, type Observable } from 'rxjs';
 
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
@@ -192,6 +193,24 @@ jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => mockState.names,
 	useRegisterNamesReady: () => mockState.namesReady,
 }));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: null, registerName: null }),
+}));
+/**
+ * The real scope providers over the mocked directories, filters and register names; required at
+ * render so a suite's own register-binding mock (the panels') is the one they read.
+ */
+function Scope({ children }: React.PropsWithChildren) {
+	const { ReportsDirectoriesProvider, ReportsFilterScopeProvider } =
+		jest.requireActual<typeof import('../scope')>('../scope');
+	return (
+		<ReportsDirectoriesProvider>
+			<ReportsFilterScopeProvider>{children}</ReportsFilterScopeProvider>
+		</ReportsDirectoriesProvider>
+	);
+}
+export const render = (ui: React.ReactElement, options?: RenderOptions) =>
+	renderTree(ui, { wrapper: Scope, ...options });
 jest.mock('uniwind', () => ({
 	useCSSVariable: () => ['red', 'blue', 'green', 'orange', 'purple', 'black', 'gray'],
 }));

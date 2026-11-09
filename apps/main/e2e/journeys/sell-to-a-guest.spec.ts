@@ -154,6 +154,7 @@ test.describe('J2 Sell to a guest', () => {
 		const lines = server.line_items ?? [];
 		expect(lines, 'the sale has one line').toHaveLength(1);
 		expect(Number(lines[0].quantity), 'the line carries the keyed quantity').toBe(sale.quantity);
+		expect(Number(server.customer_id), 'the sale belongs to the Guest').toBe(0);
 	});
 
 	test('a cashier tenders more than the balance and change is due', async ({

@@ -12,6 +12,7 @@ import { Toast } from '@wcpos/components/toast';
 import {
 	readAwaitingCustomer,
 	readLedger,
+	readPaidUnits,
 	withAwaitingCustomer,
 	withGatewayAttempt,
 	withLedger,
@@ -1053,8 +1054,8 @@ describe('useTenderFlow', () => {
 		);
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
-		expect(result.current.entryAppliedMinor).toBe(4648);
-		expect(result.current.entryChangeMinor).toBe(352);
+		expect(result.current.figures.entryAppliedMinor).toBe(4648);
+		expect(result.current.figures.entryChangeMinor).toBe(352);
 		await act(async () => {});
 	});
 	it('lets the last planned cash leg take the whole remaining balance', async () => {
@@ -1084,7 +1085,7 @@ describe('useTenderFlow', () => {
 			})
 		);
 		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
-		expect(result.current.entryAppliedMinor).toBe(result.current.balanceMinor);
+		expect(result.current.figures.entryAppliedMinor).toBe(result.current.balanceMinor);
 		await act(async () => {});
 	});
 	it('pre-fills a picked method with the ledger-derived balance', async () => {
@@ -1107,8 +1108,8 @@ describe('useTenderFlow', () => {
 		});
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 10000 }));
 
-		expect(result.current.entryAppliedMinor).toBe(9295);
-		expect(result.current.entryChangeMinor).toBe(705);
+		expect(result.current.figures.entryAppliedMinor).toBe(9295);
+		expect(result.current.figures.entryChangeMinor).toBe(705);
 
 		await act(async () => result.current.takeTender());
 
@@ -1370,7 +1371,7 @@ describe('useTenderFlow', () => {
 
 	it('derives this payment, custom prefill, and quick amounts from the entry', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		expect(result.current.thisPaymentMinor).toBe(9295);
+		expect(result.current.figures.thisPaymentMinor).toBe(9295);
 		act(() =>
 			result.current.dispatch({
 				type: 'set-plan',
@@ -1378,19 +1379,19 @@ describe('useTenderFlow', () => {
 				balanceMinor: 9295,
 			})
 		);
-		expect(result.current.thisPaymentMinor).toBe(4648);
+		expect(result.current.figures.thisPaymentMinor).toBe(4648);
 		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current.thisPaymentMinor).toBe(4648);
-		expect(result.current.quickAmountsMinor).toEqual([4648, 5000]);
+		expect(result.current.figures.thisPaymentMinor).toBe(4648);
+		expect(result.current.figures.quickAmountsMinor).toEqual([4648, 5000]);
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 1200 }));
-		expect(result.current.thisPaymentMinor).toBe(4648);
-		expect(result.current.afterThisPaymentMinor).toBe(8095);
-		expect(result.current.quickAmountsMinor).toEqual([1200, 1500, 2000, 5000]);
+		expect(result.current.figures.thisPaymentMinor).toBe(4648);
+		expect(result.current.figures.afterThisPaymentMinor).toBe(8095);
+		expect(result.current.figures.quickAmountsMinor).toEqual([1200, 1500, 2000, 5000]);
 		act(() => result.current.dispatch({ type: 'back' }));
 		act(() => result.current.dispatch({ type: 'arm-custom' }));
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(0);
-		expect(result.current.thisPaymentMinor).toBe(9295);
+		expect(result.current.figures.thisPaymentMinor).toBe(9295);
 		await act(async () => {});
 	});
 	it('advances the plan only for a recorded leg and shows its actual ledger amount', async () => {
@@ -1405,7 +1406,7 @@ describe('useTenderFlow', () => {
 		act(() => result.current.pickMethod('pos_cash'));
 		mockRecordManualPayment.mockResolvedValueOnce({ kind: 'refused' });
 		await act(async () => result.current.takeTender());
-		expect(result.current.planLegs.filter((leg) => leg.state === 'done')).toHaveLength(0);
+		expect(result.current.figures.legs.filter((leg) => leg.state === 'done')).toHaveLength(0);
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
 		mockPayload.meta_data = [
@@ -1420,7 +1421,7 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.takeTender());
 		rerender();
 		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
-		expect(result.current.planLegs).toEqual([
+		expect(result.current.figures.legs).toEqual([
 			{ minor: 5000, state: 'done', title: 'Cash' },
 			{ minor: 4295, state: 'now' },
 		]);
@@ -1466,7 +1467,7 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.takeTender());
 		rerender();
 		expect(result.current.planLabel).toBe('pos_checkout.rest_of_the_order');
-		expect(result.current.thisPaymentMinor).toBe(2400);
+		expect(result.current.figures.thisPaymentMinor).toBe(2400);
 		// The group's later leg carries no units: they count once, under the first leg.
 		expect(result.current.paidUnits).toEqual({ 1: { units: 1, methods: ['Card'] } });
 		expect(result.current.splitOn).toBe(true);
@@ -1482,12 +1483,12 @@ describe('useTenderFlow', () => {
 		// The other column writes the store; the pane's typed entry gives way to the picks.
 		act(() => pickUnits(order.uuid, 1, 2));
 		expect(result.current.picked).toEqual({ 1: 2 });
-		expect(result.current.pickedMinor).toBe(1100);
+		expect(result.current.figures.pickedMinor).toBe(1100);
 		expect(result.current.state.entryDirty).toBe(false);
 		expect(result.current.state.entryMinor).toBe(1100);
 		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 0 }));
 		expect(getCheckoutModeSnapshot().pickedUnits.get(order.uuid)).toEqual({});
-		expect(result.current.pickedMinor).toBe(0);
+		expect(result.current.figures.pickedMinor).toBe(0);
 		await act(async () => {});
 	});
 
@@ -1511,7 +1512,7 @@ describe('useTenderFlow', () => {
 		expect(result.current.splitOn).toBe(true);
 		expect(result.current.picked).toEqual({ 1: 4 });
 		expect(result.current.state.entryMinor).toBe(2000);
-		expect(result.current.entryAppliedMinor).toBe(2000);
+		expect(result.current.figures.entryAppliedMinor).toBe(2000);
 	});
 	it('Split on lives in the store; Split off clears it and the picks, and a paid sale ends both', async () => {
 		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 4, total: '20.00' }];
@@ -1566,7 +1567,7 @@ describe('useTenderFlow', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		expect(result.current.lines[0]?.totalMinor).toBe(2200);
 		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 1 }));
-		expect(result.current.pickedMinor).toBe(550);
+		expect(result.current.figures.pickedMinor).toBe(550);
 		await act(async () => {});
 	});
 	it('picking every unit carries stray cents but never shipping or fees (CodeRabbit on #3405)', async () => {
@@ -1575,14 +1576,14 @@ describe('useTenderFlow', () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'pick-units', lineId: 1, units: 4 }));
-		expect(result.current.allUnpaidPicked).toBe(false);
+		expect(result.current.figures.allUnpaidPicked).toBe(false);
 		expect(result.current.state.entryMinor).toBe(8000);
 		// 92.95 of lines in three units floors to 3098 × 3 = 9294: the odd cent rides along.
 		mockPayload.line_items = [{ id: 1, name: 'Lemonade', quantity: 3, total: '92.95' }];
 		const { result: odd } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => odd.current.pickMethod('pos_cash'));
 		act(() => odd.current.dispatch({ type: 'pick-units', lineId: 1, units: 3 }));
-		expect(odd.current.allUnpaidPicked).toBe(true);
+		expect(odd.current.figures.allUnpaidPicked).toBe(true);
 		expect(odd.current.state.entryMinor).toBe(9295);
 		await act(async () => {});
 	});
@@ -1728,7 +1729,7 @@ describe('useTenderFlow', () => {
 			[payment({ id: 'a', amount: '30.00', tendered: null }), authorized.row]
 		);
 		const view = renderHook(() => useTenderFlow(order, hostAtWidth()));
-		expect(view.result.current.planLegs).toEqual([
+		expect(view.result.current.figures.legs).toEqual([
 			{ minor: 3000, state: 'done', title: 'Cash' },
 			{ minor: 3000, state: 'now' },
 			{ minor: 3000, state: 'todo' },
@@ -1758,6 +1759,74 @@ describe('useTenderFlow', () => {
 			kind: 'even',
 			shares: ['30.00', '30.00', '32.95'],
 		});
+	});
+
+	it.each([false, true])(
+		'journals a partial leg once even when recorded again (%s)',
+		async (repeat) => {
+			const row = payment();
+			setAllocations(order.uuid, { [row.id]: { line: 1 } });
+			mockRecordManualPayment.mockImplementationOnce(async () => {
+				mockPayload.meta_data = withLedger(mockPayload.meta_data, [row]);
+				return { ...recorded, row };
+			});
+			// The resolver write door: the stamp is resolved against the payload at write time.
+			mockLocalPatch.mockImplementation(async ({ changes }) => {
+				const resolved = changes(mockPayload);
+				if (resolved.meta_data) mockPayload.meta_data = resolved.meta_data;
+				return { document: order };
+			});
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			await act(async () => result.current.takeTender());
+			if (repeat) await act(async () => result.current.takeTender());
+
+			// Every stamp goes through the door; only the first resolves to a write.
+			expect(mockLocalPatch).toHaveBeenCalledTimes(repeat ? 2 : 1);
+			const [{ document, changes }] = mockLocalPatch.mock.calls[0];
+			expect(document).toBe(order);
+			expect(readPaidUnits(mockPayload.meta_data)).toEqual({ [row.id]: { line: 1 } });
+			expect(readLedger(mockPayload.meta_data)).toEqual([row]);
+			expect(typeof changes).toBe('function');
+			if (repeat) expect(mockLocalPatch.mock.calls[1][0].changes(mockPayload)).toEqual({});
+		}
+	);
+
+	it('does not stamp paid units again when the recorded leg completes the sale', async () => {
+		const row = payment({ amount: '92.95' });
+		setAllocations(order.uuid, { [row.id]: { line: 1 } });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [row]);
+			return { ...recorded, row };
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.takeTender());
+
+		expect(mockCompleteOrderFlow).toHaveBeenCalled();
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+	});
+
+	it('a failed paid-units stamp does not fail the recorded partial payment', async () => {
+		const row = payment();
+		setAllocations(order.uuid, { [row.id]: { line: 1 } });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [row]);
+			return { ...recorded, row };
+		});
+		mockLocalPatch.mockRejectedValueOnce(new Error('local write failed'));
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => {
+			await expect(result.current.takeTender()).resolves.toBeUndefined();
+		});
+
+		expect(mockWarn).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ error: 'local write failed' }),
+			})
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		expect(readLedger(mockPayload.meta_data)).toEqual([row]);
+		expect(result.current.state.entryMinor).toBe(4295);
 	});
 
 	it('clears stale paid units left by a refused attempt when the sale completes without picks', async () => {
@@ -1874,9 +1943,16 @@ describe('useTenderFlow', () => {
 	it('cancelOnePayment voids only the named payment and frees its units, after the cancel question', async () => {
 		const kept = payment({ id: 'a', amount: '23.00', method_id: 'pos_card', kind: 'card' });
 		const cancelled = payment({ id: 'b', amount: '15.00', tendered: null });
-		mockPayload.meta_data = withLedger([], [kept, cancelled]);
+		mockPayload.meta_data = withLedger(
+			[{ id: 17, key: '_wcpos_paid_units', value: '{"a":{"l1":1},"b":{"l2":1}}' }],
+			[kept, cancelled]
+		);
 		setAllocations(order.uuid, { a: { l1: 1 }, b: { l2: 1 } });
-		mockVoidPayments.mockResolvedValue({ rows: [{ ...cancelled, status: 'voided' }], failed: [] });
+		mockVoidPayments.mockImplementationOnce(async () => {
+			const voided = { ...cancelled, status: 'voided' as const };
+			mockPayload.meta_data = withLedger(mockPayload.meta_data, [kept, voided]);
+			return { rows: [voided], failed: [] };
+		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 
 		await act(async () => result.current.cancelOnePayment('b'));
@@ -1891,6 +1967,14 @@ describe('useTenderFlow', () => {
 		expect(mockVoidPayments).toHaveBeenCalledTimes(1);
 		expect(mockVoidPayments).toHaveBeenCalledWith(order, ['b']);
 		expect(getCheckoutModeSnapshot().allocations.get(order.uuid)).toEqual({ a: { l1: 1 } });
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		const resolved = mockLocalPatch.mock.calls[0][0].changes(mockPayload);
+		expect(readPaidUnits(resolved.meta_data)).toEqual({ a: { l1: 1 } });
+		expect(resolved.meta_data).toContainEqual({
+			id: 17,
+			key: '_wcpos_paid_units',
+			value: '{"a":{"l1":1}}',
+		});
 		expect(mockInfo).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
@@ -1903,6 +1987,28 @@ describe('useTenderFlow', () => {
 			mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.cancelled')
 		).toHaveLength(0);
 		expect(mockDismissTo).not.toHaveBeenCalled();
+	});
+
+	it('cancelling the last allocated leg clears saved paid units', async () => {
+		const row = payment();
+		mockPayload.meta_data = withLedger(
+			[{ id: 17, key: '_wcpos_paid_units', value: '{"payment-1":{"line":1}}' }],
+			[row]
+		);
+		mockVoidPayments.mockImplementationOnce(async () => {
+			const voided = { ...row, status: 'voided' as const };
+			mockPayload.meta_data = withLedger(mockPayload.meta_data, [voided]);
+			return { rows: [voided], failed: [] };
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.cancelOnePayment(row.id));
+
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.calls[0][0].changes(mockPayload).meta_data).toContainEqual({
+			id: 17,
+			key: '_wcpos_paid_units',
+			value: null,
+		});
 	});
 
 	it('cancelOnePayment re-plans the next payment over what is left (Greptile on #3405)', async () => {
@@ -3073,7 +3179,7 @@ it.each([
 			act(() => view.result.current.pickMethod('pos_cash'));
 			if (amountMinor === 500)
 				act(() => view.result.current.dispatch({ type: 'set-entry', minor: 500 }));
-			expect(view.result.current.entryAppliedMinor).toBe(amountMinor);
+			expect(view.result.current.figures.entryAppliedMinor).toBe(amountMinor);
 			await act(async () => view.result.current.takeTender());
 			expect(mockManualPost).toHaveBeenCalledTimes(1);
 			expect(mockManualMirror).toHaveBeenCalledTimes(1);
@@ -3091,7 +3197,7 @@ it.each([
 			);
 			if (!completed) {
 				expect(view.result.current.balanceMinor).toBe(100);
-				expect(view.result.current.entryAppliedMinor).toBe(100);
+				expect(view.result.current.figures.entryAppliedMinor).toBe(100);
 				expect(view.result.current.state.entryMinor).toBe(100);
 				expect(view.result.current.busy).toBe(false);
 			}
@@ -3212,7 +3318,7 @@ describe('provider completion provenance before intent', () => {
 			]);
 			rerender();
 			act(() => result.current.pickMethod('terminal'));
-			expect(result.current.entryAppliedMinor).toBe(3098);
+			expect(result.current.figures.entryAppliedMinor).toBe(3098);
 			const beforeMeta = mockPayload.meta_data;
 			await act(async () => result.current.takeTender());
 			const split = {
@@ -4246,7 +4352,7 @@ describe('gateway capture mode (contract 1.2)', () => {
 		act(() => result.current.dispatch({ type: 'key', key: '2' }));
 		act(() => result.current.pickMethod('wcpos_email_invoice'));
 		// The reducer keeps a hand-typed amount across pills (ledger line 1); what is applied is the balance.
-		expect(result.current.entryAppliedMinor).toBe(9295);
+		expect(result.current.figures.entryAppliedMinor).toBe(9295);
 		await act(async () => result.current.takeTender());
 		expect(jest.mocked(provenance.recordSaleAttempt)).toHaveBeenCalledWith(
 			expect.anything(),
@@ -4260,10 +4366,10 @@ describe('gateway capture mode (contract 1.2)', () => {
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 4648 }));
 		act(() => result.current.pickMethod('wcpos_email_invoice'));
-		expect(result.current.entryAppliedMinor).toBe(9295);
+		expect(result.current.figures.entryAppliedMinor).toBe(9295);
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(4648);
-		expect(result.current.entryAppliedMinor).toBe(4648);
+		expect(result.current.figures.entryAppliedMinor).toBe(4648);
 		await act(async () => {});
 	});
 
@@ -5426,22 +5532,24 @@ describe('cash rounding (#66, #84)', () => {
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current).toMatchObject({
 			balanceMinor: 1003,
+			state: { entryMinor: 1005, entryDirty: false },
+		});
+		expect(result.current.figures).toMatchObject({
 			roundedDueMinor: 1005,
 			roundingMinor: 2,
 			entryAppliedMinor: 1005,
 			entryChangeMinor: 0,
-			state: { entryMinor: 1005, entryDirty: false },
 		});
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
-		expect(result.current).toMatchObject({ roundingMinor: 2, entryChangeMinor: 995 });
+		expect(result.current.figures).toMatchObject({ roundingMinor: 2, entryChangeMinor: 995 });
 		// An exact unrounded entry pays the balance as it is; the hook does not round it either.
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 1003 }));
-		expect(result.current).toMatchObject({ roundingMinor: 0, entryAppliedMinor: 1003 });
+		expect(result.current.figures).toMatchObject({ roundingMinor: 0, entryAppliedMinor: 1003 });
 		// A partial tender is never rounded.
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 500 }));
-		expect(result.current).toMatchObject({ roundingMinor: 0, entryAppliedMinor: 500 });
+		expect(result.current.figures).toMatchObject({ roundingMinor: 0, entryAppliedMinor: 500 });
 		act(() => result.current.pickMethod('pos_card'));
-		expect(result.current).toMatchObject({ roundedDueMinor: 1003, roundingMinor: 0 });
+		expect(result.current.figures).toMatchObject({ roundedDueMinor: 1003, roundingMinor: 0 });
 		await act(async () => {});
 	});
 
@@ -5459,7 +5567,7 @@ describe('cash rounding (#66, #84)', () => {
 			const plan = { kind: 'fixed', firstMinor: share, title: null, from: 0 } as const;
 			act(() => result.current.dispatch({ type: 'set-plan', plan, balanceMinor: balance }));
 			act(() => result.current.dispatch({ type: 'set-entry', minor: 2000 }));
-			expect(result.current).toMatchObject({
+			expect(result.current.figures).toMatchObject({
 				thisPaymentMinor: share,
 				roundingMinor: rounding,
 				entryAppliedMinor: applied,
@@ -5775,7 +5883,7 @@ describe('cash rounding (#66, #84)', () => {
 		});
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current).toMatchObject({ roundedDueMinor: 0, roundingMinor: -2 });
+		expect(result.current.figures).toMatchObject({ roundedDueMinor: 0, roundingMinor: -2 });
 		await act(async () => result.current.takeTender());
 
 		expect(patches()).toEqual([
@@ -5989,6 +6097,22 @@ describe('offline manual tenders', () => {
 			amount: '10.05',
 			method: 'Cash',
 		});
+	});
+
+	// A re-opened paid sale takes no money: no offline confirm, the close refuses offline itself.
+	it('a zero-balance press with a settles-later tile is never asked to confirm offline', async () => {
+		const paid = payment({ id: 'row-a', amount: '10.00', tendered: null });
+		mockPayload = { id: 42, total: '10.00', meta_data: withLedger([], [paid]) };
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.balanceMinor).toBe(0);
+		expect(result.current.tiles.find(({ method }) => method.id === 'pos_cash')).toMatchObject({
+			settlesLater: true,
+		});
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+
+		expect(mockConfirm).not.toHaveBeenCalled();
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
 	it('the cashier declines the offline confirmation → nothing journaled', async () => {

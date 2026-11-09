@@ -60,7 +60,7 @@ it('shows the no-register title and register guide for a cashier', () => {
 	expect(screen.queryByTestId('register-gate-admin')).toBeNull();
 	fireEvent.click(screen.getByTestId('register-gate-docs'));
 	expect(openExternalURL).toHaveBeenCalledWith(
-		'https://docs.wcpos.com/stores/registers-and-devices'
+		'https://docs.wcpos.com/stores/registers-and-devices#choosing-a-store-and-a-register'
 	);
 });
 

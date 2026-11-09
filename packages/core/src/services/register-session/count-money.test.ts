@@ -1,6 +1,6 @@
 import { fromMinor } from '@wcpos/order-math';
 
-import { createTestT } from '../../../../../jest/translate';
+import { createTestT } from '../../../jest/translate';
 import {
 	countDecimals,
 	countVariance,
@@ -8,7 +8,7 @@ import {
 	overThreshold,
 	validAmount,
 	varianceText,
-} from './register-count.helpers';
+} from './count-money';
 const t = createTestT();
 const format = (n: number) => `£${n.toFixed(2)}`;
 it.each([

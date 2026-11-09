@@ -17,7 +17,8 @@ import {
 	subscribeCustomerDisplayServiceStart,
 } from '../../../../services/customer-display';
 
-const DOCS_URL = 'https://docs.wcpos.com/customer-display';
+// Until the docs have a customer display page; then point it there.
+const DOCS_URL = 'https://docs.wcpos.com/getting-started/free-vs-pro#customer-display';
 const EMPTY_STATE: CustomerDisplayState = { displays: [], pairingCode: null };
 
 function createServiceStore(service: CustomerDisplayService | null) {

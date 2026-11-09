@@ -7,15 +7,15 @@
  * keeps the id the till route delivered last; outside the POS group the remembered cart id holds.
  */
 export function tillOrderIdForRoute(input: {
-	segments: string[];
+	inPos: boolean;
+	inSheet: boolean;
 	orderIdFromParams: string | undefined;
-	/** The id the till route delivered last (state owned by the layout). */
+	/** The id the till route delivered last (state owned by `useTillOrderId`). */
 	tillOrderId: string | undefined;
-	/** The layout's existing `lastOrderId` (remembered for routes outside the POS group). */
+	/** The last till cart id (state owned by `useTillOrderId`), for routes outside the POS group. */
 	lastOrderId: string | undefined;
 }): { orderId: string | undefined; tillOrderId: string | undefined } {
-	const inPos = input.segments.includes('(pos)');
-	const inSheet = input.segments.includes('(modals)');
+	const { inPos, inSheet } = input;
 	const tillOrderId = inPos && !inSheet ? input.orderIdFromParams : input.tillOrderId;
 	const orderId = !inPos ? input.lastOrderId : inSheet ? tillOrderId : input.orderIdFromParams;
 	return { orderId, tillOrderId };

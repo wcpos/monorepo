@@ -1,5 +1,7 @@
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
+import { resultOf, resultText } from './closure-result';
+
 /** Cash is counted in at least cents: a store that hides decimals still holds coins. */
 export const countDecimals = (priceDecimals: unknown) => Math.max(2, Number(priceDecimals ?? 2));
 
@@ -28,6 +30,5 @@ export function varianceText(
 	format: (value: number) => string,
 	t: (key: string) => string
 ) {
-	if (!variance) return t('register.exact');
-	return `${varianceAmount(variance, decimals, format)} ${variance < 0 ? t('register.short') : t('register.over')}`;
+	return resultText(resultOf(variance), varianceAmount(variance, decimals, format), t, 'register');
 }

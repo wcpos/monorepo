@@ -7,7 +7,6 @@ import {
 	searchFixturePayload,
 	searchFixtureProduct,
 } from '@wcpos/sync-core/testing';
-import { log } from '@wcpos/utils/logger';
 
 import { authenticatedTest as test, waitForCadenceStart, wcposRestRoute } from './fixtures';
 
@@ -108,7 +107,7 @@ test('a single-word search meets the latency budgets on a slow host', async ({
 	const fullPageMs = Date.now() - typedAt;
 
 	// Printed on every run so a CI log carries the measured numbers, not only pass/fail.
-	log.info(
+	console.log(
 		`[search-latency] firstRowMs=${firstRowMs} fullPageMs=${fullPageMs} requests=${requests}`
 	);
 	// The 250 ms debounce is part of what the cashier waits for, so it is inside the budget.

@@ -1,3 +1,4 @@
+import { netRefundable, type PaymentRow } from '@wcpos/order-math';
 import { roundHalfUp } from '@wcpos/order-math/internal';
 
 interface LineItemInput {
@@ -98,8 +99,10 @@ export function formatLineItemRefundWithTax(
 export function computeMaxRefundable(
 	orderTotal: string,
 	refunds: { total?: string }[],
-	dp: number = 2
+	dp: number = 2,
+	rows: readonly PaymentRow[] = []
 ): number {
+	if (rows.length) return Number(netRefundable(orderTotal, refunds, rows).toFixed(dp));
 	const previousTotal = refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
 	return Number((parseFloat(orderTotal || '0') - previousTotal).toFixed(dp));
 }

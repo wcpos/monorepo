@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { usePageSheetHost } from './page-sheet-host';
 import { useT } from '../../../contexts/translations';
 import { UISettingsColumnsOnlyForm, UISettingsDialog } from './ui-settings';
 
@@ -16,6 +17,7 @@ export function DisplayOptions({
 	/** A page's own settings above its columns. */
 	before?: React.ReactNode;
 }) {
+	const host = usePageSheetHost();
 	const t = useT();
 	// A literal t() per key, so the string extractor sees each one: the trigger's label, the panel's title.
 	const [open, title] = {
@@ -26,6 +28,7 @@ export function DisplayOptions({
 	}[id];
 	return (
 		<UISettingsDialog
+			portalHost={host}
 			title={title}
 			triggerTestID={`${id}-bar-display`}
 			triggerLabel={open}

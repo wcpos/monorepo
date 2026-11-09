@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as renderTree, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 import { Query } from 'mingo';
 
@@ -20,6 +20,7 @@ import {
 	useReportsScope,
 	useReportsSelection,
 } from './context';
+import { ReportsDirectoriesProvider, ReportsFilterScopeProvider } from './scope';
 import { QueryStateProvider, useQueryStateActions } from '../../../query';
 
 import type { QueryHandle } from '../../../query';
@@ -43,13 +44,36 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: Record<string, unknown> | undefined, pick: (row: never) => unknown) =>
 		doc ? pick(doc as never) : undefined,
 }));
+const mockSession = {
+	site: { populate$: () => jest.requireActual('rxjs').of([]) },
+	wpCredentials: { get$: () => jest.requireActual('rxjs').of([]) },
+	store: {},
+};
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({ site: { timezone_string: mockZone, gmt_offset: '0' }, store: {} }),
+	useStoreSession: () => mockSession,
+}));
+jest.mock('../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({}),
+	useRegisterNamesReady: () => true,
+}));
+jest.mock('../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: null, registerName: null }),
 }));
 jest.mock('../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (value: string) => new Date(value),
 	convertLocalDateToUTCString: (value: Date) => value.toISOString(),
 }));
+
+/** The directories wrap every render; the filter scope sits inside each query state. */
+const render = (ui: React.ReactElement) => renderTree(ui, { wrapper: ReportsDirectoriesProvider });
+function Scoped({ children }: React.PropsWithChildren) {
+	return (
+		<ReportsFilterScopeProvider>
+			<ReportsScopeProvider>{children}</ReportsScopeProvider>
+		</ReportsFilterScopeProvider>
+	);
+}
 
 const orders = [
 	{ uuid: 'one', total: 'legacy-one' },
@@ -84,7 +108,7 @@ function Provider({
 	refundsHandle?: QueryHandle;
 }>) {
 	return (
-		<ReportsScopeProvider>
+		<Scoped>
 			<ReportsProvider
 				handle={handle}
 				comparisonHandle={comparisonHandle}
@@ -92,7 +116,7 @@ function Provider({
 			>
 				{children}
 			</ReportsProvider>
-		</ReportsScopeProvider>
+		</Scoped>
 	);
 }
 
@@ -587,9 +611,9 @@ it.each([
 					initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 					initialFilters={{ dateRange: { from, to } }}
 				>
-					<ReportsScopeProvider>
+					<Scoped>
 						<Period />
-					</ReportsScopeProvider>
+					</Scoped>
 				</QueryStateProvider>
 			);
 			expect(screen.getByTestId('comparison-range').textContent).toBe(
@@ -627,9 +651,9 @@ it('compares a clamped early This month with the same bounds in the previous mon
 				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 				initialFilters={{ dateRange: { from: '2026-04-01T04:00:00Z', to: '2026-04-03T03:59:59Z' } }}
 			>
-				<ReportsScopeProvider>
+				<Scoped>
 					<Period />
-				</ReportsScopeProvider>
+				</Scoped>
 			</QueryStateProvider>
 		);
 		expect(screen.getByTestId('early-month').textContent).toBe(

@@ -108,7 +108,16 @@ jest.mock('../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 
-const mockOrder = {
+const mockOrder: {
+	uuid: string;
+	payload: {
+		id: number;
+		status: string;
+		total?: string;
+		refunds?: { total: string }[];
+		meta_data: { key: string; value: string }[];
+	};
+} = {
 	uuid: 'order-1',
 	payload: { id: 42, status: 'completed', meta_data: [] },
 };
@@ -117,7 +126,9 @@ const mockOrder = {
 function Footer({ order }: { order: typeof mockOrder }) {
 	const actions = useOrderActions(order as never);
 	recordAction('order-modal-reopen', actions.reopen, actions.storageDegraded || actions.reopening);
-	recordAction('order-modal-refund', actions.refund, actions.storageDegraded);
+	if (actions.canRefund) {
+		recordAction('order-modal-refund', actions.refund, actions.storageDegraded);
+	}
 	recordAction('order-modal-sync', actions.sync);
 	recordAction('order-modal-delete', actions.requestDelete, actions.storageDegraded);
 	return (
@@ -238,6 +249,123 @@ describe('Order actions while storage is degraded (#163 ruling R5)', () => {
 
 		expect(mockPush).not.toHaveBeenCalled();
 		expect(mockNavigate).not.toHaveBeenCalled();
+	});
+});
+
+describe('Order refund availability', () => {
+	const capturedPayments = (refundAmount = '0.00', amount = '42.50') => [
+		{
+			key: '_wcpos_payments',
+			value: JSON.stringify({
+				schema: 1,
+				payments: [
+					{
+						id: 'payment-1',
+						source: 'app',
+						order_id: 42,
+						method_id: 'pos_cash',
+						provider: null,
+						kind: 'cash',
+						capture_mode: 'manual',
+						transport: null,
+						recorded_offline: false,
+						amount,
+						currency: 'USD',
+						tendered: null,
+						change: null,
+						tip: null,
+						status: 'captured',
+						failure_reason: null,
+						refunded_amount: '0.00',
+						refunds:
+							refundAmount === '0.00'
+								? []
+								: [{ id: 1, amount: refundAmount, status: 'succeeded', provider_ref: null }],
+						provider_refs: {},
+						receipt: {},
+						cashier_id: 1,
+						store_id: null,
+						created_at_gmt: '2026-01-01T00:00:00Z',
+						captured_at_gmt: '2026-01-01T00:00:00Z',
+						updated_at_gmt: '2026-01-01T00:00:00Z',
+					},
+				],
+			}),
+		},
+	];
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockHandlers.clear();
+		mockDisabled.clear();
+	});
+
+	it.each([
+		{ status: 'refunded', refund: '-16.830000', offered: false },
+		{ status: 'pos-open', refund: '-10', offered: true },
+	])(
+		'nets unallocated Woo refunds for $status: offered=$offered',
+		({ status, refund, offered }) => {
+			render(
+				<Footer
+					order={{
+						...mockOrder,
+						payload: {
+							...mockOrder.payload,
+							status,
+							total: '16.83',
+							refunds: [{ total: refund }],
+							meta_data: capturedPayments('0.00', '16.83'),
+						},
+					}}
+				/>
+			);
+			expect(mockHandlers.has('order-modal-refund')).toBe(offered);
+		}
+	);
+
+	it('does not offer Refund for an unpaid pending order without ledger rows', () => {
+		render(
+			<Footer
+				order={{
+					...mockOrder,
+					payload: {
+						...mockOrder.payload,
+						status: 'pending',
+						total: '100',
+						refunds: [],
+						meta_data: [],
+					},
+				}}
+			/>
+		);
+		expect(mockHandlers.has('order-modal-refund')).toBe(false);
+	});
+
+	it.each([
+		{ status: 'pos-open', meta_data: capturedPayments(), offered: true },
+		{ status: 'cancelled', meta_data: capturedPayments(), offered: true },
+		{ status: 'refunded', meta_data: capturedPayments('42.50'), offered: false },
+		{ status: 'pos-open', meta_data: capturedPayments('12.50'), offered: true },
+		{ status: 'pos-open', meta_data: [], offered: false },
+		{ status: 'completed', meta_data: [], offered: true },
+	])('offers Refund=$offered for $status', ({ status, meta_data, offered }) => {
+		render(
+			<Footer
+				order={{
+					...mockOrder,
+					payload: {
+						...mockOrder.payload,
+						status,
+						meta_data,
+						total: meta_data.length ? '42.50' : '0',
+					},
+				}}
+			/>
+		);
+
+		expect(mockHandlers.has('order-modal-refund')).toBe(offered);
+		expect(mockDisabled.has('order-modal-refund')).toBe(offered);
 	});
 });
 

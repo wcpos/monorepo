@@ -28,6 +28,7 @@ import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
@@ -213,7 +214,12 @@ export function RefundOrderForm({ order }: Props) {
 		return refundDetails.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
 	}, [refundDetails]);
 
-	const maxRefundable = computeMaxRefundable(orderData.total || '0', refundDetails, dp);
+	const maxRefundable = computeMaxRefundable(
+		orderData.total || '0',
+		refundDetails,
+		dp,
+		readLedger(orderData.meta_data)
+	);
 
 	const initialLineItems = React.useMemo(() => {
 		return (orderData.line_items || []).map((item) => ({
