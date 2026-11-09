@@ -128,7 +128,10 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		unsyncedCount,
 		refusedClose: mockRefusedClose,
 		lastClosure: mockLastClosure,
-		movements: mockMovements,
+		// The session's movements through the drawer read's refused-cash rule (query's).
+		refusedCash: jest
+			.requireActual('../../../../../../query/src/register-session/drawer-rules')
+			.refusedCashOf(mockMovements),
 		figuresPending,
 		actions: { closeSession, backToSelling },
 	}),

@@ -33,13 +33,15 @@ import {
 	recordLiveSession,
 	remintRegister,
 } from '../../../../query/src/register-session/register-document';
+import * as reads from '../../../../query/src/register-session/reads';
 
 Object.assign(globalThis, { TextEncoder });
 Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
 
 const mockRequestRefresh = jest.fn();
-jest.mock('@wcpos/query/register-session', () => ({
-	...jest.requireActual('@wcpos/query/register-session'),
+// The drawer read composes these; query's own suites own the reads.
+jest.mock('../../../../query/src/register-session/reads', () => ({
+	...jest.requireActual('../../../../query/src/register-session/reads'),
 	observeRegisterSessions: () => {
 		const generation = mockGeneration;
 		return mockHasSessions
@@ -68,6 +70,9 @@ jest.mock('@wcpos/query/register-session', () => ({
 			concatMap(async (accounting) => accounting)
 		)
 	),
+}));
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
 	openSession: jest.fn(),
 	recordLiveSession: jest.fn(),
 	beginCount: jest.fn(),
@@ -1534,7 +1539,7 @@ describe('#2016: a refused close', () => {
 		await current();
 		const rows: unknown[] = [];
 		jest
-			.mocked(actions.observeSessionAccounting)
+			.mocked(reads.observeSessionAccounting)
 			.mock.calls.at(-1)![1]
 			.subscribe((row) => rows.push(row))
 			.unsubscribe();

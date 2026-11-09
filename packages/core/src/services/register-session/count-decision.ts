@@ -29,7 +29,8 @@ export function countDecision(
 		{ approval_required?: boolean | null; approved_counted?: Count | null } | null | undefined,
 	drawer: {
 		expected: Readonly<Partial<Count>>;
-		movements: readonly { id: string; amount?: string | null; sync_status?: string | null }[];
+		/** The drawer read's refused cash: this session's, by the closure row's rule. */
+		refusedCash: readonly { id: string; amount?: string | null }[];
 		figuresPending?: boolean;
 		refusedClose?: boolean;
 	},
@@ -52,10 +53,8 @@ export function countDecision(
 	const approvalNeeded =
 		!approvedThisCount && (!!session?.approval_required || !!session?.approved_counted || over);
 	// The closure records refused cash as not on the server (#3271), and Close waits for the
-	// cashier to say so once. A refused no-sale moves no cash.
-	const refused = drawer.movements.filter(
-		(row) => row.sync_status === 'failed' && Number(row.amount) > 0
-	);
+	// cashier to say so once.
+	const refused = drawer.refusedCash;
 	const refusedCash = refused.length
 		? {
 				total: fromMinor(
