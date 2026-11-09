@@ -99,8 +99,8 @@ jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
 	useIsPhone: () => mockState.screenSize === 'sm',
 }));
-jest.mock('../../../../contexts/theme', () => ({
-	useTheme: () => ({ roomy: mockState.screenSize === 'lg' }),
+jest.mock('../../../../hooks/use-roomy', () => ({
+	useRoomy: () => mockState.screenSize === 'lg',
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ site: mockSite, store: mockState.store, wpCredentials: mockSite }),

@@ -49,9 +49,6 @@ jest.mock('@rn-primitives/dialog', () =>
 );
 
 // Hydration services and animation are unrelated; keep translation, labels and dialog rendering real.
-jest.mock('../theme', () => ({
-	ThemeProvider: ({ children }: React.PropsWithChildren) => children,
-}));
 jest.mock('../novu', () => ({ NovuProvider: ({ children }: React.PropsWithChildren) => children }));
 jest.mock('../../screens/splash', () => ({
 	Splash: () => null,

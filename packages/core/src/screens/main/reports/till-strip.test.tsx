@@ -82,7 +82,7 @@ jest.mock('@wcpos/components/lib/device', () => ({
 	...jest.requireActual('@wcpos/components/lib/device'),
 	useIsPhone: () => size === 'sm',
 }));
-jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ roomy: size === 'lg' }) }));
+jest.mock('../../../hooks/use-roomy', () => ({ useRoomy: () => size === 'lg' }));
 const initialTerms = () => ({
 	float: '100',
 	cashSales: { amount: '343.70', count: 6 },

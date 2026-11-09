@@ -3,22 +3,14 @@ import * as React from 'react';
 import { loadAsync } from 'expo-font';
 
 import { FONT_FACES } from '@wcpos/components/lib/fonts';
-import {
-	SYSTEM_TYPE,
-	ThemeTraitsContext,
-	type ThemeType,
-} from '@wcpos/components/lib/theme-traits';
+import { SYSTEM_TYPE, type ThemeType } from '@wcpos/components/lib/theme-traits';
 import {
 	familiesForType,
-	traitsForTheme,
 	TYPE_SET_IDS,
 	TYPE_SETS,
 	typeSetForTheme,
 	type TypeSetId,
 } from '@wcpos/components/lib/themes';
-import { useDocField } from '@wcpos/query';
-
-import { useAppState } from '../app-state';
 
 /** An explicit set wins; auto, absent and retired values follow the theme (decision 45). */
 export function resolveTypeSet(value: unknown, theme: string | undefined): TypeSetId {
@@ -66,19 +58,4 @@ export function useThemeType(setId: TypeSetId): {
 				? state.status
 				: 'loading';
 	return { type: status === 'loaded' ? TYPE_SETS[setId] : SYSTEM_TYPE, status };
-}
-
-export function ThemeTraitsSettingProvider({ children }: { children: React.ReactNode }) {
-	const { store } = useAppState();
-	const theme = useDocField(store, (latest) => latest.theme) ?? 'system';
-	const fonts = useDocField(store, (latest) => latest.fonts);
-	const { type } = useThemeType(resolveTypeSet(fonts, theme));
-	const value = React.useMemo(
-		() => ({
-			...traitsForTheme(theme),
-			type,
-		}),
-		[theme, type]
-	);
-	return <ThemeTraitsContext.Provider value={value}>{children}</ThemeTraitsContext.Provider>;
 }

@@ -14,10 +14,9 @@ import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { hasStoreSession, useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
-import { IconSetSettingProvider } from '@wcpos/core/contexts/icon-set';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
 import { ScaleProvider } from '@wcpos/core/contexts/scale';
-import { ThemeTraitsSettingProvider } from '@wcpos/core/contexts/theme-traits';
+import { ThemeSettingProvider } from '@wcpos/core/contexts/theme-setting';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
 import { setToast } from '@wcpos/utils/logger';
@@ -29,7 +28,6 @@ import {
 import { DesktopWindowChrome } from '../components/desktop-window-chrome';
 import { LiveTabGate } from '../components/live-tab-gate';
 import { RootError } from '../components/root-error';
-import { useThemeRestorer } from '../components/use-theme-restorer';
 // Configures EAS Observe at import, before any screen mounts (see lib/observe.ts).
 import { useObserveConsent } from '../lib/observe';
 import '../global.css';
@@ -48,8 +46,6 @@ function useToastTheme(): 'light' | 'dark' {
 
 function RootStack() {
 	const appState = useAppState();
-	const { store } = appState;
-	const { isThemeReady } = useThemeRestorer();
 	// One merchant preference, two telemetry clients: the Sentry sink (inside the
 	// hook) and EAS Observe. Neither sends anything before it is `allowed`.
 	const telemetryConsent = useTelemetryConsent();
@@ -60,12 +56,6 @@ function RootStack() {
 	// error code's translated sentence first; it is re-created whenever `t`
 	// changes identity so a language switch takes effect on the next toast.
 	setToast(createMerchantToast(t, Toast.show));
-
-	// Wait for theme to be ready when we have a store
-	// This prevents the flash of default theme colors
-	if (store && !isThemeReady) {
-		return null;
-	}
 
 	return (
 		<>
@@ -139,15 +129,14 @@ function MerchantRootLayout() {
 								    inside the scale scope. */}
 								<ScaleProvider>
 									{/* Inside the scale scope for the same reason: it reads the store's
-									    icon family, and the toaster and every PortalHost draw icons too. */}
-									<IconSetSettingProvider>
-										<ThemeTraitsSettingProvider>
-											<RootStack />
-											<ErrorBoundary>
-												<ThemedToaster />
-											</ErrorBoundary>
-										</ThemeTraitsSettingProvider>
-									</IconSetSettingProvider>
+									    icon family, and the toaster and every PortalHost draw icons too.
+									    It also applies the store's theme before the first frame paints. */}
+									<ThemeSettingProvider>
+										<RootStack />
+										<ErrorBoundary>
+											<ThemedToaster />
+										</ErrorBoundary>
+									</ThemeSettingProvider>
 								</ScaleProvider>
 							</HydrationProviders>
 						</KeyboardProvider>

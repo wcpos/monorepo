@@ -5,7 +5,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 
-import { useTheme } from '../../../../contexts/theme';
+import { useRoomy } from '../../../../hooks/use-roomy';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData } from '../context';
 import { cogsEnabled } from '../margin';
@@ -49,7 +49,7 @@ export function PeriodSection() {
 	const branded = (products ?? []).some((product) => product.brands?.length);
 	const visibleCards = cards.filter((card) => card.id !== 'card-brands' || enabled || branded);
 	const t = useT(),
-		{ roomy } = useTheme(),
+		roomy = useRoomy(),
 		phone = useIsPhone();
 	// Columns follow the measured width, not the breakpoint: the app calls a 1024-point tablet
 	// `lg`, where three cards cramp their stat grids. Until the first layout, the breakpoint.

@@ -9,7 +9,6 @@ import { PropertyRowLabelsProvider } from '@wcpos/components/property-row';
 import { Splash, SplashProgressProvider } from '../screens/splash';
 import { AppStateProvider } from './app-state';
 import { NovuProvider } from './novu';
-import { ThemeProvider } from './theme';
 import { TranslationProvider, useT } from './translations';
 
 interface HydrationProvidersProps {
@@ -44,9 +43,8 @@ export function HydrationProviders({ children }: HydrationProvidersProps) {
 				/**
 				 * Single suspense boundary that handles all hydration steps:
 				 * 1. App state hydration (step by step with progress updates)
-				 * 2. Theme provider
-				 * 3. Translation provider
-				 * 4. Novu provider (for notifications)
+				 * 2. Translation provider
+				 * 3. Novu provider (for notifications)
 				 * Each step throws suspense, updates progress, then continues
 				 */
 				fallback={<Splash />}
@@ -54,13 +52,11 @@ export function HydrationProviders({ children }: HydrationProvidersProps) {
 				<AppStateProvider>
 					{/* Around the whole app: a throw here replaces it, so the fallback is the gate. */}
 					<ErrorBoundary FallbackComponent={FallbackScreen}>
-						<ThemeProvider>
-							<TranslationProvider>
-								<TranslatedDialogLabels>
-									<NovuProvider>{children}</NovuProvider>
-								</TranslatedDialogLabels>
-							</TranslationProvider>
-						</ThemeProvider>
+						<TranslationProvider>
+							<TranslatedDialogLabels>
+								<NovuProvider>{children}</NovuProvider>
+							</TranslatedDialogLabels>
+						</TranslationProvider>
 					</ErrorBoundary>
 				</AppStateProvider>
 			</Suspense>

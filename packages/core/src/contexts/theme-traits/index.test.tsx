@@ -9,7 +9,8 @@ import { FONT_FACES } from '@wcpos/components/lib/fonts';
 import { SYSTEM_TYPE, useThemeTraits } from '@wcpos/components/lib/theme-traits';
 import { THEME_TYPE, TYPE_SETS } from '@wcpos/components/lib/themes';
 
-import { resolveTypeSet, ThemeTraitsSettingProvider, useThemeType } from './index';
+import { resolveTypeSet, useThemeType } from './index';
+import { ThemeSettingProvider } from '../theme-setting';
 
 const store: { theme?: string; fonts?: string; $?: BehaviorSubject<{ theme: string }> } = {};
 jest.mock('../app-state', () => ({ useAppState: () => ({ store }) }));
@@ -17,6 +18,12 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 jest.mock('expo-font', () => ({ loadAsync: jest.fn() }));
+// The traits reach the screens through the one theme-setting owner, which also applies the theme.
+jest.mock('uniwind', () => ({ Uniwind: { setTheme: jest.fn() } }));
+jest.mock('@wcpos/components/icon', () => ({
+	ICON_SET_IDS: ['tabler', 'hugeicons', 'phosphor'],
+	IconSetProvider: ({ children }: React.PropsWithChildren) => children,
+}));
 
 function pendingLoad() {
 	let resolve!: () => void;
@@ -39,9 +46,9 @@ function Probe() {
 
 function renderType() {
 	return render(
-		<ThemeTraitsSettingProvider>
+		<ThemeSettingProvider>
 			<Probe />
-		</ThemeTraitsSettingProvider>
+		</ThemeSettingProvider>
 	);
 }
 
@@ -102,9 +109,9 @@ it('keeps system type and warns once when loading fails', async () => {
 	const { rerender } = renderType();
 	await act(async () => load.reject(new Error('Failed to load font')));
 	rerender(
-		<ThemeTraitsSettingProvider>
+		<ThemeSettingProvider>
 			<Probe />
-		</ThemeTraitsSettingProvider>
+		</ThemeSettingProvider>
 	);
 	expect(drawnType()).toEqual(SYSTEM_TYPE);
 	expect(warn).toHaveBeenCalledTimes(1);
