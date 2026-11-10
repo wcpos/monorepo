@@ -16,8 +16,8 @@ The native adapter runs premium SQLite over `expo-sqlite` in `Documents/wcpos-sq
 
 **Status:** ruled, standing, in two eras.
 
-- **Era 1 — `opfs-filesystem` (previous era, retained on `main` / 1.10.x).** Owner ruling 2026-08-06, implemented by #1057 (closes #1045, #1055, #1050-web). Supersedes #1049 and wcpos/electron#325. **Web is `true`.**
-- **Era 2 — `sqlite-sahpool` (current `next` / 2.0 adapter).** Owner ruling 2026-09-21, wayfinder #2146 under map #2137; implemented by #2242 and #2271. **Web is `false`, switched with the engine.**
+- **Era 1 — `opfs-filesystem` (previous era, retained on `1.11.x`).** Owner ruling 2026-08-06, implemented by #1057 (closes #1045, #1055, #1050-web). Supersedes #1049 and wcpos/electron#325. **Web is `true`.**
+- **Era 2 — `sqlite-sahpool` (current `main` / 2.0 adapter).** Owner ruling 2026-09-21, wayfinder #2146 under map #2137; implemented by #2242 and #2271. **Web is `false`, switched with the engine.**
 
 The two values are pinned as a **pair**: `adapters/storage/storage-engines.ts` declares the current engine and the `multiInstance` each engine requires, and `multi-instance-ruling.test.ts` asserts them together. Change both halves or neither. Never backport SQLite's flag to the filesystem-era lane.
 
