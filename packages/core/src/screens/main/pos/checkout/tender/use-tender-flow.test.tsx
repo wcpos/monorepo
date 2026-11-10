@@ -1276,6 +1276,7 @@ describe('useTenderFlow', () => {
 			expect.objectContaining({
 				code: 'PAYMENT213',
 				showToast: true,
+				toast: { title: 'pos_checkout.payment_refused_by_store' },
 				context: expect.objectContaining({
 					serverCode: 'wcpos_payment_method_not_found',
 					status: 404,

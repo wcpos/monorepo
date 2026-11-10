@@ -1299,9 +1299,12 @@ export function useTenderFlow(
 			if (error instanceof RecordManualPaymentError) {
 				// The store answered and refused (a definitive refusal writes nothing), so nothing
 				// was taken and the order is still open; never the generic "confirm it went through".
-				logger.error(t('pos_checkout.payment_refused_by_store', { reason: error.message }), {
+				const sentence = t('pos_checkout.payment_refused_by_store', { reason: error.message });
+				logger.error(sentence, {
 					code: ERROR_CODES.PAYMENT_RECORD_REFUSED,
 					showToast: true,
+					// The catalogue summary has no slot for the store's reason, and the action text says to read it.
+					toast: { title: sentence },
 					context: {
 						...orderContext,
 						method: method?.id ?? null,
