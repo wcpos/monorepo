@@ -39,14 +39,17 @@ export async function closeRegister(ctx: CloseContext, sessionId: string, count:
 	if (!current) throw new RegisterSessionRequiredError();
 	// A retry of a refused close (#3304) closes again, so a corrected count reaches the status
 	// POST; closeSession holds it out of the outbox until the closure below is rewritten.
-	const closed =
-		current.status === 'closed' && current.sync_status !== 'failed'
-			? current
-			: await closeSession(storeDB, sessionId, {
-					...count,
-					closedBy: credentials.id,
-					timezone: ctx.timezone,
-				});
+	const reused = current.status === 'closed' && current.sync_status !== 'failed';
+	const closed = reused
+		? current
+		: await closeSession(storeDB, sessionId, {
+				...count,
+				closedBy: credentials.id,
+				timezone: ctx.timezone,
+			});
+	// The store refuses a closure whose count differs from the closed session's (POS-30F).
+	const own = reused && closed.counted ? closed.counted : null;
+	const tenders = own ?? count.counted;
 	const cashiers: { id?: number; display_name?: string }[] = await firstValueFrom(
 		observeSiteCredentials(ctx.site).pipe(filter((value) => value !== PENDING_USER_DB_READ))
 	);
@@ -73,11 +76,13 @@ export async function closeRegister(ctx: CloseContext, sessionId: string, count:
 		session: closed,
 		// The session as it stands after the wait: a refresh may have moved the server's snapshot.
 		baseline: { session: closed.getLatest(), refundSources: accounting.refundSources },
-		counted: count.counted.cash,
-		note: count.note ?? closed.count_note ?? '',
-		denominations: count.denominations ?? closed.count_denominations ?? [],
+		counted: own ? (own.cash ?? '0') : count.counted.cash,
+		note: own ? (closed.count_note ?? '') : (count.note ?? closed.count_note ?? ''),
+		denominations: own
+			? (closed.count_denominations ?? [])
+			: (count.denominations ?? closed.count_denominations ?? []),
 		otherTenders: Object.fromEntries(
-			Object.entries(count.counted).filter(([method]) => method !== 'cash')
+			Object.entries(tenders).filter(([method]) => method !== 'cash')
 		),
 		movements,
 		orders: accounting.orders,

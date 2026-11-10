@@ -340,6 +340,42 @@ describe('a refused close’s retry (#3304)', () => {
 	});
 });
 
+describe('a second close while the first is still pending (POS-30F)', () => {
+	// The store refuses a closure whose count differs from the closed session's (409
+	// wcpos_closure_counted_mismatch): the reused session's own count is what the closure carries.
+	it('writes the closure from the session’s own count, not the second one', async () => {
+		await insert();
+		await closeRegister(ctx, 's1', { counted: { cash: '90' } });
+		expect((await session()).sync_status).toBe('pending');
+		await closeRegister(ctx, 's1', { counted: { cash: '100' } });
+		expect({ session: (await session()).counted, closure: (await closureRow())?.counted }).toEqual({
+			session: { cash: '90' },
+			closure: { cash: '90' },
+		});
+	});
+
+	it('takes other tenders, the note and the denominations from the session too', async () => {
+		await insert();
+		await closeRegister(ctx, 's1', {
+			counted: { cash: '90', card: '40' },
+			note: 'first',
+			denominations: [{ value: '50', pieces: 1 }],
+		});
+		await closeRegister(ctx, 's1', {
+			counted: { cash: '100', card: '55' },
+			note: 'second',
+			denominations: [],
+		});
+		const closure = await closureRow();
+		expect((await session()).counted).toEqual({ cash: '90', card: '40' });
+		expect(closure?.counted).toEqual({ cash: '90', card: '40' });
+		expect(closure?.breakdowns.variance_note).toBe('first');
+		expect(closure?.breakdowns.denominations).toEqual([
+			{ value: '50', pieces: 1, amount: '50.0000' },
+		]);
+	});
+});
+
 it('rejects a missing session with the domain error', async () => {
 	await expect(closeRegister(ctx, 'missing', { counted: { cash: '0' } })).rejects.toBeInstanceOf(
 		RegisterSessionRequiredError
