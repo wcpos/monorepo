@@ -1,5 +1,7 @@
 /** @jest-environment node */
 
+import { DEFAULT_ICE_SERVERS } from './ice-servers';
+
 test('lazy-loads react-native-webrtc and creates the same ordered reliable offerer', async () => {
 	jest.resetModules();
 	const channel = {
@@ -30,6 +32,23 @@ test('lazy-loads react-native-webrtc and creates the same ordered reliable offer
 
 	const peer = createOfferer();
 	await expect(peer.createOffer()).resolves.toEqual({ sdp: 'native-offer' });
-	expect(constructor).toHaveBeenCalledWith({ iceServers: [] });
+	expect(constructor).toHaveBeenCalledWith({ iceServers: DEFAULT_ICE_SERVERS });
 	expect(connection.createDataChannel).toHaveBeenCalledWith('wcpos-display', { ordered: true });
+});
+
+test('passes a caller-supplied ICE server list through unchanged', async () => {
+	jest.resetModules();
+	const connection = {
+		createDataChannel: jest.fn(() => ({})),
+		addEventListener: jest.fn(),
+	};
+	const constructor = jest.fn(() => connection);
+	jest.doMock('react-native-webrtc', () => ({ RTCPeerConnection: constructor }), { virtual: true });
+	const { createOfferer } = await import('./peer.native');
+
+	createOfferer([{ urls: 'stun:example.test:3478' }]);
+
+	expect(constructor).toHaveBeenCalledWith({
+		iceServers: [{ urls: 'stun:example.test:3478' }],
+	});
 });

@@ -1,6 +1,6 @@
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
-import { makeEnvelope, uuid } from './envelope';
+import { type DisplayEnvelope, makeEnvelope, uuid } from './envelope';
 import { createOfferer, type OffererPeer } from './peer';
 import { serialiseSnapshot } from './snapshot';
 
@@ -12,6 +12,10 @@ export const IDLE_AFTER_COMPLETE_MS = 8000;
 const HELLO_TIMEOUT_MS = 10_000; // Match the display page's config timeout before re-offering.
 // Mailbox offers expire server-side after two minutes, so only then is a waiting offer stale.
 const OFFER_LIFETIME_MS = 2 * 60 * 1000;
+// Contract v1 allows at most one snapshot POST per second per display.
+const SNAPSHOT_THROTTLE_MS = 1000;
+// The server serves a snapshot for 60 s, so re-send while the channel stays shut.
+const SNAPSHOT_KEEPALIVE_MS = 20_000;
 export interface DisplayEvent {
 	action: string;
 	payload: Record<string, unknown>;
@@ -38,6 +42,7 @@ interface DisplaySessionOptions {
 	onConnectionChange: () => void;
 	uuid?: () => string;
 	now?: () => Date;
+	snapshotFallback?: boolean;
 }
 export class DisplaySession {
 	private display: DisplayRegistryRow;
@@ -49,6 +54,7 @@ export class DisplaySession {
 	private readonly onConnectionChange: () => void;
 	private readonly uuid: () => string;
 	private readonly now: () => Date;
+	private readonly snapshotFallback: boolean;
 	private peer: OffererPeer | null = null;
 	private sessionId: string | null = null;
 	private offeredAt = 0;
@@ -61,6 +67,20 @@ export class DisplaySession {
 	private helloTimer: ReturnType<typeof setTimeout> | null = null;
 	private seq = 0;
 	private stopped = false;
+	private snapshotSeq = 0;
+	private snapshotKey: string | null = null;
+	private snapshotBody: {
+		v: 1;
+		seq: number;
+		config: Record<string, unknown>;
+		event: DisplayEnvelope;
+	} | null = null;
+	private snapshotSession: string | null = null;
+	private snapshotTimer: ReturnType<typeof setTimeout> | null = null;
+	private snapshotInFlight = false;
+	private snapshotDirty = false;
+	private lastSnapshotAt = 0;
+	private rejectedSnapshotSeq = 0;
 
 	constructor(options: DisplaySessionOptions) {
 		this.display = options.display;
@@ -72,6 +92,7 @@ export class DisplaySession {
 		this.onConnectionChange = options.onConnectionChange;
 		this.uuid = options.uuid ?? uuid;
 		this.now = options.now ?? (() => new Date());
+		this.snapshotFallback = options.snapshotFallback ?? false;
 	}
 	get isOpen(): boolean {
 		return this.peer?.channelState === 'open';
@@ -81,6 +102,7 @@ export class DisplaySession {
 	}
 	updateDisplay(display: DisplayRegistryRow): void {
 		this.display = display;
+		this.queueSnapshot();
 	}
 	async poll(): Promise<void> {
 		if (this.stopped) return;
@@ -144,7 +166,10 @@ export class DisplaySession {
 		this.pendingHelloId = null;
 		this.pendingCandidates = [];
 		this.answerAccepted = false;
+		let opened = false;
 		peer.onOpen(() => {
+			opened = true;
+			this.clearSnapshotTimer();
 			logger.warn('Customer display channel opened', { context: { displayId: this.display.id } });
 			this.helloTimer = setTimeout(() => peer.close(), HELLO_TIMEOUT_MS);
 			this.onConnectionChange();
@@ -160,6 +185,8 @@ export class DisplaySession {
 			this.pendingHelloId = null;
 			this.pendingCandidates = [];
 			this.answerAccepted = false;
+			if (opened) this.snapshotKey = null;
+			this.queueSnapshot();
 			logger.warn('Customer display channel closed', { context: { displayId: this.display.id } });
 			this.onConnectionChange();
 		});
@@ -172,6 +199,8 @@ export class DisplaySession {
 				session: sessionId,
 				body: offer,
 			});
+			this.snapshotSession = sessionId;
+			this.queueSnapshot();
 		} catch (error) {
 			peer.close();
 			if (this.peer === peer) {
@@ -214,24 +243,21 @@ export class DisplaySession {
 		this.pendingHelloId = message.id;
 		this.sendConfig(message.id);
 	}
+	private configPayload(config: DisplayConfigInput): Record<string, unknown> {
+		return {
+			contract: '1.0',
+			display: { id: this.display.id, name: this.display.name },
+			...config,
+			...(this.template ? { template: { ...this.template, settings: {} } } : {}),
+			idle: { afterCompleteMs: IDLE_AFTER_COMPLETE_MS },
+		};
+	}
 	private sendConfig(id: string): void {
 		const config = this.getConfig();
 		if (!config || !this.template || this.peer?.channelState !== 'open') return;
 		this.seq = 0;
 		const sent = this.send(
-			serialiseSnapshot(
-				makeEnvelope(
-					'display.config',
-					{
-						contract: '1.0',
-						display: { id: this.display.id, name: this.display.name },
-						...config,
-						template: { ...this.template, settings: {} },
-						idle: { afterCompleteMs: IDLE_AFTER_COMPLETE_MS },
-					},
-					id
-				)
-			)
+			serialiseSnapshot(makeEnvelope('display.config', this.configPayload(config), id))
 		);
 		if (!sent) return;
 		this.configured = true;
@@ -244,10 +270,14 @@ export class DisplaySession {
 	refreshConfig(): void {
 		if (this.pendingHelloId !== null) this.sendConfig(this.pendingHelloId);
 		else if (this.configured) this.sendConfig(this.uuid());
+		this.queueSnapshot();
 	}
 
 	publish(event: DisplayEvent): boolean {
-		if (!this.configured || this.peer?.channelState !== 'open') return false;
+		if (!this.configured || this.peer?.channelState !== 'open') {
+			this.queueSnapshot();
+			return false;
+		}
 		this.seq += 1;
 		const sent = this.send(
 			serialiseSnapshot(
@@ -261,6 +291,93 @@ export class DisplaySession {
 		return sent;
 	}
 
+	private snapshotEligible(): boolean {
+		return (
+			this.snapshotFallback &&
+			!this.stopped &&
+			!this.isOpen &&
+			this.display.connected !== false &&
+			this.snapshotSession !== null &&
+			this.getConfig() !== null &&
+			this.getCurrentState() !== null
+		);
+	}
+	private refreshSnapshotBody(): boolean {
+		const config = this.configPayload(this.getConfig()!);
+		const state = this.getCurrentState()!;
+		const key = JSON.stringify({ config, action: state.action, payload: state.payload });
+		if (key === this.snapshotKey) return false;
+		this.snapshotSeq += 1;
+		this.snapshotKey = key;
+		this.snapshotBody = {
+			v: 1,
+			seq: this.snapshotSeq,
+			config,
+			event: makeEnvelope(state.action, {
+				...state.payload,
+				seq: this.snapshotSeq,
+				sentAt: this.now().toISOString(),
+			}),
+		};
+		return true;
+	}
+	private queueSnapshot(): void {
+		if (!this.snapshotEligible()) {
+			this.clearSnapshotTimer();
+			return;
+		}
+		const changed = this.refreshSnapshotBody();
+		if (this.snapshotInFlight) {
+			if (changed) this.snapshotDirty = true;
+			return;
+		}
+		if (!changed && this.snapshotTimer) return;
+		this.armSnapshot(
+			Math.max(0, this.lastSnapshotAt + SNAPSHOT_THROTTLE_MS - this.now().getTime())
+		);
+	}
+	private armSnapshot(delay: number): void {
+		this.clearSnapshotTimer();
+		this.snapshotTimer = setTimeout(() => void this.sendSnapshot(), delay);
+	}
+	private clearSnapshotTimer(): void {
+		if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
+		this.snapshotTimer = null;
+	}
+	private async sendSnapshot(): Promise<void> {
+		this.snapshotTimer = null;
+		if (!this.snapshotEligible() || !this.snapshotBody) return;
+		this.refreshSnapshotBody();
+		const body = this.snapshotBody;
+		if (body.seq === this.rejectedSnapshotSeq) return;
+		this.snapshotInFlight = true;
+		this.snapshotDirty = false;
+		this.lastSnapshotAt = this.now().getTime();
+		try {
+			await this.signaling.postSignal(this.display.id, {
+				from: `pos:${this.deviceId}`,
+				to: 'display',
+				type: 'snapshot',
+				session: this.snapshotSession!,
+				body,
+			});
+		} catch (error) {
+			const status = (error as { response?: { status?: unknown } })?.response?.status;
+			if (status === 400 || status === 413) this.rejectedSnapshotSeq = body.seq;
+			logger.warn('Customer display snapshot failed', {
+				context: { displayId: this.display.id, status },
+			});
+		} finally {
+			this.snapshotInFlight = false;
+		}
+		if (this.snapshotEligible()) {
+			if (this.snapshotDirty) {
+				this.armSnapshot(
+					Math.max(0, this.lastSnapshotAt + SNAPSHOT_THROTTLE_MS - this.now().getTime())
+				);
+			} else this.armSnapshot(SNAPSHOT_KEEPALIVE_MS);
+		}
+	}
 	private send(text: string): boolean {
 		try {
 			this.peer?.send(text);
@@ -285,14 +402,16 @@ export class DisplaySession {
 					body: {},
 				});
 			}
-			this.stopped = true;
 		} finally {
+			this.stopped = true;
 			this.peer?.close();
+			this.clearSnapshotTimer();
 		}
 	}
 
 	close(): void {
 		this.stopped = true;
+		this.clearSnapshotTimer();
 		this.peer?.close();
 	}
 }

@@ -1,3 +1,5 @@
+import { DEFAULT_ICE_SERVERS, type IceServer } from './ice-servers';
+
 import type { OffererPeer } from './peer';
 
 declare const require: (name: string) => { RTCPeerConnection: new (config: object) => NativePeer };
@@ -43,9 +45,9 @@ function waitForIce(connection: NativePeer): Promise<void> {
 	});
 }
 
-export function createOfferer(): OffererPeer {
+export function createOfferer(iceServers: IceServer[] = DEFAULT_ICE_SERVERS): OffererPeer {
 	const { RTCPeerConnection } = require('react-native-webrtc');
-	const connection = new RTCPeerConnection({ iceServers: [] });
+	const connection = new RTCPeerConnection({ iceServers });
 	const channel = connection.createDataChannel('wcpos-display', { ordered: true });
 	let open: () => void = () => undefined;
 	let message: (text: string) => void = () => undefined;
