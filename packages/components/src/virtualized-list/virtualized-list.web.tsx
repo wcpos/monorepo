@@ -199,50 +199,70 @@ function List<T>({
 	} as React.ComponentProps<typeof Parent>;
 
 	return (
-		<Parent {...wrapperProps}>
-			{rowVirtualizer.getVirtualItems().map((vItem) => {
-				const item = data[vItem.index];
-				// Rows render inline (not memoized), so extraData changes reach them via
-				// ordinary re-render — extraData must never be folded into the key, which
-				// would remount every visible row instead.
-				const key = keyExtractor ? keyExtractor(item, vItem.index) : String(vItem.key);
+		// A list drawn inside a row (a popover's, through a portal too) measures its own rows.
+		<InsideItemContext.Provider value={false}>
+			<Parent {...wrapperProps}>
+				{rowVirtualizer.getVirtualItems().map((vItem) => {
+					const item = data[vItem.index];
+					// Rows render inline (not memoized), so extraData changes reach them via
+					// ordinary re-render — extraData must never be folded into the key, which
+					// would remount every visible row instead.
+					const key = keyExtractor ? keyExtractor(item, vItem.index) : String(vItem.key);
 
-				const itemContext = {
-					item,
-					index: vItem.index,
-					rowVirtualizer,
-					vItem,
-					horizontal: horizontal ?? false,
-				} as unknown as WebItemContext<T>;
+					const itemContext = {
+						item,
+						index: vItem.index,
+						rowVirtualizer,
+						vItem,
+						horizontal: horizontal ?? false,
+					} as unknown as WebItemContext<T>;
 
-				return (
-					<ItemContext.Provider key={key} value={itemContext}>
-						{renderItem({ item, index: vItem.index, target: 'Cell' })}
-					</ItemContext.Provider>
-				);
-			})}
-			{ListFooterComponent && (
-				<View
-					style={{
-						position: 'absolute',
-						top: 0,
-						left: 0,
-						width: '100%',
-						transform: `translateY(${totalSize}px)`,
-					}}
-				>
-					{React.isValidElement(ListFooterComponent) ? (
-						ListFooterComponent
-					) : (
-						<ListFooterComponent />
-					)}
-				</View>
-			)}
-		</Parent>
+					return (
+						<ItemContext.Provider key={key} value={itemContext}>
+							{renderItem({ item, index: vItem.index, target: 'Cell' })}
+						</ItemContext.Provider>
+					);
+				})}
+				{ListFooterComponent && (
+					<View
+						style={{
+							position: 'absolute',
+							top: 0,
+							left: 0,
+							width: '100%',
+							transform: `translateY(${totalSize}px)`,
+						}}
+					>
+						{React.isValidElement(ListFooterComponent) ? (
+							ListFooterComponent
+						) : (
+							<ListFooterComponent />
+						)}
+					</View>
+				)}
+			</Parent>
+		</InsideItemContext.Provider>
 	);
 }
 
-function Item({ children, ...props }: ItemProps<any>) {
+/**
+ * True under an Item: a row component that brings its own Item (the inline variable product
+ * row) may be handed an Item by the list's `renderItem` too. Native's Item is a fragment, so
+ * nesting is harmless there; on web the inner one is a passthrough, so each row stays one
+ * positioned, measured box (merchant report 2026-11-10: two variable rows in one slot).
+ */
+const InsideItemContext = React.createContext(false);
+
+function Item(props: ItemProps<any>) {
+	if (React.useContext(InsideItemContext)) return <>{props.children}</>;
+	return (
+		<InsideItemContext.Provider value={true}>
+			<MeasuredItem {...props} />
+		</InsideItemContext.Provider>
+	);
+}
+
+function MeasuredItem({ children, ...props }: ItemProps<any>) {
 	const { index, rowVirtualizer, vItem } = useItemContext() as WebItemContext<any>;
 	const { horizontal } = useRootContext();
 
