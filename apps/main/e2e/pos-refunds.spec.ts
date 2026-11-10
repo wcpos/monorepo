@@ -172,7 +172,8 @@ async function interceptRefundDependencies(page: Page) {
 		if (route.request().method() !== 'GET') return route.fallback();
 		const held = heldDocument ? [heldDocument] : [];
 		if (includeIds(new URL(route.request().url())).some((id) => id !== '999001')) {
-			const response = await route.fetch();
+			const response = await route.fetch().catch(() => null);
+			if (!response) return;
 			const body: unknown = response.ok() ? await response.json().catch(() => null) : null;
 			if (Array.isArray(body)) {
 				// The body is rewritten, so the real length and encoding no longer describe it.
@@ -233,6 +234,12 @@ test.describe('POS refunds (Pro)', () => {
 	// eslint-disable-next-line no-empty-pattern -- Playwright requires object destructuring for fixtures.
 	test.beforeEach(async ({}, testInfo) => {
 		test.skip(getStoreVariant(testInfo) !== 'pro', 'Refund UI requires Pro');
+	});
+
+	test.afterEach(async ({ page }) => {
+		// A stub's real fetch still in flight when the test ends would fail the shard outside any test.
+		// `page`, not `posPage`: afterEach runs after a beforeEach skip too, and posPage would log in for nothing.
+		await page.unrouteAll({ behavior: 'ignoreErrors' });
 	});
 
 	test('submits refund_destination=cash for a non-cash order', async ({ posPage: page }) => {
