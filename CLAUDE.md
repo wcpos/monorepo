@@ -120,7 +120,7 @@ The `e2e-product-writer` (shop_manager) identity exists on every dev server with
 
 ## Standing rulings
 
-- **Web `multiInstance` is pinned to the storage engine, never set on its own.** On `next` (2.0) the engine is `sqlite-sahpool` and the flag is `false` with one live tab per origin (#2242, #2271); on `main` (1.10.x) the engine is `opfs-filesystem` and the flag is `true` (#1057). The pair is enforced by `multi-instance-ruling.test.ts`; change both halves or neither, and never backport one lane's flag to the other. Read the Decision section of `packages/database/src/adapters/default/README.md` first.
+- **Web `multiInstance` is pinned to the storage engine, never set on its own.** On `main` (2.0) the engine is `sqlite-sahpool` and the flag is `false` with one live tab per origin (#2242, #2271); on `1.11.x` the engine is `opfs-filesystem` and the flag is `true` (#1057). The pair is enforced by `multi-instance-ruling.test.ts`; change both halves or neither, and never backport one lane's flag to the other. Read the Decision section of `packages/database/src/adapters/default/README.md` first.
 
 ## Branch lanes
 
