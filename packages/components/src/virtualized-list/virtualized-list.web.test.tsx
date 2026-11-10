@@ -1,8 +1,14 @@
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 
-import { List, Root } from './virtualized-list.web';
+import { List, Root, Item as WebItem } from './virtualized-list.web';
+
+import type { Item as NativeItem } from './virtualized-list';
+
+// Callers get Item's type from the native module (index.ts), which takes children only; the
+// web Item never reads the item/index its own signature names, so type it as callers see it.
+const VirtualizedItem = WebItem as unknown as typeof NativeItem;
 
 type VirtualizerOptions = {
 	count: number;
@@ -100,5 +106,90 @@ describe('VirtualizedList (web)', () => {
 		};
 
 		expect(options?.measureElement?.(element, undefined, instance)).toBe(48);
+	});
+
+	// POS products (pos/products/index.tsx) wraps every row in an Item, and the inline variable
+	// row (components/product/variable-product-row) brings its own: two absolutely positioned
+	// boxes per row. The virtualizer measured the outer one, empty and 0 px tall, so every later
+	// row started where the variable row did, and the inner box was translated twice
+	// (merchant report 2026-11-10: two variable products drawn in one row slot).
+	it('measures one box per row, at its own offset, when a row brings its own Item', async () => {
+		mockUseVirtualizer.mockClear();
+		const view = render(
+			<Root>
+				<List<Item>
+					data={[{ id: 'a' }, { id: 'b' }]}
+					keyExtractor={(item) => item.id}
+					estimatedItemSize={50}
+					renderItem={({ item }) => (
+						<VirtualizedItem>
+							<VirtualizedItem>
+								<div data-testid={`row-${item.id}`}>{item.id}</div>
+							</VirtualizedItem>
+						</VirtualizedItem>
+					)}
+				/>
+			</Root>
+		);
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		// One positioned, measured box per row, never one inside another.
+		expect(view.container.querySelectorAll('[data-index]')).toHaveLength(2);
+		expect(view.container.querySelector('[data-index] [data-index]')).toBeNull();
+
+		// Each row's content sits at its own row's offset (the mock spaces rows 50 px apart).
+		const offsetOf = (testId: string) => {
+			let total = 0;
+			let node: HTMLElement | null = view.getByTestId(testId);
+			while (node) {
+				if (node.hasAttribute('data-index')) {
+					total += Number(/translateY\((-?[\d.]+)px\)/.exec(node.style.transform)?.[1] ?? 0);
+				}
+				node = node.parentElement;
+			}
+			return total;
+		};
+		expect([offsetOf('row-a'), offsetOf('row-b')]).toEqual([0, 50]);
+
+		// The virtualizer is handed each row's box exactly once.
+		const measured = mockUseVirtualizer.mock.results.flatMap((result) =>
+			(result.value.measureElement as jest.Mock).mock.calls.map(([node]) =>
+				(node as Element).getAttribute('data-index')
+			)
+		);
+		expect(measured.sort()).toEqual(['0', '1']);
+	});
+
+	it('still measures the rows of a list drawn inside a row', () => {
+		const view = render(
+			<Root>
+				<List<Item>
+					data={[{ id: 'outer' }]}
+					keyExtractor={(item) => item.id}
+					estimatedItemSize={50}
+					renderItem={() => (
+						<VirtualizedItem>
+							<Root>
+								<List<Item>
+									data={[{ id: 'x' }, { id: 'y' }]}
+									keyExtractor={(item) => item.id}
+									estimatedItemSize={50}
+									renderItem={({ item }) => (
+										<VirtualizedItem>
+											<div data-testid={`inner-${item.id}`}>{item.id}</div>
+										</VirtualizedItem>
+									)}
+								/>
+							</Root>
+						</VirtualizedItem>
+					)}
+				/>
+			</Root>
+		);
+		// The outer row's box, and one box per inner row.
+		expect(view.container.querySelectorAll('[data-index]')).toHaveLength(3);
+		expect(view.getByTestId('inner-y').parentElement?.getAttribute('data-index')).toBe('1');
 	});
 });
