@@ -44,18 +44,18 @@
 		"!(*.worker).{js,jsx,ts,tsx}": "node --max-old-space-size=6144 node_modules/eslint/bin/eslint.js --fix"
 	},
 	"devDependencies": {
-		"@sqlite.org/sqlite-wasm": "3.53.4-build1",
+		"@sqlite.org/sqlite-wasm": "3.53.4-build2",
 		"@vitest/coverage-v8": "5.1.0",
 		"esbuild": "0.28.2",
-		"eslint": "^9.39.5",
+		"eslint": "^10.14.0",
 		"expo": "~58.0.23",
-		"glob": "^14.0.3",
+		"glob": "^14.0.4",
 		"jsdom": "^31.0.0",
 		"lint-staged": "^17.6.0",
 		"prettier-plugin-tailwindcss": "^0.8.1",
 		"rxdb": "17.6.0",
 		"rxdb-premium": "17.6.0",
-		"serve": "14.2.6",
+		"serve": "14.2.7",
 		"yaml": "2.9.1"
 	},
 	"dependencies": {
