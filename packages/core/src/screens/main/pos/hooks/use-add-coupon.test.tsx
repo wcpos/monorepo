@@ -315,19 +315,39 @@ describe('useAddCoupon engine reads', () => {
 		]);
 	});
 
-	it('returns not found for an unknown discount_type without dispatching', async () => {
-		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+	it('names a coupon type from another plugin instead of saying not found, without dispatching', async () => {
+		const appliedLines = [...baseOrderSnapshot.coupon_lines];
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: appliedLines };
 		mockEngineData([
 			engineDocument({
-				uuid: 'coupon-broken',
+				uuid: 'coupon-credit',
 				remoteId: '1',
-				payload: couponPayload('broken', false, { discount_type: 'unknown' }),
+				payload: couponPayload('credit20', false, { discount_type: 'pi_store_credit' }),
 			}),
 		]);
-		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
-		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
 		const { result } = renderHook(() => useAddCoupon());
-		await expect(result.current.addCoupon('broken')).resolves.toEqual({
+		await expect(result.current.addCoupon(' CREDIT20 ')).resolves.toEqual({
+			success: false,
+			error:
+				"CREDIT20 can't be applied in the POS: its coupon type (pi_store_credit) comes from another plugin. Only percentage and fixed discount coupons are supported.",
+		});
+		expect(orderSnapshot.coupon_lines).toEqual(baseOrderSnapshot.coupon_lines);
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+		expect(getLogger([]).info).toHaveBeenCalledWith('Coupon application rejected', {
+			context: {
+				event: 'coupon.rejected',
+				couponCode: 'credit20',
+				reason: 'unsupported_type',
+				params: { type: 'pi_store_credit' },
+			},
+		});
+	});
+
+	it('still returns not found for a code absent from the catalog', async () => {
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('absent')).resolves.toEqual({
 			success: false,
 			error: 'Coupon not found',
 		});

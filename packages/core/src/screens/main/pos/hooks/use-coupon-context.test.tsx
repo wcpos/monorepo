@@ -141,3 +141,29 @@ it('provides catalog tax status on the coupon context', async () => {
 	const context = await result.current.getCouponContext([{ product_id: 82 }]);
 	expect(context.taxStatusFor?.({ product_id: 82 })).toBe('none');
 });
+
+it('keeps a type the POS cannot apply out of coupons and names it in unsupportedTypes', async () => {
+	engine.active().database.collections.coupons.find = () => ({
+		exec: async () => [
+			engineRecord('601', { code: 'percent10', discount_type: 'percent', amount: '10' }),
+			engineRecord('602', { code: 'credit20', discount_type: 'pi_store_credit', amount: '20' }),
+		],
+	});
+	const { result } = renderHook(() => useCouponContext());
+	const context = await result.current.getCouponContext([]);
+	expect([...context.coupons.keys()]).toEqual(['percent10']);
+	expect(context.unsupportedTypes).toEqual(new Map([['credit20', 'pi_store_credit']]));
+});
+
+it('puts a record with an empty or missing discount_type in neither map', async () => {
+	engine.active().database.collections.coupons.find = () => ({
+		exec: async () => [
+			engineRecord('603', { code: 'blank', discount_type: '', amount: '5' }),
+			engineRecord('604', { code: 'untyped', amount: '5' }),
+		],
+	});
+	const { result } = renderHook(() => useCouponContext());
+	const context = await result.current.getCouponContext([]);
+	expect(context.coupons.size).toBe(0);
+	expect(context.unsupportedTypes).toEqual(new Map());
+});

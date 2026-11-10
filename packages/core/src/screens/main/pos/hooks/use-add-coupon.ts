@@ -86,6 +86,24 @@ export const useAddCoupon = () => {
 				const coupons = await getCouponContext(lineItems, appliedCouponLines);
 				const coupon = coupons.coupons.get(couponCode.toLowerCase().trim());
 				if (!coupon) {
+					// A type from another plugin (store credit, gift card) is found but not applicable:
+					// say so rather than "not found", which the autocomplete just contradicted.
+					const normalisedCode = couponCode.toLowerCase().trim();
+					const type = coupons.unsupportedTypes.get(normalisedCode);
+					if (type) {
+						orderLogger.info('Coupon application rejected', {
+							context: {
+								event: 'coupon.rejected',
+								couponCode: normalisedCode,
+								reason: 'unsupported_type',
+								params: { type },
+							},
+						});
+						return {
+							success: false,
+							error: t('pos_cart.coupon_type_unsupported', { code: couponCode.trim(), type }),
+						};
+					}
 					return { success: false, error: t('pos_cart.coupon_not_found') };
 				}
 				const validation = validateCoupon(

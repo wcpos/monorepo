@@ -212,7 +212,7 @@ it('refuses to stack onto an applied individual-use catalog coupon, like useAddC
 });
 it('refuses when an applied catalog coupon is still not resident after the reference wait', async () => {
 	couponLines = [{ code: 'not-yet-pulled' }];
-	getCouponContext.mockResolvedValueOnce({ coupons: new Map() });
+	getCouponContext.mockResolvedValueOnce({ coupons: new Map(), unsupportedTypes: new Map() });
 	const { result } = renderHook(() => useAddQuickDiscount());
 	await expect(
 		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
@@ -223,6 +223,19 @@ it('refuses when an applied catalog coupon is still not resident after the refer
 		getCouponContext.mock.invocationCallOrder[0]
 	);
 	expect(recalculate).not.toHaveBeenCalled();
+});
+it('names the coupon type when an applied catalog coupon is of a type the POS cannot apply', async () => {
+	couponLines = [{ code: 'credit20' }];
+	getCouponContext.mockResolvedValueOnce({
+		coupons: new Map(),
+		unsupportedTypes: new Map([['credit20', 'pi_store_credit']]),
+	});
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
+	).resolves.toEqual({ success: false, error: 'pos_cart.coupon_type_unsupported' });
+	expect(recalculate).not.toHaveBeenCalled();
+	expect(localPatch).not.toHaveBeenCalled();
 });
 it('stacks onto a resident, non-exclusive catalog coupon, matching the code case-insensitively', async () => {
 	couponLines = [{ code: 'PLAIN' }];
