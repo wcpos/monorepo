@@ -309,6 +309,7 @@ describe('drainMutationQueue', () => {
 			conflicts: [],
 			failed: 0,
 			sessionExpired: false,
+			updateRequired: false,
 			failures: [],
 			deferred: 0,
 			rejected: [],
