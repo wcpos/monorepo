@@ -186,7 +186,7 @@ it('closes: the session, its closure from the session accounting, the live copy 
 		counted_float: null,
 		business_day: null,
 	});
-	const closure = await closeRegister(ctx, 's1', {
+	const { closure } = await closeRegister(ctx, 's1', {
 		counted: { cash: '125', stripe: '0' },
 		note: 'Short',
 		denominations: [{ value: '5', pieces: 25 }],
@@ -269,7 +269,7 @@ it('waits for a missing refund parent, then closes with the refund on its tender
 	});
 	await engineDB.collections.orders.insert(parent);
 	arrive();
-	const closure = await closing;
+	const { closure } = await closing;
 	expect(closure.till_expected).toEqual({ cash: '105.0000', stripe: '-20.0000' });
 	expect(closure.movement_ids).toEqual(['late']);
 	expect(engine.demandEvents).toContain('release:targeted-records');
@@ -287,7 +287,7 @@ it('closes with the accounting it has once the parent wait times out', async () 
 		});
 		const closing = closeRegister(ctx, 's1', { counted: { cash: '80' } });
 		await jest.advanceTimersByTimeAsync(15_000);
-		const closure = await closing;
+		const { closure } = await closing;
 		expect(closure.till_expected).toEqual({ cash: '80.0000' });
 		expect(logger.warn).toHaveBeenCalledWith(
 			'Refund parent wait timed out; closing with available accounting'
@@ -313,7 +313,7 @@ describe('a refused close’s retry (#3304)', () => {
 
 	it('rewrites the closure with the corrected count, then lets the outbox send both', async () => {
 		await refusedClose();
-		const closure = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
+		const { closure } = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
 		expect(closure.toJSON()).toMatchObject({
 			counted: { cash: '100' },
 			number: 1,
@@ -347,11 +347,20 @@ describe('a second close while the first is still pending (POS-30F)', () => {
 		await insert();
 		await closeRegister(ctx, 's1', { counted: { cash: '90' } });
 		expect((await session()).sync_status).toBe('pending');
-		await closeRegister(ctx, 's1', { counted: { cash: '100' } });
+		const { kept } = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
 		expect({ session: (await session()).counted, closure: (await closureRow())?.counted }).toEqual({
 			session: { cash: '90' },
 			closure: { cash: '90' },
 		});
+		expect(kept).toEqual({ cash: '90' });
+	});
+
+	it('keeps nothing on a first close, or when the second count is the same one written differently', async () => {
+		await insert();
+		expect((await closeRegister(ctx, 's1', { counted: { cash: '90' } })).kept).toBeNull();
+		const again = await closeRegister(ctx, 's1', { counted: { cash: '90.00', card: '0' } });
+		expect(again.kept).toBeNull();
+		expect(again.closure.counted).toEqual({ cash: '90' });
 	});
 
 	it('takes other tenders, the note and the denominations from the session too', async () => {
@@ -361,11 +370,12 @@ describe('a second close while the first is still pending (POS-30F)', () => {
 			note: 'first',
 			denominations: [{ value: '50', pieces: 1 }],
 		});
-		await closeRegister(ctx, 's1', {
+		const { kept } = await closeRegister(ctx, 's1', {
 			counted: { cash: '100', card: '55' },
 			note: 'second',
 			denominations: [],
 		});
+		expect(kept).toEqual({ cash: '90', card: '40' });
 		const closure = await closureRow();
 		expect((await session()).counted).toEqual({ cash: '90', card: '40' });
 		expect(closure?.counted).toEqual({ cash: '90', card: '40' });
@@ -386,7 +396,7 @@ describe('recovering a closure reservation a restart interrupted', () => {
 	/** A close that reserved its closure (numbered, figures fixed) and stopped before the row. */
 	const interrupted = async () => {
 		await insert();
-		const closure = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
+		const { closure } = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
 		const row = closure.toJSON();
 		await closure.remove();
 		// The reservation as the write left it: not yet applied to the register's totals.

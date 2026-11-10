@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ScrollView } from 'react-native';
 
 import { DialogFooter, DialogHeader } from '@wcpos/components/dialog';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { useDocField } from '@wcpos/query';
@@ -12,10 +13,13 @@ import { formatClosureDate } from '../../../../services/register-session/closure
 import { ClosureBody, ClosureHeading } from '../../reports/closures/closure-body';
 import { useClosureView } from '../../reports/closures/closure-panel';
 import { PrintSheet } from '../../receipt/print-sheet';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 
 export type ClosureCount = {
 	closure: ReadonlyClosureDocument;
+	/** The count a reused closed session kept, when the one just entered differed (POS-30F). */
+	kept: Record<string, string> | null;
 	counted: string;
 	expected: string;
 	blind: boolean;
@@ -27,6 +31,7 @@ export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone:
 	const view = useClosureView(row, { isReprint: (row.print_count ?? 0) > 0 });
 	const { doc, context, settled, touched, corrections, printCount, reprint, error } = view;
 	const t = useT();
+	const { format } = useCurrencyFormat();
 	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const names = useRegisterNames(row.store_id ?? undefined);
 	const printed = !!row.printed_at || printCount > 0;
@@ -43,6 +48,13 @@ export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone:
 				/>
 			</DialogHeader>
 			<ScrollView className="min-h-0 flex-1" contentContainerClassName="gap-4 px-4">
+				{count.kept && (
+					<Notice
+						tone="info"
+						testID="closure-count-kept"
+						title={t('register.count_kept', { amount: format(Number(count.kept.cash)) })}
+					/>
+				)}
 				<ClosureBody
 					row={row}
 					doc={doc}

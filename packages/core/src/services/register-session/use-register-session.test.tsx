@@ -393,14 +393,19 @@ it('does not log a manual retry when resetting the movement fails', async () => 
 
 // The close is one command in query (its fact, closure and wait are query's suite's).
 it('hands the close to closeRegister with the till’s context and returns its closure', async () => {
-	jest.mocked(actions.closeRegister).mockResolvedValue({ id: 'closure' } as never);
+	jest
+		.mocked(actions.closeRegister)
+		.mockResolvedValue({ closure: { id: 'closure' }, kept: null } as never);
 	const result = await settled();
 	const input = {
 		counted: { cash: '115' },
 		note: 'n',
 		denominations: [{ value: '5', pieces: 23 }],
 	};
-	await expect(result.current.actions.closeSession(input)).resolves.toEqual({ id: 'closure' });
+	await expect(result.current.actions.closeSession(input)).resolves.toEqual({
+		closure: { id: 'closure' },
+		kept: null,
+	});
 	expect(actions.closeRegister).toHaveBeenCalledWith(
 		{
 			storeDB: mockStoreSession.storeDB,
@@ -1219,7 +1224,9 @@ it('records the live session on the device as the session opens and closes; the 
 	jest.mocked(actions.openSession).mockResolvedValue(row as never);
 	jest.mocked(actions.beginCount).mockResolvedValue({ ...row, status: 'counting' } as never);
 	jest.mocked(actions.abandonCount).mockResolvedValue(row as never);
-	jest.mocked(actions.closeRegister).mockResolvedValue({ id: 'closure' } as never);
+	jest
+		.mocked(actions.closeRegister)
+		.mockResolvedValue({ closure: { id: 'closure' }, kept: null } as never);
 	const result = await settled();
 	await act(() => result.current.actions.openSession({ expectedFloat: '90', countedFloat: '100' }));
 	expect(actions.recordLiveSession).toHaveBeenLastCalledWith(

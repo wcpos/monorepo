@@ -98,7 +98,7 @@ let separator = '.';
 let expectedCash = '480.80',
 	decimals: number | undefined;
 const closure = { id: 's', number: 1 };
-const closeSession = jest.fn(async () => closure),
+const closeSession = jest.fn(async () => ({ closure, kept: null })),
 	backToSelling = jest.fn(async () => undefined);
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
@@ -489,6 +489,7 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 	await waitFor(() =>
 		expect(onClosed).toHaveBeenCalledWith({
 			closure,
+			kept: null,
 			counted: '480.80',
 			expected: '480.80',
 			blind: false,

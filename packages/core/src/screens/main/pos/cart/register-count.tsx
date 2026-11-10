@@ -29,6 +29,7 @@ import { Text } from '@wcpos/components/text';
 import { TileGrid } from '@wcpos/components/tile-grid';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
+import type { CloseResult } from '@wcpos/query/register-session';
 
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
 import { recordRegisterFact, useRegisterActor } from '../../../../services/register-session/audit';
@@ -163,8 +164,8 @@ export function RegisterCount({
 	const countedDenominations = faces
 		.filter((value) => (pieces[value] ?? 0) > 0)
 		.map((value) => ({ value, pieces: pieces[value] }));
-	const completed = (closure: ClosureCount['closure']) =>
-		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
+	const completed = ({ closure, kept }: CloseResult) =>
+		onClosed({ closure, kept, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {
 		setBusy(true);
 		onBusyChange?.(true);
