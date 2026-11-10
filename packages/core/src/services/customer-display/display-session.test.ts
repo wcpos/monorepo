@@ -525,6 +525,30 @@ describe('snapshot fallback', () => {
 		});
 	});
 
+	test('forget stops snapshots even when the bye post fails', async () => {
+		const { session, signaling } = setup(undefined, undefined, extra);
+		let resolvePost!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			resolvePost = resolve;
+		});
+		jest.mocked(signaling.postSignal).mockImplementation(async (_id, signal) => {
+			if (signal.type === 'snapshot') await pending;
+			if (signal.type === 'bye') throw new Error('bye failed');
+		});
+		await session.poll();
+		await jest.advanceTimersByTimeAsync(0);
+		expect(
+			jest.mocked(signaling.postSignal).mock.calls.filter(([, s]) => s.type === 'snapshot')
+		).toHaveLength(1);
+
+		await expect(session.forget()).rejects.toThrow('bye failed');
+		resolvePost();
+		await jest.advanceTimersByTimeAsync(25_000);
+		expect(
+			jest.mocked(signaling.postSignal).mock.calls.filter(([, s]) => s.type === 'snapshot')
+		).toHaveLength(1);
+	});
+
 	test('re-sends the identical body every 20 seconds while the channel stays shut', async () => {
 		const { session, signaling } = setup(undefined, undefined, extra);
 		await session.poll();

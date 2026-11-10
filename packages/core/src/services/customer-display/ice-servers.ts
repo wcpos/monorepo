@@ -34,6 +34,18 @@ export function parseIceServers(value: unknown): IceServer[] | undefined {
 			return undefined;
 		if ('username' in entry && typeof username !== 'string') return undefined;
 		if ('credential' in entry && typeof credential !== 'string') return undefined;
+		const urlList = typeof urls === 'string' ? [urls] : urls;
+		if (!urlList.every((url: string) => /^(stuns?|turns?):./i.test(url))) return undefined;
+		if (
+			urlList.some((url: string) => /^turns?:/i.test(url)) &&
+			!(
+				typeof username === 'string' &&
+				username.length > 0 &&
+				typeof credential === 'string' &&
+				credential.length > 0
+			)
+		)
+			return undefined;
 		servers.push({
 			urls,
 			...(typeof username === 'string' ? { username } : {}),

@@ -100,7 +100,7 @@ export class CustomerDisplayService {
 						display,
 						deviceId: this.options.deviceId,
 						signaling: this.signaling,
-						createPeer: this.options.createPeer ?? (() => createOfferer(this.options.iceServers)),
+						createPeer: this.options.createPeer ?? (() => this.createOffererPeer()),
 						snapshotFallback: this.options.snapshotFallback === true,
 						getConfig: () => this.config,
 						getCurrentState: () => this.currentState,
@@ -218,6 +218,18 @@ export class CustomerDisplayService {
 	subscribe(listener: () => void): () => void {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
+	}
+
+	private createOffererPeer(): OffererPeer {
+		try {
+			return createOfferer(this.options.iceServers);
+		} catch (error) {
+			if (this.options.iceServers === undefined) throw error;
+			logger.warn('Customer display ICE servers refused; using the default STUN servers', {
+				context: { error: getErrorMessage(error) },
+			});
+			return createOfferer();
+		}
 	}
 
 	private activePairingCode(): PairingCode | null {

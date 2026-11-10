@@ -402,8 +402,8 @@ export class DisplaySession {
 					body: {},
 				});
 			}
-			this.stopped = true;
 		} finally {
+			this.stopped = true;
 			this.peer?.close();
 			this.clearSnapshotTimer();
 		}
