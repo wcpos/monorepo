@@ -102,6 +102,7 @@ async function createRefundableOrder(page: Page) {
 async function interceptRefundDependencies(page: Page) {
 	const unsupportedProviderRefundGatewayId = 'unsupported_provider_refunds';
 	let orderRevision = 0;
+	let heldDocument: Record<string, unknown> | undefined;
 	const gatewayIds = [
 		unsupportedProviderRefundGatewayId,
 		'stripe_terminal_for_woocommerce',
@@ -151,14 +152,40 @@ async function interceptRefundDependencies(page: Page) {
 			payload: Record<string, unknown>;
 		};
 		const currentRevision = `sha256:e2e-refund-${++orderRevision}`;
+		heldDocument = { ...mutation.payload, id: 999_001 };
 
 		await route.fulfill({
 			status: mutation.operation === 'create' ? 201 : 200,
 			contentType: 'application/json',
-			body: JSON.stringify({
-				document: { ...mutation.payload, id: 999_001 },
-				currentRevision,
-			}),
+			body: JSON.stringify({ document: heldDocument, currentRevision }),
+		});
+	});
+
+	// Since #3391 the window lane re-checks held orders with `GET …/orders?include=<ids>` and
+	// deletes any id the store leaves out; 999001 lives only in this stub, so the stub answers for it.
+	const includeIds = (url: URL) => (url.searchParams.get('include') ?? '').split(',');
+	const isTargetedFixtureFetch = (url: URL) =>
+		(url.pathname.endsWith('/orders') ||
+			!!url.searchParams.get('rest_route')?.endsWith('/orders')) &&
+		includeIds(url).includes('999001');
+	await page.route(isTargetedFixtureFetch, async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		const held = heldDocument ? [heldDocument] : [];
+		if (includeIds(new URL(route.request().url())).some((id) => id !== '999001')) {
+			const response = await route.fetch();
+			const body: unknown = response.ok() ? await response.json().catch(() => null) : null;
+			if (Array.isArray(body)) {
+				// The body is rewritten, so the real length and encoding no longer describe it.
+				const { 'content-length': _len, 'content-encoding': _enc, ...headers } = response.headers();
+				const total = headers['x-wp-total'];
+				if (total) headers['x-wp-total'] = String(Number(total) + held.length);
+				return route.fulfill({ status: response.status(), headers, json: [...body, ...held] });
+			}
+		}
+		return route.fulfill({
+			status: 200,
+			headers: { 'x-wp-total': String(held.length), 'x-wp-totalpages': '1' },
+			json: held,
 		});
 	});
 }

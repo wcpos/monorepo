@@ -86,11 +86,14 @@ export function deriveSettled(recorded: RecordedFigures, corrections: readonly C
 		const value = settled[field];
 		if (typeof value === 'string') {
 			if (toMinor(value, 4) !== toMinor(recorded[field] as string, 4)) touched.add(field);
-		} else
+		} else if (value != null)
 			for (const [tender, amount] of Object.entries(value)) {
 				if (
 					toMinor(amount, 4) !==
-					toMinor((recorded[field] as Record<string, string>)[tender] ?? '0', 4)
+					toMinor(
+						(recorded[field] as Record<string, string> | null | undefined)?.[tender] ?? '0',
+						4
+					)
 				)
 					touched.add(`${field}.${tender}`);
 			}
