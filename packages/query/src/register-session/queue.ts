@@ -592,14 +592,22 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 					server_closure_id: server.id,
 					printed_number: server.printed_number ?? null,
 					server_findings: server.findings ?? null,
-					// Redacted for a cashier counting blind; keep the local figures rather than
-					// patching required fields with undefined.
+					// Redacted for a cashier counting blind, the four totals too; keep the local figures
+					// rather than patching required fields with undefined.
 					...(server.expected === undefined ? {} : { expected: server.expected }),
 					...(server.variance === undefined ? {} : { variance: server.variance }),
-					period_sales_total: server.period_sales_total,
-					period_refunds_total: server.period_refunds_total,
-					perpetual_sales_total: server.perpetual_sales_total,
-					perpetual_refunds_total: server.perpetual_refunds_total,
+					...(server.period_sales_total === undefined
+						? {}
+						: { period_sales_total: server.period_sales_total }),
+					...(server.period_refunds_total === undefined
+						? {}
+						: { period_refunds_total: server.period_refunds_total }),
+					...(server.perpetual_sales_total === undefined
+						? {}
+						: { perpetual_sales_total: server.perpetual_sales_total }),
+					...(server.perpetual_refunds_total === undefined
+						? {}
+						: { perpetual_refunds_total: server.perpetual_refunds_total }),
 					// An offline print is not on the server yet; never lose it.
 					print_count: Math.max(row.getLatest().print_count ?? 0, server.print_count ?? 0),
 				});
