@@ -1178,6 +1178,7 @@
 	"pos_cart.coupon_refresh_timeout": "Coupon details couldn't be loaded — the totals shown may be out of date. Edit the cart to recalculate.",
 	"pos_cart.coupon_code": "Coupon Code",
 	"pos_cart.coupon_not_found": "Coupon not found",
+	"pos_cart.coupon_type_unsupported": "{code} can't be applied in the POS: its coupon type ({type}) comes from another plugin. Only percentage and fixed discount coupons are supported.",
 	"pos_cart.coupon_rejected_already_applied": "This coupon is already on the order.",
 	"pos_cart.coupon_rejected_email_not_allowed": "This coupon is restricted to certain customers, and this customer's email isn't one of them.",
 	"pos_cart.coupon_rejected_email_required": "This coupon is restricted to certain customers. Add a customer with an email address to the order first.",
