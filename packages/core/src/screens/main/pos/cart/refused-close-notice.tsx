@@ -26,7 +26,7 @@ export function RefusedCloseNotice({
 			tone="bad"
 			testID="register-panel-refused-close"
 			className={className}
-			title={t(forbidden ? 'register.no_cash_permission' : 'register.close_refused')}
+			title={forbidden ? t('register.no_cash_permission') : t('register.close_refused')}
 			actions={
 				onRetry
 					? [{ label: t('register.retry'), testID: 'register-panel-retry-close', onPress: onRetry }]
