@@ -133,3 +133,31 @@ it('settles a row only by the corrections it carries, and never a blind view', (
 	const blind = { ...recorded, expected: undefined, corrections: [recount] };
 	expect(settledRow(blind as unknown as typeof recorded)).toBe(blind);
 });
+
+// Revert: drop the null guard in the touched loop (Object.entries(null) throws on a blind doc).
+it('skips null and absent totals without throwing (Sentry 7838448400)', () => {
+	const doc: Record<string, unknown> = {
+		...recorded,
+		period_sales_total: null,
+		period_refunds_total: null,
+	};
+	delete doc.perpetual_sales_total;
+	delete doc.perpetual_refunds_total;
+	let touched: string[] = [];
+	expect(() => {
+		touched = [...deriveSettled(doc as unknown as typeof recorded, []).touched];
+	}).not.toThrow();
+	expect(touched).toEqual([]);
+});
+
+// Revert: drop the optional chaining on the recorded per-tender lookup.
+it('compares a corrected tender against a null recorded figure set without throwing', () => {
+	const doc = { ...recorded, expected: null } as unknown as typeof recorded;
+	let touched = new Set<string>();
+	expect(() => {
+		touched = deriveSettled(doc, [
+			correction(1, 'late_sale', { expected_delta: { cash: '5.0000' } }),
+		]).touched;
+	}).not.toThrow();
+	expect(touched.has('expected.cash')).toBe(true);
+});
