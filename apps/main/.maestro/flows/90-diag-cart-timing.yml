@@ -1,0 +1,70 @@
+appId: com.wcpos.main.dev
+env:
+  PRODUCT_SEARCH: WCPOS E2E Simple
+---
+# DIAGNOSTIC ONLY (diag/android-sync-profile, 2026-11-10). Runs straight
+# after 02-auth-setup (no relaunch), so the first sample lands during the
+# initial sync and the later ones at >= 6 and >= 12 minutes after login.
+# Logs WCPOS_E2E_DIAG_CART lines; asserts nothing about speed.
+- evalScript: ${output.diagStartAt = Date.now()}
+- evalScript: "${console.log('WCPOS_E2E_DIAG_PHASE flow-start ' + output.diagStartAt)}"
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: 'search-products-clear'
+          commands:
+            - tapOn:
+                id: 'search-products-clear'
+      - tapOn:
+          id: 'search-products'
+      - eraseText
+      - evalScript: ${output.searchCharIndex = 0}
+      - repeat:
+          while:
+            true: ${output.searchCharIndex < PRODUCT_SEARCH.length}
+          commands:
+            - inputText: ${PRODUCT_SEARCH.charAt(output.searchCharIndex)}
+            - evalScript: ${output.searchCharIndex++}
+      - assertVisible:
+          text: ${PRODUCT_SEARCH}
+- evalScript: "${console.log('WCPOS_E2E_DIAG_PHASE search-typed ' + Math.round((Date.now() - output.diagStartAt) / 1000))}"
+- extendedWaitUntil:
+    visible:
+      id: 'product-tile'
+    timeout: 600000
+- evalScript: "${console.log('WCPOS_E2E_DIAG_PHASE tile-visible ' + Math.round((Date.now() - output.diagStartAt) / 1000))}"
+- hideKeyboard:
+    optional: true
+- runFlow:
+    file: ../subflows/diag-cart-add-sample.yml
+    env:
+      LABEL: during-sync
+- repeat:
+    while:
+      true: ${Date.now() - output.diagStartAt < 360000}
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: 'diag-never-present'
+          timeout: 20000
+          optional: true
+- runFlow:
+    file: ../subflows/diag-cart-add-sample.yml
+    env:
+      LABEL: after-6min
+- repeat:
+    while:
+      true: ${Date.now() - output.diagStartAt < 720000}
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: 'diag-never-present'
+          timeout: 20000
+          optional: true
+- runFlow:
+    file: ../subflows/diag-cart-add-sample.yml
+    env:
+      LABEL: after-12min

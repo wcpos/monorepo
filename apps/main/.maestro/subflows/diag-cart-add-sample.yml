@@ -1,0 +1,41 @@
+appId: com.wcpos.main.dev
+---
+# DIAGNOSTIC ONLY (diag/android-sync-profile, 2026-11-10). One tap-to-cart
+# sample, logged and never asserted. Same method as assert-cart-add-timing.yml
+# (sequence read before the tap, wait for sequence+1 "complete"), but with a
+# 15-minute wait and no threshold, so a stalled engine yields a number instead
+# of a red. LABEL names the sample. Prints one WCPOS_E2E_DIAG_CART line:
+#   app.durationMs       add-handler entry to cart commit (the app's clock)
+#   tapCmdMs             Maestro's tapOn command (find + tap + settle)
+#   tapToCompleteSeenMs  tap start until Maestro reads the completed sample
+- runFlow:
+    file: capture-cart-add-sequence.yml
+- runFlow:
+    when:
+      visible:
+        id: 'pos-tab-products'
+    commands:
+      - tapOn:
+          id: 'pos-tab-products'
+- evalScript: ${output.diagTapAt = Date.now()}
+- tapOn:
+    id: 'product-tile'
+    index: 0
+- evalScript: ${output.diagTappedAt = Date.now()}
+- runFlow:
+    when:
+      visible:
+        id: 'pos-tab-cart'
+    commands:
+      - tapOn:
+          id: 'pos-tab-cart'
+- extendedWaitUntil:
+    visible:
+      id: 'e2e-cart-add-timing'
+      text: ${'.*"sequence":' + (output.cartAddSequence + 1) + ',"status":"complete".*'}
+    timeout: 900000
+    optional: true
+- evalScript: ${output.diagSeenAt = Date.now()}
+- copyTextFrom:
+    id: 'e2e-cart-add-timing'
+- evalScript: "${console.log('WCPOS_E2E_DIAG_CART ' + JSON.stringify({ label: LABEL, sinceFlowStartS: Math.round((output.diagTapAt - output.diagStartAt) / 1000), tapCmdMs: output.diagTappedAt - output.diagTapAt, tapToCompleteSeenMs: output.diagSeenAt - output.diagTapAt, expectedSequence: output.cartAddSequence + 1, app: maestro.copiedText }))}"

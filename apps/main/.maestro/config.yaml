@@ -8,18 +8,15 @@
 # session, so execution order is pinned explicitly — Maestro's default flow
 # order is non-deterministic.
 # Shared recovery lives in subflows/; healthy flow boundaries never relaunch.
+# DIAGNOSTIC BRANCH (diag/android-sync-profile, 2026-11-10): connect, log in,
+# then sample tap-to-cart during and after the initial sync. Nothing else.
 flows:
-  - flows/*.yml
+  - flows/01-clean-launch-connect.yml
+  - flows/02-auth-setup.yml
+  - flows/90-diag-cart-timing.yml
 executionOrder:
   continueOnFailure: false
   flowsOrder:
     - 01-clean-launch-connect
     - 02-auth-setup
-    - 03-authenticated-relaunch
-    - 04-cash-sale
-    - 05-drawer-navigation
-    - 06-cart-quantity-editing
-    - 07-variation-add-to-cart
-    - 08-void-order
-    - 09-pos-panel-resize
-    - 10-cart-add-burst
+    - 90-diag-cart-timing

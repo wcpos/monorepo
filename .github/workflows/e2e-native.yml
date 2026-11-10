@@ -69,6 +69,18 @@ on:
           - all
           - ios
           - android
+      # DIAGNOSTIC BRANCH ONLY (diag/android-sync-profile, 2026-11-10): the
+      # Android emulator's guest core count, to measure tap-to-cart against
+      # CPU. Feeds both emulator steps and both AVD cache keys.
+      cores:
+        description: Android emulator guest cores (diagnostic)
+        type: choice
+        default: '3'
+        options:
+          - '2'
+          - '3'
+          - '4'
+          - '6'
 
 # LATEST HEAD WINS (owner ruling 2026-09-01): ~10 queued 1-2h runs blocked the
 # 1.10.5 release — "I only really care about the last PR; that's more important
@@ -114,7 +126,7 @@ env:
   # is how a next-lane app came to be verified against the main-lane plugin
   # (deploy.yml has the full story; roadmap#277). The seed refuses an empty
   # store.
-  E2E_STORE_URL: ${{ (github.base_ref == 'next' || (github.event_name == 'push' && github.ref_name == 'next') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'next')) && 'https://dev-next.wcpos.com' || (github.base_ref == 'main' || (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'main')) && 'https://dev-pro.wcpos.com' || '' }}
+  E2E_STORE_URL: ${{ (github.base_ref == 'next' || (github.event_name == 'push' && github.ref_name == 'next') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'next')) && 'https://dev-next.wcpos.com' || (github.base_ref == 'main' || (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && (inputs.ref == 'main' || inputs.ref == 'diag/android-sync-profile'))) && 'https://dev-pro.wcpos.com' || '' }}
 
 permissions:
   contents: read
@@ -227,7 +239,7 @@ jobs:
             echo "android_devices=[$ANDROID_PHONE]" >> "$GITHUB_OUTPUT"
             echo "ios_devices=[$IOS_PHONE]" >> "$GITHUB_OUTPUT"
           else
-            echo "android_devices=[$ANDROID_PHONE,$ANDROID_TABLET]" >> "$GITHUB_OUTPUT"
+            echo "android_devices=[$ANDROID_PHONE]" >> "$GITHUB_OUTPUT"
             echo "ios_devices=[$IOS_PHONE,$IOS_TABLET]" >> "$GITHUB_OUTPUT"
           fi
           echo "Testing main @ $SHA (platform: $PLATFORM)"
@@ -661,7 +673,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores3-ram4096-heap576-v1
+          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores${{ inputs.cores || 3 }}-ram4096-heap576-v1
 
       # Cache miss: create the AVD and save a clean quickboot snapshot (no
       # -no-snapshot in the options, so the emulator saves state on exit).
@@ -687,7 +699,7 @@ jobs:
             sed -i '/^vm\.heapSize=/d' "$ANDROID_AVD_HOME/test.avd/config.ini"
             printf 'vm.heapSize=576\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
-          cores: 3
+          cores: ${{ inputs.cores || 3 }}
           ram-size: 4096M
           heap-size: 576M
           emulator-boot-timeout: 900
@@ -701,7 +713,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores3-ram4096-heap576-v1
+          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores${{ inputs.cores || 3 }}-ram4096-heap576-v1
 
       # STEP timeout 10 min under the job's: `always()` cannot buy execution
       # time past the JOB deadline — GitHub cancels the whole job there, and
@@ -751,7 +763,7 @@ jobs:
           # delivered individual input characters 2-4 minutes apart while the
           # app remained responsive on video: full guest oversubscription was
           # starving the host control plane rather than buying guest throughput.
-          cores: 3
+          cores: ${{ inputs.cores || 3 }}
           # 4 GB guest RAM (profile default is 2 GB) + the community-standard
           # 576 MB VM heap: the first-boot catalog sync hammers SQLite and the
           # JS heap at exactly the moment the guest is most memory-starved -
@@ -811,6 +823,9 @@ jobs:
             # becomes a literal maestro argument (run 33153806439).
             adb logcat -G 16M
             mkdir -p ~/.maestro/tests && nohup adb logcat -v threadtime > ~/.maestro/tests/logcat.txt 2>&1 &
+            # DIAGNOSTIC (diag/android-sync-profile): CPU counts, then per-thread CPU of the app every 15 s (TIME+ is cumulative per thread). ONE LINE each.
+            echo "DIAG host_nproc=$(nproc) guest_nproc=$(adb shell nproc | tr -d '\r') cores_input=${DIAG_CORES}" | tee ~/.maestro/tests/diag-cpu.txt
+            nohup sh -c 'while [ ! -f "$HOME/.maestro/tests/stop-screenrecord" ]; do p=$(adb shell pidof com.wcpos.main.dev 2>/dev/null | tr -d "\r"); { echo "=== $(date -u +%FT%TZ) pid=${p:-none} host_load=$(cut -d" " -f1-3 /proc/loadavg)"; [ -z "$p" ] || adb shell top -H -b -n 1 -m 15 -p "$p"; } >> "$HOME/.maestro/tests/top-threads.log" 2>&1; sleep 15; done' >/dev/null 2>&1 &
             # Record the screen too — see the iOS job for why one failure
             # screenshot is not enough. `adb shell screenrecord` stops itself at
             # ~180s, so loop it into numbered segments for the life of the run;
@@ -865,6 +880,7 @@ jobs:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
           # Half-resolution screenrecord target - see the matrix comment.
           RECORD_SIZE: ${{ matrix.device.record_size }}
+          DIAG_CORES: ${{ inputs.cores || 3 }}
           # Pins flow 07 to the seeded product's id-bearing testID; the `.*`
           # fallback (also the flow's own default) matches any variable tile.
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
