@@ -1046,6 +1046,59 @@ it('names a refused open and a refused close apart', async () => {
 	expect(logger.error.mock.calls[0][1]?.context).toHaveProperty('type', 'register.upload-refused');
 });
 
+it.each([
+	['open', async () => void (await open())],
+	[
+		'close',
+		async () => {
+			const row = await open();
+			await row.incrementalPatch({
+				server_status: 'counting',
+				status: 'counting',
+				sync_status: 'synced',
+			});
+			await closeSession(db, row.id, { counted: { cash: '100' } });
+		},
+	],
+	[
+		'movement',
+		async () => {
+			const row = await open();
+			await row.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+			await recordMovement(db, {
+				sessionId: row.id,
+				type: 'paid_in',
+				amount: '20',
+				reason: 'Float',
+				actor: 7,
+			});
+		},
+	],
+])('logs a forbidden %s as REGISTER231 at warn', async (_name, setUp) => {
+	await setUp();
+	http.post.mockRejectedValueOnce({ response: { status: 403, data: { code: 'rest_forbidden' } } });
+	await drain();
+	expect(logger.warn).toHaveBeenCalledWith(
+		expect.anything(),
+		expect.objectContaining({ code: 'REGISTER231' })
+	);
+	const codes = logger.error.mock.calls.map((call) => call[1]?.code);
+	expect(codes).not.toContain('REGISTER201');
+	expect(codes).not.toContain('REGISTER211');
+});
+
+it('keys the forbidden code on rest_forbidden, not on the 403 alone', async () => {
+	await open();
+	http.post.mockRejectedValueOnce({
+		response: { status: 403, data: { code: 'rest_cannot_create' } },
+	});
+	await drain();
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER201' })
+	);
+});
+
 it('does not call a refused counting transition a refused close', async () => {
 	const row = await open();
 	await row.incrementalPatch({ server_status: 'open', sync_status: 'synced' });

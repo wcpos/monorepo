@@ -107,6 +107,7 @@ export type ErrorCode =
 	| 'REGISTER211'
 	| 'REGISTER212'
 	| 'REGISTER221'
+	| 'REGISTER231'
 	| 'REGISTER301'
 	| 'CLIENT151'
 	| 'CLIENT181'
@@ -1155,6 +1156,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		summary:
 			'Another device already had this register open, so this till joined that session instead of starting its own.',
 	},
+	REGISTER231: {
+		code: 'REGISTER231',
+		symbol: 'REGISTER_CASH_NOT_PERMITTED',
+		domain: 'REGISTER',
+		severity: 'warn',
+		actionHint:
+			'A store manager can turn on manage_woocommerce_pos_cash for this role in POS → Access.',
+		dataSafety: 'local-only',
+		summary: "This account can't open, count or close the register.",
+	},
 	REGISTER301: {
 		code: 'REGISTER301',
 		symbol: 'REGISTER_APPROVAL_REFUSED',
@@ -1322,6 +1333,7 @@ export const ERROR_CODES = {
 	REGISTER_CLOSE_REFUSED: 'REGISTER211',
 	REGISTER_CARRY_FAILED: 'REGISTER212',
 	REGISTER_TAKEN_OVER: 'REGISTER221',
+	REGISTER_CASH_NOT_PERMITTED: 'REGISTER231',
 	REGISTER_APPROVAL_REFUSED: 'REGISTER301',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
 	STORE_SWITCH_FAILED: 'CLIENT181',

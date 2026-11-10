@@ -17,7 +17,8 @@ export function CartFoot({
 	onOpenSheet,
 }: {
 	onOpenRegister: () => void;
-	onCloseRegister: () => void;
+	/** Absent without the cash permission: the store would refuse the count. */
+	onCloseRegister?: () => void;
 	/**
 	 * The order sheet is the cart root's, pinned to the order it opened for: a status or
 	 * cashier change sent from it moves that order out of the open list, this foot
@@ -50,7 +51,7 @@ export function CartFoot({
 						>
 							{t('register.open_register')}
 						</Button>
-					) : overdue && !currentOrderRecord.payload.line_items?.length ? (
+					) : overdue && onCloseRegister && !currentOrderRecord.payload.line_items?.length ? (
 						<Button
 							testID="checkout-close-register"
 							size="lg"

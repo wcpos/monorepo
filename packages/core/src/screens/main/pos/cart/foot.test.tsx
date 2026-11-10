@@ -78,6 +78,12 @@ it('closes an overdue register with an empty cart', () => {
 	expect(onCloseRegister).toHaveBeenCalledTimes(1);
 	expect(screen.queryByTestId('checkout-button')).toBeNull();
 });
+it('offers no close without a close handler', () => {
+	mockSession.overdue = true;
+	render(<CartFoot onOpenRegister={jest.fn()} onOpenSheet={jest.fn()} />);
+	expect(screen.queryByTestId('checkout-close-register')).toBeNull();
+	expect(screen.getByTestId('checkout-button')).toBeTruthy();
+});
 it.each([false, true])('pays otherwise (overdue %s)', (overdue) => {
 	mockSession.overdue = overdue;
 	mockOrder.payload.line_items = [{}];

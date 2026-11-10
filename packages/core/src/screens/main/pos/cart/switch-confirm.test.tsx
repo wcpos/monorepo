@@ -310,6 +310,7 @@ let mockDrawer = {
 	salesCount: 3,
 	lastClosure: null as { number: number; server_number?: number | null } | null,
 	binding: { status: 'bound', registerName: 'Front counter', registerId: 'front' },
+	canManageCash: true,
 };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => mockDrawer,
@@ -564,6 +565,16 @@ it.each(['offline', 'open target', 'unknown target', 'closed source', 'counting 
 		}
 	}
 );
+it('offers no carry without the cash permission', () => {
+	mockDirectoryY = { registerId: 'target', registers: [closedTarget] };
+	mockDrawer.canManageCash = false;
+	try {
+		show({ kind: 'store', store });
+		expect(screen.queryByTestId('switch-confirm-carry')).toBeNull();
+	} finally {
+		mockDrawer.canManageCash = true;
+	}
+});
 it('offers Take the drawer back only for the matching carried session', async () => {
 	mockDirectoryY = { registerId: 'target', registers: [closedTarget] };
 	await recordCarriedFrom(mockUserDB, 'site', 'front', {

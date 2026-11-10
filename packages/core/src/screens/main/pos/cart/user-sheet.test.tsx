@@ -818,6 +818,7 @@ let mockDrawer = {
 	countingHere: false,
 	countingBy: null as { id: number; name: string | null; at: string | null } | null,
 	loaded: true,
+	canManageCash: true,
 	actions: { startCounting: jest.fn(async () => {}) },
 };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
@@ -1316,6 +1317,17 @@ describe('switch confirmations and guards', () => {
 		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-secondary')));
 		expect(mockLogout).toHaveBeenCalledTimes(1);
 		expect(mockDrawer.actions.startCounting).not.toHaveBeenCalled();
+	});
+	it('Sign out without the cash permission signs straight out', async () => {
+		mockDrawer.canManageCash = false;
+		try {
+			render(<UserSheet open onOpenChange={jest.fn()} />);
+			await act(async () => fireEvent.click(screen.getByTestId('user-sheet-sign-out')));
+			expect(screen.queryByTestId('switch-confirm')).toBeNull();
+			expect(mockLogout).toHaveBeenCalledTimes(1);
+		} finally {
+			mockDrawer.canManageCash = true;
+		}
 	});
 	it('Sign out waits while a bound register is still loading, never treating it as closed', () => {
 		Object.assign(mockDrawer, { session: null, loaded: false });
