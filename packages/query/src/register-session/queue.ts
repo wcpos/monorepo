@@ -450,6 +450,16 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 	for (const snapshot of ledger) {
 		const row = snapshot.getLatest();
 		const session = await sessions.findOne(row.session_id).exec();
+		// A refused open means the store will never have this session, so the movement can never send.
+		if (session && !session.server_status && session.sync_status === 'failed') {
+			await row.incrementalPatch({
+				sync_status: 'failed',
+				sync_attempts: row.sync_attempts + 1,
+				sync_next_at: null,
+				sync_error: session.sync_error,
+			});
+			continue;
+		}
 		if (!due(row) || !session?.server_status || session.sync_status === 'failed') continue;
 		if (row.voids) {
 			const target = await movements.findOne(row.voids).exec();

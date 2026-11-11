@@ -1046,6 +1046,45 @@ it('names a refused open and a refused close apart', async () => {
 	expect(logger.error.mock.calls[0][1]?.context).toHaveProperty('type', 'register.upload-refused');
 });
 
+it('fails a cash movement on a session the store refused to open', async () => {
+	const row = await open();
+	const movement = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	http.post.mockRejectedValueOnce({
+		response: { status: 403, data: { code: 'rest_forbidden' } },
+	});
+	await drain();
+	await drain();
+	expect(row.getLatest().sync_status).toBe('failed');
+	expect(movement.getLatest()).toMatchObject({
+		sync_status: 'failed',
+		sync_next_at: null,
+		sync_error: 'rest_forbidden',
+	});
+	expect(http.post).toHaveBeenCalledTimes(1);
+	expect(http.post).not.toHaveBeenCalledWith('movements', expect.anything());
+});
+
+it('keeps a movement pending on a session whose close was refused', async () => {
+	const row = await open();
+	await row.incrementalPatch({ server_status: 'open', sync_status: 'failed' });
+	const movement = await recordMovement(db, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	await drain();
+	expect(movement.getLatest()).toMatchObject({ sync_status: 'pending', sync_attempts: 0 });
+	expect(http.post).not.toHaveBeenCalledWith('movements', expect.anything());
+});
+
 it.each([
 	['open', async () => void (await open())],
 	[
