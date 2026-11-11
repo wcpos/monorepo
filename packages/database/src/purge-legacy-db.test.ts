@@ -96,6 +96,27 @@ jest.mock('@wcpos/utils/logger', () => ({
 	}),
 }));
 
+type Entry = { name: string; delete: jest.Mock };
+const entries = (...names: string[]): Entry[] => names.map((name) => ({ name, delete: jest.fn() }));
+
+/** Runs `run` with only these entries listed, then restores the shared harness lists. */
+async function withOnly(
+	only: { sqlite?: Entry[]; opfs?: Entry[]; live?: Entry[] },
+	run: () => Promise<void>
+) {
+	const lists: [Entry[], Entry[]][] = [
+		[sqliteEntries, only.sqlite ?? []],
+		[opfsEntries, only.opfs ?? []],
+		[liveRootEntries, only.live ?? []],
+	];
+	const saved = lists.map(([list, next]) => list.splice(0, list.length, ...next));
+	try {
+		await run();
+	} finally {
+		lists.forEach(([list], index) => list.splice(0, list.length, ...saved[index]!));
+	}
+}
+
 describe('purgeLegacyDatabases native', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -160,5 +181,38 @@ describe('purgeLegacyDatabases native', () => {
 			'document-dir/wcpos-sqlite',
 		]);
 		expect(sqliteEntries.every((entry) => entry.delete.mock.calls.length === 0)).toBe(true);
+	});
+
+	it.each([
+		['a retired-root child', { opfs: entries('rxdb-wcposusers_v6') }, true],
+		['a shared SQLite database', { sqlite: entries('wcposusers_v4') }, true],
+		['a live-root database', { live: entries('wcposusers_v9') }, true],
+		[
+			'only store databases',
+			{
+				sqlite: entries('store_v7_shop.db'),
+				opfs: entries('rxdb-store_v4_shop-products-0'),
+				live: entries('store_v9_shop', 'wcposusers_v10'),
+			},
+			false,
+		],
+	])('reports whether a retired user database went: %s', async (_, only, found) => {
+		await withOnly(only, async () => {
+			const { purgeLegacyDatabases } = await import('./purge-legacy-db');
+			await expect(purgeLegacyDatabases()).resolves.toMatchObject({
+				legacyUserDatabaseFound: found,
+			});
+		});
+	});
+
+	it('still rejects when a purge throws, so nothing is reported', async () => {
+		const [broken] = entries('wcposusers_v4');
+		broken!.delete.mockImplementation(() => {
+			throw new Error('disk gone');
+		});
+		await withOnly({ sqlite: [broken!] }, async () => {
+			const { purgeLegacyDatabases } = await import('./purge-legacy-db');
+			await expect(purgeLegacyDatabases()).rejects.toThrow('disk gone');
+		});
 	});
 });

@@ -50,6 +50,18 @@ const mockOpfsRoot = {
 	removeEntry: mockRemoveEntry,
 };
 
+/** Runs `run` with only these entries listed, then restores the shared harness lists. */
+async function withOnly(indexedDb: string[], opfs: string[], run: () => Promise<void>) {
+	const savedIndexedDb = indexedDbNames.splice(0, indexedDbNames.length, ...indexedDb);
+	const savedOpfs = opfsNames.splice(0, opfsNames.length, ...opfs);
+	try {
+		await run();
+	} finally {
+		indexedDbNames.splice(0, indexedDbNames.length, ...savedIndexedDb);
+		opfsNames.splice(0, opfsNames.length, ...savedOpfs);
+	}
+}
+
 describe('purgeLegacyDatabases web', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -122,6 +134,7 @@ describe('purgeLegacyDatabases web', () => {
 			success: true,
 			message: 'Successfully purged 24 legacy database entries',
 			databasesDeleted: 24,
+			legacyUserDatabaseFound: true,
 		});
 		expect(mockDeleteDatabase.mock.calls.map(([name]) => name)).toEqual([
 			'wcposusers_v4',
@@ -151,5 +164,24 @@ describe('purgeLegacyDatabases web', () => {
 			['rxdb-fast_store_v8_shop-orders-0', { recursive: true }],
 			['rxdb-fast_store_v9_shop-orders-0', { recursive: true }],
 		]);
+	});
+
+	it.each([
+		['an OPFS user database', [], ['rxdb-wcposusers_v6'], true],
+		['an IndexedDB user database', ['wcposusers_v4'], [], true],
+		[
+			'only store and scope databases',
+			['store_v6_shop', 'pos_v4_0123456789ab_s1_c2'],
+			['rxdb-store_v6_shop-products-0', 'rxdb-pos_v4_0123456789ab_s1_c2--0--orders'],
+			false,
+		],
+		['nothing', [], [], false],
+	])('reports whether a retired user database went: %s', async (_, indexedDb, opfs, found) => {
+		await withOnly(indexedDb, opfs, async () => {
+			const { purgeLegacyDatabases } = await import('./purge-legacy-db.web');
+			await expect(purgeLegacyDatabases()).resolves.toMatchObject({
+				legacyUserDatabaseFound: found,
+			});
+		});
 	});
 });
