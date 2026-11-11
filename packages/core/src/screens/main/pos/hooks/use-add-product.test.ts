@@ -18,6 +18,7 @@ const mockLoggerSuccess = jest.fn();
 const mockShowAddedToCartToast = jest.fn();
 
 const mockReadCounting = jest.fn(async () => false);
+const mockReadPriceCheck = jest.fn(async () => false);
 const mockToastShow = jest.fn();
 
 jest.mock('@wcpos/components/toast', () => ({
@@ -102,6 +103,7 @@ jest.mock('./use-add-item-to-order', () => ({
 	useAddItemToOrder: () => ({
 		addItemToOrder: mockAddItemToOrder,
 		readCounting: () => mockReadCounting(),
+		readPriceCheck: () => mockReadPriceCheck(),
 	}),
 }));
 
@@ -171,6 +173,7 @@ describe('useAddProduct', () => {
 		mockFindByProductVariationID.mockReturnValue(null);
 		mockAddItemToOrder.mockResolvedValue(true);
 		mockReadCounting.mockResolvedValue(false);
+		mockReadPriceCheck.mockResolvedValue(false);
 	});
 
 	it('adds nothing while the drawer is counted, with the notice, then adds after the count', async () => {
@@ -199,6 +202,40 @@ describe('useAddProduct', () => {
 		});
 
 		mockReadCounting.mockResolvedValue(false);
+		await act(async () => {
+			added = await result.current.addProduct(product as never);
+		});
+		expect(added).toBe(true);
+		expect(mockAddItemToOrder).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).toHaveBeenCalledTimes(2);
+	});
+
+	it('adds nothing while the register is closed, with the price-check notice, then adds once it opens', async () => {
+		mockReadPriceCheck.mockResolvedValue(true);
+		const { result } = renderHook(() => useAddProduct());
+		const product = engineDocument({ id: 101, name: 'Plain product', type: 'simple' }, '101');
+
+		let added: boolean | undefined;
+		await act(async () => {
+			added = await result.current.addProduct(product as never);
+		});
+		expect(added).toBe(false);
+		// The silent (scan) path still says why.
+		await act(async () => {
+			added = await result.current.addProduct(product as never, { silent: true });
+		});
+		expect(added).toBe(false);
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(mockIncrementLineItem).not.toHaveBeenCalled();
+		expect(mockShowAddedToCartToast).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenCalledTimes(2);
+		expect(mockToastShow).toHaveBeenCalledWith({
+			id: 'pos-price-check-refused',
+			type: 'info',
+			title: 'pos_products.price_check_only_until_open',
+		});
+
+		mockReadPriceCheck.mockResolvedValue(false);
 		await act(async () => {
 			added = await result.current.addProduct(product as never);
 		});
