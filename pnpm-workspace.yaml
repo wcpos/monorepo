@@ -195,6 +195,10 @@ patchedDependencies:
   # agrees with React's static prop. Kept as a guard after the Reanimated bump; drop it once
   # native flow 05 has stayed green on 4.5.5 for a while, or if upstream hides a closed panel.
   react-native-drawer-layout@4.2.10: patches/react-native-drawer-layout@4.2.10.patch
+  # Imports p-queue from its package root, adds the codegen `ResultT` for constants, and relabels the iOS
+  # `addCommand` export to `addCommand:data:`, the selector the TurboModule codegen calls (without it,
+  # addCommand crashes iOS with an unrecognized selector, POS-310). Guarded by
+  # scripts/esc-pos-printer-selectors.test.mjs; drop the addCommand hunk once upstream exports addCommand:data:.
   "react-native-esc-pos-printer@4.5.1": "patches/react-native-esc-pos-printer@4.5.1.patch"
   # storage-sqlite's sqliteTransaction kept a REJECTED link in its per-database promise chain
   # after a failed handler, so every later write replayed that error until the process died
