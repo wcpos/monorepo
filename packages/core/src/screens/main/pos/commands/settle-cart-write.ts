@@ -23,6 +23,7 @@ type Input = {
 	};
 	queue?: OrderMutationContext;
 };
+export type CartWriteCoupons = NonNullable<Input['coupons']>;
 export type Deps<T> = {
 	localPatch: (input: { document: CurrentOrderRecord; changes: PayloadChanges }) => T;
 	configForOrder: (order: OrderPayload) => CartConfig;

@@ -6,6 +6,7 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCartConfigReader } from '../hooks/use-cart-config';
 import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
 
+import type { CartWriteCoupons } from './settle-cart-write';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 
@@ -19,7 +20,12 @@ export function useCartWrite() {
 	const configForOrder = useCartConfigReader();
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const write = React.useCallback(
-		(input: { document: CurrentOrderRecord; data: object; queue: OrderMutationContext }) =>
+		(input: {
+			document: CurrentOrderRecord;
+			data: object;
+			queue: OrderMutationContext;
+			coupons?: CartWriteCoupons;
+		}) =>
 			settleCartWrite(input, {
 				localPatch,
 				commitAtBoundary,

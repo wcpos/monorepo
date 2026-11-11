@@ -88,6 +88,41 @@ it('apply: dispatches the entering line with the cart, then recalculates and pat
 	});
 });
 
+it('apply: the write carries the coupon context that priced the lines, so the total settles in the same write', async () => {
+	const context = { coupons: new Map(), productCategories: new Map() };
+	recalculate.mockImplementationOnce(async ({ line_items: lines }, coupons) => ({
+		lineItems: lines.map((line: Record<string, unknown>) => ({ ...line, total: '90' })),
+		couponLines: coupons,
+		context,
+	}));
+	await applyCouponLine(writer, order, saved, cartSnapshotOf(cart()));
+	expect(settledWrite).toHaveBeenCalledWith({
+		document: order,
+		queue: expect.objectContaining({ dispatchToken: expect.any(Object) }),
+		data: {
+			coupon_lines: [saved],
+			line_items: [{ product_id: 1, quantity: 1, total: '90' }],
+		},
+		coupons: { context, missing: { deny: { reasonKey: 'pos_cart.coupon_not_found' } } },
+	});
+});
+
+it('remove: the write carries the coupon context of the remaining coupons', async () => {
+	couponLines = [{ code: 'save10' }];
+	const context = { coupons: new Map(), productCategories: new Map() };
+	recalculate.mockImplementationOnce(async ({ line_items: lines }, coupons) => ({
+		lineItems: lines,
+		couponLines: coupons,
+		context,
+	}));
+	await removeCouponLine(remover, order, 'save10');
+	expect(settledWrite).toHaveBeenCalledWith(
+		expect.objectContaining({
+			coupons: { context, missing: { deny: { reasonKey: 'pos_cart.coupon_not_found' } } },
+		})
+	);
+});
+
 it('apply: a guard refusal is returned and nothing is recalculated or written', async () => {
 	registerActionHook(
 		'cart.coupon.apply',

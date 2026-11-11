@@ -190,7 +190,13 @@ describe('useRecalculateCoupons engine reads', () => {
 
 		await expect(
 			result.current.recalculate({ line_items: lineItems }, couponLines)
-		).resolves.toEqual(expected);
+		).resolves.toEqual({
+			...expected,
+			context: expect.objectContaining({
+				coupons: expect.any(Map),
+				productCategories: expect.any(Map),
+			}),
+		});
 		expect(reads.productFind).toHaveBeenCalledWith({
 			selector: { remoteKey: { $in: ['83', '82'] } },
 		});
@@ -221,7 +227,13 @@ describe('useRecalculateCoupons engine reads', () => {
 
 		await expect(
 			result.current.recalculate({ line_items: lineItems }, couponLines)
-		).resolves.toEqual(expected);
+		).resolves.toEqual({
+			...expected,
+			context: expect.objectContaining({
+				coupons: expect.any(Map),
+				productCategories: expect.any(Map),
+			}),
+		});
 	});
 
 	it('builds the replay config directly from the coupon record payload', async () => {
@@ -252,7 +264,13 @@ describe('useRecalculateCoupons engine reads', () => {
 
 		await expect(
 			result.current.recalculate({ line_items: lineItems }, couponLines)
-		).resolves.toEqual(expected);
+		).resolves.toEqual({
+			...expected,
+			context: expect.objectContaining({
+				coupons: expect.any(Map),
+				productCategories: expect.any(Map),
+			}),
+		});
 	});
 });
 
