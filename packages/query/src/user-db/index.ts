@@ -14,6 +14,7 @@ export {
 	PENDING_USER_DB_READ,
 } from './reads';
 export {
+	clearSitePluginVersions,
 	migrateSiteApiUrl,
 	recordSiteInfo,
 	removeSite,
