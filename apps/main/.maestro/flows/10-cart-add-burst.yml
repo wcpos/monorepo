@@ -153,6 +153,16 @@ env:
                 visible:
                   id: "cart-quantity-input"
                 timeout: 10000
+# An undeclared DEVICE_CLASS (the local `maestro test` run) keeps the layout
+# look (Codex r4544040095 on #3520).
+- runFlow:
+    when:
+      true: "${typeof DEVICE_CLASS === 'undefined'}"
+      visible:
+        id: "pos-tab-cart"
+    commands:
+      - tapOn:
+          id: "pos-tab-cart"
 # optional here so the numbers are logged before the hard assertion below.
 - extendedWaitUntil:
     visible:

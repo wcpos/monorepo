@@ -3513,6 +3513,11 @@ test('flow 10 switches to the cart tab with a retried tap on phones', () => {
 	assert.equal(retry.maxRetries, 2);
 	assert.deepEqual(retry.commands[0], { tapOn: { id: 'pos-tab-cart' } });
 	assert.equal(retry.commands[1].extendedWaitUntil?.visible?.id, 'cart-quantity-input');
+	// An undeclared DEVICE_CLASS (local run) keeps the layout look (Codex r4544040095).
+	const fallback = flow[tapped + 2].runFlow;
+	assert.match(fallback.when.true, /typeof DEVICE_CLASS === 'undefined'/);
+	assert.equal(fallback.when.visible.id, 'pos-tab-cart');
+	assert.deepEqual(fallback.commands, [{ tapOn: { id: 'pos-tab-cart' } }]);
 });
 
 test('the Android emulator resolves DNS through public resolvers and proves connectivity before the suite', () => {
