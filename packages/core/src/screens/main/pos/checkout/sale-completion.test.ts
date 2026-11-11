@@ -423,6 +423,9 @@ describe("the poster's post-answer adoption stands in for the completion's refre
 		[{ source: 'gateway-contract', status: 'completed' }],
 	] as [SaleOutcome][])('%j refreshes whatever the resident holds', async (outcome) => {
 		mockAnswerAdopted.mockResolvedValue(true);
+		// A replay finishes a journaled attempt; one already resolved completes nothing (POS-31A).
+		if (outcome.source === 'replay')
+			await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
 		await completeSale(ctx, order, outcome, { host: 'modal', autoPrintReceipt: false });
 		expect(mockAnswerAdopted).not.toHaveBeenCalled();
 		expect(mockReconcile).toHaveBeenCalledTimes(1);
@@ -481,9 +484,13 @@ describe('the print that follows a sale with no receipt on screen', () => {
 	});
 	it('a replay queues nothing', async () => {
 		const replay = { source: 'replay', refreshed: true } as const;
+		const journaled = () =>
+			recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
+		await journaled();
 		expect(await completeSale(ctx, order, replay, { host: 'modal', autoPrintReceipt: true })).toBe(
 			'completed'
 		);
+		await journaled();
 		expect(
 			await completeSale(ctx, order, replay, {
 				host: 'stage',
@@ -1018,6 +1025,8 @@ it.each([
 			: kind === 'terminal'
 				? { source: kind, row, order: { balance: '0' } as never }
 				: { source: kind };
+	if (kind === 'replay')
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'terminal' });
 	try {
 		await completeSale({ ...ctx, actor: { id: '7', name: 'Pat' } }, order, outcome, presentation);
 		expect(dispatch).toHaveBeenCalledWith(
@@ -1509,7 +1518,38 @@ describe('POS-31A: the recovery and the tender both complete one sale', () => {
 
 	// The order the field's code runs them in: the tender's commit holds the order's slot
 	// (`commit-sale.ts`, `enqueueOrderMutation`) through its record retries, so the bridge's replay,
-	// called with no queue, waits behind it and completes second.
+	// called with no queue, waits behind it and completes second. Inside the slot it finds the
+	// attempt the tender resolved gone, and completes nothing.
+	it('the queue runs the tender landing first and the bridge replay behind it: one paid moment (POS-31A)', async () => {
+		let release!: () => void;
+		const held = new Promise<void>((resolveHeld) => (release = resolveHeld));
+		const tender = mutationQueue.enqueueOrderMutation(uuid, async (queue) => {
+			await held;
+			return tenderLands(queue);
+		});
+		const replay = bridgeReplays();
+		release();
+		expect(await tender).toBe('completed');
+		expect(await replay).toBe('completed');
+
+		const seen = counts();
+		expect(seen).toMatchObject({
+			prints: 1,
+			receiptTabOpen: true,
+			selected: uuid,
+			nonReplayEvents: 1,
+			replayEvents: 0,
+			nonReplayAudits: 1,
+			replayedAudits: 0,
+			stockCalls: 1,
+			recorded: 0,
+			resolved: 1,
+		});
+		expect(mode.getCheckoutModeSnapshot().receiptOrders.size).toBe(1);
+		expect(seen.receiptEntries).toHaveLength(1);
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+	});
+
 	it('the queue runs the tender landing first; a cashier who finished before the replay gets no receipt back and no print (POS-31A)', async () => {
 		expect(await tenderLands()).toBe('completed');
 		newSale();
@@ -1520,6 +1560,52 @@ describe('POS-31A: the recovery and the tender both complete one sale', () => {
 		expect(seen.receiptEntries).toEqual(before.receiptEntries);
 		expect(seen.receiptTabOpen).toBe(false);
 		expect(seen.prints).toBe(before.prints);
-		expect(seen.nonReplayEvents).toBe(before.nonReplayEvents);
+		expect(seen).toMatchObject({
+			nonReplayEvents: 1,
+			replayEvents: 0,
+			nonReplayAudits: 1,
+			replayedAudits: 0,
+			stockCalls: 1,
+			resolved: 1,
+		});
+	});
+
+	// The spec's other order (the replay completing first, then the tender) cannot happen in one tab
+	// while the tender holds the slot: a replay called with no queue does not start its run until
+	// the slot is released.
+	it('a replay with no queue starts its run only once the slot the tender holds is released (POS-31A)', async () => {
+		let release!: () => void;
+		const held = new Promise<void>((resolveHeld) => (release = resolveHeld));
+		const released = jest.fn();
+		const slot = mutationQueue.enqueueOrderMutation(uuid, async () => {
+			await held;
+			released();
+		});
+		const replay = bridgeReplays();
+		await new Promise((resolveTick) => setTimeout(resolveTick, 20));
+		expect(counts().replayEvents).toBe(0);
+		release();
+		await slot;
+		expect(await replay).toBe('completed');
+		expect(counts().replayEvents).toBe(1);
+		expect(released.mock.invocationCallOrder[0]).toBeLessThan(dispatch.mock.invocationCallOrder[0]);
+	});
+
+	// ADR 0040 Decided 1 rule 3: an offline record completes at the till and keeps its attempt; the
+	// bridge's finish once the paid order is adopted (`finishOne`) is its one replayed completion.
+	it('an offline record awaiting adoption is finished by exactly one replayed completion (POS-31A)', async () => {
+		expect(await completeSale(ctx, sale, { ...manual, via: 'offline' }, stage)).toBe('completed');
+		expect((await pendingCompletions(ctx.storeDB))[uuid]).toMatchObject({ awaitingAdoption: true });
+		const finish = { source: 'replay', refreshed: true } as const;
+		expect(await completeSale(ctx, sale, finish, { host: 'background' })).toBe('completed');
+
+		expect(counts()).toMatchObject({
+			nonReplayEvents: 1,
+			replayEvents: 1,
+			nonReplayAudits: 1,
+			replayedAudits: 1,
+			resolved: 1,
+		});
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
 	});
 });

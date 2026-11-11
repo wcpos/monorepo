@@ -1119,7 +1119,8 @@ it('reads the service version in the effect after the preceding bridge starts, w
 	);
 	await waitFor(() => expect(mockInfo).toHaveBeenCalledTimes(1));
 	await drain();
-	expect(readPending).toHaveBeenCalledTimes(1);
+	// One run's read, and the replay's own re-read inside the order's slot (POS-31A).
+	expect(readPending).toHaveBeenCalledTimes(2);
 	expect(owner.completeSale).toHaveBeenCalledTimes(1);
 });
 
