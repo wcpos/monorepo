@@ -23,16 +23,33 @@ import { createRefreshHttpClient } from './refresh-http-client';
 
 const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 
-/**
- *
- * @param responseString
- * @returns
- */
-function extractValidJSON(responseString: string) {
-	// Find the index where the actual JSON starts
-	const indexOfJsonStart = responseString.search(/[{[]/);
+function tryParse(text: string): { value: unknown } | null {
+	try {
+		return { value: JSON.parse(text) };
+	} catch {
+		return null;
+	}
+}
 
-	if (indexOfJsonStart === -1) {
+/**
+ * Reads the store's JSON out of a body that another plugin polluted with stray text.
+ *
+ * Pass 1: stray text is echoed BEFORE the REST body, so the first `{`/`[` whose whole
+ * tail parses is the store's answer, whatever brackets the stray text contains.
+ * Pass 2: when trailing junk follows the body too, keep the LONGEST parseable span.
+ * The old code returned the first start's longest prefix, so a bracket in the stray
+ * text won: `[400]` out of a Xero exception, and the payment's answer was lost (POS-30P).
+ */
+export function extractValidJSON(responseString: string) {
+	const starts: number[] = [];
+	const ends: number[] = [];
+	for (let i = 0; i < responseString.length; i++) {
+		const char = responseString[i];
+		if (char === '{' || char === '[') starts.push(i);
+		if (char === '}' || char === ']') ends.push(i);
+	}
+
+	if (starts.length === 0) {
 		httpLogger.error('Server returned invalid response - no JSON found', {
 			code: ERROR_CODES.STORE_SERVER_ERROR,
 			context: {
@@ -42,17 +59,25 @@ function extractValidJSON(responseString: string) {
 		return null;
 	}
 
-	// Extracting up to where we suspect the JSON ends
-	const possibleJson = responseString.substring(indexOfJsonStart);
+	for (const start of starts) {
+		const tail = tryParse(responseString.slice(start).trim());
+		if (tail) return tail.value;
+	}
 
-	// Trying to find a valid JSON object
-	for (let i = possibleJson.length; i > 0; i--) {
-		try {
-			return JSON.parse(possibleJson.substring(0, i));
-		} catch {
-			// Not a valid JSON yet, continue trimming
+	let best: { start: number; end: number; value: unknown } | null = null;
+	for (const start of starts) {
+		if (best && start <= best.end) continue; // inside the span kept so far
+		for (let e = ends.length - 1; e >= 0 && ends[e] > start; e--) {
+			const end = ends[e];
+			if (best && end - start <= best.end - best.start) break; // cannot beat it
+			const span = tryParse(responseString.slice(start, end + 1));
+			if (span) {
+				best = { start, end, value: span.value };
+				break;
+			}
 		}
 	}
+	if (best) return best.value;
 
 	httpLogger.error('Unable to parse server response', {
 		code: ERROR_CODES.STORE_SERVER_ERROR,
