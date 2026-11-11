@@ -496,7 +496,7 @@ export function UserSheet({
 	const { total } = useSalesToday();
 	const { format } = useCurrencyFormat();
 	const paying = usePaymentInFlight();
-	const { countingHere, session, loaded, actions, binding } = useRegisterSession();
+	const { countingHere, session, loaded, actions, binding, canManageCash } = useRegisterSession();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
@@ -811,7 +811,10 @@ export function UserSheet({
 										// also returns a closed session whose closure write was interrupted, and Close
 										// register would reopen it (Codex, #3056).
 										onPress: () =>
-											binding.status === 'bound' && session && session.status !== 'closed'
+											binding.status === 'bound' &&
+											session &&
+											session.status !== 'closed' &&
+											canManageCash
 												? setRequest({ kind: 'sign-out' })
 												: void act(() => logout()),
 									}

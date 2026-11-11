@@ -17,6 +17,7 @@ import { Text } from '@wcpos/components/text';
 import { TileGrid } from '@wcpos/components/tile-grid';
 import { Toast } from '@wcpos/components/toast';
 import { useDocField } from '@wcpos/query';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 
 import { useAppState, useStoreSession } from '../../../../contexts/app-state';
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
@@ -28,7 +29,7 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RegisterAmount } from '../../components/register-count';
 
 export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void }) {
-	const { binding, lastClosed, lastClosure, actions, blind, closedElsewhere } =
+	const { binding, lastClosed, lastClosure, actions, blind, closedElsewhere, canManageCash } =
 		useRegisterSession();
 	const { site, store: sessionStore } = useStoreSession();
 	const { store } = useAppState();
@@ -73,6 +74,40 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 			setBusy(false);
 		}
 	};
+	// The store refuses an open without the cash permission: the sentence takes the float entry's place.
+	if (!canManageCash)
+		return (
+			<ScrollView
+				className="flex-1"
+				contentContainerClassName="gap-4 px-4 py-5"
+				testID="open-register-card"
+			>
+				<Notice
+					tone="info"
+					testID="open-register-no-cash-permission"
+					title={t('register.no_cash_permission')}
+					docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('REGISTER231') }}
+				/>
+				{lastClosure && (
+					<ListRow
+						testID="open-register-last-closure"
+						size="sm"
+						onPress={onLastClosure}
+						className="gap-2 border-t border-b-0 px-0"
+						bodyClassName="flex-row items-center gap-2"
+						leading={<Icon name="chevronRight" className="text-muted-foreground" />}
+					>
+						<Text className="text-muted-foreground">{t('register.last_closure')}</Text>
+						<Text className="text-muted-foreground shrink">
+							{t('reports.closure_n', { n: lastClosure.server_number ?? lastClosure.number })}
+							{!blind && lastClosure.counted?.cash != null
+								? ` · ${format(Number(lastClosure.counted.cash))}`
+								: ''}
+						</Text>
+					</ListRow>
+				)}
+			</ScrollView>
+		);
 	return (
 		<ScrollView
 			className="flex-1"

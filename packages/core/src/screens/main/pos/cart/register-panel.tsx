@@ -24,6 +24,7 @@ import { Notice } from '@wcpos/components/notice';
 import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { isLiveMovement, readCarriedFrom } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
@@ -78,14 +79,16 @@ export function RegisterPanel({
 		refusedClose,
 		lastClosure,
 		actions,
+		canManageCash,
 	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [error, setError] = React.useState('');
 	// This device's own count, or a close awaiting its closure write, opens on the count pane;
 	// so does a close the store refused (#2016), whose count mark the close already cleared.
 	const landing =
-		(session?.status === 'counting' && (countingHere || refusedClose)) ||
-		session?.status === 'closed'
+		canManageCash &&
+		((session?.status === 'counting' && (countingHere || refusedClose)) ||
+			session?.status === 'closed')
 			? 'count'
 			: 'register';
 	const [pane, setPane] = React.useState<'register' | 'closure' | 'count' | 'written'>(landing);
@@ -175,7 +178,7 @@ export function RegisterPanel({
 	};
 	// Opening is an external request, not a subscription to changes during a count.
 	const openPane = React.useEffectEvent(() => {
-		if (initialPane === 'count' && session?.status === 'open' && !figuresPending)
+		if (canManageCash && initialPane === 'count' && session?.status === 'open' && !figuresPending)
 			void attempt(async () => {
 				await actions.startCounting();
 				setPane('count');
@@ -194,6 +197,7 @@ export function RegisterPanel({
 	// comes from the hook already scoped to this register and NOT to the current session, so
 	// the banner survives the close that would otherwise hide the last record of the cash.
 	const refused = refusedMovements;
+	const closeForbidden = session?.sync_error === 'rest_forbidden';
 	// Refused cash alone can open the panel (no session, no closure): then there is no stamp.
 	const stamp = session?.opened_at_gmt ?? lastClosure?.closed_at;
 	const openedDate = stamp ? convertUTCStringToLocalDate(stamp) : undefined;
@@ -250,6 +254,26 @@ export function RegisterPanel({
 			.filter(Boolean)
 			.join(' · ');
 	const description = <Ticking>{describe}</Ticking>;
+	// Without the cash permission the store refuses every POST, so no action offers one.
+	const retryRefused = canManageCash
+		? ([
+				{
+					label: t('register.retry'),
+					testID: 'register-panel-retry-refused',
+					onPress: () =>
+						void attempt(() => Promise.all(refused.map((row) => actions.retryMovement(row.id)))),
+				},
+			] as const)
+		: undefined;
+	const voidAction = (id: string) =>
+		canManageCash
+			? {
+					label: t('register.void'),
+					testID: `movement-void-${id}`,
+					disabled: session?.status !== 'open',
+					onPress: () => void attempt(() => actions.voidMovement(id)),
+				}
+			: undefined;
 	if (pane === 'written' && written)
 		return (
 			<Dialog open={open} onOpenChange={close}>
@@ -300,6 +324,15 @@ export function RegisterPanel({
 						<DialogDescription testID="register-panel-description">{description}</DialogDescription>
 					</View>
 				</DialogHeader>
+				{!canManageCash && (
+					<Notice
+						tone="info"
+						testID="register-panel-no-cash-permission"
+						className="mx-4"
+						title={t('register.no_cash_permission')}
+						docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('REGISTER231') }}
+					/>
+				)}
 				{figuresPending && (
 					<Notice
 						tone="info"
@@ -308,14 +341,18 @@ export function RegisterPanel({
 						title={t('register.figures_after_sync')}
 					/>
 				)}
-				{refusedClose && session && (
+				{refusedClose && session && (canManageCash || !closeForbidden) && (
 					<RefusedCloseNotice
 						className="mx-4"
-						onRetry={() =>
-							void attempt(async () => {
-								if (session.status === 'open') await actions.startCounting();
-								setPane('count');
-							})
+						forbidden={closeForbidden}
+						onRetry={
+							canManageCash
+								? () =>
+										void attempt(async () => {
+											if (session.status === 'open') await actions.startCounting();
+											setPane('count');
+										})
+								: undefined
 						}
 					/>
 				)}
@@ -325,16 +362,7 @@ export function RegisterPanel({
 						testID="register-panel-refused"
 						className="mx-4"
 						title={t('register.refused', { count: refused.length })}
-						actions={[
-							{
-								label: t('register.retry'),
-								testID: 'register-panel-retry-refused',
-								onPress: () =>
-									void attempt(() =>
-										Promise.all(refused.map((row) => actions.retryMovement(row.id)))
-									),
-							},
-						]}
+						actions={retryRefused}
 					/>
 				)}
 				{session && (
@@ -371,7 +399,7 @@ export function RegisterPanel({
 						</Text>
 					</View>
 				)}
-				{session && (
+				{session && canManageCash && (
 					<View className="flex-row gap-2 px-4">
 						{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (
 							<Button
@@ -499,12 +527,7 @@ export function RegisterPanel({
 														row.sync_status === 'failed' ? t('register.refused_row') : undefined
 													}
 													tone={row.sync_status === 'failed' ? 'bad' : undefined}
-													action={{
-														label: t('register.void'),
-														testID: `movement-void-${row.id}`,
-														disabled: session?.status !== 'open',
-														onPress: () => void attempt(() => actions.voidMovement(row.id)),
-													}}
+													action={voidAction(row.id)}
 												/>
 											))}
 										</DerivationStep>
@@ -595,18 +618,20 @@ export function RegisterPanel({
 						disabled: blind || !session,
 						onPress: () => setSheetOpen(true),
 					}}
-					intent={{
-						label: overdue
-							? t('register.close_register_past', { time: closeTime })
-							: t('register.close_register'),
-						testID: 'register-panel-close-register',
-						disabled: !session || figuresPending,
-						onPress: () =>
-							void attempt(async () => {
-								await actions.startCounting();
-								setPane('count');
-							}),
-					}}
+					intent={
+						canManageCash && {
+							label: overdue
+								? t('register.close_register_past', { time: closeTime })
+								: t('register.close_register'),
+							testID: 'register-panel-close-register',
+							disabled: !session || figuresPending,
+							onPress: () =>
+								void attempt(async () => {
+									await actions.startCounting();
+									setPane('count');
+								}),
+						}
+					}
 				/>
 				<PrintSheet
 					open={sheetOpen}

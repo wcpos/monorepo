@@ -139,6 +139,8 @@ type Deps = {
  * shift from its sales; a takeover means two tills on one drawer. A refused closure is the same
  * problem as a refused close transition — the count did not reach the store — so it shares
  * REGISTER211 rather than inventing a code that says the same thing.
+ * A missing cash permission is its own code on every endpoint, ahead of the open, close and
+ * movement codes, because the fix is the role and not a retry.
  *
  * The status route carries all three transitions, so it is classified by the transition the row
  * actually asked for, not by the route: a refused `counting` or `open` transition leaves the
@@ -152,6 +154,8 @@ function refusalCode(
 	if (failure.status === 409 && failure.errorCode === 'wcpos_session_already_open') {
 		return ERROR_CODES.REGISTER_TAKEN_OVER;
 	}
+	if (failure.status === 403 && failure.errorCode === 'rest_forbidden')
+		return ERROR_CODES.REGISTER_CASH_NOT_PERMITTED;
 	if (endpoint === 'movements') {
 		return 'voids' in row && row.voids
 			? ERROR_CODES.CASH_MOVEMENT_VOID_REFUSED

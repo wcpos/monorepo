@@ -158,6 +158,7 @@ export function useRegisterSession() {
 		closeTime,
 		binding,
 		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
+		canManageCash: !capabilities || capabilities.includes('manage_woocommerce_pos_cash'),
 		figuresPending,
 		/** This device owns the cached count mark, not another till. */
 		countingHere: !!data?.countingHere,
