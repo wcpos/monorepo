@@ -253,19 +253,28 @@ export function RefundOrderForm({ order }: Props) {
 		},
 	});
 
+	// An effect because the form's line items are react-hook-form state that must follow the
+	// refund history as it loads. While the history loads every remaining quantity is a 0
+	// placeholder, and a reconnect restarts the load (useRestHttpClient returns a new client per
+	// online status), so the entered quantities are kept and clamped only once the history has loaded.
 	React.useEffect(() => {
 		const currentLineItems = form.getValues('line_items') || [];
 		form.reset(
 			{
 				...form.getValues(),
-				line_items: initialLineItems.map((item, index) => ({
-					...item,
-					refund_qty: Math.min(currentLineItems[index]?.refund_qty ?? 0, item.remaining_quantity),
-				})),
+				line_items: initialLineItems.map((item, index) => {
+					const enteredQty = currentLineItems[index]?.refund_qty ?? 0;
+					return {
+						...item,
+						refund_qty: refundDetailsLoading
+							? enteredQty
+							: Math.min(enteredQty, item.remaining_quantity),
+					};
+				}),
 			},
 			{ keepDirty: true, keepTouched: true }
 		);
-	}, [form, initialLineItems]);
+	}, [form, initialLineItems, refundDetailsLoading]);
 
 	React.useEffect(() => {
 		if (form.getFieldState('refund_destination').isDirty) {
@@ -345,6 +354,11 @@ export function RefundOrderForm({ order }: Props) {
 		}
 		// The link can drop while the confirm dialog sits open: nothing is sent, the line below says why.
 		if (!online) {
+			setConfirmOpen(false);
+			return;
+		}
+		// The amount can fall while the confirm sits open; a refund the form rejects is never sent.
+		if (!isValid) {
 			setConfirmOpen(false);
 			return;
 		}
@@ -441,6 +455,7 @@ export function RefundOrderForm({ order }: Props) {
 	}, [
 		blockIfDegraded,
 		online,
+		isValid,
 		loading,
 		awaitingGateway,
 		refundDetailsLoading,
@@ -636,7 +651,7 @@ export function RefundOrderForm({ order }: Props) {
 							label: t('orders.process_refund'),
 							testID: 'confirm-process-refund-button',
 							onPress: () => void handleSubmit(),
-							disabled: loading || storageDegraded || awaitingGateway,
+							disabled: loading || storageDegraded || awaitingGateway || !isValid,
 						}}
 					/>
 				</AlertDialogContent>
