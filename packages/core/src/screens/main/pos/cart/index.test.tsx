@@ -66,12 +66,13 @@ let mockSession: {
 	countingElsewhere?: boolean;
 	refusedClose?: boolean;
 	overdue?: boolean;
+	canManageCash?: boolean;
 } = {
 	session: null,
 	sessionsOn: false,
 };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ loaded: true, ...mockSession }),
+	useRegisterSession: () => ({ loaded: true, canManageCash: true, ...mockSession }),
 }));
 jest.mock('../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { openOrdersPosition: mockPosition } }),
@@ -172,6 +173,25 @@ it("the empty cart's Close register requests the count pane without opening its 
 		mockSession = previous;
 		mockIsNew = previousNew;
 		consumeRegisterPanelRequest();
+	}
+});
+it('an overdue empty cart offers no close without the cash permission', () => {
+	const previous = mockSession,
+		previousNew = mockIsNew;
+	mockSession = {
+		session: { id: 's', status: 'open' },
+		sessionsOn: true,
+		overdue: true,
+		canManageCash: false,
+	};
+	mockIsNew = true;
+	try {
+		render(<OpenOrders isColumn />);
+		expect(screen.getByTestId('cart-empty')).toBeTruthy();
+		expect(screen.queryByTestId('checkout-close-register')).toBeNull();
+	} finally {
+		mockSession = previous;
+		mockIsNew = previousNew;
 	}
 });
 it.each(['counting', 'closed'])(

@@ -83,6 +83,21 @@ export const useAddQuickDiscount = () => {
 					// Still not resident after the wait: we cannot tell whether it is exclusive, and
 					// settlement could not replay it either. Refuse rather than guess.
 					if (records.some((record) => record === undefined)) {
+						// A resident coupon of a type the POS can't apply says so, not "not found".
+						const unsupported = catalogCodes.find(
+							(catalogCode, index) =>
+								records[index] === undefined &&
+								coupons.unsupportedTypes.has(catalogCode.toLowerCase())
+						);
+						if (unsupported) {
+							return {
+								success: false,
+								error: t('pos_cart.coupon_type_unsupported', {
+									code: unsupported,
+									type: coupons.unsupportedTypes.get(unsupported.toLowerCase()),
+								}),
+							};
+						}
 						return { success: false, error: t('pos_cart.coupon_not_found') };
 					}
 					const exclusive = catalogCodes.find(

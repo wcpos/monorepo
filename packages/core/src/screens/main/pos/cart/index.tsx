@@ -73,8 +73,16 @@ function CartColumn({
 	const { tear } = useThemeTraits();
 	const surface = isColumn ? 'bg-cart' : 'bg-background';
 	const { status: bindingStatus, failed, retrying, retry } = useRegisterBinding();
-	const { sessionsOn, session, loaded, overdue, countingHere, countingElsewhere, refusedClose } =
-		useRegisterSession();
+	const {
+		sessionsOn,
+		session,
+		loaded,
+		overdue,
+		countingHere,
+		countingElsewhere,
+		refusedClose,
+		canManageCash,
+	} = useRegisterSession();
 	// Until the session loads, an open register reads as closed; show neither card nor cart.
 	const sessionLoading = sessionsOn && !loaded && bindingStatus === 'bound';
 	const [panelOpen, setPanelOpen] = React.useState(false);
@@ -229,7 +237,7 @@ function CartColumn({
 								testID="cart-empty"
 								title={t('pos_cart.empty_cart_hint')}
 							/>
-							{overdue && (
+							{overdue && canManageCash && (
 								<Button
 									testID="checkout-close-register"
 									size="lg"
@@ -261,7 +269,7 @@ function CartColumn({
 								</ErrorBoundary>
 								<CartFoot
 									onOpenRegister={() => setPickingRegister(true)}
-									onCloseRegister={() => requestRegisterPanel()}
+									onCloseRegister={canManageCash ? () => requestRegisterPanel() : undefined}
 									onOpenSheet={() => setEditingOrder(currentOrderRecord)}
 								/>
 							</View>
