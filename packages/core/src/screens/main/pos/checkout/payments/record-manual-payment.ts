@@ -71,8 +71,8 @@ export interface RecordManualPaymentDeps {
 	 * cash (Codex 4342921641 on #2832).
 	 */
 	unansweredRecord?: () => Promise<PaymentRow | null>;
-	/** The row as the resident's ledger now holds it, and the resident's status: read when another sender settled this record. */
-	settledRecord?: (rowId: string) => Promise<{ row: PaymentRow; status: string | null } | null>;
+	/** The row as the resident's ledger now holds it, the resident's status, and `order` (that status plus the resident's ledger-derived figures; `null` without a status): read when another sender settled this record. */
+	settledRecord?: (rowId: string) => Promise<(Answered & { status: string | null }) | null>;
 	/** Mirror the answered row onto the latest resident; never rejects, a failure is `{ cause }`. */
 	mirror: (
 		answer: { payment: PaymentRow; status?: string },
@@ -209,7 +209,8 @@ export async function recordManualPayment(
 					{ payment: settled.row, ...status },
 					{ accepted: true }
 				);
-				return { kind: 'recorded', via: 'online', row: settled.row, order: null, notMirrored };
+				const summary = settled.order ?? null;
+				return { kind: 'recorded', via: 'online', row: settled.row, order: summary, notMirrored };
 			}
 			// Refused before it left the till (the pre-flight failed, no revision, the order
 			// changed): nothing was sent, so it is terminal, never the unknown re-send path.

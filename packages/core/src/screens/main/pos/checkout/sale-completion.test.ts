@@ -382,6 +382,29 @@ it.each([
 			mockReconcile.mock.invocationCallOrder[0]
 		);
 });
+// Codex r4543471493 on #3513: a record another sender settled carries the resident's summary, so
+// a press that predicted a partial payment completes when the store's ledger cleared the balance.
+it('a settled-elsewhere record predicted partial whose order clears the balance completes: audit and stock refresh run (POS-31A)', async () => {
+	const summary: OrderPaymentSummary = {
+		status: 'completed',
+		total: '100.00',
+		paid: '100.00',
+		balance: '0.00',
+		payment_method: 'pos_cash',
+		payment_method_title: 'Cash',
+	};
+	const settled = { ...manual, remainingMinor: 500 } as const;
+	const modal = { host: 'modal', autoPrintReceipt: false } as const;
+
+	// Without the summary the press's prediction decides: a partial sale, nothing finished.
+	expect(await completeSale(ctx, order, { ...settled, order: null }, modal)).toBe('partial');
+	expect(mockReconcile).not.toHaveBeenCalled();
+	expect(mockActionLog).not.toHaveBeenCalled();
+
+	expect(await completeSale(ctx, order, { ...settled, order: summary }, modal)).toBe('completed');
+	expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
+	expect(mockActionLog).toHaveBeenCalledTimes(1);
+});
 describe("the poster's post-answer adoption stands in for the completion's refresh", () => {
 	const settled = [
 		manual,
