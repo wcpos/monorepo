@@ -135,13 +135,24 @@ env:
     repeat: 19
     delay: 200
 - evalScript: ${output.burstTappedAt = Date.now()}
+# Phones only (tablets show the cart beside the products, no tab strip). Runs
+# 43074681482 and 43086880258 (iOS phone): all twenty adds landed (both badges
+# 20), but a single `when visible: pos-tab-cart` look on the busy screen was
+# SKIPPED, so the cart was never shown. The retry executes 3 times
+# (maxRetries 2 + 1); worst case ~3 x 10 s, well inside the flow budget.
 - runFlow:
     when:
-      visible:
-        id: "pos-tab-cart"
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
     commands:
-      - tapOn:
-          id: "pos-tab-cart"
+      - retry:
+          maxRetries: 2
+          commands:
+            - tapOn:
+                id: "pos-tab-cart"
+            - extendedWaitUntil:
+                visible:
+                  id: "cart-quantity-input"
+                timeout: 10000
 # optional here so the numbers are logged before the hard assertion below.
 - extendedWaitUntil:
     visible:

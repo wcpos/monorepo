@@ -3468,6 +3468,53 @@ test('the Android suite keeps adb reverse alive for the life of the run', () => 
 	assert.doesNotMatch(lines[refresher], /\\$/);
 });
 
+test('the Android suite samples emulator load and the app view tree for the life of the run', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const lines = (step.with?.script ?? step.run).split('\n');
+	const refresher = lines.findIndex(
+		(line) => line.startsWith('nohup sh -c') && line.includes('adb reverse tcp:8081 tcp:8081')
+	);
+	const sampler = lines.findIndex(
+		(line) => line.startsWith('nohup sh -c') && line.includes('android-sampler.log')
+	);
+	const suite = lines.findIndex((line) => line.startsWith('{ maestro test'));
+	assert.ok(sampler >= 0, 'missing the Android load sampler loop');
+	assert.ok(sampler > refresher, 'the sampler starts after the adb reverse refresher');
+	assert.ok(sampler < suite, 'the sampler must start before the suite');
+	// FINDINGS e2e-native-red-2026-11-11 §Harness: 5–12 s hierarchy dumps on the
+	// POS screen; the log tells tree size (app) from emulator CPU (runner).
+	assert.match(lines[sampler], /top -b -n 1 -m 8/);
+	assert.match(lines[sampler], /dumpsys activity top/);
+	assert.match(lines[sampler], /stop-screenrecord/);
+	// Maestro's driver holds the one UiAutomation connection; a second client
+	// is refused or disturbs it mid-flow.
+	assert.doesNotMatch(lines[sampler], /uiautomator/);
+	// ONE line, no continuation backslash (the action runs the script line by line).
+	assert.doesNotMatch(lines[sampler], /\\$/);
+});
+
+test('flow 10 switches to the cart tab with a retried tap on phones', () => {
+	const flow = readMaestroFlow('10-cart-add-burst.yml');
+	const tapped = flow.findIndex(
+		(step) => typeof step?.evalScript === 'string' && step.evalScript.includes('burstTappedAt')
+	);
+	assert.ok(tapped >= 0, 'missing the burstTappedAt evalScript');
+	// Runs 43074681482 and 43086880258 (iOS phone): all twenty adds landed, but
+	// a single `when visible` look SKIPPED the tab switch on the busy screen.
+	const { runFlow } = flow[tapped + 1];
+	assert.ok(runFlow, 'the step after burstTappedAt must be a runFlow');
+	assert.match(runFlow.when.true, /DEVICE_CLASS === 'phone'/);
+	assert.equal(runFlow.when.visible, undefined);
+	const { retry } = runFlow.commands[0];
+	assert.equal(retry.maxRetries, 2);
+	assert.deepEqual(retry.commands[0], { tapOn: { id: 'pos-tab-cart' } });
+	assert.equal(retry.commands[1].extendedWaitUntil?.visible?.id, 'cart-quantity-input');
+});
+
 test('the Android emulator resolves DNS through public resolvers and proves connectivity before the suite', () => {
 	const step = findStep(
 		readWorkflow('e2e-native.yml'),
