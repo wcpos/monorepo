@@ -37,6 +37,7 @@ import {
 	type ScopeBound,
 	type StoreScopeManager,
 	type SyncObserver,
+	webCryptoUuid,
 	wooIdOf,
 } from '@wcpos/sync-core';
 
@@ -57,6 +58,7 @@ import {
 	isCouponReferenceOrderby,
 	isTermReferenceOrderby,
 	laneKeyFor,
+	mintSchedulerOwnerId,
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	orderBrowserQueryKey,
 	parseCustomerBrowseWindowDescriptor,
@@ -530,6 +532,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// pulls on first open, remount churn within the window still costs nothing,
 	// and maintenance completions never count.
 	const lastDemandReferencePullMs = new Map<string, number>();
+	// One scheduler owner per plane, carrying this runtime's boot id, so the next launch can tell
+	// a claim this plane left behind when it was killed from a live owner's (#3500). Minted on the
+	// first drain, not at construction: a read-only engine may open on a host without Web Crypto.
+	let schedulerOwnerId: string | null = null;
 	let seq = 0;
 	// Two lanes, each one execution at a time. A typed search must not queue behind the
 	// boot window or a refresh (live runs: >10 s with no search request on a slow host).
@@ -886,7 +892,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					db: schedulerDb,
 					coverage,
 					baseUrl: deps.syncBaseUrl,
-					ownerId: 'require-plane',
+					ownerId: (schedulerOwnerId ??= mintSchedulerOwnerId('require-plane', webCryptoUuid)),
 					...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 					...(deps.exactSkuLeg !== undefined ? { exactSkuLeg: deps.exactSkuLeg } : {}),
 					fetcher: schedulerFetcher,

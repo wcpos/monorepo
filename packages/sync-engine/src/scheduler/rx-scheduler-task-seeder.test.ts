@@ -1,10 +1,11 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	type SchedulerTaskSeederRepository,
 	seedPersistedSchedulerTasks,
 } from './rx-scheduler-task-seeder';
+import { __resetSchedulerBootIdForTests, mintSchedulerOwnerId } from './scheduler-owner-id';
 
 import type { RerunOrReseedOutcome } from './rx-scheduler-task-state-repository';
 import type { PersistedSchedulerTaskState } from './persisted-scheduler-state';
@@ -443,5 +444,132 @@ describe('seedPersistedSchedulerTasks', () => {
 			rerunRequested: 0,
 			taskIds: ['orders:in-flight'],
 		});
+	});
+});
+
+/**
+ * A repository holding rows, whose claim is a compare-and-set against the stored row (the
+ * shape of the real guarded write), so "the stored row" can be read back after the seed.
+ */
+function storedRepository(rows: PersistedSchedulerTaskState[]) {
+	const stored = new Map(rows.map((row) => [row.taskId, { ...row }]));
+	const repo: SchedulerTaskSeederRepository = {
+		readForTaskIds: vi.fn(async (taskIds: string[]) =>
+			taskIds.flatMap((taskId) => {
+				const row = stored.get(taskId);
+				return row ? [{ ...row }] : [];
+			})
+		),
+		claimNew: vi.fn(async () => true),
+		claim: vi.fn(async (expected, next) => {
+			if (JSON.stringify(stored.get(expected.taskId)) !== JSON.stringify(expected)) return false;
+			stored.set(next.taskId, { ...next });
+			return true;
+		}),
+		requestRerunOrReseed: vi.fn(async () => 'rerun-requested' as const),
+	};
+	return { repo, stored };
+}
+
+describe('seedPersistedSchedulerTasks: in-flight rows a killed launch left behind (#3500)', () => {
+	const uuid = () => globalThis.crypto.randomUUID();
+	const taskId = 'orders:in-flight';
+	const requirementId = 'orders.in-flight';
+
+	afterEach(() => __resetSchedulerBootIdForTests());
+
+	function inFlightRow(ownerId: string, claimedUntilMs: number) {
+		return state({
+			taskId,
+			requirementId,
+			status: 'in-flight',
+			ownerId,
+			claimedUntilMs,
+			attempt: 1,
+		});
+	}
+
+	function seed(repo: SchedulerTaskSeederRepository) {
+		return seedPersistedSchedulerTasks({
+			repository: repo,
+			tasks: [task({ id: taskId, requirementId })],
+			nowMs: 10_000,
+			completedDedupeForMs: 0,
+		});
+	}
+
+	it('(a) re-queues a row whose owner comes from another boot, while its lease is still live', async () => {
+		const deadOwner = mintSchedulerOwnerId('require-plane', uuid);
+		__resetSchedulerBootIdForTests();
+		mintSchedulerOwnerId('require-plane', uuid);
+		const { repo, stored } = storedRepository([inFlightRow(deadOwner, 40_000)]);
+
+		const result = await seed(repo);
+
+		expect(result.requeued).toBe(1);
+		expect(result.skippedActive).toBe(0);
+		expect(stored.get(taskId)).toMatchObject({
+			status: 'queued',
+			ownerId: null,
+			claimedUntilMs: null,
+			attempt: 1,
+		});
+	});
+
+	it('(b) skips a row whose owner comes from this boot while its lease is live', async () => {
+		const row = inFlightRow(mintSchedulerOwnerId('require-plane', uuid), 40_000);
+		const { repo, stored } = storedRepository([row]);
+
+		const result = await seed(repo);
+
+		expect(result.skippedActive).toBe(1);
+		expect(result.requeued).toBe(0);
+		expect(repo.claim).not.toHaveBeenCalled();
+		expect(stored.get(taskId)).toEqual(row);
+	});
+
+	it('(c) skips a legacy constant-owner row while its lease is live', async () => {
+		mintSchedulerOwnerId('require-plane', uuid);
+		const row = inFlightRow('require-plane', 40_000);
+		const { repo, stored } = storedRepository([row]);
+
+		const result = await seed(repo);
+
+		expect(result.skippedActive).toBe(1);
+		expect(repo.claim).not.toHaveBeenCalled();
+		expect(stored.get(taskId)).toEqual(row);
+	});
+
+	it.each([
+		['a legacy owner', () => 'require-plane'],
+		['an owner from this boot', () => mintSchedulerOwnerId('require-plane', uuid)],
+	])(
+		'(d) re-queues a row whose lease has expired, whatever the owner (%s)',
+		async (_name, owner) => {
+			const { repo, stored } = storedRepository([inFlightRow(owner(), 10_000)]);
+
+			const result = await seed(repo);
+
+			expect(result.requeued).toBe(1);
+			expect(result.skippedActive).toBe(0);
+			expect(stored.get(taskId)).toMatchObject({ status: 'queued', ownerId: null });
+		}
+	);
+
+	it('(e) counts claimLost when the row changes between the read and the re-queue', async () => {
+		const { repo, stored } = storedRepository([inFlightRow('owner-a', 9_000)]);
+		const read = repo.readForTaskIds;
+		repo.readForTaskIds = vi.fn(async (taskIds: string[]) => {
+			const rows = await read(taskIds);
+			// A live owner heartbeats its lease after our read.
+			stored.set(taskId, { ...stored.get(taskId)!, claimedUntilMs: 40_000 });
+			return rows;
+		});
+
+		const result = await seed(repo);
+
+		expect(result.claimLost).toBe(1);
+		expect(result.requeued).toBe(0);
+		expect(stored.get(taskId)).toMatchObject({ status: 'in-flight', claimedUntilMs: 40_000 });
 	});
 });
