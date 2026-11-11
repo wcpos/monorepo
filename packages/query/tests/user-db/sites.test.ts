@@ -16,8 +16,10 @@ import '@wcpos/database/plugins';
 import { userCollections } from '@wcpos/database/collections';
 
 import {
+	clearSitePluginVersions,
 	connectionAddressOf,
 	linkCredentialsToSite,
+	SiteRemovedError,
 	stripLocalOnlySiteFields,
 	upsertSiteData,
 } from '../../src/user-db/sites';
@@ -235,6 +237,34 @@ describe('upsertSiteData', () => {
 		const final = await sites().findOne(SITE_UUID).exec();
 		expect(final!.wp_credentials).toEqual(['cred-1', 'cred-2']);
 		expect(final!.name).toBe('Renamed');
+	});
+});
+
+describe('clearSitePluginVersions', () => {
+	it('empties both saved plugin versions and keeps the rest of the site', async () => {
+		await upsertSiteData(
+			db,
+			parse(
+				restResponse({ wcpos_version: '1.11.4', wcpos_pro_version: '1.11.4', wp_version: '6.9' })
+			)
+		);
+		const site = await sites().findOne(SITE_UUID).exec();
+
+		await clearSitePluginVersions(site!);
+
+		const final = await sites().findOne(SITE_UUID).exec();
+		expect(final!.wcpos_version).toBe('');
+		expect(final!.wcpos_pro_version).toBe('');
+		expect(final!.wp_version).toBe('6.9');
+		expect(final!.name).toBe('Pro WCPOS');
+	});
+
+	it('throws SiteRemovedError on a removed site', async () => {
+		await upsertSiteData(db, parse(restResponse({ wcpos_version: '1.11.4' })));
+		const site = await sites().findOne(SITE_UUID).exec();
+		await site!.getLatest().remove();
+
+		await expect(clearSitePluginVersions(site!)).rejects.toBeInstanceOf(SiteRemovedError);
 	});
 });
 

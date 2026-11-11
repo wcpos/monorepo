@@ -278,6 +278,24 @@ export async function recordSiteInfo(
 	}
 }
 
+/**
+ * Forget the saved WCPOS free and Pro plugin versions, and nothing else on the site. The next
+ * mount's `useSiteInfo`, or the next embedded boot payload, writes the store's real version
+ * back. An empty version never shows the plugin gate.
+ */
+export async function clearSitePluginVersions(
+	site: ReadonlySiteRecord | SiteDocument
+): Promise<void> {
+	const document = site as SiteDocument;
+	if (document.getLatest().deleted) throw new SiteRemovedError();
+	try {
+		await document.incrementalPatch({ wcpos_version: '', wcpos_pro_version: '' });
+	} catch (error) {
+		if (document.getLatest().deleted) throw new SiteRemovedError();
+		throw error;
+	}
+}
+
 export async function migrateSiteApiUrl(
 	site: ReadonlySiteRecord | SiteDocument,
 	apiURL: string

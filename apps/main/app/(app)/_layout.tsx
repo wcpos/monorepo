@@ -8,7 +8,6 @@ import { PortalHost } from '@wcpos/components/portal';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { useT } from '@wcpos/core/contexts/translations';
 import { registerEngineScopeSwitcher } from '@wcpos/core/contexts/app-state/engine-scope-port';
-import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
 import { useUpdateRequired } from '@wcpos/core/hooks/use-update-required';
@@ -28,7 +27,7 @@ import { NewCustomerLinkBridge } from '@wcpos/core/screens/main/pos/cart/new-cus
 import { TerminalPaymentsBridge } from '@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge';
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
-import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
+import { CompatGate } from '@wcpos/core/screens/main/compat-gate';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { RasterizeProvider } from '@wcpos/printer';
@@ -249,7 +248,7 @@ function AppStack() {
 				<SearchMetaKeysBridge />
 				<SearchWarmupBridge />
 				<UISettingsProvider>
-					<CompatGate>
+					<CompatGate site={site}>
 						<UpdateRequiredGate site={wpApiUrl}>
 							<ScanHubProvider>
 								<View
@@ -305,16 +304,6 @@ function AppStack() {
 }
 
 /**
- * The plugin-version compatibility gate. It lives BELOW the engine + QueryProvider
- * (inside AppStack) so that toggling it — the `wcposVersion` (useSiteInfo) and
- * `wcposVersionPass` (useAppInfo) values settle on separate async timelines and
- * transiently disagree during boot — only swaps the gated CONTENT and never
- * unmounts the engine. Previously this gate early-returned in AppLayout, above
- * AppStack, so the toggle remounted AppStack and constructed the engine twice; the
- * second construction collided on the already-open RxDatabase (multiInstance:false)
- * and its scope never became ready, leaving every binding reading an empty engine.
- */
-/**
  * The mirror of CompatGate: the server's protocol-gate refusal
  * (wcpos_update_required — this APP is older than the store's plugin
  * requires). Same placement rule: below the engine + QueryProvider, so
@@ -327,14 +316,6 @@ function UpdateRequiredGate({ site, children }: { site: string; children: React.
 	const state = useUpdateRequired(site);
 	if (state) {
 		return <UpdateRequired />;
-	}
-	return <>{children}</>;
-}
-
-function CompatGate({ children }: { children: React.ReactNode }) {
-	const { compatibility, site: siteVersionInfo } = useAppInfo();
-	if (siteVersionInfo?.wcposVersion && !compatibility?.wcposVersionPass) {
-		return <UpgradeRequired />;
 	}
 	return <>{children}</>;
 }
