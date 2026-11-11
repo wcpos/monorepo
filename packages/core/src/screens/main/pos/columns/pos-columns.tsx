@@ -18,6 +18,7 @@ import { useCurrentOrder } from '../contexts/current-order';
 import { useCheckoutMode, useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { ReceiptStage } from '../checkout/receipt-stage/receipt-stage';
 import { CheckoutColumn } from '../checkout/column/checkout-column';
+import { TenderScans } from './tender-scans';
 
 import type { ReadonlyView, SlotContracts } from '../../../../extensions/slots';
 
@@ -142,6 +143,8 @@ export function POSColumns() {
 														key={currentOrderRecord.uuid}
 														order={currentOrderRecord as EngineRecord<'orders'>}
 													/>
+													{/* The POS owns scans at checkout too (#1438, #3506); never at the paid receipt. */}
+													{stage === 'checkout' ? <TenderScans /> : null}
 												</EdgeSurface>
 											) : (
 												// The products column's edge facing the cart keeps no inset: the handle

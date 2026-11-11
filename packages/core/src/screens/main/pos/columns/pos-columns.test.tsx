@@ -42,6 +42,11 @@ jest.mock('@wcpos/query', () => ({
 // The real registration module populates the real slot registry with these panels.
 jest.mock('../cart', () => ({ OpenOrders: () => <div data-testid="open-orders-strip" /> }));
 jest.mock('../products', () => ({ POSProducts: () => <div data-testid="products" /> }));
+// `POSProducts` is mocked above, so every call here is `TenderScans`'s.
+const mockUseBarcode = jest.fn();
+jest.mock('../products/use-barcode', () => ({
+	useBarcode: (...args: unknown[]) => mockUseBarcode(...args),
+}));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'a', isNew: mockIsNew, payload: {} } }),
 }));
@@ -240,6 +245,55 @@ it('shows the current paid order its receipt column before any selection', () =>
 	render(<POSColumns />);
 	expect(screen.getByTestId('checkout-receipt-stage').textContent).toBe('a');
 	expect(screen.queryByTestId('checkout-tender-pane')).toBeNull();
+});
+
+// #1438, #3506: the POS owns scans; the checkout column takes them while the products pane is away.
+describe('one scan consumer per stage', () => {
+	beforeEach(() => {
+		mockUseBarcode.mockClear();
+		mockIsNew = false;
+		mockReceipt = null;
+		mockAutoShow = true;
+	});
+	it('the checkout column takes scans; the cart stage leaves them to the products pane', () => {
+		mockStage = 'cart';
+		const view = render(<POSColumns />);
+		expect(screen.getByTestId('products')).not.toBeNull();
+		expect(mockUseBarcode).not.toHaveBeenCalled();
+		mockStage = 'checkout';
+		view.rerender(<POSColumns />);
+		expect(screen.queryByTestId('products')).toBeNull();
+		expect(screen.getByTestId('checkout-tender-pane')).not.toBeNull();
+		expect(mockUseBarcode).toHaveBeenCalled();
+		mockUseBarcode.mockClear();
+		mockStage = 'cart';
+		view.rerender(<POSColumns />);
+		expect(mockUseBarcode).not.toHaveBeenCalled();
+	});
+	it.each([true, false])('never at the receipt stage: autoShow=%s', (autoShow) => {
+		mockAutoShow = autoShow;
+		mockStage = 'receipt';
+		render(<POSColumns />);
+		expect(mockUseBarcode).not.toHaveBeenCalled();
+	});
+	it('never under a selected receipt, even while the order is in checkout', () => {
+		mockStage = 'checkout';
+		mockReceipt = 'paid-order';
+		render(<POSColumns />);
+		expect(screen.getByTestId('checkout-receipt-stage')).not.toBeNull();
+		expect(mockUseBarcode).not.toHaveBeenCalled();
+	});
+	it('leaves the scan consumer when the open tender is paid with receipts off', () => {
+		mockAutoShow = false;
+		mockStage = 'checkout';
+		const view = render(<POSColumns />);
+		expect(mockUseBarcode).toHaveBeenCalled();
+		mockUseBarcode.mockClear();
+		mockStage = 'receipt';
+		view.rerender(<POSColumns />);
+		expect(screen.getByTestId('checkout-tender-pane')).not.toBeNull();
+		expect(mockUseBarcode).not.toHaveBeenCalled();
+	});
 });
 
 it.each([false, true])('uses the trait for column transitions: tear=%s', (tear) => {
