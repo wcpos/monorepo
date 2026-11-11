@@ -6,6 +6,7 @@ import {
 	isFastStoreDatabaseName,
 	isKnownAppDatabaseName,
 	isLegacyAppDatabaseName,
+	isLegacyUserDatabaseName,
 	isStoreDatabaseName,
 	LEGACY_FAST_STORE_PREFIXES,
 	LEGACY_STORE_PREFIXES,
@@ -156,6 +157,28 @@ describe('database name helpers', () => {
 		expect(isKnownAppDatabaseName('wcposusers_v14')).toBe(true);
 		expect(isKnownAppDatabaseName('random-db')).toBe(false);
 		expect(containsScopeDatabaseName('random-db')).toBe(false);
+	});
+
+	it.each([
+		'wcposusers_v6',
+		'rxdb-wcposusers_v6',
+		'rxdb-dexie-wcposusers_v4--0--stores',
+		'wcposusers_v9.db',
+		'wcposusers_v8-wal',
+	])('names %s a retired user database', (name) => {
+		expect(isLegacyUserDatabaseName(name)).toBe(true);
+	});
+
+	it.each([
+		'wcposusers_v10',
+		'rxdb-wcposusers_v10',
+		'wcposusers_v20',
+		'store_v6_abc',
+		'fast_store_v6_x',
+		'pos_v9_0123456789ab_s1_c2',
+		'',
+	])('does not name %p a retired user database', (name) => {
+		expect(isLegacyUserDatabaseName(name)).toBe(false);
 	});
 
 	it('classifies scope databases for both web storage filters', () => {

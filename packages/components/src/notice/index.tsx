@@ -10,7 +10,14 @@ import { cn } from '../lib/utils';
 import { Text } from '../text';
 import { VStack } from '../vstack';
 
-type NoticeAction = { label: string; onPress: () => void; testID?: string; loading?: boolean };
+type NoticeAction = {
+	label: string;
+	onPress: () => void;
+	testID?: string;
+	loading?: boolean;
+	/** the band's leading action: accent text, so it reads as the thing to do */
+	primary?: boolean;
+};
 type NoticeActions = readonly [NoticeAction] | readonly [NoticeAction, NoticeAction];
 /** One line of a list the band carries (one refused sale, say), with its own actions. */
 type NoticeItem = { id: string; text: string; actions: NoticeActions };
@@ -127,7 +134,10 @@ function NoticeButton({ action, testID }: { action: NoticeAction; testID?: strin
 			loading={action.loading}
 			onPress={action.onPress}
 		>
-			<ButtonText numberOfLines={0} className="web:whitespace-normal text-clip">
+			<ButtonText
+				numberOfLines={0}
+				className={cn('web:whitespace-normal text-clip', action.primary && 'text-primary')}
+			>
 				{action.label}
 			</ButtonText>
 		</Button>

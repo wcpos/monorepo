@@ -30,6 +30,10 @@
 			"browser": "./src/platform/index.web.ts",
 			"default": "./src/platform/index.ts"
 		},
+		"./scanner-reset-notice": {
+			"browser": "./src/scanner-reset-notice.web.ts",
+			"default": "./src/scanner-reset-notice.ts"
+		},
 		"./*": "./src/*"
 	},
 	"files": [

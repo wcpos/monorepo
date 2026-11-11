@@ -34,6 +34,7 @@ import { useRegisterSession } from '../../../../services/register-session/use-re
 import { RegisterBar } from './register-bar';
 import { requestRegisterPanel } from './register-panel-request';
 import { SessionHoldBanner } from '../../components/session-hold-banner';
+import { ScannerResetNotice } from '../../components/scanner-reset-notice';
 import { RegisterPicker } from './register-picker';
 import { RegisterGateCard } from './register-gate-card';
 import {
@@ -188,6 +189,7 @@ function CartColumn({
 			{tear && <ReceiptEdge />}
 			<RegisterBar panelOpen={panelOpen} onPanelOpenChange={setPanelOpen} />
 			<SessionHoldBanner gutter="dense" />
+			<ScannerResetNotice gutter="dense" />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					(

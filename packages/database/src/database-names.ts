@@ -78,6 +78,15 @@ export const isFastStoreDatabaseName = (value: string) =>
 export const isLegacyAppDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, LEGACY_APP_DATABASE_PREFIXES) ||
 	(containsLegacyScopeDatabaseName(value) && !containsDrainableScopeDatabaseName(value));
+// A retired user DB entry. Storages wrap the name, so containment; a following digit means a
+// different generation (`wcposusers_v2` is not `wcposusers_v20`).
+export const isLegacyUserDatabaseName = (value: string) =>
+	LEGACY_USER_DATABASE_NAMES.some((name) => {
+		for (let at = value.indexOf(name); at !== -1; at = value.indexOf(name, at + 1)) {
+			if (!/\d/.test(value.charAt(at + name.length))) return true;
+		}
+		return false;
+	});
 export const isKnownAppDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, APP_DATABASE_PREFIXES);
 /**

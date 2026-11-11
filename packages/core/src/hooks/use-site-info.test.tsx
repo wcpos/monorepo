@@ -66,6 +66,17 @@ describe('useSiteInfo', () => {
 		mockIncrementalPatch.mockResolvedValue(undefined);
 	});
 
+	it('cache-busts the site-info GET, so a cached 1.x index answer cannot be written back (AUTH331)', async () => {
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+
+		const params = mockGet.mock.calls[0]?.[1]?.params;
+		expect(params).toMatchObject({ wcpos: 1 });
+		expect(typeof params._wcpos_nocache).toBe('string');
+		expect(params._wcpos_nocache).not.toBe('');
+	});
+
 	it('preserves the saved license when the site-info response omits it', async () => {
 		renderHook(() => useSiteInfo({ site: mockSite as never }));
 
