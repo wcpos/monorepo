@@ -578,6 +578,7 @@ it.each([
 						closed_at_gmt: '2026-09-17T12:00:00Z',
 						closure_id: 'session',
 						sync_status: 'pending',
+						counted: { cash: '120' },
 					}
 				: {}),
 		});
@@ -618,6 +619,7 @@ it('replays a closed session using the stored note and denominations', async () 
 		status: 'closed',
 		closure_id: 'session',
 		sync_status: 'pending',
+		counted: { cash: '100' },
 		count_note: 'Stored note',
 		count_denominations: [{ value: '50', pieces: 2 }],
 	});

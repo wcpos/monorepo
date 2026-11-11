@@ -11,11 +11,13 @@ export function DenominationTile({
 	value,
 	pieces,
 	add,
+	disabled,
 }: {
 	currencyOptions?: CurrencyFormatOptions;
 	value: string;
 	pieces: number;
 	add: (pieces: number) => void;
+	disabled?: boolean;
 }) {
 	const { format } = useCurrencyFormat(currencyOptions);
 	const held = React.useRef(false);
@@ -27,6 +29,7 @@ export function DenominationTile({
 		<Tile
 			testID={`den-tile-${value}`}
 			badge={pieces}
+			disabled={disabled}
 			accessibilityLabel={format(Number(value))}
 			// Web otherwise adds its default 50 ms press-in delay to the hold duration.
 			{...(Platform.OS === 'web' ? { delayPressIn: 0 } : {})}

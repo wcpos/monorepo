@@ -13,6 +13,7 @@ import { remoteIdOrNull, remoteKeyFor } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { type CloseContext, closeRegister } from '../../src/register-session/close';
+import { drainRegisterSessionQueue } from '../../src/register-session/queue';
 import {
 	readLiveSession,
 	readRegister,
@@ -384,6 +385,59 @@ describe('a second close while the first is still pending (POS-30F)', () => {
 			{ value: '50', pieces: 1, amount: '50.0000' },
 		]);
 	});
+
+	it('keeps only the tenders that differ', async () => {
+		await insert();
+		await closeRegister(ctx, 's1', { counted: { cash: '90', card: '50' } });
+		const { kept } = await closeRegister(ctx, 's1', { counted: { cash: '90.00', card: '40' } });
+		expect(kept).toEqual({ card: '50' });
+	});
+
+	// An interrupted close whose kept count has no cash closes again: never a cash figure nobody counted.
+	const uncounted = {
+		status: 'closed',
+		pending_status: 'closed',
+		sync_status: 'pending',
+		closed_at_gmt: '2026-10-28T17:00:00.000Z',
+		status_at: '2026-10-28T17:00:00.000Z',
+	} as const;
+	it('closes a kept count without cash again, the session and the closure on the entered count', async () => {
+		await insert({ ...uncounted, counted: { card: '10' }, closure_id: 's1' });
+		await closeRegister(ctx, 's1', { counted: { cash: '75' } });
+		expect({ session: (await session()).counted, closure: (await closureRow())?.counted }).toEqual({
+			session: { cash: '75' },
+			closure: { cash: '75' },
+		});
+	});
+
+	// The outbox's two payloads as one drain sends them: the session's status POST, then the closure.
+	const sent = async () => {
+		const http = { get: jest.fn(), post: jest.fn() };
+		http.post.mockImplementation(async (url: string, body: Record<string, unknown>) => ({
+			data:
+				url === 'closures' ? { ...body, number: 1 } : { ...(await session()), status: 'closed' },
+		}));
+		await drainRegisterSessionQueue({ storeDB, userDB, siteUuid: 'site', engine, http });
+		const counted = (path: string) =>
+			http.post.mock.calls.find(([url]) => url === path)?.[1].counted;
+		return { session: counted('sessions/s1/status'), closure: counted('closures') };
+	};
+	it.each([
+		['a reused close', { server_status: 'counting' }, { cash: '90' }],
+		[
+			'a kept count without cash',
+			{ ...uncounted, server_status: 'counting', counted: {} },
+			{ cash: '75' },
+		],
+	] as const)(
+		'the outbox sends one count for the session and the closure: %s',
+		async (_, patch, count) => {
+			await insert(patch);
+			if (!('status' in patch)) await closeRegister(ctx, 's1', { counted: { cash: '90' } });
+			await closeRegister(ctx, 's1', { counted: { cash: '75' } });
+			expect(await sent()).toEqual({ session: count, closure: count });
+		}
+	);
 });
 
 it('rejects a missing session with the domain error', async () => {

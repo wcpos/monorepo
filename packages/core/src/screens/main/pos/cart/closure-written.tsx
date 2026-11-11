@@ -18,8 +18,8 @@ import { useRegisterNames } from '../../../../services/register/use-register-nam
 
 export type ClosureCount = {
 	closure: ReadonlyClosureDocument;
-	/** The count a reused closed session kept, when the one just entered differed (POS-30F). */
-	kept: Record<string, string> | null;
+	/** Each tender a reused closed session kept, when the one just entered differed (POS-30F). */
+	kept: { tender: string; amount: string }[] | null;
 	counted: string;
 	expected: string;
 	blind: boolean;
@@ -49,11 +49,13 @@ export function ClosureWritten({ count, onDone }: { count: ClosureCount; onDone:
 			</DialogHeader>
 			<ScrollView className="min-h-0 flex-1" contentContainerClassName="gap-4 px-4">
 				{count.kept && (
-					<Notice
-						tone="info"
-						testID="closure-count-kept"
-						title={t('register.count_kept', { amount: format(Number(count.kept.cash)) })}
-					/>
+					<Notice tone="info" testID="closure-count-kept" title={t('register.count_kept')}>
+						{count.kept.map(({ tender, amount }) => (
+							<Text key={tender} className="text-muted-foreground">
+								{t('register.count_kept_tender', { tender, amount: format(Number(amount)) })}
+							</Text>
+						))}
+					</Notice>
 				)}
 				<ClosureBody
 					row={row}

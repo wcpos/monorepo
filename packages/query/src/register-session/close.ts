@@ -5,6 +5,7 @@ import { toMinor } from '@wcpos/order-math';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import { recordRegisterFact } from './audit';
+import { countRecorded } from './drawer-rules';
 import { recordLiveSession } from './register-document';
 import { settleSessionAccounting } from './reads';
 import {
@@ -37,11 +38,19 @@ export type CloseResult = {
 	kept: Record<string, string> | null;
 };
 
-/** Tender by tender in minor units: '100' is '100.00', and a tender one side lacks is zero. */
-const sameTenders = (a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>) =>
-	[...new Set([...Object.keys(a), ...Object.keys(b)])].every(
-		(method) => toMinor(a[method], 4) === toMinor(b[method], 4)
-	);
+/**
+ * The kept figure of each tender the entered count differs on, in minor units ('100' is '100.00',
+ * and a tender one side lacks is zero); `null` when none differs.
+ */
+function keptTenders(
+	kept: Readonly<Record<string, string>>,
+	entered: Readonly<Record<string, string>>
+) {
+	const differing = [...new Set([...Object.keys(kept), ...Object.keys(entered)])]
+		.filter((method) => toMinor(kept[method], 4) !== toMinor(entered[method], 4))
+		.map((method): [string, string] => [method, kept[method] ?? '0']);
+	return differing.length ? Object.fromEntries(differing) : null;
+}
 
 /**
  * Close the register, whole: the status transition, the wait for the session's accounting, the
@@ -58,7 +67,9 @@ export async function closeRegister(
 	if (!current) throw new RegisterSessionRequiredError();
 	// A retry of a refused close (#3304) closes again, so a corrected count reaches the status
 	// POST; closeSession holds it out of the outbox until the closure below is rewritten.
-	const reused = current.status === 'closed' && current.sync_status !== 'failed';
+	// A kept count without cash closes again like a fresh close: the row and the closure both take
+	// the entered count, never a cash figure nobody counted.
+	const reused = countRecorded(current);
 	const closed = reused
 		? current
 		: await closeSession(storeDB, sessionId, {
@@ -67,10 +78,9 @@ export async function closeRegister(
 				timezone: ctx.timezone,
 			});
 	// The store refuses a closure whose count differs from the closed session's (POS-30F).
-	// A kept count without cash falls back to the entered one: never a cash figure nobody counted.
-	const own = reused && typeof closed.counted?.cash === 'string' ? closed.counted : null;
+	const own = reused ? closed.counted : null;
 	const tenders = own ?? count.counted;
-	const kept = own && !sameTenders(own, count.counted) ? { ...own } : null;
+	const kept = own ? keptTenders(own, count.counted) : null;
 	const cashiers: { id?: number; display_name?: string }[] = await firstValueFrom(
 		observeSiteCredentials(ctx.site).pipe(filter((value) => value !== PENDING_USER_DB_READ))
 	);

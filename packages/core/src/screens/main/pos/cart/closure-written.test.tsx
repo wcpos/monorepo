@@ -165,18 +165,17 @@ jest.mock('@wcpos/components/icon', () => ({
 
 const count = () => ({
 	closure: mockClosure as never,
-	kept: null as Record<string, string> | null,
+	kept: null as { tender: string; amount: string }[] | null,
 	counted: '0',
 	expected: '0',
 	blind: false,
 });
 // POS-30F: a second count on a close still pending is not used; the cashier is told which one was.
-it('says which count was kept when the one just entered was not used, and only then', () => {
-	const view = render(
-		<ClosureWritten count={{ ...count(), kept: { cash: '90', card: '40' } }} onDone={jest.fn()} />
-	);
-	expect(screen.getByTestId('closure-count-kept-title').textContent).toBe(
-		'A count of £90.00 was already submitted for this close and has been kept. The count you just entered was not used.'
+it('says which count was kept, tender by tender, when the one just entered was not used, and only then', () => {
+	const kept = [{ tender: 'Card counted', amount: '50' }];
+	const view = render(<ClosureWritten count={{ ...count(), kept }} onDone={jest.fn()} />);
+	expect(screen.getByTestId('closure-count-kept').textContent).toBe(
+		'Your earlier count was kept. The count you just entered was not used.Card counted: £50.00'
 	);
 	view.rerender(<ClosureWritten count={count()} onDone={jest.fn()} />);
 	expect(screen.queryByTestId('closure-count-kept')).toBeNull();

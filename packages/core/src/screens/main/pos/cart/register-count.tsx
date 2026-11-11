@@ -29,7 +29,7 @@ import { Text } from '@wcpos/components/text';
 import { TileGrid } from '@wcpos/components/tile-grid';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
-import type { CloseResult } from '@wcpos/query/register-session';
+import { type CloseResult, countRecorded } from '@wcpos/query/register-session';
 
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
 import { recordRegisterFact, useRegisterActor } from '../../../../services/register-session/audit';
@@ -116,8 +116,11 @@ export function RegisterCount({
 			Object.entries(session?.counted ?? {}).filter(([method]) => method !== 'cash')
 		)
 	);
+	// An interrupted close's count is already written: closing again uses it, so it shows, locked.
+	const recorded = countRecorded(session);
 	// A refused close (#2016) starts from the count it kept, also when the refusal lands after the
-	// pane mounted: the close leaves no current session until the store answers.
+	// pane mounted: the close leaves no current session until the store answers. So does a recorded
+	// count, also when the session loads after the pane mounted.
 	const prefill = React.useEffectEvent(() => {
 		if (!session) return;
 		const kept = keptCount(session, lastClosure);
@@ -125,14 +128,14 @@ export function RegisterCount({
 		setOthers(
 			Object.fromEntries(Object.entries(kept.counted).filter(([method]) => method !== 'cash'))
 		);
-		if (kept.denominations)
-			setPieces(Object.fromEntries(kept.denominations.map(({ value, pieces }) => [value, pieces])));
+		const tiles = kept.denominations ?? (recorded ? (session.count_denominations ?? []) : null);
+		if (tiles) setPieces(Object.fromEntries(tiles.map(({ value, pieces }) => [value, pieces])));
 		if (kept.note !== undefined) noteForm.setValue('note', kept.note);
 	});
 	React.useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- the refusal is the store's async reply, often after mount; the kept count seeds editable state once per refusal, so it cannot be derived without overwriting the cashier's edits.
-		if (refusedClose) prefill();
-	}, [refusedClose]);
+		if (refusedClose || recorded) prefill();
+	}, [refusedClose, recorded]);
 	const [notesOpen, setNotesOpen] = React.useState(false);
 	const [tendersOpen, setTendersOpen] = React.useState(false);
 	const [approving, setApproving] = React.useState(false);
@@ -164,8 +167,25 @@ export function RegisterCount({
 	const countedDenominations = faces
 		.filter((value) => (pieces[value] ?? 0) > 0)
 		.map((value) => ({ value, pieces: pieces[value] }));
+	const tenderLabel = (method: string) =>
+		method === 'cash'
+			? t('register.cash_counted_float_included')
+			: method === 'card'
+				? t('register.card_counted')
+				: t('register.tender_counted', { method });
 	const completed = ({ closure, kept }: CloseResult) =>
-		onClosed({ closure, kept, counted: amount, expected: expected.cash ?? '0', blind });
+		onClosed({
+			closure,
+			kept:
+				kept &&
+				Object.entries(kept).map(([method, figure]) => ({
+					tender: tenderLabel(method),
+					amount: figure,
+				})),
+			counted: amount,
+			expected: expected.cash ?? '0',
+			blind,
+		});
 	const attempt = async (action: () => Promise<unknown>) => {
 		setBusy(true);
 		onBusyChange?.(true);
@@ -187,11 +207,15 @@ export function RegisterCount({
 		>
 			{/* The footer is this pane's Retry: it sends the count as edited here. */}
 			{refusedClose && <RefusedCloseNotice />}
-			<Text className="text-muted-foreground">{t('register.cash_counted_float_included')}</Text>
+			{recorded && (
+				<Notice tone="info" testID="count-recorded" title={t('register.count_recorded')} />
+			)}
+			<Text className="text-muted-foreground">{tenderLabel('cash')}</Text>
 			{/* The region: a blur leaving the field or a key for a target outside it collapses the keypad. */}
 			<View ref={regionRef} testID="count-entry" className="gap-4" onBlur={leaveRegion}>
 				<RegisterAmount
 					testID="count-amount"
+					editable={!recorded}
 					value={amount.replace('.', separator)}
 					onChangeText={(value) => {
 						setPieces({});
@@ -207,7 +231,7 @@ export function RegisterCount({
 							rows={[
 								...DIGIT_ROWS,
 								decimalRow(decimals > 0 ? separator : undefined, t('common.backspace')),
-							]}
+							].map((row) => row.map((key) => ({ ...key, disabled: recorded })))}
 							fit={phone ? 'shrink' : 'tile'}
 							testID="count"
 							onPress={(key) => {
@@ -324,6 +348,7 @@ export function RegisterCount({
 								key={value}
 								value={value}
 								pieces={pieces[value] ?? 0}
+								disabled={recorded}
 								add={(n) => {
 									setPieces((previous) => ({ ...previous, [value]: (previous[value] ?? 0) + n }));
 									setKeypadOpen(false);
@@ -333,6 +358,7 @@ export function RegisterCount({
 					</TileGrid>
 					<Button
 						testID="count-clear"
+						disabled={recorded}
 						variant="ghost"
 						className="self-end"
 						onPress={() => {
@@ -363,13 +389,10 @@ export function RegisterCount({
 					.filter((method) => method !== 'cash')
 					.map((method) => (
 						<View key={method} className="gap-2">
-							<Text>
-								{method === 'card'
-									? t('register.card_counted')
-									: t('register.tender_counted', { method })}
-							</Text>
+							<Text>{tenderLabel(method)}</Text>
 							<RegisterAmount
 								testID={`count-tender-${method}`}
+								editable={!recorded}
 								value={others[method] ?? ''}
 								onChangeText={(value) => setOthers({ ...others, [method]: value })}
 							/>
