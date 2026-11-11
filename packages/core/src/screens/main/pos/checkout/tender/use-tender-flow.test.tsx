@@ -1257,6 +1257,58 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it("a definitive store refusal of a cash record logs PAYMENT213 with the store's reason, never PAYMENT999", async () => {
+		const { RecordManualPaymentError } = jest.requireActual('../payments/record-manual-payment');
+		mockRecordManualPayment.mockRejectedValueOnce(
+			new RecordManualPaymentError(
+				'Payment method not found.',
+				'wcpos_payment_method_not_found',
+				404
+			)
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+
+		await act(async () => result.current.commands.takeTender());
+
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_refused_by_store',
+			expect.objectContaining({
+				code: 'PAYMENT213',
+				showToast: true,
+				toast: { title: 'pos_checkout.payment_refused_by_store' },
+				context: expect.objectContaining({
+					serverCode: 'wcpos_payment_method_not_found',
+					status: 404,
+				}),
+			})
+		);
+		expect(mockT).toHaveBeenCalledWith('pos_checkout.payment_refused_by_store', {
+			reason: 'Payment method not found.',
+		});
+		expect(mockError).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ code: 'PAYMENT999' })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ code: 'PAYMENT201' })
+		);
+	});
+
+	it('a plain Error thrown by the cash record still logs PAYMENT999', async () => {
+		mockRecordManualPayment.mockRejectedValueOnce(new Error('boom'));
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+
+		await act(async () => result.current.commands.takeTender());
+
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.objectContaining({ code: 'PAYMENT999', showToast: true })
+		);
+	});
+
 	it('a zero balance offline is refused with CHECKOUT101 and writes nothing', async () => {
 		mockPayload = { id: 42, total: '0.00', meta_data: [] };
 		mockOnlineStatus = 'offline';

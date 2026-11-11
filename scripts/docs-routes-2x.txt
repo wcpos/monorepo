@@ -75,6 +75,7 @@
 /error-codes/PAYMENT201
 /error-codes/PAYMENT211
 /error-codes/PAYMENT212
+/error-codes/PAYMENT213
 /error-codes/PAYMENT221
 /error-codes/PAYMENT301
 /error-codes/PAYMENT311

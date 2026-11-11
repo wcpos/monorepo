@@ -90,7 +90,7 @@ import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { type CheckoutHost, useLeaveCheckoutHost } from '../receipt-stage/use-finish-sale';
-import { useRecordManualPayment, useVoidPayments } from '../payments';
+import { RecordManualPaymentError, useRecordManualPayment, useVoidPayments } from '../payments';
 import { sweepDeadRounding } from '../payments/rounding-sweep';
 import { useGatewayPayment } from '../payments/use-gateway-payment';
 import {
@@ -1292,6 +1292,25 @@ export function useTenderFlow(
 						...orderContext,
 						method: method?.id ?? null,
 						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+				return;
+			}
+			if (error instanceof RecordManualPaymentError) {
+				// The store answered and refused (a definitive refusal writes nothing), so nothing
+				// was taken and the order is still open; never the generic "confirm it went through".
+				const sentence = t('pos_checkout.payment_refused_by_store', { reason: error.message });
+				logger.error(sentence, {
+					code: ERROR_CODES.PAYMENT_RECORD_REFUSED,
+					showToast: true,
+					// The catalogue summary has no slot for the store's reason, and the action text says to read it.
+					toast: { title: sentence },
+					context: {
+						...orderContext,
+						method: method?.id ?? null,
+						serverCode: error.code,
+						status: error.status ?? null,
+						error: error.message,
 					},
 				});
 				return;

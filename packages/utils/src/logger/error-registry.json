@@ -696,6 +696,27 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "PAYMENT213",
+		"symbol": "PAYMENT_RECORD_REFUSED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Nothing was taken and the order is still open. Read the store's reason before trying again.",
+		"retryPolicy": "manual",
+		"dataSafety": "no-impact",
+		"escalation": "site-admin",
+		"summary": "The store refused to record this payment. Nothing was taken.",
+		"docsBody": "The POS asked the store to record a payment (cash, card or another manual method) and the store refused. The store recorded nothing: no payment was taken, and the order is still open with its balance owing. The store's own reason is on the log row. \"Payment method not found\" means the store did not load this POS payment method, and a site administrator has to fix the store before the method can be used.",
+		"troubleshooting": [
+			"Read the store's reason on the toast or the log row.",
+			"The order is still open: take the payment again once the cause is fixed, or use a different payment method.",
+			"\"Payment method not found\" for POS Cash or POS Card on WCPOS 2.0.0: another plugin or the theme loaded the WooCommerce payment gateways before WCPOS added its own. The site administrator updates the WCPOS plugin once a fix is released; until then, support has a one-file fix.",
+			"Any other reason: the site administrator checks that the payment method is enabled in the WCPOS settings in WP Admin."
+		],
+		"logSources": ["network-inspector", "wp-admin-pos-logs"],
+		"evidence": "2026-11-10 Sentry errorCode:PAYMENT999 on wcpos-app@2.0.0: thirty 404 wcpos_payment_method_not_found refusals of POST /wcpos/v2/orders/<id>/payments were logged as PAYMENT999 \"confirm whether the payment went through\" although the store recorded nothing.",
+		"introducedIn": "2.0.1"
+	},
+	{
 		"code": "PAYMENT221",
 		"symbol": "PAYMENT_VOID_REFUSED",
 		"domain": "PAYMENT",

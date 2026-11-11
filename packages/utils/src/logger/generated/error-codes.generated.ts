@@ -31,6 +31,7 @@ export type ErrorCode =
 	| 'PAYMENT201'
 	| 'PAYMENT211'
 	| 'PAYMENT212'
+	| 'PAYMENT213'
 	| 'PAYMENT221'
 	| 'PAYMENT301'
 	| 'PAYMENT311'
@@ -430,6 +431,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Correct the details and send again, or take a different payment method.',
 		dataSafety: 'no-impact',
 		summary: 'The gateway did not accept this payment.',
+	},
+	PAYMENT213: {
+		code: 'PAYMENT213',
+		symbol: 'PAYMENT_RECORD_REFUSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			"Nothing was taken and the order is still open. Read the store's reason before trying again.",
+		dataSafety: 'no-impact',
+		summary: 'The store refused to record this payment. Nothing was taken.',
 	},
 	PAYMENT221: {
 		code: 'PAYMENT221',
@@ -1257,6 +1268,7 @@ export const ERROR_CODES = {
 	PAYMENT_OUTCOME_UNKNOWN: 'PAYMENT201',
 	PAYMENT_TERMINAL_REFUSED: 'PAYMENT211',
 	PAYMENT_GATEWAY_REFUSED: 'PAYMENT212',
+	PAYMENT_RECORD_REFUSED: 'PAYMENT213',
 	PAYMENT_VOID_REFUSED: 'PAYMENT221',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
 	REFUND_OUTCOME_UNKNOWN: 'PAYMENT311',
