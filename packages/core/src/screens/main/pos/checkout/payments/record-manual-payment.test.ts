@@ -591,6 +591,45 @@ describe('recordManualPayment', () => {
 		expect(deps.mirror).toHaveBeenCalledTimes(1);
 	});
 
+	// Sentry POS-31A: the recovery re-sent the lost record and settled it before the retry.
+	const settledElsewhere = (deps: ReturnType<typeof createDeps>, row: PaymentRow | null) => {
+		const sent = { sentAt: NOW, sentRevision: 'sha256:r1' } as never;
+		deps.post
+			.mockRejectedValueOnce(new Error('Network Error'))
+			.mockRejectedValueOnce(new MoneyCommandError('settled_elsewhere', sent));
+		deps.settledRecord = jest.fn(async () => (row ? { row, status: 'completed' } : null));
+		return recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
+	};
+
+	it('a retry whose record another sender settled lands the ledger row as recorded, never a refusal (POS-31A)', async () => {
+		const deps = createDeps();
+		const settledRow = { ...mintedCard, status: 'captured' as const };
+		const result = await settledElsewhere(deps, settledRow);
+
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: settledRow });
+		expect(deps.settledRecord).toHaveBeenCalledWith(mintedCard.id);
+		expect(deps.mirror).toHaveBeenCalledTimes(1);
+		expect(deps.mirror).toHaveBeenCalledWith(
+			{ payment: settledRow, status: 'completed' },
+			{ accepted: true }
+		);
+		expect(deps.raiseAttention).not.toHaveBeenCalled();
+	});
+
+	it('a retry whose record another sender settled, but whose settled row is missing, reads as unknown (POS-31A)', async () => {
+		const deps = createDeps();
+		const result = await settledElsewhere(deps, null);
+		expect(result).toMatchObject({ kind: 'unknown', row: { id: mintedCard.id } });
+		expect(deps.mirror).not.toHaveBeenCalled();
+	});
+
+	it('a retry whose record another sender settled, but whose settled row failed, reads as unknown (POS-31A)', async () => {
+		const deps = createDeps();
+		const result = await settledElsewhere(deps, { ...mintedCard, status: 'failed' });
+		expect(result).toMatchObject({ kind: 'unknown', row: { id: mintedCard.id } });
+		expect(deps.mirror).not.toHaveBeenCalled();
+	});
+
 	it('returns invalid for card tendered input without any side effect', async () => {
 		const deps = createDeps();
 

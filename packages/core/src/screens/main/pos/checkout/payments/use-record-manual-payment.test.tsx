@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
 
-import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+import { type PaymentMethodDescriptor, withLedger } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useRecordManualPayment } from './use-record-manual-payment';
@@ -417,6 +417,30 @@ it('replays the journaled unanswered record instead of minting a new row', async
 
 	expect(mockPost).toHaveBeenCalledTimes(1);
 	expect(mockPost.mock.calls[0][1].payment).toEqual(journaled);
+});
+
+// Sentry POS-31A: the recovery settled the record before the retry; its row is in the ledger.
+it('a retry whose record another sender settled lands the resident ledger row and status', async () => {
+	lane = 'online';
+	const settled = { id: 'payment-id', method_id: 'pos_cash', amount: '40.00', status: 'captured' };
+	const payload = order.payload as typeof order.payload & { status?: string };
+	payload.meta_data = withLedger(payload.meta_data, [settled as never]);
+	payload.status = 'completed';
+	const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+	mockPost
+		.mockRejectedValueOnce(new Error('Network Error'))
+		.mockRejectedValueOnce(Object.assign(new MoneyCommandError(), { reason: 'settled_elsewhere' }));
+	const { result } = renderHook(() => useRecordManualPayment());
+	const outcome = await act(() =>
+		result.current(order, method, { session: gateSession(), lane, amount: 40 })
+	);
+	delete payload.status;
+
+	expect(outcome).toMatchObject({ kind: 'recorded', via: 'online', row: settled });
+	expect(mockPost).toHaveBeenCalledTimes(2);
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({ changes: expect.objectContaining({ payment: settled }) })
+	);
 });
 
 it('awaits the provenance push before posting and mirrors only the answered row, never pre-command meta', async () => {

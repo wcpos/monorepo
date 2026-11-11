@@ -94,6 +94,12 @@ export function useRecordManualPayment(): (
 					);
 					return sent?.row ?? null;
 				},
+				// Another sender settled this record (POS-31A): its answer is in the resident's ledger.
+				settledRecord: async (rowId) => {
+					const latest = order.getLatest().payload;
+					const found = readLedger(latest.meta_data ?? []).find((r) => samePaymentId(r.id, rowId));
+					return found ? { row: cloneDeep(found), status: latest.status ?? null } : null;
+				},
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
 				registerId,

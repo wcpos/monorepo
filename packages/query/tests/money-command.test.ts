@@ -1042,6 +1042,48 @@ describe('moneyCommandPoster', () => {
 		expect(requires).toEqual([expect.objectContaining({ readopt: true })]);
 		expect(await chain()).toBeNull();
 	});
+
+	// Sentry POS-31A: the tender's unknown-answer loop re-calls the same poster after the recovery
+	// re-sent its record, got the 200 and settled it. A fresh freeze would mint new provenance under
+	// the same row id, which the store answers 422 wcpos_command_conflict.
+	const recordProvenance = () => {
+		let n = 0;
+		return jest.fn(async () => ({ register_id: 'reg', sale_time: `t${++n}` }));
+	};
+	const sentFor = (id: string) =>
+		sentBodies().filter((b) => (b.payment as { id?: string } | undefined)?.id === id).length;
+
+	it('a record retry after the recovery settled it neither freezes nor sends a second command (POS-31A)', async () => {
+		const provenance = recordProvenance();
+		const tender = poster({ provenance });
+		const body = { payment: cash('row-1', '10.00') };
+		store.modes = ['lose'];
+		await expect(tender('orders/5/payments', body)).rejects.toThrow();
+		await recover();
+		expect(store.rows.has('row-1')).toBe(true);
+
+		const sent = sentFor('row-1');
+		const retry = tender('orders/5/payments', body);
+		await expect(retry).rejects.toBeInstanceOf(MoneyCommandError);
+		await expect(retry).rejects.toMatchObject({ reason: 'settled_elsewhere' });
+		await expect(retry).rejects.not.toMatchObject({ phase: 'unsent' });
+		expect(provenance).toHaveBeenCalledTimes(1);
+		expect(sentFor('row-1')).toBe(sent);
+		expect(await entries()).toHaveLength(0);
+	});
+
+	it('a fresh poster for a record another sender settled still freezes and sends it (POS-31A)', async () => {
+		const provenance = recordProvenance();
+		const body = { payment: cash('row-1', '10.00') };
+		store.modes = ['lose'];
+		await expect(poster({ provenance })('orders/5/payments', body)).rejects.toThrow();
+		await recover();
+
+		const sent = sentFor('row-1');
+		await poster({ provenance })('orders/5/payments', body).catch(() => undefined);
+		expect(provenance).toHaveBeenCalledTimes(2);
+		expect(sentFor('row-1')).toBe(sent + 1);
+	});
 });
 
 describe('defer: a record journaled offline (ADR 0040 Decided 1)', () => {
