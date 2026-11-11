@@ -24,7 +24,7 @@ import { useUISettings } from '../../contexts/ui-settings';
 import { useBarcodeDetection } from '../../hooks/barcodes';
 import { useBarcodeSearch } from '../../hooks/barcodes/use-barcode-search';
 import { useActionContext } from '../hooks/use-action-context';
-import { showCountingNotice, useAddProduct } from '../hooks/use-add-product';
+import { showCountingNotice, showPriceCheckNotice, useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 import { useTillLocation } from '../use-till-location';
 import { resolveStock } from '../../components/product/resolve-stock';
@@ -118,7 +118,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
-	const { readCounting } = useActionContext();
+	const { readCounting, readPriceCheck } = useActionContext();
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
@@ -173,6 +173,10 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		// Refused before the lookup, so a scan during a count never reads as "not found" (#2001).
 		if (await readCounting()) {
 			showCountingNotice(t);
+			return;
+		}
+		if (await readPriceCheck()) {
+			showPriceCheckNotice(t);
 			return;
 		}
 		let results = await barcodeSearch(barcodeStr, event.symbology);
