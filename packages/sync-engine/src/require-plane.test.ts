@@ -1,9 +1,17 @@
 import { newRxError } from 'rxdb';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { createEngineHarness, remoteId, type SchedulerTaskStateDocument } from './testing';
+import {
+	createEngineHarness,
+	memoryEngineStorage,
+	remoteId,
+	type SchedulerTaskStateDocument,
+} from './testing';
 import { RxSchedulerTaskStateRepository } from './scheduler/rx-scheduler-task-state-repository';
+import { __resetSchedulerBootIdForTests } from './scheduler/scheduler-owner-id';
+
+import type { RxStorage } from 'rxdb';
 
 describe.each([false, true])('resident order refresh outcomes (dirty=%s)', (dirty) => {
 	it.each([
@@ -215,6 +223,138 @@ describe('forced resident refresh requires its own completion', () => {
 		} finally {
 			read.mockRestore();
 			await harness.dispose();
+		}
+	});
+});
+
+describe('a relaunch and the scheduler claims a killed launch left in flight (#3500)', () => {
+	afterEach(() => __resetSchedulerBootIdForTests());
+
+	const categoryPicker = {
+		id: 'category-picker',
+		collection: 'categories' as const,
+		kind: 'refresh' as const,
+	};
+	const isCategoryPull = (url: string) => new URL(url).pathname.endsWith('/products/categories');
+
+	/**
+	 * Launch A claims the categories lane and is stopped while its pull is on the wire. A killed
+	 * process never releases, so what it leaves on disk is the in-flight row captured mid-pull;
+	 * the harness can only stop cleanly (which settles the row), so the next launch restores
+	 * that captured row before it reads anything.
+	 */
+	async function launchAndKillMidWalk(storage: RxStorage<unknown, unknown>) {
+		setPremiumFlag();
+		let onWire!: () => void;
+		const entered = new Promise<void>((resolve) => (onWire = resolve));
+		let finishPull!: (response: Response) => void;
+		const pull = new Promise<Response>((resolve) => (finishPull = resolve));
+		const a = await createEngineHarness({
+			storage,
+			fetch: async (url) => {
+				if (!isCategoryPull(url)) return Response.json([]);
+				onWire();
+				return pull;
+			},
+		});
+		const handle = a.engine.require(categoryPicker);
+		await entered;
+		const row = await a
+			.collection<SchedulerTaskStateDocument>('schedulerTaskStates')
+			.findOne({ selector: { status: 'in-flight' } })
+			.exec();
+		if (!row) throw new Error('Launch A left no in-flight categories claim');
+		const claim = row.toJSON();
+		finishPull(Response.json([]));
+		await handle.ready.catch(() => undefined);
+		handle.release();
+		await a.dispose();
+		return { identity: a.identity, claim };
+	}
+
+	async function relaunch(
+		storage: RxStorage<unknown, unknown>,
+		launchA: Awaited<ReturnType<typeof launchAndKillMidWalk>>,
+		startAtMs?: number
+	) {
+		const { identity, claim } = launchA;
+		const b = await createEngineHarness({
+			storage,
+			identity,
+			...(startAtMs === undefined ? {} : { startAtMs }),
+			fetch: async () => Response.json([]),
+		});
+		const states = () => b.collection<SchedulerTaskStateDocument>('schedulerTaskStates');
+		const row = await states().findOne(claim.stateKey).exec();
+		await row!.incrementalPatch({
+			status: claim.status,
+			ownerId: claim.ownerId,
+			claimedUntilMs: claim.claimedUntilMs,
+			attempt: claim.attempt,
+			retryAfterMs: claim.retryAfterMs,
+			updatedAtMs: claim.updatedAtMs,
+		});
+		const categoryPulls = () => b.requests.filter((request) => isCategoryPull(request.url)).length;
+		const storedRow = async () => (await states().findOne(claim.stateKey).exec())!.toJSON();
+		return { b, categoryPulls, storedRow };
+	}
+
+	it('(f) a relaunch after a kill mid-walk takes the claim back before its lease expires', async () => {
+		const storage = memoryEngineStorage();
+		const launchA = await launchAndKillMidWalk(storage);
+		__resetSchedulerBootIdForTests(); // the relaunch is a fresh JS runtime
+		const { b, categoryPulls, storedRow } = await relaunch(storage, launchA);
+		try {
+			const handle = b.engine.require(categoryPicker);
+			await expect(handle.ready).resolves.toMatchObject({ action: 'fetched' });
+			handle.release();
+			expect(categoryPulls()).toBe(1);
+			// The injected clock never moved past A's lease.
+			expect(b.clock.now()).toBeLessThan(launchA.claim.claimedUntilMs!);
+			expect((await storedRow()).status).toBe('completed');
+		} finally {
+			await b.dispose();
+		}
+	});
+
+	it('(g) a second owner in the same runtime leaves a live claim alone', async () => {
+		const storage = memoryEngineStorage();
+		const launchA = await launchAndKillMidWalk(storage);
+		// No reset: B runs in A's runtime, so A's claim is a live owner's.
+		const { b, categoryPulls, storedRow } = await relaunch(storage, launchA);
+		try {
+			const handle = b.engine.require(categoryPicker);
+			await expect(handle.ready).resolves.toMatchObject({
+				action: 'released',
+				reason: 'categories refresh already in progress',
+			});
+			handle.release();
+			expect(categoryPulls()).toBe(0);
+			expect(await storedRow()).toMatchObject({
+				status: 'in-flight',
+				ownerId: launchA.claim.ownerId,
+			});
+		} finally {
+			await b.dispose();
+		}
+	});
+
+	it('(h) a claim whose lease has expired is reclaimed, even from this runtime', async () => {
+		const storage = memoryEngineStorage();
+		const launchA = await launchAndKillMidWalk(storage);
+		const { b, categoryPulls, storedRow } = await relaunch(
+			storage,
+			launchA,
+			launchA.claim.claimedUntilMs! + 1
+		);
+		try {
+			const handle = b.engine.require(categoryPicker);
+			await expect(handle.ready).resolves.toMatchObject({ action: 'fetched' });
+			handle.release();
+			expect(categoryPulls()).toBe(1);
+			expect((await storedRow()).status).toBe('completed');
+		} finally {
+			await b.dispose();
 		}
 	});
 });

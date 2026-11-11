@@ -146,6 +146,7 @@ export {
 	schedulerTaskStateSchema,
 	type SchedulerTaskStateDocument,
 } from './scheduler-task-state-schema';
+export { mintSchedulerOwnerId } from './scheduler-owner-id';
 
 export {
 	refundBrowserQueryKey,
