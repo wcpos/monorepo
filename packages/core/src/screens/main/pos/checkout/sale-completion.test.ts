@@ -50,7 +50,8 @@ const mockBound = jest.fn(),
 	mockDebug = jest.fn(),
 	mockReceipt = jest.fn(),
 	mockAnswerAdopted = jest.fn(),
-	mockInfo = jest.fn();
+	mockInfo = jest.fn(),
+	mockError = jest.fn();
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	answerAdopted: (...args: unknown[]) => mockAnswerAdopted(...args),
@@ -90,6 +91,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
 		debug: (...args: unknown[]) => mockDebug(...args),
+		error: (...args: unknown[]) => mockError(...args),
 	}),
 }));
 const payload = { id: 42, status: 'completed', meta_data: [], line_items: [] };
@@ -1607,5 +1609,89 @@ describe('POS-31A: the recovery and the tender both complete one sale', () => {
 			resolved: 1,
 		});
 		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+	});
+
+	/** Holds the first completion inside its own slot (at its stock refresh) until released. */
+	const holdFirstInSlot = () => {
+		let release!: () => void;
+		let entered!: () => void;
+		const held = new Promise<void>((resolveHeld) => (release = resolveHeld));
+		const inside = new Promise<void>((resolveInside) => (entered = resolveInside));
+		mockReconcile.mockImplementationOnce(async (_runtime, _order, refresh, adjust) => {
+			entered();
+			await held;
+			adjust([]);
+			return refresh ? 'refreshed' : 'skipped';
+		});
+		return { inside, release };
+	};
+
+	// The terminal's completeOrder, a gateway path and the bridge's finishRecovered pass no queue:
+	// completeSale takes the slot itself, and its resolve must land before that slot is released.
+	it('a completion that holds no slot resolves before releasing it, so a replay queued behind it completes nothing (POS-31A)', async () => {
+		const { inside, release } = holdFirstInSlot();
+		const first = tenderLands();
+		await inside;
+		const replay = bridgeReplays();
+		release();
+		expect(await first).toBe('completed');
+		expect(await replay).toBe('completed');
+
+		expect(counts()).toMatchObject({
+			nonReplayEvents: 1,
+			replayEvents: 0,
+			stockCalls: 1,
+			resolved: 1,
+		});
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+	});
+
+	it('an offline record that holds no slot is marked awaiting adoption before a replay queued behind it enters (POS-31A)', async () => {
+		const seenByReplay: unknown[] = [];
+		const actualRead = journal.pendingCompletions;
+		const read = jest.spyOn(journal, 'pendingCompletions');
+		read.mockImplementation(async (db) => {
+			const pending = await actualRead(db);
+			seenByReplay.push(pending[uuid]);
+			return pending;
+		});
+		const { inside, release } = holdFirstInSlot();
+		const first = completeSale(ctx, sale, { ...manual, via: 'offline' }, stage);
+		await inside;
+		const finish = completeSale(
+			ctx,
+			sale,
+			{ source: 'replay', refreshed: true },
+			{ host: 'background' }
+		);
+		release();
+		expect(await first).toBe('completed');
+		expect(await finish).toBe('completed');
+		read.mockRestore();
+
+		expect(seenByReplay).toHaveLength(1);
+		expect(seenByReplay[0]).toMatchObject({ awaitingAdoption: true });
+		expect(counts()).toMatchObject({ nonReplayEvents: 1, replayEvents: 1, resolved: 1 });
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+	});
+
+	it('a replay whose in-slot journal read fails logs it at error level and keeps its attempt (POS-31A)', async () => {
+		const failure = new Error('journal closed');
+		const read = jest.spyOn(journal, 'pendingCompletions').mockRejectedValueOnce(failure);
+		const retain = jest.spyOn(journal, 'retainCompletionAttempt');
+		await expect(
+			completeSale(ctx, sale, { source: 'replay' }, { host: 'background' })
+		).rejects.toBe(failure);
+
+		expect(mockError).toHaveBeenCalledTimes(1);
+		expect(mockError).toHaveBeenCalledWith('Completion journal read failed', {
+			code: 'CHECKOUT999',
+			context: { orderId: uuid, error: 'journal closed' },
+		});
+		expect(retain).toHaveBeenCalledTimes(1);
+		expect(retain.mock.calls[0][1]).toBe(uuid);
+		expect(counts()).toMatchObject({ nonReplayEvents: 0, replayEvents: 0, resolved: 0 });
+		read.mockRestore();
+		retain.mockRestore();
 	});
 });

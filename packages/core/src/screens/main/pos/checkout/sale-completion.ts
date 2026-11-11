@@ -14,6 +14,7 @@ import {
 } from '@wcpos/order-math';
 import { answerAdopted, type EngineRecord, type useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	awaitAdoption,
 	pendingCompletions,
@@ -573,34 +574,47 @@ export async function completeSale(
 		// POS-31A: a replay queued behind the tender's slot re-reads its attempt inside the slot. One
 		// another completion resolved meanwhile is that sale's paid moment, finished: no second event,
 		// audit, stock refresh, receipt or resolve. An attempt still pending (an offline record
-		// awaiting adoption, ADR 0040 Decided 1 rule 3) replays as before.
-		const inSlot = async (token: DispatchToken) =>
-			outcome.source === 'replay' && !(await pendingCompletions(ctx.storeDB))[order.uuid]
-				? null
-				: run(token);
-		const result = queue
+		// awaiting adoption, ADR 0040 Decided 1 rule 3) replays as before. The resolve or adoption
+		// mark below runs in the slot too, so a replay queued behind a completion that took the slot
+		// itself (no `queue`) never finds the attempt still pending once that slot is released.
+		const inSlot = async (token: DispatchToken) => {
+			if (outcome.source === 'replay') {
+				const pending = await pendingCompletions(ctx.storeDB).catch((error: unknown) => {
+					getLogger(['wcpos', 'pos', 'checkout']).error('Completion journal read failed', {
+						code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+						context: {
+							orderId: order.uuid,
+							error: error instanceof Error ? error.message : String(error),
+						},
+					});
+					throw error;
+				});
+				if (!pending[order.uuid]) return 'completed';
+			}
+			const result = await run(token);
+			if (isActionRefusal(result))
+				throw new Error(CHECKOUT_COMPLETE_EVENT + ' refused: ' + result.deny.reasonKey);
+			// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
+			// An unconfirmed sale keeps its attempt for the bridge; a replay keeps one it did not finish.
+			// An offline record completes at the till but the store has not answered it (ADR 0040
+			// Decided 1 rule 3): the attempt awaits adoption, and the bridge finishes it once answered.
+			// That second completion is a REPLAY: audited with `replayed: true` (audit-hook), the
+			// receipt entered unselected; no drawer, no print, no haptic, which all belong to this,
+			// the till's paid moment.
+			const offline =
+				outcome.source === 'manual' && outcome.via === 'offline' && result.outcome === 'completed';
+			const kept =
+				offline ||
+				result.outcome === 'unconfirmed' ||
+				(outcome.source === 'replay' && result.outcome !== 'completed');
+			if (!kept) await resolveCompletionAttempt(ctx.storeDB, order.uuid);
+			else if (offline || result.outcome === 'unconfirmed')
+				await awaitAdoption(ctx.storeDB, order.uuid);
+			return result.outcome;
+		};
+		return queue
 			? await inSlot(queue.dispatchToken)
 			: await enqueueOrderMutation(order.uuid, (q) => inSlot(q.dispatchToken));
-		if (result === null) return 'completed';
-		if (isActionRefusal(result))
-			throw new Error(CHECKOUT_COMPLETE_EVENT + ' refused: ' + result.deny.reasonKey);
-		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
-		// An unconfirmed sale keeps its attempt for the bridge; a replay keeps one it did not finish.
-		// An offline record completes at the till but the store has not answered it (ADR 0040
-		// Decided 1 rule 3): the attempt awaits adoption, and the bridge finishes it once answered.
-		// That second completion is a REPLAY: audited with `replayed: true` (audit-hook), the
-		// receipt entered unselected; no drawer, no print, no haptic, which all belong to this,
-		// the till's paid moment.
-		const offline =
-			outcome.source === 'manual' && outcome.via === 'offline' && result.outcome === 'completed';
-		const kept =
-			offline ||
-			result.outcome === 'unconfirmed' ||
-			(outcome.source === 'replay' && result.outcome !== 'completed');
-		if (!kept) await resolveCompletionAttempt(ctx.storeDB, order.uuid);
-		else if (offline || result.outcome === 'unconfirmed')
-			await awaitAdoption(ctx.storeDB, order.uuid);
-		return result.outcome;
 	} catch (error) {
 		try {
 			await retainCompletionAttempt(ctx.storeDB, order.uuid, {
