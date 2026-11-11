@@ -7,7 +7,7 @@ import { renderHook } from '@testing-library/react';
 
 import { clearUpdateRequired, currentUpdateRequired } from '@wcpos/utils/update-required-gate';
 
-import { useRestHttpClient } from './index';
+import { extractValidJSON, useRestHttpClient } from './index';
 import { useHostCapabilities } from '../../mini-apps/capabilities/host';
 
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
@@ -380,4 +380,70 @@ describe('useRestHttpClient methods', () => {
 			expect(response.headers).not.toHaveProperty('x-wp-totalpages');
 		}
 	);
+
+	it('reads the store body out of a response with stray text before it', async () => {
+		mockRequest.mockResolvedValueOnce({ data: '[400] stray\n' + paymentBody });
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		const response = await result.current.post('/42/payments', {});
+
+		expect(response.data).toEqual(JSON.parse(paymentBody));
+	});
+});
+
+const paymentBody =
+	'{"payment":{"id":7,"status":"recorded"},"order":{"id":42,"status":"pending","line_items":[{"id":1}]}}';
+// POS-30P: a Xero integration echoed its exception before WCPOS's JSON.
+const xeroPrefix =
+	'Exception when calling AccountingApi->emailInvoice: [400] Client error: `POST https://api.xero.com/...` resulted in a `400 Bad Request`\n';
+
+describe('extractValidJSON', () => {
+	it.each([
+		['a stray prefix with [400]', xeroPrefix + paymentBody],
+		[
+			'a stray prefix with {foo}',
+			'Notice: Undefined index {foo} in /x.php on line 3\n' + paymentBody,
+		],
+		['trailing junk', paymentBody + '\n<!-- cached 0.2s -->'],
+		['trailing junk with brackets', paymentBody + '\n[debug] done'],
+		['a [400] prefix and [debug] trailing junk', xeroPrefix + paymentBody + '\n[debug] done'],
+	])('reads the store body out of %s', (_name, response) => {
+		expect(extractValidJSON(response)).toEqual(JSON.parse(paymentBody));
+	});
+
+	it.each([paymentBody, '[{"id":1},{"id":2}]'])('parses clean JSON unchanged: %s', (response) => {
+		expect(extractValidJSON(response)).toEqual(JSON.parse(response));
+	});
+
+	it.each(['<html>Fatal error</html>', 'error {oops'])('returns null for %p', (response) => {
+		expect(extractValidJSON(response)).toBeNull();
+	});
+
+	it.each([
+		['a {} footer', paymentBody + '\n{}'],
+		['a [200] footer', paymentBody + '\n[200]'],
+		['a [400] prefix and a JSON footer', xeroPrefix + paymentBody + '\n{"cache":true}'],
+		['small valid JSON in the stray text', 'debug {"a":1} then\n' + paymentBody],
+	])('prefers the store body over %s', (_name, response) => {
+		expect(extractValidJSON(response)).toEqual(JSON.parse(paymentBody));
+	});
+
+	const noteBody = '{"payment":{"id":7,"note":"see [1) and {x"},"order":{"id":42}}';
+	it.each([noteBody, xeroPrefix + noteBody])(
+		'ignores unbalanced brackets inside a JSON string: %#',
+		(response) => {
+			expect(extractValidJSON(response)).toEqual(JSON.parse(noteBody));
+		}
+	);
+
+	it('parses at most once per opening bracket on a bracket-heavy page', () => {
+		const html = '<html><style>' + '.c{color:red}'.repeat(1000) + '</style></html>';
+		const parse = jest.spyOn(JSON, 'parse');
+		try {
+			expect(extractValidJSON(html)).toBeNull();
+			expect(parse.mock.calls.length).toBeLessThanOrEqual(html.split(/[{[]/).length - 1 + 1);
+		} finally {
+			parse.mockRestore();
+		}
+	});
 });
