@@ -17,6 +17,7 @@ const mockLoggerSuccess = jest.fn();
 const mockShowAddedToCartToast = jest.fn();
 
 const mockReadCounting = jest.fn(async () => false);
+const mockReadPriceCheck = jest.fn(async () => false);
 const mockToastShow = jest.fn();
 
 jest.mock('@wcpos/components/toast', () => ({
@@ -91,6 +92,7 @@ jest.mock('./use-add-item-to-order', () => ({
 	useAddItemToOrder: () => ({
 		addItemToOrder: mockAddItemToOrder,
 		readCounting: () => mockReadCounting(),
+		readPriceCheck: () => mockReadPriceCheck(),
 	}),
 }));
 
@@ -165,6 +167,7 @@ describe('useAddVariation', () => {
 		mockIncrementLineItem.mockResolvedValue(true);
 		mockAddItemToOrder.mockResolvedValue(true);
 		mockReadCounting.mockResolvedValue(false);
+		mockReadPriceCheck.mockResolvedValue(false);
 	});
 
 	it('adds nothing while the drawer is counted, with the notice, then adds after the count', async () => {
@@ -192,6 +195,42 @@ describe('useAddVariation', () => {
 		});
 
 		mockReadCounting.mockResolvedValue(false);
+		await act(async () => {
+			added = await result.current.addVariation(
+				variationDocument as never,
+				parentDocument as never
+			);
+		});
+		expect(added).toBe(true);
+		expect(mockAddItemToOrder).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).toHaveBeenCalledTimes(1);
+	});
+
+	it('adds nothing while the register is closed, with the price-check notice, then adds once it opens', async () => {
+		mockReadPriceCheck.mockResolvedValue(true);
+		mockFindByProductVariationID.mockReturnValue([]);
+		const { result } = renderHook(() => useAddVariation());
+
+		let added: boolean | undefined;
+		await act(async () => {
+			added = await result.current.addVariation(
+				variationDocument as never,
+				parentDocument as never,
+				undefined,
+				{ silent: true }
+			);
+		});
+		expect(added).toBe(false);
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(mockIncrementLineItem).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).toHaveBeenCalledWith({
+			id: 'pos-price-check-refused',
+			type: 'info',
+			title: 'pos_products.price_check_only_until_open',
+		});
+
+		mockReadPriceCheck.mockResolvedValue(false);
 		await act(async () => {
 			added = await result.current.addVariation(
 				variationDocument as never,

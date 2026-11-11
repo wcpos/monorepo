@@ -24,6 +24,7 @@ export { sessionRefreshRequests } from './refresh';
 export {
 	findOpenSession,
 	isRegisterCounting,
+	readCurrentSession,
 	openSession,
 	recordMovement,
 	recordApproval,
