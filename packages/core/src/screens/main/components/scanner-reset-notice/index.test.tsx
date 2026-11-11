@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+type TextMockProps = Record<string, unknown> & { testID?: string };
+
 const mockPush = jest.fn();
 const mockDismiss = jest.fn();
 let mockArmed = false;
@@ -29,6 +31,12 @@ jest.mock('@wcpos/utils/scanner-reset-notice', () => ({
 
 // Keep Notice and its buttons real; native drawing and URL hand-off are outside this suite.
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// react-native-web drops className; a span Text keeps it so the action labels' classes are readable.
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	Text: ({ testID, numberOfLines, maxFontSizeMultiplier, style, ...props }: TextMockProps) =>
+		jest.requireActual('react').createElement('span', { ...props, 'data-testid': testID }),
+}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 
@@ -63,6 +71,9 @@ describe('ScannerResetNotice', () => {
 		expect(screen.getByTestId('scanner-reset-notice-title').textContent).toBe(
 			'Your barcode scanner settings were reset to their defaults in this update.'
 		);
+		// Review leads in the accent; Dismiss stays the muted ghost.
+		expect(screen.getByText('Review scanner settings').className).toContain('text-primary');
+		expect(screen.getByText('Dismiss').className).not.toContain('text-primary');
 	});
 
 	it('dismisses and opens Barcode Scanning settings on review', () => {

@@ -39,6 +39,7 @@ export function ScannerResetNotice({ gutter = 'page' }: { gutter?: 'page' | 'den
 						router.push(BARCODE_SCANNING_SETTINGS_HREF);
 					},
 					testID: 'scanner-reset-notice-review',
+					primary: true,
 				},
 				{
 					label: t('settings.barcode_reset_notice_dismiss'),
