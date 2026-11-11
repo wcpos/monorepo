@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import type { SiteDocument } from '@wcpos/database';
 import { clearSitePluginVersions, type ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
@@ -28,7 +27,7 @@ export function CompatGate({
 	site,
 	children,
 }: {
-	site: ReadonlySiteRecord | SiteDocument;
+	site: ReadonlySiteRecord;
 	children: React.ReactNode;
 }) {
 	const { status, recheck } = usePluginCompatCheck(site);

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import type { SiteDocument } from '@wcpos/database';
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { useDocField } from '@wcpos/query';
 import { type ReadonlySiteRecord, recordSiteInfo } from '@wcpos/query/user-db';
@@ -25,14 +24,13 @@ const versionOf = (value: unknown) => (typeof value === 'string' && value ? valu
  * asked again with a cache-busted, unauthenticated request before the gate is allowed to stand,
  * because a cached 1.x index answer once held a 2.0.1 store behind the gate (AUTH331).
  */
-export function usePluginCompatCheck(site: ReadonlySiteRecord | SiteDocument | null | undefined): {
+export function usePluginCompatCheck(site: ReadonlySiteRecord): {
 	status: PluginCompatStatus;
 	recheck: () => void;
 } {
 	const http = useHttpClient();
-	const record = site as ReadonlySiteRecord | null | undefined;
-	const savedVersion = useDocField(record, (value) => value.wcpos_version);
-	const savedProVersion = useDocField(record, (value) => value.wcpos_pro_version);
+	const savedVersion = useDocField(site, (value) => value.wcpos_version);
+	const savedProVersion = useDocField(site, (value) => value.wcpos_pro_version);
 	const savedPasses = !savedVersion || isWcposPluginCompatible(savedVersion || savedProVersion);
 	const [phase, setPhase] = React.useState<PluginCompatStatus>('checking');
 
