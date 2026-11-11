@@ -140,6 +140,7 @@ function mockAccounting(row: Row | undefined, orders: Hit[], refunds: Hit[]) {
 }
 
 let mockHasSessions = true;
+let mockCapabilities: string[] | undefined = ['view_woocommerce_pos_reports'];
 let mockGeneration = {};
 const mockBinding = { registerId: 'register', registerName: 'Front' };
 const mockRuntime = { engine: {}, locale: 'en' };
@@ -173,7 +174,7 @@ jest.mock('@wcpos/query', () => ({
 			register_sessions: true,
 			variance_threshold: null,
 			expected_close_time: mockCloseTime,
-			capabilities: ['view_woocommerce_pos_reports'],
+			capabilities: mockCapabilities,
 		}),
 }));
 
@@ -206,6 +207,7 @@ async function settled() {
 
 beforeEach(() => {
 	mockHasSessions = true;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
 	jest.clearAllMocks();
 	active = [
 		{
@@ -232,6 +234,17 @@ it('reports not loaded until the combined query first emits, so an open register
 	expect(result.current.loaded).toBe(false);
 	await waitFor(() => expect(result.current.loaded).toBe(true));
 	expect(result.current.session?.id).toBe('session');
+});
+
+it.each([
+	[['manage_woocommerce_pos_cash'], true],
+	[['view_woocommerce_pos_reports'], false],
+	[undefined, true],
+	[[], false],
+])('canManageCash follows the cash capability and fails open when unknown', (caps, expected) => {
+	mockCapabilities = caps;
+	const { result } = renderHook(() => useRegisterSession());
+	expect(result.current.canManageCash).toBe(expected);
 });
 
 it('reports loaded with no session for a closed register', async () => {

@@ -1085,6 +1085,59 @@ it('keeps a movement pending on a session whose close was refused', async () => 
 	expect(http.post).not.toHaveBeenCalledWith('movements', expect.anything());
 });
 
+it.each([
+	['open', async () => void (await open())],
+	[
+		'close',
+		async () => {
+			const row = await open();
+			await row.incrementalPatch({
+				server_status: 'counting',
+				status: 'counting',
+				sync_status: 'synced',
+			});
+			await closeSession(db, row.id, { counted: { cash: '100' } });
+		},
+	],
+	[
+		'movement',
+		async () => {
+			const row = await open();
+			await row.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+			await recordMovement(db, {
+				sessionId: row.id,
+				type: 'paid_in',
+				amount: '20',
+				reason: 'Float',
+				actor: 7,
+			});
+		},
+	],
+])('logs a forbidden %s as REGISTER231 at warn', async (_name, setUp) => {
+	await setUp();
+	http.post.mockRejectedValueOnce({ response: { status: 403, data: { code: 'rest_forbidden' } } });
+	await drain();
+	expect(logger.warn).toHaveBeenCalledWith(
+		expect.anything(),
+		expect.objectContaining({ code: 'REGISTER231' })
+	);
+	const codes = logger.error.mock.calls.map((call) => call[1]?.code);
+	expect(codes).not.toContain('REGISTER201');
+	expect(codes).not.toContain('REGISTER211');
+});
+
+it('keys the forbidden code on rest_forbidden, not on the 403 alone', async () => {
+	await open();
+	http.post.mockRejectedValueOnce({
+		response: { status: 403, data: { code: 'rest_cannot_create' } },
+	});
+	await drain();
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER201' })
+	);
+});
+
 it('does not call a refused counting transition a refused close', async () => {
 	const row = await open();
 	await row.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
@@ -1301,6 +1354,56 @@ it('waits for session rows, then adopts server number, totals and findings', asy
 		last_closure_number: 4,
 		perpetual_sales_total: '100.1234',
 		perpetual_refunds_total: '10.1000',
+	});
+});
+// WOOCOMMERCE-POS-300: a cashier without reports access gets the closure back less its totals
+// (plugin 2.0.0 Closures_Controller::visible); production storage would store them as undefined.
+it('keeps the local totals when the server withholds them from a blind cashier', async () => {
+	await db.remove();
+	db = await createRxDatabase({
+		name: `queueprod${Math.random().toString(36).slice(2)}`,
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	});
+	await db.addCollections({
+		closures: { schema: closuresLiteral, autoMigrate: false },
+		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
+		cash_movements: { schema: cashMovementsLiteral, autoMigrate: false },
+	});
+	const { session, row } = await closure();
+	const local = row.toJSON();
+	http.post.mockImplementation(async (url, body) => {
+		if (url !== 'closures') return { data: { ...session.toJSON(), status: body.status } };
+		const {
+			expected: _e,
+			till_expected: _t,
+			variance: _v,
+			period_sales_total: _ps,
+			period_refunds_total: _pr,
+			perpetual_sales_total: _qs,
+			perpetual_refunds_total: _qr,
+			breakdowns: _b,
+			...visible
+		} = { ...row.toJSON(), number: 4 };
+		return { data: visible };
+	});
+	await drain();
+	expect(http.post.mock.calls.map(([url]) => url)).toContain('closures');
+	const after = row.getLatest().toMutableJSON();
+	expect(after.sync_status).toBe('synced');
+	expect(after.server_number).toBe(4);
+	expect(after.counted).toEqual(local.counted);
+	expect(after.expected).toEqual(local.expected);
+	expect({
+		period_sales_total: after.period_sales_total,
+		period_refunds_total: after.period_refunds_total,
+		perpetual_sales_total: after.perpetual_sales_total,
+		perpetual_refunds_total: after.perpetual_refunds_total,
+	}).toEqual({
+		period_sales_total: local.period_sales_total,
+		period_refunds_total: local.period_refunds_total,
+		perpetual_sales_total: local.perpetual_sales_total,
+		perpetual_refunds_total: local.perpetual_refunds_total,
 	});
 });
 it('supersedes a closure that landed as a recount', async () => {

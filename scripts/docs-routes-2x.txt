@@ -102,6 +102,7 @@
 /error-codes/REGISTER211
 /error-codes/REGISTER212
 /error-codes/REGISTER221
+/error-codes/REGISTER231
 /error-codes/REGISTER301
 /error-codes/SYNC101
 /error-codes/SYNC111
