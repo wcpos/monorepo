@@ -62,6 +62,14 @@ function buildCategoryParents(
 	return categoryParentMap;
 }
 
+/**
+ * The coupon context plus the codes whose type the POS can't apply (store credit, gift cards…),
+ * keyed by lower-cased code with the raw `discount_type`, so a refusal can say why.
+ */
+export type PosCouponContext = CouponContext & {
+	unsupportedTypes: ReadonlyMap<string, string>;
+};
+
 /** Read raw CouponContext inputs; order-math owns eligibility and ancestry. */
 export async function readCouponContext(
 	runtime: QueryRuntime,
@@ -72,7 +80,7 @@ export async function readCouponContext(
 		lineItems: readonly LineItemInput[];
 		couponLines: readonly CouponLine[];
 	}
-): Promise<CouponContext> {
+): Promise<PosCouponContext> {
 	const productIds = lineItems
 		.map((item) => item.product_id)
 		.filter((id): id is number => id != null && id > 0);
@@ -83,9 +91,17 @@ export async function readCouponContext(
 	} = await readCouponCatalog(runtime.engine, productIds);
 
 	const coupons = new Map<string, CouponInput>();
+	const unsupportedTypes = new Map<string, string>();
 	for (const record of couponRecords) {
 		const payload = record.payload;
-		if (typeof payload.code !== 'string' || !isDiscountType(payload.discount_type)) continue;
+		if (typeof payload.code !== 'string') continue;
+		if (!isDiscountType(payload.discount_type)) {
+			const type: unknown = payload.discount_type;
+			if (typeof type === 'string' && type !== '') {
+				unsupportedTypes.set(payload.code.toLowerCase(), type);
+			}
+			continue;
+		}
 		coupons.set(payload.code.toLowerCase(), {
 			...payload,
 			code: payload.code,
@@ -118,6 +134,7 @@ export async function readCouponContext(
 		productCategories,
 		categoryParents,
 		taxStatusFor: await readCatalogTaxStatuses(runtime.engine, lineItems),
+		unsupportedTypes,
 	};
 }
 

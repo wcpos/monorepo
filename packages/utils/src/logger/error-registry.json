@@ -2369,6 +2369,29 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "REGISTER231",
+		"symbol": "REGISTER_CASH_NOT_PERMITTED",
+		"domain": "REGISTER",
+		"severity": "warn",
+		"actionHint": "A store manager can turn on manage_woocommerce_pos_cash for this role in POS → Access.",
+		"retryPolicy": "after-change",
+		"dataSafety": "local-only",
+		"escalation": "store-admin",
+		"summary": "This account can't open, count or close the register.",
+		"docsBody": "The store turned this down because the signed-in account's role does not have the cash permission, which opening, counting, closing and recording cash in or out all need. The till keeps what was entered. Selling is not affected.",
+		"troubleshooting": [
+			"Ask a store manager to give this role the cash permission in POS → Access, or to sign in on this till and do the open, count or close.",
+			"A movement or close refused this way is not retried by itself. After the permission is granted, a manager can tap Retry on the register pane.",
+			"If the register is mid-count, sales stay blocked until someone with the permission closes it."
+		],
+		"logSources": [
+			"browser-console",
+			"network-inspector"
+		],
+		"evidence": "Sentry WOOCOMMERCE-POS-302/303/305; HANDOFF sentry-watch-2026-11-10",
+		"introducedIn": "2.0.1"
+	},
+	{
 		"code": "REGISTER301",
 		"symbol": "REGISTER_APPROVAL_REFUSED",
 		"domain": "REGISTER",

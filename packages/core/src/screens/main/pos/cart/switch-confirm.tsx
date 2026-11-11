@@ -76,7 +76,8 @@ export function SwitchConfirm({
 	}
 	const { wpCredentials, store, site } = useStoreSession();
 	const credentials = useObservableSuspense(credentialsListResource(site));
-	const { session, expected, blind, figuresPending, binding, unsyncedCount } = useRegisterSession();
+	const { session, expected, blind, figuresPending, binding, unsyncedCount, canManageCash } =
+		useRegisterSession();
 	// The cashier's open carts from the same handle the POS layout owns (the rail's sheet renders
 	// outside CurrentOrderProvider, so the context read would say none); never suspends.
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
@@ -179,6 +180,7 @@ export function SwitchConfirm({
 			// empty list is "not loaded yet", not "you'll choose one" (CodeRabbit, #3046).
 			const known = y.loaded || y.registers.length > 0;
 			const offered =
+				canManageCash &&
 				binding.status === 'bound' &&
 				session?.status === 'open' &&
 				online &&

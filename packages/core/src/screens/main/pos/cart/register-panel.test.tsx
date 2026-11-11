@@ -63,6 +63,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: mockRegisters }),
 }));
 let mockOverdue = false;
+let mockCanManageCash = true;
 let mockRefusedClose = false;
 let mockHasClosure = true;
 let mockClosureOverrides: Record<string, unknown> = {};
@@ -117,6 +118,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		blind,
 		countingHere: mockCountingHere,
 		refusedClose: mockRefusedClose,
+		canManageCash: mockCanManageCash,
 		overdue: mockOverdue,
 		closeTime: '17:30',
 		figuresPending: currentFiguresPending,
@@ -232,12 +234,14 @@ jest.mock('@wcpos/components/notice', () => ({
 		testID,
 		title,
 		actions,
+		docs,
 	}: {
 		testID?: string;
 		title: string;
 		actions?: { label: string; onPress: () => void; testID?: string }[];
+		docs?: { href: string };
 	}) => (
-		<div data-testid={testID}>
+		<div data-testid={testID} data-docs={docs?.href}>
 			{title}
 			{actions?.map((action) => (
 				<button key={action.label} data-testid={action.testID} onClick={action.onPress}>
@@ -434,6 +438,7 @@ beforeEach(() => {
 	mockPhone = false;
 	currentLoaded = true;
 	mockRefusedClose = false;
+	mockCanManageCash = true;
 	currentFiguresPending = false;
 	blind = false;
 	expected = { cash: '155', card: '30' };
@@ -1522,5 +1527,55 @@ describe('#2016: a refused close', () => {
 		fireEvent.click(screen.getByTestId('panel-x'));
 		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
 		expect(mockBackToSelling).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('without the cash permission', () => {
+	beforeEach(() => {
+		mockCanManageCash = false;
+	});
+	it('shows the sentence once and offers no close, movement or void', () => {
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		const notices = screen.getAllByTestId('register-panel-no-cash-permission');
+		expect(notices).toHaveLength(1);
+		expect(notices[0].textContent).toContain('register.no_cash_permission');
+		expect(notices[0].getAttribute('data-docs')).toMatch(/REGISTER231$/);
+		for (const id of ['close-register', 'paid-in', 'paid-out', 'no-sale'])
+			expect(screen.queryByTestId(`register-panel-${id}`)).toBeNull();
+		expect(screen.getByTestId('movement-row-old')).toBeTruthy();
+		expect(screen.queryByTestId('movement-void-old')).toBeNull();
+	});
+	it('a count request does not start counting', async () => {
+		render(<RegisterPanel open initialPane="count" onOpenChange={jest.fn()} />);
+		await act(async () => undefined);
+		expect(startCounting).not.toHaveBeenCalled();
+		expect(screen.queryByTestId('count-back')).toBeNull();
+		expect(screen.getByTestId('register-panel-no-cash-permission')).toBeTruthy();
+	});
+	it('a refused movement stays visible without Retry', () => {
+		movements = [...movements, lost];
+		refusedMovements = [lost];
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-refused').textContent).toContain('1');
+		expect(screen.queryByTestId('register-panel-retry-refused')).toBeNull();
+	});
+	it('a forbidden close shows only the sentence', () => {
+		currentSession = { ...currentSession, sync_error: 'rest_forbidden' };
+		mockRefusedClose = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
+		expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+		expect(screen.getAllByTestId('register-panel-no-cash-permission')).toHaveLength(1);
+	});
+	it('a manager still gets Retry on a forbidden close', () => {
+		mockCanManageCash = true;
+		currentSession = { ...currentSession, sync_error: 'rest_forbidden' };
+		mockRefusedClose = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-panel-retry-close')).toBeTruthy();
+		expect(screen.getByTestId('register-panel-refused-close').getAttribute('data-docs')).toMatch(
+			/REGISTER231$/
+		);
+		expect(screen.queryByTestId('register-panel-no-cash-permission')).toBeNull();
 	});
 });

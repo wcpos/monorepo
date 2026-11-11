@@ -20,6 +20,7 @@ let defaultFloat: string | undefined = '200';
 let lastCount: string | undefined = '570.10';
 let hasClosure = true;
 let blind = false;
+let mockCanManageCash = true;
 const open = jest.fn(async () => undefined);
 const print = jest.fn(async () => undefined);
 jest.mock('../../../../services/register-session/use-register-session', () => ({
@@ -38,6 +39,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		actions: { openSession: open },
 		expected: { cash: '155' },
 		blind,
+		canManageCash: mockCanManageCash,
 	}),
 }));
 // The movement sheet reaches the receipt document hook (REST client, expo-crypto); not this test's concern.
@@ -64,6 +66,7 @@ jest.mock('@wcpos/components/button', () => ({
 			{children}
 		</button>
 	),
+	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/input', () => {
 	function Field({
@@ -120,8 +123,17 @@ jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
 beforeEach(() => {
 	separator = '.';
 	hasClosure = true;
+	mockCanManageCash = true;
 	defaultFloat = '200';
 	lastCount = '570.10';
+});
+it('without the cash permission shows the sentence and no open', () => {
+	mockCanManageCash = false;
+	render(<OpenRegisterCard />);
+	expect(screen.getByTestId('open-register-no-cash-permission')).toBeTruthy();
+	expect(screen.queryByTestId('open-register-button')).toBeNull();
+	expect(screen.queryByTestId('open-register-key-2')).toBeNull();
+	expect(screen.getByTestId('open-register-last-closure')).toBeTruthy();
 });
 it('the first key replaces the prefilled default', () => {
 	defaultFloat = '150';
