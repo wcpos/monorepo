@@ -630,6 +630,25 @@ describe('recordManualPayment', () => {
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 
+	// The settled branch is for the poster's own `settled_elsewhere` only: a row id the store holds
+	// under another body is a foreign command, and its 422 stays the refusal the cashier is shown.
+	it('a genuine command conflict still refuses with PAYMENT213, not settled_elsewhere (POS-31A)', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValueOnce(responseError(422, 'wcpos_command_conflict'));
+		deps.settledRecord = jest.fn(async () => ({
+			row: { ...mintedCard, status: 'captured' as const },
+			status: 'completed',
+		}));
+
+		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
+		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentError);
+		await expect(promise).rejects.toMatchObject({ code: 'wcpos_command_conflict', status: 422 });
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(deps.settledRecord).not.toHaveBeenCalled();
+		expect(deps.mirror).not.toHaveBeenCalled();
+		expect(deps.raiseAttention).not.toHaveBeenCalled();
+	});
+
 	it('returns invalid for card tendered input without any side effect', async () => {
 		const deps = createDeps();
 

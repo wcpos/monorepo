@@ -1084,6 +1084,26 @@ describe('moneyCommandPoster', () => {
 		expect(provenance).toHaveBeenCalledTimes(2);
 		expect(sentFor('row-1')).toBe(sent + 1);
 	});
+
+	// Only a record this poster dispatched can be settled elsewhere: a row id the store already holds
+	// under another body is a foreign command, and its 422 is the store's definitive refusal.
+	it('a first record whose id conflicts at the store surfaces the 422 refusal, never settled_elsewhere (POS-31A)', async () => {
+		store.commands.set('row-1', { fingerprint: 'another body', answer: {} });
+		const provenance = recordProvenance();
+		const body = { payment: cash('row-1', '10.00') };
+
+		const first = poster({ provenance })('orders/5/payments', body);
+		await expect(first).rejects.toThrow('wcpos_command_conflict');
+		await expect(first).rejects.not.toBeInstanceOf(MoneyCommandError);
+		await expect(first).rejects.not.toMatchObject({ reason: 'settled_elsewhere' });
+		await expect(first).rejects.toMatchObject({
+			response: { status: 422, data: { code: 'wcpos_command_conflict' } },
+		});
+		expect(provenance).toHaveBeenCalledTimes(1);
+		expect(sentFor('row-1')).toBe(1);
+		// A definitive refusal settles the command: nothing is left for a re-send.
+		expect(await entries()).toEqual([]);
+	});
 });
 
 describe('defer: a record journaled offline (ADR 0040 Decided 1)', () => {
