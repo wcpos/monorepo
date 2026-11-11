@@ -418,4 +418,32 @@ describe('extractValidJSON', () => {
 	it.each(['<html>Fatal error</html>', 'error {oops'])('returns null for %p', (response) => {
 		expect(extractValidJSON(response)).toBeNull();
 	});
+
+	it.each([
+		['a {} footer', paymentBody + '\n{}'],
+		['a [200] footer', paymentBody + '\n[200]'],
+		['a [400] prefix and a JSON footer', xeroPrefix + paymentBody + '\n{"cache":true}'],
+		['small valid JSON in the stray text', 'debug {"a":1} then\n' + paymentBody],
+	])('prefers the store body over %s', (_name, response) => {
+		expect(extractValidJSON(response)).toEqual(JSON.parse(paymentBody));
+	});
+
+	const noteBody = '{"payment":{"id":7,"note":"see [1) and {x"},"order":{"id":42}}';
+	it.each([noteBody, xeroPrefix + noteBody])(
+		'ignores unbalanced brackets inside a JSON string: %#',
+		(response) => {
+			expect(extractValidJSON(response)).toEqual(JSON.parse(noteBody));
+		}
+	);
+
+	it('parses at most once per opening bracket on a bracket-heavy page', () => {
+		const html = '<html><style>' + '.c{color:red}'.repeat(1000) + '</style></html>';
+		const parse = jest.spyOn(JSON, 'parse');
+		try {
+			expect(extractValidJSON(html)).toBeNull();
+			expect(parse.mock.calls.length).toBeLessThanOrEqual(html.split(/[{[]/).length - 1 + 1);
+		} finally {
+			parse.mockRestore();
+		}
+	});
 });

@@ -31,22 +31,36 @@ function tryParse(text: string): { value: unknown } | null {
 	}
 }
 
+/** Index of the bracket that closes the one at `start`, skipping JSON strings; -1 if none. */
+function closingBracket(text: string, start: number): number {
+	let depth = 0;
+	let inString = false;
+	for (let i = start; i < text.length; i++) {
+		const char = text[i];
+		if (inString) {
+			if (char === '\\') i++;
+			else if (char === '"') inString = false;
+		} else if (char === '"') inString = true;
+		else if (char === '{' || char === '[') depth++;
+		else if ((char === '}' || char === ']') && --depth === 0) return i;
+	}
+	return -1;
+}
+
 /**
  * Reads the store's JSON out of a body that another plugin polluted with stray text.
  *
- * Pass 1: stray text is echoed BEFORE the REST body, so the first `{`/`[` whose whole
- * tail parses is the store's answer, whatever brackets the stray text contains.
- * Pass 2: when trailing junk follows the body too, keep the LONGEST parseable span.
- * The old code returned the first start's longest prefix, so a bracket in the stray
- * text won: `[400]` out of a Xero exception, and the payment's answer was lost (POS-30P).
+ * Each `{`/`[` is matched to its own closing bracket (brackets inside JSON strings
+ * ignored) and that one span is parsed, so the work is one parse per opening bracket.
+ * The LONGEST span wins: the store's body is bigger than a `[400]` in a stray prefix
+ * or a `{}` footer after it. The old code returned the first start's longest prefix,
+ * so a bracket in the stray text won: `[400]` out of a Xero exception, and the
+ * payment's answer was lost (POS-30P).
  */
 export function extractValidJSON(responseString: string) {
 	const starts: number[] = [];
-	const ends: number[] = [];
 	for (let i = 0; i < responseString.length; i++) {
-		const char = responseString[i];
-		if (char === '{' || char === '[') starts.push(i);
-		if (char === '}' || char === ']') ends.push(i);
+		if (responseString[i] === '{' || responseString[i] === '[') starts.push(i);
 	}
 
 	if (starts.length === 0) {
@@ -59,23 +73,20 @@ export function extractValidJSON(responseString: string) {
 		return null;
 	}
 
-	for (const start of starts) {
-		const tail = tryParse(responseString.slice(start).trim());
-		if (tail) return tail.value;
-	}
+	const whole = tryParse(responseString.trim());
+	if (whole) return whole.value;
 
-	let best: { start: number; end: number; value: unknown } | null = null;
+	let best: { length: number; value: unknown } | null = null;
+	let parsedUpTo = -1; // end of the last span that parsed; starts inside it are skipped
 	for (const start of starts) {
-		if (best && start <= best.end) continue; // inside the span kept so far
-		for (let e = ends.length - 1; e >= 0 && ends[e] > start; e--) {
-			const end = ends[e];
-			if (best && end - start <= best.end - best.start) break; // cannot beat it
-			const span = tryParse(responseString.slice(start, end + 1));
-			if (span) {
-				best = { start, end, value: span.value };
-				break;
-			}
-		}
+		if (start <= parsedUpTo) continue;
+		const end = closingBracket(responseString, start);
+		if (end === -1) continue;
+		const span = tryParse(responseString.slice(start, end + 1));
+		if (!span) continue;
+		parsedUpTo = end;
+		const length = end + 1 - start;
+		if (!best || length > best.length) best = { length, value: span.value };
 	}
 	if (best) return best.value;
 
