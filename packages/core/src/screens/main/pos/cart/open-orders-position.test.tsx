@@ -27,6 +27,7 @@ jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 jest.mock('../../components/session-hold-banner', () => ({ SessionHoldBanner: () => null }));
+jest.mock('../../components/scanner-reset-notice', () => ({ ScannerResetNotice: () => null }));
 jest.mock('./register-gate-card', () => ({
 	RegisterGateCard: ({ failed }: { failed: boolean }) => (
 		<div data-testid="register-gate-card" data-failed={String(failed)} />
