@@ -377,4 +377,9 @@ add its case in the same PR.
   the class has changed and the row above is stale. Beware: `maestro.log`
   repeats each retry block's command metadata on every evaluation, so grep for
   the output form of the line, not bare `WCPOS_E2E`.
+- **Android load sampler:** every Android job writes `android-sampler.log` to
+  the `maestro-*` artifact: every 30 s, `top` (8 busiest processes) and the
+  app's `views total=… visible=…` counts: do 5–12 s hierarchy dumps track
+  tree size (app) or emulator CPU (runner)? The counts come from `dumpsys
+  activity top`, since `uiautomator` would fight Maestro for UiAutomation.
 - **iOS phone, `next`:** the Products tab loses its register bar (hamburger, place, bell, avatar) after a sale's New sale, so the drawer cannot be opened from Products until relaunch; flow 05 is red on that lane until it is fixed (run 36898140001; triage in the #2242 round-2 PR).
