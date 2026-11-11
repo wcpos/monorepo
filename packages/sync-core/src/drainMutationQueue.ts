@@ -99,6 +99,8 @@ export type DrainResult = {
 	failed: number;
 	/** True when a push in this drain failed with 401; later rows were not pushed. */
 	sessionExpired: boolean;
+	/** True when a push in this drain was refused by the store's protocol gate (426 `wcpos_update_required`); later rows were not pushed. */
+	updateRequired: boolean;
 	/** Retryable push failures, whichever attempt met them (first push, 428 restamp or #1204 re-push). */
 	failures: { mutation: QueuedMutation; status?: number; reason?: string }[];
 	/** Mutations skipped this drain because their backoff window has not yet elapsed (ADR 0012). */
@@ -121,6 +123,13 @@ export type DrainResult = {
 
 // A 401 is a session failure, not a payload verdict; the queue drains after re-auth.
 const SESSION_EXPIRED_STATUS = 401;
+
+// The plugin's protocol gate refuses the app, not the row. The code is checked as well as the
+// status because the transport keys on the code (middleboxes may rewrite the status).
+function isUpdateRequired(error: unknown): boolean {
+	const e = error as { status?: unknown; reason?: unknown } | null;
+	return e?.reason === 'wcpos_update_required' || e?.status === 426;
+}
 
 /** How one push attempt ended: a verdict to record, settled here, or cut off by an abort. */
 type Settled = { kind: 'pushed'; result: PushResult } | { kind: 'settled' } | { kind: 'aborted' };
@@ -145,6 +154,7 @@ const RETRYABLE_4XX = new Set([SESSION_EXPIRED_STATUS, 408, 409, 425, 429]);
  * (4xx, not in RETRYABLE_4XX).
  */
 export function isNonRetryable(error: unknown): boolean {
+	if (isUpdateRequired(error)) return false;
 	const e = error as { status?: unknown; permanent?: unknown } | null;
 	if (e?.permanent === true) return true;
 	const status = e?.status;
@@ -538,6 +548,7 @@ export async function drainMutationQueue(input: {
 	let deferred = 0;
 	let attempted = 0;
 	let sessionWall: { status?: number; reason?: string } | undefined;
+	let updateWall: { status?: number; reason?: string } | undefined;
 
 	// LEASE FENCE (task 43): a settlement write is safe only while THIS drain still
 	// holds the row's lease. If another window stole it — our push outlived the
@@ -860,6 +871,7 @@ export async function drainMutationQueue(input: {
 		blockedRecords.add(recordKey(row));
 		await applyBackoff({ ...row, status: 'pending' });
 		if (status === SESSION_EXPIRED_STATUS) sessionWall = { status, reason };
+		if (isUpdateRequired(error)) updateWall = { status, reason };
 	};
 
 	// A thrown push: a permanent 4xx is dead-lettered (retrying forever would poison
@@ -910,9 +922,11 @@ export async function drainMutationQueue(input: {
 			blockedRecords.add(recordKey(mutation));
 			continue;
 		}
-		// The plugin's 401 means no user is logged in, so every push in this session would get one.
-		if (sessionWall) {
-			reportFailure({ mutation, ...sessionWall });
+		// The plugin's 401 means no user is logged in, so every push in this session would get one,
+		// or a protocol-gate refusal (the app, not the row).
+		const wall = sessionWall ?? updateWall;
+		if (wall) {
+			reportFailure({ mutation, ...wall });
 			continue;
 		}
 		// The plugin's 401 means no user is logged in, so every push in this session would get one.
@@ -1204,6 +1218,7 @@ export async function drainMutationQueue(input: {
 		conflicts,
 		failed,
 		sessionExpired: sessionWall !== undefined,
+		updateRequired: updateWall !== undefined,
 		failures,
 		deferred,
 		rejected,
