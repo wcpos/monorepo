@@ -61,7 +61,7 @@ function MockControlledField({ render, name, control }: any) {
 jest.mock('@wcpos/components/form', () => ({
 	Form: ({ children }: any) => <form>{children}</form>,
 	FormField: ({ render, name, control }: any) =>
-		name === 'custom_amount' ? (
+		name === 'custom_amount' || /^line_items\.\d+\.refund_qty$/.test(name) ? (
 			<MockControlledField render={render} name={name} control={control} />
 		) : (
 			render({
@@ -82,11 +82,19 @@ jest.mock('@wcpos/components/form', () => ({
 	),
 }));
 
-// FormInput is mocked; its keypad fields never render. The custom amount renders a plain input.
+// FormInput is mocked; its keypad fields never render. The custom amount renders a plain input, and
+// the count fields render too, addressed by their field name.
 jest.mock('../../components/amount-field', () => ({
 	AmountField: () => null,
-	FormAmountField: ({ testID, onChange }: any) =>
-		testID ? <input data-testid={testID} onChange={(e) => onChange(e.target.value)} /> : null,
+	FormAmountField: ({ testID, name, kind, onChange }: any) => {
+		const id = testID ?? (kind === 'count' ? name : undefined);
+		return id ? (
+			<input
+				data-testid={id}
+				onChange={(e) => onChange(kind === 'count' ? Number(e.target.value) : e.target.value)}
+			/>
+		) : null;
+	},
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
@@ -176,7 +184,7 @@ jest.mock('@wcpos/query', () => ({
 const mockUseRefundMutation = jest.fn(() => jest.fn());
 const mockUseRouter = jest.fn(() => ({ back: jest.fn() }));
 const mockGet = jest.fn();
-const mockRestHttpClient = { get: mockGet };
+const mockHttpClients = new Map<string, { get: (...args: unknown[]) => unknown }>();
 
 jest.mock('./use-refund-mutation', () => ({
 	useRefundMutation: () => mockUseRefundMutation(),
@@ -196,8 +204,14 @@ jest.mock('../../../../contexts/app-state', () => ({
 		},
 	}),
 }));
+// The real hook memoises its client on the online status (use-rest-http-client/index.ts:408).
 jest.mock('../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => mockRestHttpClient,
+	useRestHttpClient: () => {
+		if (!mockHttpClients.has(mockOnlineStatus)) {
+			mockHttpClients.set(mockOnlineStatus, { get: (...args: unknown[]) => mockGet(...args) });
+		}
+		return mockHttpClients.get(mockOnlineStatus);
+	},
 }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({
@@ -272,6 +286,7 @@ describe('RefundOrderForm', () => {
 		});
 
 		render(<RefundOrderForm order={order} />);
+		fireEvent.change(screen.getByTestId('refund-custom-amount'), { target: { value: '45' } });
 
 		// Pending: the destination is unknown, so nothing may be submitted (a cash
 		// default here would refund a card sale the wrong way).
@@ -302,6 +317,7 @@ describe('RefundOrderForm', () => {
 		);
 
 		render(<RefundOrderForm order={{ ...order, payment_method: 'pos_cash' }} />);
+		fireEvent.change(screen.getByTestId('refund-custom-amount'), { target: { value: '45' } });
 
 		// Cash needs no gateway contract: the confirm action is available while gateways load.
 		await waitFor(() => expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled());
@@ -417,8 +433,9 @@ describe('RefundOrderForm', () => {
 				'orders.previously_refunded-€25.00'
 			)
 		);
+		fireEvent.change(screen.getByTestId('refund-custom-amount'), { target: { value: '45' } });
 		const processLabel = () =>
-			within(screen.getByTestId('process-refund-button')).getByText('orders.process_refund');
+			within(screen.getByTestId('process-refund-button')).getByText(/^orders\.submit_refund_/);
 		expect(processLabel()).toHaveAttribute('data-loading', 'false');
 
 		fireEvent.click(screen.getByTestId('process-refund-button'));
@@ -639,6 +656,28 @@ describe('RefundOrderForm', () => {
 
 			mockOnlineStatus = 'offline';
 			rerender(<RefundOrderForm order={cashOrder} />);
+			await waitFor(() =>
+				expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled()
+			);
+			fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+
+			await waitFor(() =>
+				expect(screen.getByTestId('refund-confirm-dialog')).toHaveAttribute('data-open', 'false')
+			);
+			expect(mockRefundCall).not.toHaveBeenCalled();
+		});
+
+		it('sends nothing when the confirm is pressed with nothing to refund', async () => {
+			mockEnableRefundActions = true;
+			mockGateways(Promise.resolve({ data: [] }));
+			render(<RefundOrderForm order={cashOrder} />);
+
+			enterAmount('45');
+			await labelReads('orders.submit_refund_cash:€45.00');
+			enterAmount('');
+			await labelReads('orders.process_refund');
+
+			fireEvent.click(processButton());
 			fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
 
 			await waitFor(() =>
@@ -654,8 +693,10 @@ describe('RefundOrderForm', () => {
 			mockOnlineStatus = status;
 			mockGet.mockRejectedValue(new Error('boom'));
 			render(<RefundOrderForm order={order} />);
+			enterAmount('45');
 
-			// The confirm action ignores the connection; it frees once the failed lookup settles.
+			// The confirm action ignores the connection; it frees once the failed lookup settles and
+			// an amount is entered.
 			await waitFor(() =>
 				expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled()
 			);
@@ -686,6 +727,78 @@ describe('RefundOrderForm', () => {
 			fireEvent.click(processButton());
 			fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
 			await waitFor(() => expect(mockRefundCall).toHaveBeenCalledTimes(1));
+		});
+
+		it('keeps the line quantities when the connection drops and returns with the confirm open', async () => {
+			const lineOrder = {
+				...order,
+				payment_method: 'pos_cash',
+				refunds: [],
+				line_items: [
+					{ id: 77, name: 'Belt', quantity: 2, total: '20.00', total_tax: '0.00', taxes: [] },
+				],
+			} as never;
+			mockGet.mockImplementation((url: string) => {
+				if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+				if (mockOnlineStatus !== 'online-website-available') {
+					return Promise.reject(new Error('offline'));
+				}
+				return Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '1' } });
+			});
+
+			const { rerender } = render(<RefundOrderForm order={lineOrder} />);
+			await waitFor(() => {
+				const row = screen.getByText('Belt').closest('tr') as HTMLElement;
+				expect(within(row).getByText('2')).toBeInTheDocument();
+			});
+
+			fireEvent.change(screen.getByTestId('line_items.0.refund_qty'), { target: { value: '1' } });
+			await labelReads('orders.submit_refund_cash:€10.00');
+
+			fireEvent.click(processButton());
+			expect(screen.getByTestId('refund-confirm-dialog')).toHaveAttribute('data-open', 'true');
+
+			mockOnlineStatus = 'offline';
+			rerender(<RefundOrderForm order={lineOrder} />);
+			mockOnlineStatus = 'online-website-available';
+			rerender(<RefundOrderForm order={lineOrder} />);
+
+			await waitFor(() =>
+				expect(
+					mockGet.mock.calls.filter(([url]) => url === 'orders/23858/refunds').length
+				).toBeGreaterThanOrEqual(3)
+			);
+			await labelReads('orders.submit_refund_cash:€10.00');
+			expect(screen.getByText('orders.confirm_refund_description:€10.00')).toBeInTheDocument();
+
+			await waitFor(() =>
+				expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled()
+			);
+			fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+			await waitFor(() =>
+				expect(mockRefundCall).toHaveBeenCalledWith(
+					expect.objectContaining({
+						amount: '10.00',
+						lineItems: [expect.objectContaining({ id: 77, quantity: 1 })],
+					})
+				)
+			);
+		});
+
+		it('disables the confirm when the refund falls to nothing while it is open', async () => {
+			mockGateways(Promise.resolve({ data: [] }));
+			render(<RefundOrderForm order={cashOrder} />);
+
+			enterAmount('45');
+			await waitFor(() => expect(processButton()).toBeEnabled());
+			fireEvent.click(processButton());
+			expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled();
+
+			enterAmount('');
+			await waitFor(() =>
+				expect(screen.getByTestId('confirm-process-refund-button')).toBeDisabled()
+			);
+			expect(screen.getByText('orders.confirm_refund_description:€0.00')).toBeInTheDocument();
 		});
 	});
 });
@@ -762,13 +875,13 @@ describe('RefundOrderForm while storage is degraded', () => {
 	it('disables both refund actions', async () => {
 		render(<RefundOrderForm order={order} />);
 		await screen.findByTestId('process-refund-button');
+		fireEvent.change(screen.getByTestId('refund-custom-amount'), { target: { value: '45' } });
 
 		// Prove the healthy starting state first: without this, an initially-disabled
 		// control would satisfy the post-degradation `toBeDisabled` without the
-		// storage latch ever changing the UI. The confirm action is the right probe —
-		// its disabled prop is `loading || storageDegraded`, independent of form
-		// validity (the process button also folds in `!isValid`, which holds before
-		// any amount is entered).
+		// storage latch ever changing the UI. An amount is entered so that both
+		// actions start enabled (each folds in `!isValid`, which holds before any
+		// amount is entered).
 		await waitFor(() => expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled());
 
 		await killStorageWorker();
@@ -783,6 +896,8 @@ describe('RefundOrderForm while storage is degraded', () => {
 		mockEnableRefundActions = true;
 		render(<RefundOrderForm order={order} />);
 		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+		// The gateway lookup holds the button (loading) until it settles; the click must land after.
+		await waitFor(() => expect(screen.getByTestId('process-refund-button')).toBeEnabled());
 
 		fireEvent.click(screen.getByTestId('process-refund-button'));
 		expect(screen.getByTestId('refund-confirm-dialog')).toHaveAttribute('data-open', 'true');
