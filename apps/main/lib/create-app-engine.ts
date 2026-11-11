@@ -23,6 +23,7 @@ import {
 import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
+import { armScannerResetNotice } from '@wcpos/utils/scanner-reset-notice';
 import { purgeLegacyDatabases } from '@wcpos/database/purge-legacy-db';
 import { scopeDatabaseFiles } from '@wcpos/database/scope-database-files';
 import { defaultConfig } from '@wcpos/database/adapters/default';
@@ -946,7 +947,11 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			if (legacyPurgeStarted) return;
 			legacyPurgeStarted = true;
 			try {
-				await purgeLegacyDatabases();
+				// A retired user database held this till's scanner settings: tell the cashier once.
+				// Read defensively: the Electron purge answers with its main process's own shape.
+				const result = (await purgeLegacyDatabases()) as
+					{ legacyUserDatabaseFound?: unknown } | null | undefined;
+				if (result?.legacyUserDatabaseFound === true) armScannerResetNotice();
 			} catch (error) {
 				engineLogger.error('Failed to purge legacy databases', {
 					code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,

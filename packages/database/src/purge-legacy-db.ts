@@ -4,7 +4,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { NATIVE_SQLITE_ROOT } from './adapters/storage/sqlite-root';
-import { isLegacyAppDatabaseName } from './database-names';
+import { isLegacyAppDatabaseName, isLegacyUserDatabaseName } from './database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'purge-legacy']);
 const EXPO_OPFS_ROOT = new Directory(Paths.document, '.expo-opfs');
@@ -15,6 +15,8 @@ export interface PurgeLegacyDBResult {
 	success: boolean;
 	message: string;
 	databasesDeleted: number;
+	/** A retired user database was among the deleted entries: its device-local settings are gone. */
+	legacyUserDatabaseFound: boolean;
 }
 
 const deleteLegacySQLiteDatabases = (directory: Directory) => {
@@ -22,7 +24,7 @@ const deleteLegacySQLiteDatabases = (directory: Directory) => {
 
 	if (!directory.exists) {
 		dbLogger.debug('SQLite database directory does not exist');
-		return 0;
+		return { count: 0, userDatabaseFound: false };
 	}
 
 	// `Documents/SQLite` is expo-sqlite's SHARED directory, not a WCPOS-owned one,
@@ -41,33 +43,40 @@ const deleteLegacySQLiteDatabases = (directory: Directory) => {
 	// `-wal`/`-shm` are SQLite's sidecars for a database already counted below —
 	// they are deleted with it, but they are not themselves databases, and this
 	// count is what the user-facing message reports.
-	return legacyEntries.filter(
-		(entry) => !entry.name.endsWith('-wal') && !entry.name.endsWith('-shm')
-	).length;
+	return {
+		count: legacyEntries.filter(
+			(entry) => !entry.name.endsWith('-wal') && !entry.name.endsWith('-shm')
+		).length,
+		userDatabaseFound: legacyEntries.some((entry) => isLegacyUserDatabaseName(entry.name)),
+	};
 };
 
 const deleteLegacyFilesystemDatabases = () => {
 	if (!EXPO_OPFS_ROOT.exists) {
 		dbLogger.debug('Expo OPFS root does not exist');
-		return 0;
+		return { count: 0, userDatabaseFound: false };
 	}
 
 	// The entire retired engine root is WCPOS-owned, including current-generation remnants.
-	const count = EXPO_OPFS_ROOT.list().filter((item) =>
+	const children = EXPO_OPFS_ROOT.list().filter((item) =>
 		item.name.startsWith(RXDB_DIRECTORY_PREFIX)
-	).length;
+	);
 	EXPO_OPFS_ROOT.delete();
-	return count;
+	return {
+		count: children.length,
+		userDatabaseFound: children.some((item) => isLegacyUserDatabaseName(item.name)),
+	};
 };
 
 export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
 	try {
 		dbLogger.debug('Starting to purge legacy application databases');
-		const deletedSQLiteDatabases =
-			deleteLegacySQLiteDatabases(LEGACY_SQLITE_DIRECTORY) +
-			deleteLegacySQLiteDatabases(NATIVE_SQLITE_ROOT);
-		const deletedFilesystemDatabases = deleteLegacyFilesystemDatabases();
-		const databasesDeleted = deletedSQLiteDatabases + deletedFilesystemDatabases;
+		const purged = [
+			deleteLegacySQLiteDatabases(LEGACY_SQLITE_DIRECTORY),
+			deleteLegacySQLiteDatabases(NATIVE_SQLITE_ROOT),
+			deleteLegacyFilesystemDatabases(),
+		];
+		const databasesDeleted = purged.reduce((total, { count }) => total + count, 0);
 		const message =
 			databasesDeleted > 0
 				? `Successfully purged ${databasesDeleted} legacy database entries`
@@ -79,6 +88,7 @@ export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
 			success: true,
 			message,
 			databasesDeleted,
+			legacyUserDatabaseFound: purged.some(({ userDatabaseFound }) => userDatabaseFound),
 		};
 	} catch (error) {
 		dbLogger.error('Failed to purge legacy databases', {
