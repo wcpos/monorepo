@@ -13,6 +13,7 @@ import { remoteIdOrNull, remoteKeyFor } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { type CloseContext, closeRegister } from '../../src/register-session/close';
+import { drainRegisterSessionQueue } from '../../src/register-session/queue';
 import {
 	readLiveSession,
 	readRegister,
@@ -186,7 +187,7 @@ it('closes: the session, its closure from the session accounting, the live copy 
 		counted_float: null,
 		business_day: null,
 	});
-	const closure = await closeRegister(ctx, 's1', {
+	const { closure } = await closeRegister(ctx, 's1', {
 		counted: { cash: '125', stripe: '0' },
 		note: 'Short',
 		denominations: [{ value: '5', pieces: 25 }],
@@ -269,7 +270,7 @@ it('waits for a missing refund parent, then closes with the refund on its tender
 	});
 	await engineDB.collections.orders.insert(parent);
 	arrive();
-	const closure = await closing;
+	const { closure } = await closing;
 	expect(closure.till_expected).toEqual({ cash: '105.0000', stripe: '-20.0000' });
 	expect(closure.movement_ids).toEqual(['late']);
 	expect(engine.demandEvents).toContain('release:targeted-records');
@@ -287,7 +288,7 @@ it('closes with the accounting it has once the parent wait times out', async () 
 		});
 		const closing = closeRegister(ctx, 's1', { counted: { cash: '80' } });
 		await jest.advanceTimersByTimeAsync(15_000);
-		const closure = await closing;
+		const { closure } = await closing;
 		expect(closure.till_expected).toEqual({ cash: '80.0000' });
 		expect(logger.warn).toHaveBeenCalledWith(
 			'Refund parent wait timed out; closing with available accounting'
@@ -313,7 +314,7 @@ describe('a refused close’s retry (#3304)', () => {
 
 	it('rewrites the closure with the corrected count, then lets the outbox send both', async () => {
 		await refusedClose();
-		const closure = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
+		const { closure } = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
 		expect(closure.toJSON()).toMatchObject({
 			counted: { cash: '100' },
 			number: 1,
@@ -340,6 +341,105 @@ describe('a refused close’s retry (#3304)', () => {
 	});
 });
 
+describe('a second close while the first is still pending (POS-30F)', () => {
+	// The store refuses a closure whose count differs from the closed session's (409
+	// wcpos_closure_counted_mismatch): the reused session's own count is what the closure carries.
+	it('writes the closure from the session’s own count, not the second one', async () => {
+		await insert();
+		await closeRegister(ctx, 's1', { counted: { cash: '90' } });
+		expect((await session()).sync_status).toBe('pending');
+		const { kept } = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
+		expect({ session: (await session()).counted, closure: (await closureRow())?.counted }).toEqual({
+			session: { cash: '90' },
+			closure: { cash: '90' },
+		});
+		expect(kept).toEqual({ cash: '90' });
+	});
+
+	it('keeps nothing on a first close, or when the second count is the same one written differently', async () => {
+		await insert();
+		expect((await closeRegister(ctx, 's1', { counted: { cash: '90' } })).kept).toBeNull();
+		const again = await closeRegister(ctx, 's1', { counted: { cash: '90.00', card: '0' } });
+		expect(again.kept).toBeNull();
+		expect(again.closure.counted).toEqual({ cash: '90' });
+	});
+
+	it('takes other tenders, the note and the denominations from the session too', async () => {
+		await insert();
+		await closeRegister(ctx, 's1', {
+			counted: { cash: '90', card: '40' },
+			note: 'first',
+			denominations: [{ value: '50', pieces: 1 }],
+		});
+		const { kept } = await closeRegister(ctx, 's1', {
+			counted: { cash: '100', card: '55' },
+			note: 'second',
+			denominations: [],
+		});
+		expect(kept).toEqual({ cash: '90', card: '40' });
+		const closure = await closureRow();
+		expect((await session()).counted).toEqual({ cash: '90', card: '40' });
+		expect(closure?.counted).toEqual({ cash: '90', card: '40' });
+		expect(closure?.breakdowns.variance_note).toBe('first');
+		expect(closure?.breakdowns.denominations).toEqual([
+			{ value: '50', pieces: 1, amount: '50.0000' },
+		]);
+	});
+
+	it('keeps only the tenders that differ', async () => {
+		await insert();
+		await closeRegister(ctx, 's1', { counted: { cash: '90', card: '50' } });
+		const { kept } = await closeRegister(ctx, 's1', { counted: { cash: '90.00', card: '40' } });
+		expect(kept).toEqual({ card: '50' });
+	});
+
+	// An interrupted close whose kept count has no cash closes again: never a cash figure nobody counted.
+	const uncounted = {
+		status: 'closed',
+		pending_status: 'closed',
+		sync_status: 'pending',
+		closed_at_gmt: '2026-10-28T17:00:00.000Z',
+		status_at: '2026-10-28T17:00:00.000Z',
+	} as const;
+	it('closes a kept count without cash again, the session and the closure on the entered count', async () => {
+		await insert({ ...uncounted, counted: { card: '10' }, closure_id: 's1' });
+		await closeRegister(ctx, 's1', { counted: { cash: '75' } });
+		expect({ session: (await session()).counted, closure: (await closureRow())?.counted }).toEqual({
+			session: { cash: '75' },
+			closure: { cash: '75' },
+		});
+	});
+
+	// The outbox's two payloads as one drain sends them: the session's status POST, then the closure.
+	const sent = async () => {
+		const http = { get: jest.fn(), post: jest.fn() };
+		http.post.mockImplementation(async (url: string, body: Record<string, unknown>) => ({
+			data:
+				url === 'closures' ? { ...body, number: 1 } : { ...(await session()), status: 'closed' },
+		}));
+		await drainRegisterSessionQueue({ storeDB, userDB, siteUuid: 'site', engine, http });
+		const counted = (path: string) =>
+			http.post.mock.calls.find(([url]) => url === path)?.[1].counted;
+		return { session: counted('sessions/s1/status'), closure: counted('closures') };
+	};
+	it.each([
+		['a reused close', { server_status: 'counting' }, { cash: '90' }],
+		[
+			'a kept count without cash',
+			{ ...uncounted, server_status: 'counting', counted: {} },
+			{ cash: '75' },
+		],
+	] as const)(
+		'the outbox sends one count for the session and the closure: %s',
+		async (_, patch, count) => {
+			await insert(patch);
+			if (!('status' in patch)) await closeRegister(ctx, 's1', { counted: { cash: '90' } });
+			await closeRegister(ctx, 's1', { counted: { cash: '75' } });
+			expect(await sent()).toEqual({ session: count, closure: count });
+		}
+	);
+});
+
 it('rejects a missing session with the domain error', async () => {
 	await expect(closeRegister(ctx, 'missing', { counted: { cash: '0' } })).rejects.toBeInstanceOf(
 		RegisterSessionRequiredError
@@ -350,7 +450,7 @@ describe('recovering a closure reservation a restart interrupted', () => {
 	/** A close that reserved its closure (numbered, figures fixed) and stopped before the row. */
 	const interrupted = async () => {
 		await insert();
-		const closure = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
+		const { closure } = await closeRegister(ctx, 's1', { counted: { cash: '100' } });
 		const row = closure.toJSON();
 		await closure.remove();
 		// The reservation as the write left it: not yet applied to the register's totals.

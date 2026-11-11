@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@wcpos/compone
 import { Toast } from '@wcpos/components/toast';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { recordApproval } from '@wcpos/query/register-session';
+import { recordApproval, type RegisterCount } from '@wcpos/query/register-session';
 
 import { recordRegisterFact, useRegisterActor } from '../../../../services/register-session/audit';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -24,7 +24,7 @@ export function ApproveSheet({
 	side: sideProp,
 }: {
 	side?: 'left' | 'right';
-	counted: Record<string, string>;
+	counted: RegisterCount['counted'];
 	note?: string;
 	denominations?: { value: string; pieces: number }[];
 	onClosed: (

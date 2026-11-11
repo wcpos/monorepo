@@ -98,7 +98,7 @@ let separator = '.';
 let expectedCash = '480.80',
 	decimals: number | undefined;
 const closure = { id: 's', number: 1 };
-const closeSession = jest.fn(async () => closure),
+const closeSession = jest.fn(async () => ({ closure, kept: null })),
 	backToSelling = jest.fn(async () => undefined);
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
@@ -144,6 +144,7 @@ jest.mock('../../components/register-count/register-amount', () => ({
 		onFocus,
 		onBlur,
 		onPressIn,
+		editable,
 	}: {
 		value: string;
 		onChangeText: (v: string) => void;
@@ -151,11 +152,14 @@ jest.mock('../../components/register-count/register-amount', () => ({
 		onFocus?: () => void;
 		onBlur?: () => void;
 		onPressIn?: () => void;
+		editable?: boolean;
 	}) => (
+		// A field that is not editable takes no typing, as a native TextInput.
 		<input
 			data-testid={testID}
 			value={value}
-			onChange={(e) => onChangeText(e.target.value)}
+			readOnly={editable === false}
+			onChange={(e) => editable !== false && onChangeText(e.target.value)}
 			onFocus={onFocus}
 			onBlur={onBlur}
 			onMouseDown={onPressIn}
@@ -164,9 +168,10 @@ jest.mock('../../components/register-count/register-amount', () => ({
 }));
 jest.mock('./approve-sheet', () => ({
 	// The host its DialogContent takes: the nearest provided, else the root.
-	ApproveSheet: ({ side }: { side?: 'left' | 'right' }) => (
+	ApproveSheet: ({ side, counted }: { side?: 'left' | 'right'; counted: unknown }) => (
 		<div
 			data-testid="approve-sheet"
+			data-counted={JSON.stringify(counted)}
 			data-side={side}
 			data-portal={String(
 				jest.requireActual('@wcpos/components/lib/overlay-host').useOverlayHost() ?? null
@@ -489,6 +494,7 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 	await waitFor(() =>
 		expect(onClosed).toHaveBeenCalledWith({
 			closure,
+			kept: null,
 			counted: '480.80',
 			expected: '480.80',
 			blind: false,
@@ -920,5 +926,56 @@ describe('a stored amount seeds the count at the count decimals', () => {
 		expect(closeSession).toHaveBeenCalledWith(
 			expect.objectContaining({ counted: { cash: '63014.56' } })
 		);
+	});
+});
+
+// POS-30F: a close interrupted after its count was written lands on the count after a relaunch;
+// closing again uses that count, so the pane shows it, locked, and asks approval for it.
+describe('a recorded count (an interrupted close)', () => {
+	const recorded = () => {
+		mockSessionStatus = 'closed';
+		mockCounted = { cash: '90' };
+	};
+	const onClosed = jest.fn();
+	const pane = () => <RegisterCount description="Shop" onBack={jest.fn()} onClosed={onClosed} />;
+	it.each([false, true])(
+		'shows it, locked, and closes with it (the session loads after mount: %s)',
+		async (late) => {
+			if (!late) recorded();
+			const view = render(pane());
+			if (late) recorded();
+			view.rerender(pane());
+			expect(screen.getByTestId('count-recorded-title').textContent).toBe(
+				'This count was already recorded. Closing the register uses it.'
+			);
+			fireEvent.click(screen.getByTestId('count-key-5'));
+			enter('100');
+			const { value, readOnly } = screen.getByTestId('count-amount') as HTMLInputElement;
+			expect({ value, readOnly }).toEqual({ value: '90', readOnly: true });
+			closeSession.mockResolvedValueOnce({ closure, kept: { card: '50' } } as never);
+			await act(async () => fireEvent.click(screen.getByTestId('count-close')));
+			expect(closeSession).toHaveBeenCalledWith(
+				expect.objectContaining({ counted: { cash: '90' } })
+			);
+			expect(onClosed.mock.calls[0][0].kept).toEqual([{ tender: 'Card counted', amount: '50' }]);
+		}
+	);
+	it('asks approval for the recorded count, the one the close uses', () => {
+		recorded();
+		approval_required = true;
+		render(pane());
+		enter('100');
+		fireEvent.click(screen.getByTestId('count-close'));
+		const counted = screen.getByTestId('approve-sheet').getAttribute('data-counted');
+		expect(JSON.parse(counted ?? 'null')).toEqual({ cash: '90' });
+	});
+	// The closure takes the session's note too, so a note typed here would be dropped.
+	it('shows the recorded note, locked, also when the session loads after mount', () => {
+		const view = render(pane());
+		recorded();
+		count_note = 'Kept note';
+		view.rerender(pane());
+		const { value, readOnly } = screen.getByTestId('count-note') as HTMLInputElement;
+		expect({ value, readOnly }).toEqual({ value: 'Kept note', readOnly: true });
 	});
 });

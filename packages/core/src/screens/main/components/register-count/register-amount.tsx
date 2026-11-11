@@ -27,7 +27,7 @@ export function RegisterAmount({
 	ref?: React.Ref<TextInputInstance>;
 } & Pick<
 	React.ComponentProps<typeof Input.InputField> & React.AriaAttributes,
-	'onBlur' | 'onFocus' | 'onPressIn' | 'aria-invalid' | 'aria-describedby'
+	'onBlur' | 'onFocus' | 'onPressIn' | 'editable' | 'aria-invalid' | 'aria-describedby'
 >) {
 	const { prefix, suffix, format } = useCurrencyFormat(currencyOptions);
 	// The locale's own zero, without the symbol that already sits beside it.

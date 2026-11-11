@@ -48,8 +48,8 @@ export {
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
 export { observeRegisterDrawer, observeRegisterStatus } from './drawer';
-export { isLiveMovement } from './drawer-rules';
+export { countRecorded, isLiveMovement } from './drawer-rules';
 export { abandonCount, beginCount } from './count';
-export { closeRegister, type RegisterCount } from './close';
+export { type CloseResult, closeRegister, type RegisterCount } from './close';
 
 export { carryDrawer, CarryAdoptionError, type CarryTarget } from './carry';

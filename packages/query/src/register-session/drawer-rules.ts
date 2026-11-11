@@ -9,6 +9,17 @@ type ClosureRef = { id: string; sync_status: string };
 export const unaccepted = (closure: { sync_status: string } | null | undefined) =>
 	!!closure && !['synced', 'superseded'].includes(closure.sync_status);
 
+/** A closed session whose count is written (an interrupted close): closing again uses it (POS-30F). */
+export const countRecorded = (
+	session:
+		| { status?: string; sync_status?: string; counted?: Readonly<{ cash?: unknown }> | null }
+		| null
+		| undefined
+) =>
+	session?.status === 'closed' &&
+	session.sync_status !== 'failed' &&
+	typeof session.counted?.cash === 'string';
+
 /**
  * The register's current session. Recover only a close this till made and never got
  * acknowledged whose closure write was interrupted (closure_id stamped, no local closure row);

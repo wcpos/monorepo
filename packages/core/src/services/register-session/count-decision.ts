@@ -9,7 +9,7 @@ type Denomination = { value: string; pieces: number };
 /** What the count pane decides from the session, the drawer, the cashier's entry and the store's policy. */
 export type CountDecision = {
 	/** Cash plus every other tender with an amount: what Close sends and the manager approves. */
-	counted: Count;
+	counted: { cash: string } & Count;
 	valid: boolean;
 	/** Counted cash less expected cash, in the count's minor units. */
 	variance: number;

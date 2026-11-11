@@ -1301,7 +1301,7 @@ jest.mock('./closure-written', () => ({
 		<button data-testid="closure-done" onClick={onDone} />
 	),
 }));
-const mockCloseSession = jest.fn(async () => ({ id: 'written' }));
+const mockCloseSession = jest.fn(async () => ({ closure: { id: 'written' }, kept: null }));
 it('pushes the written moment after close, survives the session disappearing, and Done closes', async () => {
 	const previous = currentSession,
 		previousClosure = mockHasClosure;
@@ -1326,9 +1326,9 @@ it('pushes the written moment after close, survives the session disappearing, an
 });
 
 it('refuses × while the close is in flight, then closes once it lands', async () => {
-	let land: (closure: { id: string }) => void = () => {};
+	let land: (result: { closure: { id: string }; kept: null }) => void = () => {};
 	mockCloseSession.mockImplementationOnce(
-		() => new Promise<{ id: string }>((resolve) => (land = resolve))
+		() => new Promise<{ closure: { id: string }; kept: null }>((resolve) => (land = resolve))
 	);
 	const onOpenChange = jest.fn();
 	render(<RegisterPanel open initialPane="count" onOpenChange={onOpenChange} />);
@@ -1340,7 +1340,7 @@ it('refuses × while the close is in flight, then closes once it lands', async (
 	await act(async () => {});
 	expect(onOpenChange).not.toHaveBeenCalled();
 	expect(mockBackToSelling).not.toHaveBeenCalled();
-	await act(async () => land({ id: 'written' }));
+	await act(async () => land({ closure: { id: 'written' }, kept: null }));
 	await waitFor(() => expect(screen.getByTestId('closure-done')).toBeTruthy());
 	fireEvent.click(screen.getByTestId('panel-x'));
 	await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));

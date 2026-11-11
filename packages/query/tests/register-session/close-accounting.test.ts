@@ -14,7 +14,11 @@ import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-m
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 
-import { type CloseContext, closeRegister } from '../../src/register-session/close';
+import {
+	type CloseContext,
+	closeRegister,
+	type RegisterCount,
+} from '../../src/register-session/close';
 import { observeSessionAccounting } from '../../src/register-session/reads';
 import { remintRegister } from '../../src/register-session/register-document';
 import * as sessionStore from '../../src/register-session/session-store';
@@ -284,7 +288,7 @@ it('closes with the old parent and refund that drove the drawer, and the countâ€
 	await insert();
 	mockRefunds.next([refundHit()]);
 	mockOrders.next([parentHit()]);
-	const closure = await closeRegister(ctx, 'session', {
+	const { closure } = await closeRegister(ctx, 'session', {
 		counted: { cash: '100' },
 		note: 'Found notes',
 		denominations: [{ value: '50', pieces: 2 }],
@@ -321,7 +325,7 @@ it.each([false, true])(
 			mockOrders.next([parentHit()]);
 			mockRefunds.next([refundHit()]);
 		}
-		const closure = await closeRegister(ctx, 'session', { counted: { cash: '100' } });
+		const { closure } = await closeRegister(ctx, 'session', { counted: { cash: '100' } });
 		expect((await sessionRow()).server_expected).toEqual({ cash: '100' });
 		expect(closure.toJSON()).toMatchObject({
 			period_refunds_total: '20.0000',
@@ -350,7 +354,7 @@ it('waits for missing refund parents before computing the closure tender', async
 	expect(writeClosure).not.toHaveBeenCalled();
 	mockOrders.next([parentHit()]);
 	resolve();
-	expect(refundsByMethod(await closing)).toEqual({ stripe: '20.0000' });
+	expect(refundsByMethod((await closing).closure)).toEqual({ stripe: '20.0000' });
 });
 
 // Revert to resolving on any accounting emission: an unchanged missing set closes with cash.
@@ -379,7 +383,7 @@ it('ignores an unrelated resident parent emission while awaiting the missing par
 	await tick();
 	const closedEarly = writeClosure.mock.calls.length > 0;
 	mockParentOrders.next([resident, parentHit()]);
-	const closure = await closing;
+	const { closure } = await closing;
 	expect(closedEarly).toBe(false);
 	expect(refundsByMethod(closure)).toEqual({ stripe: '20.0000', cash: '5.0000' });
 });
@@ -416,7 +420,7 @@ it.each([false, true])(
 		}
 		mockOrders.next([parentHit()]);
 		resolveReplacement();
-		expect(refundsByMethod(await closing)).toEqual({ stripe: '20.0000' });
+		expect(refundsByMethod((await closing).closure)).toEqual({ stripe: '20.0000' });
 	}
 );
 
@@ -448,7 +452,7 @@ it('follows replacement refund parent handles before computing the closure tende
 	replacementParent.record.payload.id = 2;
 	mockOrders.next([replacementParent]);
 	resolve();
-	expect(refundsByMethod(await closing)).toEqual({ stripe: '20.0000' });
+	expect(refundsByMethod((await closing).closure)).toEqual({ stripe: '20.0000' });
 });
 
 // Restart the deadline for a replacement generation: closing remains blocked beyond the original window.
@@ -483,7 +487,7 @@ it('shares one close deadline across replacement refund parent handles', async (
 it('keeps the baseline: allocations after the snapshot are deltas, the rest is the serverâ€™s', async () => {
 	await insert({ server_expected_at: '2026-09-17T00:00:00.000Z' });
 	mockOrders.next([parentHit('session', true, '2026-09-16')]);
-	const closure = await closeRegister(ctx, 'session', { counted: { cash: '100' } });
+	const { closure } = await closeRegister(ctx, 'session', { counted: { cash: '100' } });
 	expect(writeClosure).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			orders: [parentHit('session', true, '2026-09-16').record],
@@ -504,7 +508,7 @@ it.each([
 	mockOrders.next([
 		parentHit('session', false, createdAt, { kind: 'cash', method_id: 'cash', amount: '10' }),
 	]);
-	const closure = await closeRegister(ctx, 'session', { counted: { cash: '100' } });
+	const { closure } = await closeRegister(ctx, 'session', { counted: { cash: '100' } });
 	expect(closure.till_expected).toEqual({ cash });
 });
 
@@ -519,7 +523,7 @@ it.each([
 	refund.record.payload.date_created_gmt = createdAt;
 	mockOrders.next([parentHit('old-session', false)]);
 	mockRefunds.next([refund]);
-	const closure = await closeRegister(ctx, 'session', { counted: { cash: '100' } });
+	const { closure } = await closeRegister(ctx, 'session', { counted: { cash: '100' } });
 	expect(closure.till_expected).toEqual({ cash });
 });
 
@@ -548,7 +552,8 @@ it.each([
 		});
 		hit.record.local.dirty = true;
 		mockOrders.next([hit]);
-		const closure = await closeRegister(ctx, 'session', { counted: { [method]: '50' } });
+		const counted = { [method]: '50' } as RegisterCount['counted'];
+		const { closure } = await closeRegister(ctx, 'session', { counted });
 		expect(closure.till_expected).toEqual({ [method]: tillExpected });
 	}
 );
@@ -573,6 +578,7 @@ it.each([
 						closed_at_gmt: '2026-09-17T12:00:00Z',
 						closure_id: 'session',
 						sync_status: 'pending',
+						counted: { cash: '120' },
 					}
 				: {}),
 		});
@@ -613,6 +619,7 @@ it('replays a closed session using the stored note and denominations', async () 
 		status: 'closed',
 		closure_id: 'session',
 		sync_status: 'pending',
+		counted: { cash: '100' },
 		count_note: 'Stored note',
 		count_denominations: [{ value: '50', pieces: 2 }],
 	});
@@ -703,7 +710,7 @@ describe('#2016: a refused close', () => {
 	it('a retry from a refused abandon reads the accounting of the failed session', async () => {
 		await refusedClose({ status: 'open', sync_status: 'failed', closure_id: null }, 'pending');
 		mockOrders.next([parentHit('session', true, '2026-09-15')]);
-		const closure = await closeRegister(ctx, 'session', { counted: { cash: '110' } });
+		const { closure } = await closeRegister(ctx, 'session', { counted: { cash: '110' } });
 		expect(writeClosure).toHaveBeenCalledWith(
 			expect.objectContaining({ orders: [parentHit('session', true, '2026-09-15').record] })
 		);

@@ -1,9 +1,11 @@
 import { filter, firstValueFrom } from 'rxjs';
 
 import type { SiteDocument } from '@wcpos/database';
+import { toMinor } from '@wcpos/order-math';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import { recordRegisterFact } from './audit';
+import { countRecorded } from './drawer-rules';
 import { recordLiveSession } from './register-document';
 import { settleSessionAccounting } from './reads';
 import {
@@ -26,27 +28,59 @@ export type CloseContext = CountContext & {
 	timezone: string;
 	registerName: string;
 };
-export type RegisterCount = Omit<Parameters<typeof closeSession>[2], 'closedBy' | 'timezone'>;
+export type RegisterCount = Omit<
+	Parameters<typeof closeSession>[2],
+	'closedBy' | 'timezone' | 'counted'
+> & { counted: { cash: string } & Record<string, string> };
+/** The closure, and the count a reused session kept when the one entered now differs (POS-30F). */
+export type CloseResult = {
+	closure: Awaited<ReturnType<typeof writeClosure>>;
+	kept: Record<string, string> | null;
+};
+
+/**
+ * The kept figure of each tender the entered count differs on, in minor units ('100' is '100.00',
+ * and a tender one side lacks is zero); `null` when none differs.
+ */
+function keptTenders(
+	kept: Readonly<Record<string, string>>,
+	entered: Readonly<Record<string, string>>
+) {
+	const differing = [...new Set([...Object.keys(kept), ...Object.keys(entered)])]
+		.filter((method) => toMinor(kept[method], 4) !== toMinor(entered[method], 4))
+		.map((method): [string, string] => [method, kept[method] ?? '0']);
+	return differing.length ? Object.fromEntries(differing) : null;
+}
 
 /**
  * Close the register, whole: the status transition, the wait for the session's accounting, the
  * closure (its expected figures derived once, by `writeClosure`), a refused close's requeue, the
  * device's live copy and the audit fact.
  */
-export async function closeRegister(ctx: CloseContext, sessionId: string, count: RegisterCount) {
+export async function closeRegister(
+	ctx: CloseContext,
+	sessionId: string,
+	count: RegisterCount
+): Promise<CloseResult> {
 	const { storeDB, userDB, siteUuid, credentials } = ctx;
 	const current = await registerCollections(storeDB).register_sessions.findOne(sessionId).exec();
 	if (!current) throw new RegisterSessionRequiredError();
 	// A retry of a refused close (#3304) closes again, so a corrected count reaches the status
 	// POST; closeSession holds it out of the outbox until the closure below is rewritten.
-	const closed =
-		current.status === 'closed' && current.sync_status !== 'failed'
-			? current
-			: await closeSession(storeDB, sessionId, {
-					...count,
-					closedBy: credentials.id,
-					timezone: ctx.timezone,
-				});
+	// A kept count without cash closes again like a fresh close: the row and the closure both take
+	// the entered count, never a cash figure nobody counted.
+	const reused = countRecorded(current);
+	const closed = reused
+		? current
+		: await closeSession(storeDB, sessionId, {
+				...count,
+				closedBy: credentials.id,
+				timezone: ctx.timezone,
+			});
+	// The store refuses a closure whose count differs from the closed session's (POS-30F).
+	const own = reused ? closed.counted : null;
+	const tenders = own ?? count.counted;
+	const kept = own ? keptTenders(own, count.counted) : null;
 	const cashiers: { id?: number; display_name?: string }[] = await firstValueFrom(
 		observeSiteCredentials(ctx.site).pipe(filter((value) => value !== PENDING_USER_DB_READ))
 	);
@@ -73,11 +107,13 @@ export async function closeRegister(ctx: CloseContext, sessionId: string, count:
 		session: closed,
 		// The session as it stands after the wait: a refresh may have moved the server's snapshot.
 		baseline: { session: closed.getLatest(), refundSources: accounting.refundSources },
-		counted: count.counted.cash,
-		note: count.note ?? closed.count_note ?? '',
-		denominations: count.denominations ?? closed.count_denominations ?? [],
+		counted: own ? own.cash : count.counted.cash,
+		note: own ? (closed.count_note ?? '') : (count.note ?? closed.count_note ?? ''),
+		denominations: own
+			? (closed.count_denominations ?? [])
+			: (count.denominations ?? closed.count_denominations ?? []),
 		otherTenders: Object.fromEntries(
-			Object.entries(count.counted).filter(([method]) => method !== 'cash')
+			Object.entries(tenders).filter(([method]) => method !== 'cash')
 		),
 		movements,
 		orders: accounting.orders,
@@ -97,5 +133,5 @@ export async function closeRegister(ctx: CloseContext, sessionId: string, count:
 		counted: closure.counted,
 		variance: closure.variance,
 	});
-	return closure;
+	return { closure, kept };
 }
