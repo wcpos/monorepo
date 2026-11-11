@@ -969,4 +969,13 @@ describe('a recorded count (an interrupted close)', () => {
 		const counted = screen.getByTestId('approve-sheet').getAttribute('data-counted');
 		expect(JSON.parse(counted ?? 'null')).toEqual({ cash: '90' });
 	});
+	// The closure takes the session's note too, so a note typed here would be dropped.
+	it('shows the recorded note, locked, also when the session loads after mount', () => {
+		const view = render(pane());
+		recorded();
+		count_note = 'Kept note';
+		view.rerender(pane());
+		const { value, readOnly } = screen.getByTestId('count-note') as HTMLInputElement;
+		expect({ value, readOnly }).toEqual({ value: 'Kept note', readOnly: true });
+	});
 });

@@ -130,7 +130,9 @@ export function RegisterCount({
 		);
 		const tiles = kept.denominations ?? (recorded ? (session.count_denominations ?? []) : null);
 		if (tiles) setPieces(Object.fromEntries(tiles.map(({ value, pieces }) => [value, pieces])));
-		if (kept.note !== undefined) noteForm.setValue('note', kept.note);
+		// The closure takes a recorded count's note as well, so it shows here, locked with the rest.
+		const savedNote = kept.note ?? (recorded ? (session.count_note ?? '') : undefined);
+		if (savedNote !== undefined) noteForm.setValue('note', savedNote);
 	});
 	React.useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- the refusal is the store's async reply, often after mount; the kept count seeds editable state once per refusal, so it cannot be derived without overwriting the cashier's edits.
@@ -299,6 +301,7 @@ export function RegisterCount({
 								ref={noteRef}
 								aria-labelledby={`${noteId}-form-item`}
 								testID="count-note"
+								editable={!recorded}
 								value={note}
 								onChangeText={(value) => noteForm.setValue('note', value)}
 								placeholder={t('register.count_note_placeholder')}
