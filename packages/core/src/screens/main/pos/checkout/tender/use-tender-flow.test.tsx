@@ -2244,6 +2244,21 @@ describe('useTenderFlow', () => {
 		expect(result.current.balanceMinor).toBe(4295);
 		await act(async () => {});
 	});
+
+	// #3506: a scan at the checkout column adds a line; the open tender follows the new total.
+	it('follows a new order total with no tender change: due and balance read it', async () => {
+		const { result, rerender } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.balanceMinor).toBe(9295);
+		expect(result.current.figures.dueMinor).toBe(9295);
+
+		mockPayload = { ...mockPayload, total: '104.95' };
+		rerender();
+
+		expect(result.current.totalMinor).toBe(10495);
+		expect(result.current.balanceMinor).toBe(10495);
+		expect(result.current.figures.dueMinor).toBe(10495);
+		await act(async () => {});
+	});
 });
 
 let mockSize = 'sm';

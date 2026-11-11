@@ -154,6 +154,10 @@ jest.mock('../../../packages/core/src/screens/main/pos/checkout/checkout-mode', 
 jest.mock('../../../packages/core/src/screens/main/pos/checkout/column/checkout-column', () => ({
 	CheckoutColumn: () => null,
 }));
+// The checkout-stage scan consumer (#3506) is not under test here; it pulls the toast stack.
+jest.mock('../../../packages/core/src/screens/main/pos/columns/tender-scans', () => ({
+	TenderScans: () => null,
+}));
 jest.mock(
 	'../../../packages/core/src/screens/main/pos/checkout/receipt-stage/receipt-stage',
 	() => ({ ReceiptStage: () => null })
