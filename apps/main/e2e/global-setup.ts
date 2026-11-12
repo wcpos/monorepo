@@ -8,7 +8,12 @@ import {
 	LOADED_COUNT_READY,
 	LOADED_COUNT_TEST_ID,
 } from './catalogue-readiness';
-import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
+import {
+	ALL_E2E_CASHIER_USERNAMES,
+	cashierAuthStateName,
+	currentShardIndex,
+	getE2ECashierAuth,
+} from './cashier-slot';
 import {
 	COLD_START_ENABLED,
 	COLD_START_STATE_NAME,
@@ -556,7 +561,8 @@ function runCashierLogins(shards: number) {
 				storeUrl,
 				username: login.username,
 				password: login.password,
-				openers: [...new Set(openers)],
+				// Every band's cashiers too: a PR run cleans a stray a push run left, and back.
+				openers: [...new Set([...openers, ...ALL_E2E_CASHIER_USERNAMES])],
 			};
 		}
 	);
