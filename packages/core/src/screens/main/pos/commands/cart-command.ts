@@ -8,6 +8,7 @@ import {
 	dispatchAction,
 } from '../../../../extensions/actions';
 
+import type { CartWriteCoupons } from './settle-cart-write';
 import type { useCartWrite } from './use-cart-write';
 import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order';
@@ -20,7 +21,8 @@ type SettledWrite = ReturnType<typeof useCartWrite>['settledWrite'];
 /** The settled write in the slot's queue, to the revision the bottom read (default: target). */
 export type SlotWrite = (
 	data: Parameters<SettledWrite>[0]['data'],
-	snapshot?: CurrentOrderRecord
+	snapshot?: CurrentOrderRecord,
+	coupons?: CartWriteCoupons
 ) => ReturnType<SettledWrite>;
 
 export interface CartCommandSlot<E extends CartCommandEvent> {
@@ -77,8 +79,8 @@ export function cartCommand<E extends CartCommandEvent>(
 						ctx: deps.ctx,
 						input: { orderId: target.uuid, actor: deps.actor, source: 'user', payload },
 						bottom: (e) =>
-							bottom(e, (data, snapshot = target) =>
-								deps.settledWrite({ document: snapshot, queue, data })
+							bottom(e, (data, snapshot = target, coupons) =>
+								deps.settledWrite({ document: snapshot, queue, data, ...(coupons && { coupons }) })
 							),
 					}),
 			});
