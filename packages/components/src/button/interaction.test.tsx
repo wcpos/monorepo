@@ -121,3 +121,10 @@ it('a link verb is underlined only on a theme whose trait says its link ink is t
 	);
 	expect(screen.getByTestId('context').className.split(' ')).not.toContain('underline');
 });
+it('takes only icon names from ICON_NAMES as a string icon', () => {
+	// @ts-expect-error: an icon name outside ICON_NAMES must not compile (closures "document", 2026-11-11).
+	const bad = <Button leftIcon="document">x</Button>;
+	const good = <Button leftIcon="download">x</Button>;
+	expect(bad).toBeDefined();
+	expect(good).toBeDefined();
+});
