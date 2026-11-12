@@ -57,6 +57,9 @@ export const mockState = {
 	data: {} as ReportsData,
 	/** Named figures a test pins over the ones the orders give. */
 	figures: undefined as Partial<SalesFigures> | undefined,
+	/** What `useReportLinesLoaded` answers; and whether the real product demand runs. */
+	linesLoaded: true,
+	realProductDemand: false,
 };
 export function setOrders(orders: ReportOrder[]) {
 	const dateRange = {
@@ -160,7 +163,21 @@ jest.mock('../../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),
 }));
 jest.mock('../bar', () => ({ ScopeHint: () => null }));
-jest.mock('./use-report-product-demand', () => ({ useReportProductDemand: jest.fn() }));
+// Hermetic by default; a test that sets `realProductDemand` runs the real hook, online.
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('./use-report-product-demand', () => {
+	const actual = jest.requireActual<typeof import('./use-report-product-demand')>(
+		'./use-report-product-demand'
+	);
+	return {
+		...actual,
+		useReportLinesLoaded: () => mockState.linesLoaded,
+		useReportProductDemand: (...args: Parameters<typeof actual.useReportProductDemand>) =>
+			mockState.realProductDemand ? actual.useReportProductDemand(...args) : undefined,
+	};
+});
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: jest.requireActual('react-error-boundary').ErrorBoundary,
 }));
