@@ -137,12 +137,12 @@ export function useCustomerDisplayService(): void {
 				});
 			});
 		// Back in the foreground: re-read displays at once rather than on the next poll.
-		const appState = AppState.addEventListener('change', (next) => {
+		const appStateSubscription = AppState.addEventListener('change', (next) => {
 			if (next === 'active') startedService?.wake();
 		});
 
 		return () => {
-			appState.remove();
+			appStateSubscription.remove();
 			cancelled = true;
 			if (serviceHttpRef.current === httpBinding) serviceHttpRef.current = null;
 			if (startedService && getCustomerDisplayService() === startedService) {
