@@ -44,7 +44,7 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 	const groups = summary.parts.filter((row) => !NON_GROUP_KEYS.has(row.key)).length;
 	const count = { count: groups, n: quantity(groups) };
 	const labels: Record<string, string> = {
-		unknown: t('reports.not_on_this_device'),
+		unknown: t('reports.unknown_product'),
 		uncategorised: t('reports.uncategorised'),
 		nobrand: t('reports.no_brand'),
 	};
@@ -84,7 +84,7 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 				)}
 			{summary.unknownLines > 0 && (
 				<Text testID={`card-${group}-unknown`} variant="key">
-					{t('reports.lines_not_on_this_device', {
+					{t('reports.lines_without_local_product', {
 						n: quantity(summary.unknownLines),
 						m: quantity(summary.totalLines),
 					})}

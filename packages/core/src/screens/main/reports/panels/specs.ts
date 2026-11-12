@@ -265,7 +265,7 @@ export function panelSpec(
 				labels[row.key] ||
 				unknown;
 			const labels: Record<string, string> = {
-				unknown: t('reports.not_on_this_device'),
+				unknown: t('reports.unknown_product'),
 				uncategorised: t('reports.uncategorised'),
 				nobrand: t('reports.no_brand'),
 			};

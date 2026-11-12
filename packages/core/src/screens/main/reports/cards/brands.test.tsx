@@ -42,7 +42,7 @@ it('names the lines without a local product', () => {
 	mockProducts.next([]);
 	render(<PeriodSection />);
 	expect(screen.getByTestId('card-brands-unknown').textContent).toBe(
-		'1 of 1 lines are for products not on this device'
+		'1 of 1 lines have no local product'
 	);
 });
 it('counts only real brands in the centre, not the products off this device or without a brand', () => {

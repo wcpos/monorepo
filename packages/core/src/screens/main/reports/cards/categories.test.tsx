@@ -31,10 +31,10 @@ it('names the lines without a local product', () => {
 	mockProducts.next([]);
 	render(<CategoriesCard />);
 	expect(screen.getByTestId('card-categories-unknown').textContent).toBe(
-		'1 of 1 lines are for products not on this device'
+		'1 of 1 lines have no local product'
 	);
 	expect(screen.getByTestId('card-categories-donut-row-unknown').textContent).toContain(
-		'Not on this device'
+		'Unknown product'
 	);
 });
 it('counts only real categories in the centre', () => {
