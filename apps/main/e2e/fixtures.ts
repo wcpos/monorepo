@@ -35,11 +35,11 @@ import { restoreLocalStorageAsClone, type SavedAuthState } from './indexeddb-hel
 import { quarantineGate } from './quarantine';
 import {
 	boundRegister,
+	createRegisterReadRecorder,
 	isSuiteRegister,
-	nextRegisterReads,
 	pickSuiteRegister,
 	type RegisterName,
-	type RegisterReads,
+	type RegisterReadRecorder,
 	SUITE_REGISTER_NAME,
 } from './suite-register';
 
@@ -219,23 +219,30 @@ export async function ensureRegisterOpen(
 const REGISTER_SETTLE_TIMEOUT_MS = 30_000;
 
 /** The register list and last single register each page's app read, as the store answered them. */
-const registerDirectories = new WeakMap<Page, RegisterReads>();
+const registerDirectories = new WeakMap<Page, RegisterReadRecorder>();
+
+function storeIdOf(url: string): string | null {
+	try {
+		return new URL(url).searchParams.get('store_id');
+	} catch {
+		return null;
+	}
+}
 
 /** Record the app's register reads; attached before boot by `hydrateAuthenticatedPage`. */
 function observeRegisterDirectory(page: Page): void {
+	const recorder = createRegisterReadRecorder();
+	registerDirectories.set(page, recorder);
 	page.on('response', (response) => {
-		// A failed json() keeps the last list: an unreadable body does not mean no registers.
-		nextRegisterReads(registerDirectories.get(page), wcposRestRoute(response.url()), () =>
+		recorder.observe(wcposRestRoute(response.url()), storeIdOf(response.url()), () =>
 			response.json()
-		).then((reads) => {
-			if (reads) registerDirectories.set(page, reads);
-		});
+		);
 	});
 }
 
 /** The register the device is bound to, or null until the app's reads and the bar settle. */
 async function readBoundRegister(page: Page): Promise<RegisterName | null> {
-	const directory = registerDirectories.get(page);
+	const directory = registerDirectories.get(page)?.current();
 	if (!directory) return null;
 	const place = page.getByTestId('register-bar-place').first();
 	return boundRegister(
@@ -266,7 +273,7 @@ async function pickSuiteRegisterIfShown(page: Page): Promise<void> {
 	const rows = page.locator('[data-testid^="register-picker-row-"]');
 	const state = async () => {
 		if ((await rows.count()) > 0) return 'picker';
-		const directory = registerDirectories.get(page);
+		const directory = registerDirectories.get(page)?.current();
 		if (!directory) return 'pending';
 		return ((directory.list?.length ?? 0) <= 1 && (directory.list || directory.single)) ||
 			(await readBoundRegister(page))

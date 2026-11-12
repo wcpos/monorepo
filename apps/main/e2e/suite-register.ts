@@ -27,23 +27,62 @@ export interface RegisterReads {
 	single?: RegisterName;
 }
 
-/** Record only register reads, preserving the previous reads when a response body rejects. */
-export async function nextRegisterReads(
-	prev: RegisterReads | undefined,
-	route: string | null | undefined,
-	body: () => Promise<unknown>
-): Promise<RegisterReads | undefined> {
-	if (route !== '/wcpos/v2/registers' && !/^\/wcpos\/v2\/registers\/([^/]+)$/.test(route ?? ''))
-		return prev;
-	try {
-		const row = (await body()) as RegisterName;
-		if (route === '/wcpos/v2/registers') return { ...prev, list: Array.isArray(row) ? row : [] };
-		if (typeof row?.id === 'string' && typeof row?.name === 'string')
-			return { ...prev, single: { id: row.id, name: row.name } };
-	} catch {
-		return prev;
-	}
-	return prev;
+/** One page's register reads, kept in arrival order. `observe` never throws or rejects. */
+export interface RegisterReadRecorder {
+	/**
+	 * `route` is `wcposRestRoute(url)`. `storeId` is the request's `store_id` query value, or null.
+	 * `body` is the response's json() promise.
+	 */
+	observe(
+		route: string | null | undefined,
+		storeId: string | null,
+		body: () => Promise<unknown>
+	): void;
+	/** The reads so far, or undefined before the first list or single read is recorded. */
+	current(): RegisterReads | undefined;
+	/** Resolves when every body observed so far has settled (for tests; never rejects). */
+	settled(): Promise<void>;
+}
+
+export function createRegisterReadRecorder(): RegisterReadRecorder {
+	let generation = 0;
+	let singleTaken = false;
+	let store: string | null | undefined;
+	let list: RegisterName[] | undefined;
+	let single: RegisterName | undefined;
+	const pending: Promise<void>[] = [];
+	return {
+		observe(route, storeId, body) {
+			const isList = route === '/wcpos/v2/registers';
+			const id = /^\/wcpos\/v2\/registers\/([^/]+)$/.exec(route ?? '')?.[1];
+			if (!isList && (!id || id === 'health' || !generation || singleTaken)) return;
+			if (isList) {
+				generation++;
+				single = undefined;
+				singleTaken = false;
+				if (storeId !== store) list = undefined;
+				store = storeId;
+			} else singleTaken = true;
+			const observed = generation;
+			pending.push(
+				(async () => {
+					try {
+						const row = (await body()) as RegisterName;
+						if (observed !== generation) return;
+						if (isList) list = Array.isArray(row) ? row : [];
+						else if (typeof row?.id === 'string' && typeof row?.name === 'string')
+							single = { id: row.id, name: row.name };
+					} catch {
+						// An unreadable body keeps only the same store's last list.
+					}
+				})()
+			);
+		},
+		current: () => (generation ? { ...(list && { list }), ...(single && { single }) } : undefined),
+		settled: async () => {
+			await Promise.all(pending);
+		},
+	};
 }
 
 /** A register the suite created: named exactly `Register`, or the docs register on demo (by id). */
@@ -77,12 +116,15 @@ export function boundRegister<T extends RegisterName>(
 	directory: readonly T[],
 	single?: RegisterName
 ): T | RegisterName | null {
-	if (directory.length === 1) return directory[0];
-	const named = directory.filter((row) => place.endsWith(` · ${row.name}`));
+	const namesNone = !place.includes(' · ');
+	const named = directory.filter(
+		(row) => (directory.length === 1 && namesNone) || place.endsWith(` · ${row.name}`)
+	);
 	// "Store · A · Register" names "A · Register" before "Register": the longest name is the one.
 	const bound = named.sort((a, b) => b.name.length - a.name.length)[0] ?? null;
+	if (bound && single && bound.id !== single.id) return null;
 	if (bound || directory.length > 0 || !single) return bound;
-	return !place.includes(' · ') || place.endsWith(` · ${single.name}`) ? single : null;
+	return namesNone || place.endsWith(` · ${single.name}`) ? single : null;
 }
 
 const PICKER_ROWS = '[data-testid^="register-picker-row-"]';
