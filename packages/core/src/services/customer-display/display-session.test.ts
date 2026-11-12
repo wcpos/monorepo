@@ -15,6 +15,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	}),
 }));
 
+// Like react-native-webrtc's channel, close() leaves the listeners on: open()/message() can still fire late.
 class FakePeer implements OffererPeer {
 	channelState: 'connecting' | 'open' | 'closed' = 'connecting';
 	sent: string[] = [];
@@ -501,6 +502,81 @@ describe('reconnect', () => {
 			expect.anything()
 		);
 		session.close();
+	});
+
+	describe('a retired peer’s late callbacks', () => {
+		// Peer 0 opens and says hello, then a newer ready retires it and peer 1 is offered.
+		async function reoffered(extra: Parameters<typeof setup>[2] = {}) {
+			const harness = setup(undefined, undefined, extra);
+			const offerIds = [10, 13];
+			jest
+				.mocked(harness.signaling.postSignal)
+				.mockImplementation(async () => offerIds.shift() ?? null);
+			await harness.session.poll();
+			hello(harness.peers[0]);
+			harness.peers[0].message({ type: 'ping' });
+			harness.setSignals([ready(12)]);
+			await harness.session.poll();
+			expect(harness.peers).toHaveLength(2);
+			expect(harness.peers[0].channelState).toBe('closed');
+			return harness;
+		}
+
+		test('a late ping arms no silence timer on the replacement', async () => {
+			const { session, peers } = await reoffered();
+			peers[0].message({ type: 'ping' });
+			hello(peers[1]);
+
+			await jest.advanceTimersByTimeAsync(20_000);
+
+			expect(peers[1].channelState).toBe('open');
+			expect(session.isConfigured).toBe(true);
+		});
+
+		test('a late hello leaves the replacement unconfigured and its hello timer armed', async () => {
+			const { session, peers } = await reoffered();
+			peers[1].open();
+			peers[0].message({
+				wcpos: 1,
+				id: 'old-hello',
+				action: 'display.hello',
+				payload: { template: { id: 'ledger', version: 2 } },
+			});
+
+			expect(session.isConfigured).toBe(false);
+			expect(peers[1].sent).toEqual([]);
+			await jest.advanceTimersByTimeAsync(10_000);
+			expect(peers[1].channelState).toBe('closed');
+		});
+
+		test('a late open leaves the replacement’s hello timer intact', async () => {
+			const { session, peers } = await reoffered();
+			peers[1].open();
+			peers[0].open();
+			peers[1].message({
+				wcpos: 1,
+				id: 'new-hello',
+				action: 'display.hello',
+				payload: { template: { id: 'ledger', version: 2 } },
+			});
+
+			await jest.advanceTimersByTimeAsync(10_000);
+
+			expect(peers[1].channelState).toBe('open');
+			expect(session.isConfigured).toBe(true);
+		});
+
+		test('a late open on a stopped session reports no connection change', async () => {
+			const onConnectionChange = jest.fn();
+			const { session, peers } = setup(undefined, undefined, { onConnectionChange });
+			await session.poll();
+			session.close();
+			onConnectionChange.mockClear();
+
+			peers[0].open();
+
+			expect(onConnectionChange).not.toHaveBeenCalled();
+		});
 	});
 
 	test('close posts one best-effort bye for the active session', async () => {

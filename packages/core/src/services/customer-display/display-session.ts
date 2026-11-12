@@ -190,14 +190,18 @@ export class DisplaySession {
 		this.pendingCandidates = [];
 		this.answerAccepted = false;
 		let opened = false;
+		// A retired peer's native channel can still deliver open/message after close(); ignore them.
 		peer.onOpen(() => {
+			if (this.peer !== peer || this.stopped) return;
 			opened = true;
 			this.clearSnapshotTimer();
 			logger.warn('Customer display channel opened', { context: { displayId: this.display.id } });
 			this.helloTimer = setTimeout(() => peer.close(), HELLO_TIMEOUT_MS);
 			this.onConnectionChange();
 		});
-		peer.onMessage((text) => this.handleMessage(text));
+		peer.onMessage((text) => {
+			if (this.peer === peer && !this.stopped) this.handleMessage(text);
+		});
 		peer.onClose(() => {
 			if (this.peer !== peer) return;
 			if (this.helloTimer) clearTimeout(this.helloTimer);
