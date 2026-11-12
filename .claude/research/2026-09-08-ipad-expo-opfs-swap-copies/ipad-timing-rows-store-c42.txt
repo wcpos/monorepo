@@ -1,0 +1,89 @@
+53 docs in file
+6 timing report rows
+keys: ['_attachments', '_deleted', '_meta', '_rev', 'category', 'context', 'count', 'firstSeen', 'lastSeen', 'level', 'logId', 'message', 'seq', 'sizeBytes', 'timestamp']
+
+=== row 1  ts=1788885044721  periodMs=60000
+lag: {"samples": 927, "blockedMs": 13722.101083040237, "maxMs": 5259.973917007446, "buckets": {"16": 23, "50": 13, "100": 5, "250": 3, "500": 2, "1000": 2}}
+  wrapped _rxdb_internal               bulkWrite          calls=   66 total= 21054.4 max= 1553.5 rows=    73 slow=[27.9, 40.0, 56.2, 69.8, 78.3]
+  raw     _rxdb_internal               findDocumentsById  calls=   70 total= 11494.6 max= 1303.1 rows=   206 slow=[240.1, 148.8, 64.3, 58.0, 53.8]
+  raw     _rxdb_internal               bulkWrite          calls=   66 total= 10595.5 max=  932.5 rows=    73 slow=[23.7, 35.9, 50.5, 65.3, 76.5]
+  wrapped logs                         bulkWrite          calls=   11 total=  6774.8 max= 2154.3 rows=    11 slow=[78.7, 22.2, 33.6, 22.8, 31.9]
+  raw     logs                         bulkWrite          calls=   11 total=  5953.1 max= 2059.0 rows=    11 slow=[2058.8, 2059.0, 1766.9, 33.5]
+  wrapped _rxdb_internal               findDocumentsById  calls=   43 total=  2200.7 max=  478.3 rows=   148 slow=[243.4, 152.1, 67.6, 61.3, 57.1]
+  wrapped _rxdb_internal               query              calls=   25 total=  1282.8 max=  111.3 rows=   775 slow=[47.1, 47.0, 46.9, 46.8, 46.0]
+  raw     _rxdb_internal               query              calls=   25 total=  1252.8 max=   97.9 rows=   775 slow=[47.0, 46.9, 46.8, 46.7, 45.8]
+  wrapped logs                         query              calls=    2 total=  1156.8 max=  800.5 rows=    35 slow=[356.2, 800.5]
+  raw     logs                         query              calls=    2 total=  1072.0 max=  777.1 rows=    35 slow=[294.9, 777.1]
+  wrapped stores                       findDocumentsById  calls=    2 total=   748.2 max=  745.3 rows=     3 slow=[745.3]
+  wrapped notifications                query              calls=    1 total=   674.3 max=  674.3 rows=     1 slow=[674.3]
+
+=== row 2  ts=1788885105614  periodMs=60000
+lag: {"samples": 141, "blockedMs": 53904.8840829134, "maxMs": 3703.9941660165787, "buckets": {"16": 107, "50": 76, "100": 46, "250": 32, "500": 26, "1000": 23}}
+  wrapped orders-search-v4-en_flexsearch bulkWrite          calls=    9 total=   406.7 max=  111.0 rows=    40 slow=[24.0, 107.2, 101.3, 26.0, 111.0]
+  raw     orders-search-v4-en_flexsearch bulkWrite          calls=    9 total=   265.0 max=  100.5 rows=    40 slow=[42.9, 100.5, 86.0]
+  raw     orders-search-v4-en_flexsearch findDocumentsById  calls=    5 total=   140.1 max=   64.1 rows=    36 slow=[23.3, 64.1, 25.2, 24.9]
+  wrapped variations-search-v4-en_flexsearch bulkWrite          calls=    5 total=   127.1 max=   52.8 rows=     9 slow=[22.3, 22.9, 27.0, 52.8]
+  wrapped categories-search-v4-en_flexsearch bulkWrite          calls=    5 total=   104.0 max=   33.0 rows=     5 slow=[24.0, 21.7, 23.5, 33.0]
+  wrapped brands-search-v4-en_flexsearch bulkWrite          calls=    5 total=   102.0 max=   31.2 rows=     5 slow=[24.0, 23.2, 21.8, 31.2]
+  wrapped products-search-v4-en_flexsearch bulkWrite          calls=    5 total=    99.1 max=   26.7 rows=     6 slow=[21.9, 23.1, 26.4, 26.7]
+  raw     variations-search-v4-en_flexsearch findDocumentsById  calls=    5 total=    95.3 max=   26.3 rows=     9 slow=[21.7, 22.1, 26.3, 24.0]
+  raw     brands-search-v4-en_flexsearch findDocumentsById  calls=    5 total=    90.2 max=   23.3 rows=     5 slow=[23.3, 22.4, 21.0, 22.3]
+  raw     categories-search-v4-en_flexsearch findDocumentsById  calls=    5 total=    88.0 max=   22.7 rows=     5 slow=[21.6, 21.0, 22.7, 21.5]
+  raw     products-search-v4-en_flexsearch findDocumentsById  calls=    4 total=    69.3 max=   25.6 rows=     4 slow=[21.2, 22.4, 25.6]
+  wrapped coverageRecords              query              calls=    1 total=    39.1 max=   39.1 rows=   557 slow=[39.1]
+
+=== row 3  ts=1788885165615  periodMs=60000
+lag: {"samples": 701, "blockedMs": 24920.527082920074, "maxMs": 2511.6116659641266, "buckets": {"16": 26, "50": 25, "100": 20, "250": 12, "500": 10, "1000": 10}}
+  wrapped engineKv                     bulkWrite          calls=    2 total=     9.6 max=    8.6 rows=     2 slow=[]
+  raw     engineKv                     bulkWrite          calls=    2 total=     9.4 max=    8.5 rows=     2 slow=[]
+  wrapped queryTotalCacheEntries       query              calls=    2 total=     4.7 max=    2.7 rows=    28 slow=[]
+  raw     queryTotalCacheEntries       query              calls=    2 total=     4.7 max=    2.7 rows=    28 slow=[]
+  wrapped rx-state-sync_status_v1      bulkWrite          calls=    1 total=     2.9 max=    2.9 rows=     1 slow=[]
+  wrapped logs                         bulkWrite          calls=    1 total=     2.2 max=    2.2 rows=     1 slow=[]
+  raw     rx-state-sync_status_v1      findDocumentsById  calls=    1 total=     1.6 max=    1.6 rows=     1 slow=[]
+  raw     logs                         findDocumentsById  calls=    1 total=     1.5 max=    1.5 rows=     1 slow=[]
+  raw     rx-state-sync_status_v1      bulkWrite          calls=    1 total=     1.2 max=    1.2 rows=     1 slow=[]
+  raw     logs                         bulkWrite          calls=    1 total=     0.7 max=    0.7 rows=     1 slow=[]
+
+=== row 4  ts=1788885225620  periodMs=60000
+lag: {"samples": 1107, "blockedMs": 4695.054291009903, "maxMs": 25.291542053222656, "buckets": {"16": 1, "50": 0, "100": 0, "250": 0, "500": 0, "1000": 0}}
+  wrapped engineKv                     bulkWrite          calls=    2 total=    15.8 max=   13.8 rows=     2 slow=[]
+  raw     engineKv                     bulkWrite          calls=    2 total=    15.5 max=   13.7 rows=     2 slow=[]
+  wrapped queryTotalCacheEntries       query              calls=    2 total=     5.5 max=    2.8 rows=    19 slow=[]
+  raw     queryTotalCacheEntries       query              calls=    2 total=     5.4 max=    2.8 rows=    19 slow=[]
+  wrapped logs                         bulkWrite          calls=    1 total=     2.3 max=    2.3 rows=     1 slow=[]
+  wrapped rx-state-sync_status_v1      bulkWrite          calls=    1 total=     2.3 max=    2.3 rows=     1 slow=[]
+  raw     logs                         findDocumentsById  calls=    1 total=     1.4 max=    1.4 rows=     1 slow=[]
+  raw     rx-state-sync_status_v1      findDocumentsById  calls=    1 total=     1.4 max=    1.4 rows=     1 slow=[]
+  raw     logs                         bulkWrite          calls=    1 total=     0.8 max=    0.8 rows=     1 slow=[]
+  raw     rx-state-sync_status_v1      bulkWrite          calls=    1 total=     0.8 max=    0.8 rows=     1 slow=[]
+
+=== row 5  ts=1788885345626  periodMs=60000
+lag: {"samples": 1069, "blockedMs": 6672.877376079559, "maxMs": 538.5864169597626, "buckets": {"16": 23, "50": 10, "100": 7, "250": 4, "500": 1, "1000": 0}}
+  wrapped products                     bulkWrite          calls=    6 total=   434.7 max=  167.3 rows=   214 slow=[31.9, 34.6, 167.3, 25.9, 154.7]
+  raw     products                     bulkWrite          calls=    6 total=   334.1 max=  154.4 rows=   214 slow=[28.5, 31.1, 84.7, 25.2, 154.4]
+  wrapped queryTotalRequestStates      bulkWrite          calls=   21 total=   204.0 max=   28.8 rows=    21 slow=[28.8]
+  wrapped _rxdb_internal               findDocumentsById  calls=    7 total=   202.4 max=   70.0 rows=     7 slow=[24.0, 70.0, 21.3, 33.6, 25.7]
+  raw     queryTotalRequestStates      bulkWrite          calls=   21 total=   200.8 max=   28.7 rows=    21 slow=[28.7]
+  raw     _rxdb_internal               findDocumentsById  calls=    7 total=   196.3 max=   69.7 rows=     7 slow=[23.7, 69.7, 21.3, 30.5, 25.6]
+  wrapped schedulerTaskStates          bulkWrite          calls=   15 total=   165.8 max=   29.7 rows=    15 slow=[29.7]
+  wrapped orders                       findDocumentsById  calls=    4 total=   152.0 max=   43.6 rows=   199 slow=[36.2, 43.6, 34.0, 38.3]
+  raw     orders                       findDocumentsById  calls=    4 total=   151.4 max=   43.5 rows=   199 slow=[36.0, 43.5, 33.8, 38.1]
+  raw     schedulerTaskStates          bulkWrite          calls=   15 total=   142.2 max=   14.1 rows=    15 slow=[]
+  wrapped existenceManifest            bulkWrite          calls=    7 total=   117.2 max=   34.8 rows=   223 slow=[28.3, 34.8]
+  wrapped _rxdb_internal               bulkWrite          calls=    7 total=   116.4 max=   54.2 rows=     7 slow=[54.2]
+
+=== row 6  ts=1788885405627  periodMs=60000
+lag: {"samples": 1105, "blockedMs": 4788.114040970802, "maxMs": 53.21766698360443, "buckets": {"16": 3, "50": 1, "100": 0, "250": 0, "500": 0, "1000": 0}}
+  wrapped coverageRecords              query              calls=    1 total=    32.5 max=   32.5 rows=   540 slow=[32.5]
+  raw     coverageRecords              query              calls=    1 total=    32.5 max=   32.5 rows=   540 slow=[32.5]
+  wrapped rx-state-sync_status_v1      query              calls=    1 total=    29.4 max=   29.4 rows=     8 slow=[29.4]
+  raw     rx-state-sync_status_v1      query              calls=    1 total=    29.3 max=   29.3 rows=     8 slow=[29.3]
+  wrapped engineKv                     bulkWrite          calls=    2 total=    18.1 max=   15.4 rows=     2 slow=[]
+  raw     engineKv                     bulkWrite          calls=    2 total=    17.1 max=   15.1 rows=     2 slow=[]
+  wrapped rx-state-sync_status_v1      bulkWrite          calls=    3 total=    16.9 max=   12.4 rows=    10 slow=[]
+  raw     rx-state-sync_status_v1      bulkWrite          calls=    3 total=    12.6 max=   11.3 rows=    10 slow=[]
+  wrapped queryTotalCacheEntries       query              calls=    2 total=     4.2 max=    2.1 rows=    20 slow=[]
+  raw     queryTotalCacheEntries       query              calls=    2 total=     4.1 max=    2.1 rows=    20 slow=[]
+  raw     rx-state-sync_status_v1      findDocumentsById  calls=    3 total=     3.9 max=    1.5 rows=    10 slow=[]
+  wrapped logs                         bulkWrite          calls=    1 total=     3.0 max=    3.0 rows=     1 slow=[]
