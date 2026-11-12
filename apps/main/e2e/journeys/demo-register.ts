@@ -9,14 +9,15 @@ import { log } from '@wcpos/utils/logger';
 
 import { getStoreUrl, type StoreAuthorization } from '../fixtures';
 import { resolveProbeOptions } from '../probe-credential';
+import { DOCS_REGISTER_PREFIX } from '../suite-register';
 import { openCashierSheet, posLayout, showPhoneTab } from './open-register';
 
 type Row = Record<string, unknown>;
 
 /** The docs store on demo (the front desk's ruling above). */
 export const DOCS_STORE_ID = '1234';
-/** The docs register's id begins with this; the full id lives on demo, which this code never reads. */
-export const DOCS_REGISTER_PREFIX = '944ef7dc';
+// Defined beside the suite's register rule, which counts the docs register as the suite's.
+export { DOCS_REGISTER_PREFIX };
 
 /** A GET on the store's REST API, pretty permalinks first, then `?rest_route=`. */
 async function storeGet(
