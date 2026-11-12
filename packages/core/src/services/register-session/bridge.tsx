@@ -10,6 +10,7 @@ import {
 	closeRegister,
 	failureFacts,
 	findUnwrittenCloses,
+	isCloseInFlight,
 	observeRegisterSessionAvailability,
 	runRegisterSessionCycle,
 	sessionRefreshRequests,
@@ -80,6 +81,8 @@ export function RegisterSessionBridge() {
 		const finishCloses = async () => {
 			let finished = false;
 			for (const session of registerId ? await findUnwrittenCloses(storeDB, registerId) : []) {
+				// A close still running here is no interrupted close; skipping it is not an attempt.
+				if (isCloseInFlight(session.id)) continue;
 				const { attempt = 0, dueAt = 0 } = recovering.get(session.id) ?? {};
 				if (Date.now() < dueAt) continue;
 				// In flight: due again only once this attempt has failed.

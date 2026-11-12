@@ -17,7 +17,12 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 
 import type { StoreDatabase, UserDatabase } from '@wcpos/database';
-import { sessionRefreshRequests } from '@wcpos/query/register-session';
+import {
+	closeRegister,
+	sessionRefreshRequests,
+	setClosureReceiptSnapshot,
+} from '@wcpos/query/register-session';
+import { getLogger } from '@wcpos/utils/logger';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
@@ -50,6 +55,21 @@ jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'register', registerName: 'Front' }),
 }));
 jest.mock('../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'device' }) }));
+// While `mockHold.on`, each accounting settle waits until the test releases it, or fails it.
+const mockHold = { on: false, held: [] as ((error?: Error) => void)[] };
+jest.mock('../../../../query/src/register-session/reads', () => {
+	const actual = jest.requireActual('../../../../query/src/register-session/reads');
+	return {
+		...actual,
+		settleSessionAccounting: async (...args: unknown[]) => {
+			if (mockHold.on)
+				await new Promise<void>((resolve, reject) =>
+					mockHold.held.push((error) => (error ? reject(error) : resolve()))
+				);
+			return actual.settleSessionAccounting(...args);
+		},
+	};
+});
 
 const http = { post: jest.fn(), get: jest.fn() };
 const dbs: { remove: () => Promise<unknown> }[] = [];
@@ -72,6 +92,8 @@ async function storeDatabase() {
 }
 
 beforeEach(async () => {
+	mockHold.on = false;
+	mockHold.held.length = 0;
 	http.post.mockReset();
 	http.get.mockReset();
 	userDB = (await createRxDatabase({
@@ -93,7 +115,7 @@ afterEach(async () => {
 });
 
 /** Opens and closes locally, then "reloads": a fresh store database holding the persisted row. */
-async function crashAfterCloseSession(acknowledged: Record<string, unknown> = {}) {
+async function crashAfterCloseSession(acknowledged: Record<string, unknown> = {}, close = true) {
 	const before = await storeDatabase();
 	const opened = await openSession(before, {
 		registerId: 'register',
@@ -104,7 +126,9 @@ async function crashAfterCloseSession(acknowledged: Record<string, unknown> = {}
 	});
 	await opened.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
 	const counted = { cash: '96', card: '4' };
-	const closed = await closeSession(before, opened.id, { counted, note: 'Till short' });
+	const closed = close
+		? await closeSession(before, opened.id, { counted, note: 'Till short' })
+		: opened;
 	if (Object.keys(acknowledged).length) await closed.incrementalPatch(acknowledged);
 	const after = await storeDatabase();
 	await after.register_sessions.insert(closed.getLatest().toMutableJSON());
@@ -132,6 +156,24 @@ async function secondCycle(storeDB: StoreDatabase, reads: number) {
 	});
 	await new Promise((resolve) => setTimeout(resolve, 300));
 }
+
+/** The cashier's own close, as the close dialog runs it. */
+const manualClose = (storeDB: StoreDatabase, id: string) =>
+	closeRegister(
+		{
+			storeDB,
+			userDB,
+			siteUuid: 'site',
+			actor: { id: '7', name: 'Pat' },
+			engine: mockApp.engine as never,
+			site: (mockApp.session as { site: never }).site,
+			credentials: { id: 7, display_name: 'Pat' },
+			timezone: 'device',
+			registerName: 'Front',
+		},
+		id,
+		{ counted: { cash: '96', card: '4' }, note: 'Till short' }
+	);
 
 const posts = () =>
 	http.post.mock.calls.map(([url, body]) => [url, (body as { status?: string }).status ?? null]);
@@ -200,4 +242,57 @@ it('leaves imported closed history alone: synced, no closure row here, nothing w
 	view.unmount();
 	expect(await storeDB.closures.findOne(id).exec()).toBeNull();
 	expect(http.post).not.toHaveBeenCalled();
+});
+
+it('#3531: a cycle during a live close leaves it alone: one closure write, one closed fact, the receipt kept', async () => {
+	const { storeDB, id } = await crashAfterCloseSession({}, false);
+	const view = render(<RegisterSessionBridge />);
+	await waitFor(() => expect(http.get).toHaveBeenCalled(), { timeout: 3000 });
+	await new Promise((resolve) => setTimeout(resolve, 300));
+	const info = jest.mocked(getLogger(['wcpos', 'registerSession'])).info;
+	info.mockClear();
+
+	// The cashier's close, held inside its accounting settle; a bridge cycle (the minute tick's) runs meanwhile.
+	mockHold.on = true;
+	const manual = manualClose(storeDB, id);
+	await waitFor(() => expect(mockHold.held).toHaveLength(1), { timeout: 3000 });
+	await secondCycle(storeDB, http.get.mock.calls.length);
+
+	// The manual close finishes and the pane stores its receipt; then anything else held finishes.
+	mockHold.on = false;
+	mockHold.held.shift()!();
+	const { closure } = await manual;
+	await setClosureReceiptSnapshot(storeDB, closure.id, 'printed receipt');
+	const written = (await storeDB.closures.findOne(id).exec())!.toJSON(true)._rev;
+	for (const release of mockHold.held.splice(0)) release();
+	// No further trigger: an outbox send is a closure write too, and only a recovery reruns one.
+	await new Promise((resolve) => setTimeout(resolve, 500));
+	view.unmount();
+
+	const row = (await storeDB.closures.findOne(id).exec())!.toJSON(true);
+	const closedFacts = info.mock.calls.filter(([message]) => message === 'Register session closed');
+	expect({
+		writes: row._rev.split('-')[0],
+		receipt: row.receipt_snapshot,
+		closedFacts: closedFacts.length,
+	}).toEqual({ writes: written.split('-')[0], receipt: 'printed receipt', closedFacts: 1 });
+});
+
+it('#3531: a manual close that fails is no longer in flight, so the bridge finishes it', async () => {
+	const { storeDB, id } = await crashAfterCloseSession({}, false);
+	const view = render(<RegisterSessionBridge />);
+	await waitFor(() => expect(http.get).toHaveBeenCalled(), { timeout: 3000 });
+	mockHold.on = true;
+	const manual = manualClose(storeDB, id);
+	await waitFor(() => expect(mockHold.held).toHaveLength(1), { timeout: 3000 });
+	mockHold.on = false;
+	mockHold.held.shift()!(new Error('accounting failed'));
+	await expect(manual).rejects.toThrow('accounting failed');
+
+	sessionRefreshRequests.next({ storeDB, registerId: 'register' });
+	await waitFor(
+		async () => expect((await storeDB.closures.findOne(id).exec())?.sync_status).toBe('synced'),
+		{ timeout: 3000 }
+	);
+	view.unmount();
 });

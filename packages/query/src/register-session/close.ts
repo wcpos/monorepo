@@ -52,12 +52,31 @@ function keptTenders(
 	return differing.length ? Object.fromEntries(differing) : null;
 }
 
+// Recovery must never run beside a live close (#3531 review): a second close of the same session
+// rewrites its closure, drops the receipt snapshot and records the close twice.
+const closing = new Set<string>();
+/** Whether `closeRegister` is still running for this session, on this device. */
+export const isCloseInFlight = (sessionId: string) => closing.has(sessionId);
+
 /**
  * Close the register, whole: the status transition, the wait for the session's accounting, the
  * closure (its expected figures derived once, by `writeClosure`), a refused close's requeue, the
  * device's live copy and the audit fact.
  */
 export async function closeRegister(
+	ctx: CloseContext,
+	sessionId: string,
+	count: RegisterCount
+): Promise<CloseResult> {
+	closing.add(sessionId);
+	try {
+		return await closeOnce(ctx, sessionId, count);
+	} finally {
+		closing.delete(sessionId);
+	}
+}
+
+async function closeOnce(
 	ctx: CloseContext,
 	sessionId: string,
 	count: RegisterCount
