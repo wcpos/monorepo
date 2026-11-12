@@ -1,8 +1,24 @@
 import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+
+import { request as playwrightRequest, test } from '@playwright/test';
 
 import { log } from '@wcpos/utils/logger';
 
 import { type StoreAuthorization, storeRequestOptions } from './probe-credential';
+import {
+	createWriterAuthFile,
+	realWriterClock,
+	requestWriterRenewal,
+	WRITER_AUTH_FILE_ENV,
+	WRITER_POLL_MS,
+	WRITER_WAIT_MS,
+	type WriterClock,
+	writerJitterMs,
+	WriterLoginHolder,
+	writerStoreKey,
+} from './writer-login-holder';
 
 import type { APIRequestContext, APIResponse, Locator, Page } from '@playwright/test';
 
@@ -85,24 +101,52 @@ export function productWriterCredentialsConfigured(): boolean {
 	);
 }
 
-// globalSetup hands its one writer login to shard workers as JSON keyed by store URL without trailing slashes.
-export const WRITER_RUN_AUTH_ENV = 'E2E_PRODUCT_WRITER_RUN_AUTH';
-
 // The plugin's access token lives 30 minutes; estimating expiry from login start never puts it later than the server's.
 export const WRITER_ACCESS_TOKEN_TTL_MS = 30 * 60_000;
-// Require this much life for product-visibility's 20-minute VISIBILITY_TEST_TIMEOUT_MS, the longest writer-using test budget.
+// The life a worker needs when its test has no timeout (0): product-visibility's 20-minute budget, the longest.
 export const WRITER_RENEW_MARGIN_MS = 20 * 60_000;
+// Beyond the test's own timeout: its teardown's writer calls. Also the whole need outside a test (worker fixtures).
+export const WRITER_LIFE_SLACK_MS = 60_000;
+
+/** The life a writer needs for a test with this timeout (undefined: outside a test), capped so a fresh token meets it. */
+export function writerLifeNeeded(timeoutMs: number | undefined): number {
+	const needed =
+		timeoutMs === undefined
+			? WRITER_LIFE_SLACK_MS
+			: timeoutMs === 0
+				? WRITER_RENEW_MARGIN_MS
+				: timeoutMs + WRITER_LIFE_SLACK_MS;
+	return Math.min(needed, WRITER_ACCESS_TOKEN_TTL_MS - WRITER_LIFE_SLACK_MS);
+}
+
+/** The running test's need, read at call time so a raised timeout raises it too. */
+export function writerLifeNeededMs(): number {
+	let timeoutMs: number | undefined;
+	try {
+		timeoutMs = test.info().timeout;
+	} catch {
+		timeoutMs = undefined; // Outside a test: worker-fixture setup or teardown.
+	}
+	return writerLifeNeeded(timeoutMs);
+}
 // expiresAt is epoch milliseconds.
 export type WriterAuthorization = StoreAuthorization & { expiresAt: number };
 
+/** Where workers find the shard holder's authorizations; injectable so unit tests use their own. */
+export interface WriterSource extends Partial<WriterClock> {
+	file?: string;
+}
+
+/** The holder's current authorization for one store, keyed by URL without trailing slashes. */
 export function publishedWriterAuthorization(
 	storeUrl: string,
-	env: NodeJS.ProcessEnv = process.env
+	file: string | undefined = process.env[WRITER_AUTH_FILE_ENV]
 ): WriterAuthorization | null {
+	if (!file) return null;
 	try {
-		const published = JSON.parse(env[WRITER_RUN_AUTH_ENV] ?? '{}');
+		const published = JSON.parse(fs.readFileSync(file, 'utf8'));
 		if (!published || typeof published !== 'object' || Array.isArray(published)) return null;
-		const authorization = published[storeUrl.replace(/\/+$/, '')];
+		const authorization = published[writerStoreKey(storeUrl)];
 		if (
 			authorization &&
 			typeof authorization === 'object' &&
@@ -120,48 +164,41 @@ export function publishedWriterAuthorization(
 	return null;
 }
 
-export function publishWriterAuthorization(
-	storeUrl: string,
-	authorization: WriterAuthorization,
-	env: NodeJS.ProcessEnv = process.env
-): void {
-	let published: Record<string, WriterAuthorization> = {};
-	try {
-		const parsed = JSON.parse(env[WRITER_RUN_AUTH_ENV] ?? '{}');
-		if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) published = parsed;
-	} catch {
-		published = {};
-	}
-	env[WRITER_RUN_AUTH_ENV] = JSON.stringify({
-		...published,
-		[storeUrl.replace(/\/+$/, '')]: authorization,
-	});
-}
-
-export async function mintRunWriterAuthorization(
-	request: APIRequestContext,
+/**
+ * globalSetup's per-shard writer holder: it logs in only when a worker asks, and publishes a token
+ * only after one products read accepts it. Returns the teardown, or undefined without writer credentials.
+ */
+export async function startWriterLoginHolder(
 	storeUrls: string[]
-): Promise<void> {
+): Promise<(() => Promise<void>) | undefined> {
 	try {
-		if (!productWriterCredentialsConfigured()) return;
+		if (!productWriterCredentialsConfigured()) return undefined;
 	} catch {
-		log.warn('[global-setup] product-writer run login failed; specs will log in themselves');
-		return;
+		log.warn('[global-setup] product-writer credentials are incomplete; no writer holder');
+		return undefined;
 	}
-	for (const storeUrl of storeUrls) {
-		if (!storeUrl) continue;
-		try {
-			const authorization = await storeLoginAuthorization(
+	const file = createWriterAuthFile();
+	const request = await playwrightRequest.newContext();
+	const holder = new WriterLoginHolder({
+		file,
+		storeUrls: storeUrls.filter(Boolean),
+		login: (storeUrl) =>
+			storeLoginAuthorization(
 				request,
 				storeUrl,
 				process.env.E2E_PRODUCT_WRITER_USER!,
 				process.env.E2E_PRODUCT_WRITER_PASS!
-			);
-			publishWriterAuthorization(storeUrl, authorization);
-		} catch {
-			log.warn('[global-setup] product-writer run login failed; specs will log in themselves');
-		}
-	}
+			),
+		validate: async (storeUrl, authorization) =>
+			isOkStatus(await writerReadStatus(request, storeUrl, authorization)),
+	});
+	process.env[WRITER_AUTH_FILE_ENV] = file;
+	holder.start();
+	return async () => {
+		await holder.stop();
+		await request.dispose();
+		fs.rmSync(path.dirname(file), { recursive: true, force: true });
+	};
 }
 
 export function productProbeFailureAction({
@@ -213,59 +250,108 @@ export function mintSearchProbeToken(workerIndex: number): string {
  * token to an anonymous 401 — so the helper verifies the header with one read
  * and falls back to the `?authorization=` param.
  *
- * Reuse globalSetup's handed-over writer authorization only with the renewal margin
- * remaining and one products read confirming it works; otherwise log in for this call.
+ * Workers never log in: concurrent logins of the one writer user revoke each other on the
+ * plugin's session row, so this returns the shard holder's current authorization
+ * (writer-login-holder.ts), asking it for a renewal when the token has less life than this
+ * test needs. A refused one waits 2-5 s and re-reads, then asks the holder for one renewal
+ * and retries once.
  */
 export async function productWriterAuthorization(
 	request: APIRequestContext,
-	storeUrl: string
+	storeUrl: string,
+	source: WriterSource = {}
 ): Promise<WriterAuthorization | null> {
 	const user = process.env.E2E_PRODUCT_WRITER_USER;
 	const pass = process.env.E2E_PRODUCT_WRITER_PASS;
 	productWriterCredentialsDecision(user, pass);
 	if (!user || !pass) return null;
 
-	const published = publishedWriterAuthorization(storeUrl);
-	if (
-		published &&
-		published.expiresAt - Date.now() >= WRITER_RENEW_MARGIN_MS &&
-		(await writerAuthorizationAccepted(request, storeUrl, published))
-	) {
-		return published;
+	const clock = { ...realWriterClock, ...source };
+	const file = source.file ?? process.env[WRITER_AUTH_FILE_ENV];
+	const failed = (detail: string) =>
+		new Error(`Configured product-writer authentication failed (${detail})`);
+	const noHolder = () => failed(`no holder authorization within ${WRITER_WAIT_MS / 1000}s`);
+	const neededMs = writerLifeNeededMs();
+
+	let held = await awaitHolderWriter(storeUrl, file, clock, neededMs);
+	if (!held) throw noHolder();
+	let status = await writerReadStatus(request, storeUrl, held);
+	if (isOkStatus(status)) return held;
+	// A token minted while another login lands can read anonymous for a moment: wait, then re-read.
+	await clock.sleep(writerJitterMs(clock.random));
+	held = await awaitHolderWriter(storeUrl, file, clock, neededMs);
+	if (!held) throw noHolder();
+	status = await writerReadStatus(request, storeUrl, held);
+	if (isOkStatus(status)) return held;
+	const renewed = await awaitHolderWriter(storeUrl, file, clock, neededMs, held.value);
+	if (renewed) {
+		await clock.sleep(writerJitterMs(clock.random));
+		status = await writerReadStatus(request, storeUrl, renewed);
+		if (isOkStatus(status)) return renewed;
 	}
-	return storeLoginAuthorization(request, storeUrl, user, pass);
+	throw failed(status === null ? 'no response' : `HTTP ${status}`);
+}
+
+/**
+ * The holder's authorization once it has `neededMs` of life (and is not `rejected`), else null after
+ * the wait. While it has not, every poll asks the holder to renew the token this worker saw.
+ */
+async function awaitHolderWriter(
+	storeUrl: string,
+	file: string | undefined,
+	clock: WriterClock,
+	neededMs: number,
+	rejected?: string
+): Promise<WriterAuthorization | null> {
+	const deadline = clock.now() + WRITER_WAIT_MS;
+	for (;;) {
+		const held = publishedWriterAuthorization(storeUrl, file);
+		if (held && held.value !== rejected && held.expiresAt - clock.now() >= neededMs) {
+			return held;
+		}
+		if (file) requestWriterRenewal(file, storeUrl, held);
+		if (clock.now() >= deadline) return null;
+		await clock.sleep(WRITER_POLL_MS);
+	}
 }
 
 /**
  * Renew in place so worker-scoped fixtures and specs holding this one object
- * for the worker's life all receive the fresh credential.
+ * for the worker's life all receive the fresh credential, taken from the holder.
  */
 export async function renewProductWriterIfExpiring(
 	request: APIRequestContext,
 	storeUrl: string,
-	writer: WriterAuthorization
+	writer: WriterAuthorization,
+	source: WriterSource = {}
 ): Promise<boolean> {
-	if (writer.expiresAt - Date.now() >= WRITER_RENEW_MARGIN_MS) return false;
-	const fresh = await productWriterAuthorization(request, storeUrl);
+	const now = source.now ?? Date.now;
+	if (writer.expiresAt - now() >= writerLifeNeededMs()) return false;
+	const fresh = await productWriterAuthorization(request, storeUrl, source);
 	if (!fresh) return false;
 	Object.assign(writer, fresh);
 	return true;
 }
 
-async function writerAuthorizationAccepted(
+function isOkStatus(status: number | null): boolean {
+	return status !== null && status >= 200 && status < 300;
+}
+
+/** One products read with the writer authorization: its HTTP status, or null when no response came. */
+async function writerReadStatus(
 	request: APIRequestContext,
 	storeUrl: string,
 	authorization: StoreAuthorization
-): Promise<boolean> {
+): Promise<number | null> {
 	try {
 		const options = storeRequestOptions(authorization);
 		const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
 			...options,
 			params: { ...options.params, per_page: '1' },
 		});
-		return response.ok();
+		return response.status();
 	} catch {
-		return false;
+		return null;
 	}
 }
 
@@ -279,7 +365,8 @@ export async function storeLoginAuthorization(
 	storeUrl: string,
 	user: string,
 	pass: string,
-	label = 'product-writer'
+	label = 'product-writer',
+	clock: Pick<WriterClock, 'sleep' | 'random'> = realWriterClock
 ): Promise<WriterAuthorization> {
 	// The server keys auth sessions by state + redirect URI, so concurrent workers need distinct states.
 	const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe-${randomUUID()}`;
@@ -334,7 +421,10 @@ export async function storeLoginAuthorization(
 			// valid credentials (observed on dev-next 2026-08-08; an immediate
 			// identical login succeeds). One retry absorbs that flake; a genuine
 			// credential failure still throws below, never skips.
-			if (action === 'retry' || (failure.kind === 'http' && attempt === 0)) continue;
+			if (action === 'retry' || (failure.kind === 'http' && attempt === 0)) {
+				await clock.sleep(writerJitterMs(clock.random));
+				continue;
+			}
 			const status = failure.status === null ? '' : ` (HTTP ${failure.status})`;
 			if (failure.kind === 'transport') {
 				log.warn(`[search-probe] configured ${label} login transport failed`);
