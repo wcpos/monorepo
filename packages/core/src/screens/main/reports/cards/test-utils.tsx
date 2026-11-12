@@ -160,6 +160,7 @@ jest.mock('../../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),
 }));
 jest.mock('../bar', () => ({ ScopeHint: () => null }));
+jest.mock('./use-report-product-demand', () => ({ useReportProductDemand: jest.fn() }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: jest.requireActual('react-error-boundary').ErrorBoundary,
 }));
