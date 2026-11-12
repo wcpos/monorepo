@@ -22,6 +22,7 @@ import { registerCollections, type RegisterStoreDatabase } from './store-databas
 import {
 	adoptCounters,
 	isoGmt,
+	markReservationDelivered,
 	mintClosureNumber,
 	readCounters,
 	readRegister,
@@ -276,6 +277,7 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 			if (doc.collection === closures && status === 409) {
 				const closure = doc as ClosureDocument;
 				if (body?.code === 'wcpos_closure_exists' && body.data?.closure_id) {
+					await markReservationDelivered(userDB, siteUuid, closure.register_id, closure.id);
 					await closure.incrementalPatch({
 						...synced,
 						sync_status: 'superseded',
@@ -598,7 +600,8 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 						last_closure_number: server.number,
 						perpetual_sales_total: server.perpetual_sales_total,
 						perpetual_refunds_total: server.perpetual_refunds_total,
-					}
+					},
+					{ deliveredClosureId: id }
 				);
 				await row.incrementalPatch({
 					...synced,
