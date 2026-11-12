@@ -37,7 +37,8 @@ async function findTarget() {
 function openSession(target) {
 	const { pathname, search } = new URL(target.webSocketDebuggerUrl);
 	const url = new URL(pathname + search, METRO_ORIGIN.replace(/^http/, 'ws'));
-	const ws = new WebSocket(url, { handshakeTimeout: REPLY_TIMEOUT_MS });
+	// Metro's inspector proxy verifyClient refuses a missing or foreign Origin; ws sends none by default.
+	const ws = new WebSocket(url, { handshakeTimeout: REPLY_TIMEOUT_MS, origin: METRO_ORIGIN });
 	const pending = new Map(); // command id -> settle(error, message)
 	let nextId = 0;
 	ws.on('error', () => {}); // 'close' always follows and carries the outcome.
