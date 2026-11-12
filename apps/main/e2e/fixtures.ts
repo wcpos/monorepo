@@ -36,8 +36,10 @@ import { quarantineGate } from './quarantine';
 import {
 	boundRegister,
 	isSuiteRegister,
+	nextRegisterReads,
 	pickSuiteRegister,
 	type RegisterName,
+	type RegisterReads,
 	SUITE_REGISTER_NAME,
 } from './suite-register';
 
@@ -216,26 +218,31 @@ export async function ensureRegisterOpen(
  */
 const REGISTER_SETTLE_TIMEOUT_MS = 30_000;
 
-/** The latest register list each page's app read (`GET wcpos/v2/registers`), as the store answered it. */
-const registerDirectories = new WeakMap<Page, RegisterName[]>();
+/** The register list and last single register each page's app read, as the store answered them. */
+const registerDirectories = new WeakMap<Page, RegisterReads>();
 
-/** Record the app's register list reads; attached before boot by `hydrateAuthenticatedPage`. */
+/** Record the app's register reads; attached before boot by `hydrateAuthenticatedPage`. */
 function observeRegisterDirectory(page: Page): void {
 	page.on('response', (response) => {
-		if (wcposRestRoute(response.url()) !== '/wcpos/v2/registers') return;
-		response.json().then(
-			(body) => registerDirectories.set(page, Array.isArray(body) ? body : []),
-			() => registerDirectories.set(page, [])
-		);
+		// A failed json() keeps the last list: an unreadable body does not mean no registers.
+		nextRegisterReads(registerDirectories.get(page), wcposRestRoute(response.url()), () =>
+			response.json()
+		).then((reads) => {
+			if (reads) registerDirectories.set(page, reads);
+		});
 	});
 }
 
-/** The register the device is bound to, or null until the app's list and the bar settle. */
+/** The register the device is bound to, or null until the app's reads and the bar settle. */
 async function readBoundRegister(page: Page): Promise<RegisterName | null> {
 	const directory = registerDirectories.get(page);
 	if (!directory) return null;
 	const place = page.getByTestId('register-bar-place').first();
-	return boundRegister((await place.textContent().catch(() => null)) ?? '', directory);
+	return boundRegister(
+		(await place.textContent().catch(() => null)) ?? '',
+		directory.list ?? [],
+		directory.single
+	);
 }
 
 /** Throws, before any click, unless the bound register is one the suite created (`isSuiteRegister`). */
@@ -261,7 +268,10 @@ async function pickSuiteRegisterIfShown(page: Page): Promise<void> {
 		if ((await rows.count()) > 0) return 'picker';
 		const directory = registerDirectories.get(page);
 		if (!directory) return 'pending';
-		return directory.length <= 1 || (await readBoundRegister(page)) ? 'bound' : 'pending';
+		return ((directory.list?.length ?? 0) <= 1 && (directory.list || directory.single)) ||
+			(await readBoundRegister(page))
+			? 'bound'
+			: 'pending';
 	};
 	const settled = await expect
 		.poll(state, { timeout: REGISTER_SETTLE_TIMEOUT_MS })

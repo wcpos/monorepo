@@ -21,6 +21,31 @@ export interface RegisterName {
 	name: string;
 }
 
+/** What a page's app has read about registers: the list, and the last single-register read. */
+export interface RegisterReads {
+	list?: RegisterName[];
+	single?: RegisterName;
+}
+
+/** Record only register reads, preserving the previous reads when a response body rejects. */
+export async function nextRegisterReads(
+	prev: RegisterReads | undefined,
+	route: string | null | undefined,
+	body: () => Promise<unknown>
+): Promise<RegisterReads | undefined> {
+	if (route !== '/wcpos/v2/registers' && !/^\/wcpos\/v2\/registers\/([^/]+)$/.test(route ?? ''))
+		return prev;
+	try {
+		const row = (await body()) as RegisterName;
+		if (route === '/wcpos/v2/registers') return { ...prev, list: Array.isArray(row) ? row : [] };
+		if (typeof row?.id === 'string' && typeof row?.name === 'string')
+			return { ...prev, single: { id: row.id, name: row.name } };
+	} catch {
+		return prev;
+	}
+	return prev;
+}
+
 /** A register the suite created: named exactly `Register`, or the docs register on demo (by id). */
 export function isSuiteRegister({ id, name }: RegisterName): boolean {
 	return name === SUITE_REGISTER_NAME || String(id).startsWith(DOCS_REGISTER_PREFIX);
@@ -45,16 +70,19 @@ export function suiteRegisterRowIndex(rowTexts: readonly string[]): number {
 /**
  * The register this device is bound to, from the bar's place and the register list the app read:
  * a one-register store's bar names only the store (its one register is the bound one), a larger
- * store's reads `Store · Register`. Null while the device is unbound or the list is unknown.
+ * store's reads `Store · Register`. An empty list can use the app's single-register read.
  */
 export function boundRegister<T extends RegisterName>(
 	place: string,
-	directory: readonly T[]
-): T | null {
+	directory: readonly T[],
+	single?: RegisterName
+): T | RegisterName | null {
 	if (directory.length === 1) return directory[0];
 	const named = directory.filter((row) => place.endsWith(` · ${row.name}`));
 	// "Store · A · Register" names "A · Register" before "Register": the longest name is the one.
-	return named.sort((a, b) => b.name.length - a.name.length)[0] ?? null;
+	const bound = named.sort((a, b) => b.name.length - a.name.length)[0] ?? null;
+	if (bound || directory.length > 0 || !single) return bound;
+	return !place.includes(' · ') || place.endsWith(` · ${single.name}`) ? single : null;
 }
 
 const PICKER_ROWS = '[data-testid^="register-picker-row-"]';

@@ -3,6 +3,7 @@ import {
 	boundRegister,
 	DOCS_REGISTER_PREFIX,
 	isSuiteRegister,
+	nextRegisterReads,
 	suiteRegisterRowIndex,
 } from '../e2e/suite-register';
 
@@ -54,7 +55,61 @@ describe('suiteRegisterRowIndex', () => {
 	});
 });
 
+describe('nextRegisterReads', () => {
+	it('T1: keeps the last list when response.json() rejects (run 43172345446)', async () => {
+		const prev = { list: [SUITE] };
+		const body = () => Promise.reject(new Error('response body unavailable'));
+		expect(await nextRegisterReads(prev, '/wcpos/v2/registers', body)).toEqual({ list: [SUITE] });
+	});
+
+	it('T2: keeps unknown reads unknown when response.json() rejects', async () => {
+		const body = () => Promise.reject(new Error('response body unavailable'));
+		expect(await nextRegisterReads(undefined, '/wcpos/v2/registers', body)).toBeUndefined();
+	});
+
+	it('T3: records a non-array list as empty and keeps the list with a single read', async () => {
+		const prev = { list: [SUITE] };
+		const list = await nextRegisterReads(prev, '/wcpos/v2/registers', async () => ({ code: 'x' }));
+		expect(list).toEqual({ list: [] });
+		expect(list).not.toBe(prev);
+		const single = await nextRegisterReads(prev, `/wcpos/v2/registers/${SUITE.id}`, async () => ({
+			...SUITE,
+			counters: {},
+		}));
+		expect(single).toEqual({ list: [SUITE], single: SUITE });
+		expect(single).not.toBe(prev);
+		expect(prev).toEqual({ list: [SUITE] });
+	});
+
+	it.each([`/wcpos/v2/registers/${SUITE.id}/sessions`, '/wcpos/v2/sessions'])(
+		'T4: ignores %s without reading its body',
+		async (route) => {
+			const prev = { list: [SUITE] };
+			const body = jest.fn();
+			expect(await nextRegisterReads(prev, route, body)).toBe(prev);
+			expect(body).not.toHaveBeenCalled();
+		}
+	);
+});
+
 describe('boundRegister', () => {
+	it('T5: uses a single read when the place names no register or names that register', () => {
+		expect(boundRegister('AL Store', [], SUITE)).toBe(SUITE);
+		expect(boundRegister('AL Store · Register', [], SUITE)).toBe(SUITE);
+	});
+
+	it('T5: refuses a single read when the place names Climb Register', () => {
+		expect(boundRegister('AL Store · Climb Register', [], SUITE)).toBeNull();
+	});
+
+	it('T5: keeps the matching list row ahead of a single read', () => {
+		expect(boundRegister('AL Store · Register', [SUITE, CLIMB], CLIMB)).toBe(SUITE);
+	});
+
+	it('T5: never overrides a non-empty list that does not match the place', () => {
+		expect(boundRegister('AL Store', [SUITE, CLIMB], SUITE)).toBeNull();
+	});
+
 	it('is the one register of a one-register store, whose name the bar leaves out', () => {
 		expect(boundRegister('Tienda', [CLIMB])).toEqual(CLIMB);
 	});
