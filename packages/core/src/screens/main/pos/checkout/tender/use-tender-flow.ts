@@ -140,6 +140,7 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 /** The card reader and the terminal leg's actions: the device keypad and `TerminalLegView` read these. */
 export interface TenderTerminal {
 	rememberedReaderId: string | null;
+	rememberedReaderTransport: PaymentTransport | null;
 	rememberReader: (reader: RememberedReader) => Promise<void>;
 	bootstrapReader: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
 	deviceTransport?: PaymentTransport | null;
@@ -426,6 +427,7 @@ export function useTenderFlow(
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
 	const {
 		readerId: remembered,
+		readerTransport: rememberedTransport,
 		getLoaded,
 		remember,
 	} = useRememberedReader(state.methodId, methods);
@@ -1753,6 +1755,7 @@ export function useTenderFlow(
 		() => ({
 			terminal: {
 				rememberedReaderId: remembered,
+				rememberedReaderTransport: rememberedTransport,
 				rememberReader: remember,
 				bootstrapReader,
 				deviceTransport,
@@ -1816,6 +1819,7 @@ export function useTenderFlow(
 			figures,
 			planLabel,
 			remembered,
+			rememberedTransport,
 			remember,
 			terminalLeg,
 			bootstrapReader,

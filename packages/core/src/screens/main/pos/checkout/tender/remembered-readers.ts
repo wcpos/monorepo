@@ -73,5 +73,8 @@ export function useRememberedReader(
 		},
 		[methodId, storeDB]
 	);
-	return { readerId: getLoaded(methodId), getLoaded, remember };
+	const readerId = getLoaded(methodId);
+	// The transport it was remembered on: the checkout reconnect scans only that one (roadmap#574).
+	const readerTransport = readerId && methodId ? (loaded?.get(methodId)?.transport ?? null) : null;
+	return { readerId, readerTransport, getLoaded, remember };
 }

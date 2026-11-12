@@ -648,6 +648,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				<ReaderConnection
 					bootstrap={flow.terminal.bootstrapReader}
 					remembered={flow.terminal.rememberedReaderId}
+					rememberedTransport={flow.terminal.rememberedReaderTransport}
 					remember={flow.terminal.rememberReader}
 					method={method}
 					transport={flow.terminal.deviceTransport ?? null}

@@ -227,6 +227,7 @@ function makeFlow(count = 1): TenderFlow {
 		terminal: {
 			bootstrapReader: mockBootstrap,
 			rememberedReaderId: null,
+			rememberedReaderTransport: null,
 			rememberReader: jest.fn(async () => {}),
 			readers: [],
 			lockToDefault: false,
@@ -973,6 +974,83 @@ it('uses a remembered reader the driver already holds without a discovery (no re
 	expect(connect).not.toHaveBeenCalled();
 	expect(pickTransport).toHaveBeenCalledWith('bluetooth');
 	rendered.unmount();
+});
+
+describe('reconnects a remembered reader on its own transport (roadmap#574)', () => {
+	// The fixture method lists bluetooth before tap_to_pay, as the Stripe plugin does.
+	function renderReconnect(
+		reader: { id: string; label: string; transport: 'bluetooth' | 'tap_to_pay' },
+		rememberedReaderTransport: 'bluetooth' | 'tap_to_pay' | null
+	) {
+		const discoverReaders = jest.fn(async (transport: string) => {
+			if (transport === 'bluetooth' && reader.transport !== 'bluetooth')
+				throw Object.assign(new Error('Bluetooth is off'), { code: 'BLUETOOTH_ERROR' });
+			return transport === reader.transport ? [reader] : [];
+		});
+		const connect = jest.fn(async () => {});
+		registerDriver({ ...createSimulatedDriver(), discoverReaders, connect });
+		const flow = { ...makeFlow(), saveState: null, method: deviceMethod };
+		flow.terminal = {
+			...flow.terminal,
+			rememberedReaderId: reader.id,
+			rememberedReaderTransport,
+			pickTransport: jest.fn(),
+			bootstrapReader: jest.fn(async () => ({ token: 'new' })),
+		};
+		return {
+			discoverReaders,
+			connect,
+			rendered: render(<TenderPane flow={flow} format={String} />),
+		};
+	}
+
+	it('scans only tap_to_pay for a Tap to Pay memory, so a Bluetooth error cannot abort it', async () => {
+		const reader = { id: 'ttp', label: 'Tap to Pay', transport: 'tap_to_pay' as const };
+		const { discoverReaders, connect, rendered } = renderReconnect(reader, 'tap_to_pay');
+		await act(async () => {});
+		expect(discoverReaders).toHaveBeenCalledTimes(1);
+		expect(discoverReaders).toHaveBeenCalledWith('tap_to_pay', { until: 'ttp' });
+		expect(connect).toHaveBeenCalledTimes(1);
+		expect(connect).toHaveBeenLastCalledWith(reader, expect.anything());
+		expect(screen.queryByText('Could not reconnect to the reader')).toBeNull();
+		rendered.unmount();
+	});
+
+	it('scans only bluetooth for a Bluetooth memory', async () => {
+		const reader = { id: 'wisepad', label: 'WisePad 3', transport: 'bluetooth' as const };
+		const { discoverReaders, connect, rendered } = renderReconnect(reader, 'bluetooth');
+		await act(async () => {});
+		expect(discoverReaders).toHaveBeenCalledTimes(1);
+		expect(discoverReaders).toHaveBeenCalledWith('bluetooth', { until: 'wisepad' });
+		expect(connect).toHaveBeenCalledTimes(1);
+		expect(connect).toHaveBeenLastCalledWith(reader, expect.anything());
+		rendered.unmount();
+	});
+
+	it('scans every transport in the method order for a memory with no transport', async () => {
+		const reader = { id: 'ttp', label: 'Tap to Pay', transport: 'tap_to_pay' as const };
+		const discoverReaders = jest.fn(async (transport: string) =>
+			transport === 'tap_to_pay' ? [reader] : []
+		);
+		const connect = jest.fn(async () => {});
+		registerDriver({ ...createSimulatedDriver(), discoverReaders, connect });
+		const flow = { ...makeFlow(), saveState: null, method: deviceMethod };
+		flow.terminal = {
+			...flow.terminal,
+			rememberedReaderId: 'ttp',
+			rememberedReaderTransport: null,
+			pickTransport: jest.fn(),
+			bootstrapReader: jest.fn(async () => ({ token: 'new' })),
+		};
+		const rendered = render(<TenderPane flow={flow} format={String} />);
+		await act(async () => {});
+		expect(discoverReaders.mock.calls.map(([transport]) => transport)).toEqual([
+			'bluetooth',
+			'tap_to_pay',
+		]);
+		expect(connect).toHaveBeenCalledTimes(1);
+		rendered.unmount();
+	});
 });
 
 it('keeps typed entry when switching methods without taking money', () => {
