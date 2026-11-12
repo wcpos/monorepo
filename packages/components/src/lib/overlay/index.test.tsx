@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, type PressableProps, View } from 'react-native';
+import { Pressable, type PressableProps, TextInput, View } from 'react-native';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
@@ -428,6 +428,70 @@ it('hands the keys to the newest sheet: Escape closes the one opened from a shee
 	document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 	expect(closeOuter).toHaveBeenCalledTimes(1);
 	expect(closeInner).toHaveBeenCalledTimes(1);
+});
+
+describe('Escape struck in a text field, which RN-web stops from reaching the document', () => {
+	const sheet = (onDismiss: () => void, id: string) => (
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={onDismiss} testID={id}>
+			<OverlaySheetPanel testID={`${id}-sheet`}>
+				<View testID={`${id}-wrap`}>
+					<TextInput testID={`${id}-field`} />
+				</View>
+				<input data-testid={`${id}-plain`} />
+			</OverlaySheetPanel>
+		</OverlayShell>
+	);
+	const escape = (id: string) => {
+		const field = screen.getByTestId(`${id}-field`);
+		field.focus();
+		fireEvent.keyDown(field, { key: 'Escape' });
+	};
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => jest.useRealTimers());
+
+	// Revert: Escape in a phone sheet's search field leaves the sheet open (climb F32).
+	it('closes the sheet once, after the field has had the key', () => {
+		const onDismiss = jest.fn();
+		render(sheet(onDismiss, 'f'));
+		escape('f');
+		expect(onDismiss).not.toHaveBeenCalled();
+		act(() => jest.runOnlyPendingTimers());
+		expect(onDismiss).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the sheet open when its content claims Escape', () => {
+		const onDismiss = jest.fn();
+		render(sheet(onDismiss, 'p'));
+		screen
+			.getByTestId('p-wrap')
+			.addEventListener('keydown', (event) => event.preventDefault(), true);
+		escape('p');
+		act(() => jest.runOnlyPendingTimers());
+		expect(onDismiss).not.toHaveBeenCalled();
+	});
+
+	it('dismisses once when the bubble path already heard the key', () => {
+		const onDismiss = jest.fn();
+		render(sheet(onDismiss, 'b'));
+		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+		act(() => jest.runOnlyPendingTimers());
+		expect(onDismiss).toHaveBeenCalledTimes(1);
+		// A plain field lets the key bubble: both listeners hear it, only one acts.
+		fireEvent.keyDown(screen.getByTestId('b-plain'), { key: 'Escape' });
+		act(() => jest.runOnlyPendingTimers());
+		expect(onDismiss).toHaveBeenCalledTimes(2);
+	});
+
+	it('leaves both sheets open when the field is in the older one', () => {
+		const closeOuter = jest.fn();
+		const closeInner = jest.fn();
+		render(sheet(closeOuter, 'o'));
+		render(sheet(closeInner, 'i'));
+		escape('o');
+		act(() => jest.runOnlyPendingTimers());
+		expect(closeOuter).not.toHaveBeenCalled();
+		expect(closeInner).not.toHaveBeenCalled();
+	});
 });
 
 it('focuses the first field of a sheet that owns its dismiss once the rise settles', () => {
