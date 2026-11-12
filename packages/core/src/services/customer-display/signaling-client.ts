@@ -26,10 +26,12 @@ export interface OutgoingSignal {
 	session: string;
 	body: unknown;
 }
-export interface IncomingSignal extends Omit<OutgoingSignal, 'from' | 'to'> {
+export interface IncomingSignal extends Omit<OutgoingSignal, 'from' | 'to' | 'type'> {
 	id: number;
 	from: 'display';
 	to: string;
+	// A booting display posts `ready`; a server that predates it refuses the post, so none arrives.
+	type: SignalType | 'ready';
 	created_at: string;
 }
 export function createSignalingClient(restRoot: string, http: HttpFunction) {
@@ -62,8 +64,14 @@ export function createSignalingClient(restRoot: string, http: HttpFunction) {
 				})
 			).data.messages;
 		},
-		async postSignal(displayId: string, signal: OutgoingSignal): Promise<void> {
-			await http({ method: 'POST', url: `${root}/displays/${displayId}/signal`, data: signal });
+		// Resolves to the mailbox id the server gave the signal, or null when the body carries none.
+		async postSignal(displayId: string, signal: OutgoingSignal): Promise<number | null> {
+			const { data } = await http<{ id?: unknown } | null>({
+				method: 'POST',
+				url: `${root}/displays/${displayId}/signal`,
+				data: signal,
+			});
+			return typeof data?.id === 'number' ? data.id : null;
 		},
 		async forget(displayId: string): Promise<void> {
 			await http({ method: 'DELETE', url: `${root}/displays/${displayId}` });

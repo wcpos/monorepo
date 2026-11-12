@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { AppState } from 'react-native';
 
 import { useDocField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -135,8 +136,13 @@ export function useCustomerDisplayService(): void {
 					context: { error: getErrorMessage(error) },
 				});
 			});
+		// Back in the foreground: re-read displays at once rather than on the next poll.
+		const appState = AppState.addEventListener('change', (next) => {
+			if (next === 'active') startedService?.wake();
+		});
 
 		return () => {
+			appState.remove();
 			cancelled = true;
 			if (serviceHttpRef.current === httpBinding) serviceHttpRef.current = null;
 			if (startedService && getCustomerDisplayService() === startedService) {

@@ -5,7 +5,18 @@ import { useCustomerDisplayService } from './use-customer-display-service';
 
 const mockConfigure = jest.fn();
 const mockStop = jest.fn();
-const mockService = { configure: mockConfigure, stop: mockStop };
+const mockWake = jest.fn();
+const mockService = { configure: mockConfigure, stop: mockStop, wake: mockWake };
+const mockAppStateListeners: ((state: string) => void)[] = [];
+const mockAppStateRemove = jest.fn();
+jest.mock('react-native', () => ({
+	AppState: {
+		addEventListener: (_type: string, listener: (state: string) => void) => {
+			mockAppStateListeners.push(listener);
+			return { remove: mockAppStateRemove };
+		},
+	},
+}));
 let mockCurrentService: typeof mockService | null = null;
 const mockStopCustomerDisplayService = jest.fn(() => {
 	mockCurrentService?.stop();
@@ -94,6 +105,20 @@ test('starts for an advertised store and stops when the advertisement disappears
 
 	expect(mockStop).toHaveBeenCalledTimes(1);
 	expect(mockStopCustomerDisplayService).toHaveBeenCalledTimes(1);
+});
+
+test('wakes the service when the app returns to the foreground, and unsubscribes on cleanup', async () => {
+	mockAppStateListeners.length = 0;
+	const view = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	mockAppStateListeners.forEach((listener) => listener('background'));
+	expect(mockWake).not.toHaveBeenCalled();
+	mockAppStateListeners.forEach((listener) => listener('active'));
+	expect(mockWake).toHaveBeenCalledTimes(1);
+
+	view.unmount();
+	expect(mockAppStateRemove).toHaveBeenCalledTimes(mockAppStateListeners.length);
 });
 
 test('passes the advertised snapshot flag and ICE servers to the service', async () => {
@@ -323,7 +348,7 @@ test('does not start for an unsupported advertised contract', async () => {
 test('cleanup does not stop a newer singleton service', async () => {
 	const view = renderHook(() => useCustomerDisplayService());
 	await flushEffects();
-	mockCurrentService = { configure: jest.fn(), stop: jest.fn() };
+	mockCurrentService = { configure: jest.fn(), stop: jest.fn(), wake: jest.fn() };
 
 	view.unmount();
 
