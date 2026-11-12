@@ -23,6 +23,12 @@ type Input = {
 	};
 	queue?: OrderMutationContext;
 };
+export type CartWriteCoupons = NonNullable<Input['coupons']>;
+/** The context a coupon write prices with; its boundary commit must settle with the same one. */
+export const settleCouponContext = (coupons: CartWriteCoupons): CouponContext => ({
+	...coupons.context,
+	taxStatusFor: coupons.taxStatusFor ?? coupons.context.taxStatusFor,
+});
 export type Deps<T> = {
 	localPatch: (input: { document: CurrentOrderRecord; changes: PayloadChanges }) => T;
 	configForOrder: (order: OrderPayload) => CartConfig;
@@ -31,7 +37,9 @@ export type Deps<T> = {
 export type BoundaryCommit = (
 	order: CurrentOrderRecord,
 	queue: OrderMutationContext,
-	coupons?: Input['coupons']
+	coupons?: Input['coupons'],
+	/** The payload of the revision the write produced: the cart its coupons priced. */
+	written?: OrderPayload
 ) => Promise<BoundaryOutcome>;
 
 // Birth intents remain synchronous; persisted cart commands await completion in their held slot.
@@ -87,13 +95,7 @@ export function settleCartWrite<T>(
 					: settlePayload({
 							payload: after,
 							config: deps.configForOrder(after),
-							coupons: hasCoupons
-								? {
-										...input.coupons!.context,
-										taxStatusFor:
-											input.coupons!.taxStatusFor ?? input.coupons!.context.taxStatusFor,
-									}
-								: undefined,
+							coupons: hasCoupons ? settleCouponContext(input.coupons!) : undefined,
 							owner: { uuid: document.uuid, serverOwnsMoney: deps.serverOwnsMoney },
 						});
 			if (outcome.kind === 'error') {
@@ -119,7 +121,9 @@ export function settleCartWrite<T>(
 		if (refusal) return refusal;
 		if (closed) return { deny: { reasonKey: 'pos_checkout.order_changed_retry' } };
 		if (boundary && value) {
-			const outcome = await deps.commitAtBoundary!(document, input.queue!, input.coupons);
+			// applyLocalPatch resolves `{ document }`, the revision this write produced; never a re-read.
+			const revision = (value as { document?: { payload?: OrderPayload } }).document?.payload;
+			const outcome = await deps.commitAtBoundary!(document, input.queue!, input.coupons, revision);
 			if (outcome.kind === 'refused') return outcome.refusal;
 		}
 		return value;

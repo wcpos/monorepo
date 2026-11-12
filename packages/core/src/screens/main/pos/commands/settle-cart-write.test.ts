@@ -1,12 +1,19 @@
 /** @jest-environment jsdom */
-import { settleAggregate, snapshotFromOrderJSON } from '@wcpos/order-math';
+import {
+	type CartConfig,
+	type CouponInput,
+	createCartConfig,
+	settleAggregate,
+	snapshotFromOrderJSON,
+} from '@wcpos/order-math';
 import { toOrderWirePayload } from '@wcpos/sync-core';
 
 import { config, resolveCartWrite } from '../../../../../jest/cart-write';
 import { compareOrderMoney } from '../../../../../../sync-engine/src/write-path/order-money-divergence';
-import { settleCartWrite } from './settle-cart-write';
+import { type BoundaryCommit, type CartWriteCoupons, settleCartWrite } from './settle-cart-write';
 
 import type { CurrentOrderRecord } from '../contexts/current-order';
+import type { OrderMutationContext } from '../hooks/order-mutation-queue';
 
 const line = {
 	product_id: 1,
@@ -164,7 +171,7 @@ it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', asyn
 	);
 	if (operation === 'remove') {
 		expect(localPatch).toHaveBeenCalledWith({ document: order, data });
-		expect(commitAtBoundary).toHaveBeenCalledWith(order, queue, undefined);
+		expect(commitAtBoundary).toHaveBeenCalledWith(order, queue, undefined, undefined);
 	} else {
 		expect(order.payload.total).toBe('6');
 		expect(commitAtBoundary).not.toHaveBeenCalled();
@@ -235,7 +242,9 @@ it.each([true, false])(
 			expect(writes).toEqual([
 				expect.objectContaining({
 					billing: { country: 'NZ' },
+					// 10 less 10% of 10 = 9, untaxed.
 					total: '9',
+					total_tax: '0',
 					discount_total: '1',
 					coupon_lines: [
 						expect.objectContaining({ code: 'ten', discount: '1', discount_tax: '0' }),
@@ -249,3 +258,209 @@ it.each([true, false])(
 		}
 	}
 );
+
+// These pass on 786366e9 too: they describe the write side only, not that regression.
+describe('a coupon write settles the total it priced', () => {
+	const percent = { code: 'ten', discount_type: 'percent' as const, amount: '10' };
+	const context = (...coupons: CouponInput[]) => ({
+		coupons: new Map(coupons.map((coupon) => [coupon.code, coupon])),
+		productCategories: new Map(),
+	});
+	const captured = (amount: string) => [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [{ id: 'leg', status: 'captured', amount, refunded_amount: '0' }],
+			},
+		},
+	];
+	async function write(
+		order: CurrentOrderRecord,
+		coupons: CartWriteCoupons,
+		configForOrder: () => CartConfig = () => config
+	) {
+		const writes: Record<string, unknown>[] = [];
+		const queue = { dispatchToken: {} } as OrderMutationContext;
+		const commitAtBoundary = jest.fn<ReturnType<BoundaryCommit>, Parameters<BoundaryCommit>>(
+			async () => ({ kind: 'closed' })
+		);
+		const codes = [...coupons.context.coupons.keys()].map((code) => ({ code }));
+		const result = await settleCartWrite(
+			{ document: order, data: () => ({ coupon_lines: codes }), coupons, queue },
+			{
+				localPatch: ({ changes }) => {
+					const landed = changes(order.payload);
+					writes.push(landed);
+					// As applyLocalPatch: resolves the revision the write produced.
+					const document = { payload: { ...order.payload, ...landed } };
+					return Promise.resolve({ changes: landed, document });
+				},
+				commitAtBoundary,
+				configForOrder,
+				serverOwnsMoney: () => false,
+			}
+		);
+		return { writes, result, commitAtBoundary, queue };
+	}
+	const missing = { deny: { reasonKey: 'caller_missing' } };
+
+	it('settles an inclusive taxed line with a percent coupon in one write', async () => {
+		const rate = {
+			id: 1,
+			rate: '10',
+			compound: false,
+			order: 1,
+			class: 'standard',
+			shipping: true,
+		};
+		const inclusive = createCartConfig({
+			...config,
+			rates: [rate],
+			allRates: [rate],
+			calcTaxes: true,
+			pricesIncludeTax: true,
+			taxClassSlugs: ['standard'],
+		});
+		const order = record({
+			...payload,
+			prices_include_tax: true,
+			line_items: [
+				{
+					product_id: 1,
+					quantity: 1,
+					tax_class: '',
+					subtotal: '10',
+					subtotal_tax: '1',
+					total: '10',
+					total_tax: '1',
+					taxes: [{ id: 1, subtotal: '1', total: '1' }],
+					meta_data: [
+						{ key: '_woocommerce_pos_data', value: { price: 11, tax_status: 'taxable' } },
+					],
+				},
+			],
+		} as never);
+		const { writes } = await write(
+			order,
+			{ context: context(percent), taxStatusFor: () => 'taxable', missing },
+			() => inclusive
+		);
+		// 11 inclusive (10 + 1 tax); 10% off inclusive = 1.10, of which 1 ex tax and 0.10 tax.
+		// Total 11 - 1.10 = 9.90, its tax 1 - 0.10 = 0.90.
+		expect(writes).toEqual([
+			expect.objectContaining({
+				total: '9.9',
+				total_tax: '0.9',
+				discount_total: '1',
+				discount_tax: '0.1',
+				coupon_lines: [
+					expect.objectContaining({ code: 'ten', discount: '1', discount_tax: '0.1' }),
+				],
+			}),
+		]);
+	});
+
+	it('settles a percent and a fixed_cart coupon together in one write', async () => {
+		const order = record({
+			...payload,
+			line_items: [{ product_id: 1, subtotal: '20', total: '20' }],
+		});
+		const fixed = { code: 'two', discount_type: 'fixed_cart' as const, amount: '2' };
+		const { writes } = await write(order, { context: context(percent, fixed), missing });
+		// 10% of 20 = 2 and a fixed 2: 20 - 2 - 2 = 16, discount 4.
+		expect(writes).toEqual([
+			expect.objectContaining({
+				total: '16',
+				total_tax: '0',
+				discount_total: '4',
+				coupon_lines: [
+					expect.objectContaining({ code: 'ten', discount: '2' }),
+					expect.objectContaining({ code: 'two', discount: '2' }),
+				],
+			}),
+		]);
+	});
+
+	it('settles a part-paid order the coupon leaves above its paid balance in one write', async () => {
+		const order = record({
+			...payload,
+			status: 'pos-partial',
+			meta_data: captured('4'),
+		} as never);
+		const { writes, commitAtBoundary } = await write(order, { context: context(percent), missing });
+		// 10 less 10% = 9, above the 4 paid: an ordinary patch.
+		expect(writes).toEqual([
+			expect.objectContaining({ total: '9', total_tax: '0', discount_total: '1' }),
+		]);
+		expect(commitAtBoundary).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['at', '9'],
+		['below', '10'],
+	])(
+		'hands a part-paid order the coupon takes %s its paid balance to the boundary commit with its coupons',
+		async (_where, paid) => {
+			const order = record({
+				...payload,
+				status: 'pos-partial',
+				meta_data: captured(paid),
+			} as never);
+			const coupons = { context: context(percent), missing };
+			const { writes, commitAtBoundary, queue } = await write(order, coupons);
+			// 10 less 10% = 9, at or below the paid balance: the lines land, the total waits.
+			expect(writes).toHaveLength(1);
+			expect(writes[0]).toMatchObject({ coupon_lines: [{ code: 'ten' }] });
+			for (const key of ['total', 'total_tax', 'discount_total', 'discount_tax'])
+				expect(writes[0]).not.toHaveProperty(key);
+			expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+			expect(commitAtBoundary).toHaveBeenCalledWith(order, queue, coupons, expect.anything());
+			expect(commitAtBoundary.mock.calls[0][2]?.context).toBe(coupons.context);
+		}
+	);
+
+	it('hands the boundary commit the revision its write landed', async () => {
+		const order = record({
+			...payload,
+			status: 'pos-partial',
+			meta_data: captured('9'),
+		} as never);
+		const { writes, commitAtBoundary } = await write(order, { context: context(percent), missing });
+		// At the balance the write lands the coupon line on the unchanged product line.
+		expect(writes).toEqual([{ coupon_lines: [{ code: 'ten' }] }]);
+		const written = commitAtBoundary.mock.calls[0][3];
+		expect({ line_items: written?.line_items, coupon_lines: written?.coupon_lines }).toEqual({
+			line_items: [{ product_id: 1, subtotal: '10', total: '8' }],
+			coupon_lines: [{ code: 'ten' }],
+		});
+	});
+
+	it('settles a part-paid order a coupon is removed from in one write', async () => {
+		// 10% of 20 = 2 and a fixed 2: 20 - 2 - 2 = 16, 4 of it paid.
+		const order = record({
+			...payload,
+			status: 'pos-partial',
+			total: '16',
+			discount_total: '4',
+			line_items: [{ product_id: 1, subtotal: '20', total: '16' }],
+			coupon_lines: [
+				{ code: 'ten', discount: '2' },
+				{ code: 'two', discount: '2' },
+			],
+			meta_data: captured('4'),
+		} as never);
+		// The write drops the fixed_cart coupon and keeps the percent one.
+		const { writes, commitAtBoundary } = await write(order, { context: context(percent), missing });
+		// Without the fixed 2: 20 - 2 = 18, above the 4 paid.
+		expect(writes).toEqual([
+			expect.objectContaining({
+				total: '18',
+				discount_total: '2',
+				line_items: [expect.objectContaining({ subtotal: '20', total: '18' })],
+				coupon_lines: [expect.objectContaining({ code: 'ten', discount: '2' })],
+			}),
+		]);
+		expect(commitAtBoundary).not.toHaveBeenCalled();
+	});
+});
