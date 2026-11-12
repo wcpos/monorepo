@@ -162,12 +162,18 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			},
 		});
 
+		// One state per login attempt: expo's own request.state. Whichever tab the
+		// return lands in (this one after the fallback, or the popup when the poll
+		// wrongly reported it closed) validates against this value.
+		const attemptState =
+			typeof request.state === 'string' && request.state.length > 0 ? request.state : null;
+
 		/**
-		 * Helper to perform fallback redirect with state
+		 * Helper to perform fallback redirect with the attempt's state
 		 */
 		const doFallbackRedirect = () => {
 			oauthLogger.debug('Performing fallback redirect');
-			const state = generateState();
+			const state = attemptState ?? generateState();
 			const authUrl = buildAuthUrl(
 				config.site!.wcpos_login_url,
 				redirectUri,
@@ -178,6 +184,14 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			oauthLogger.debug('Redirecting to auth URL', { context: { authUrl } });
 			navigateToUrl(authUrl);
 		};
+
+		// Save BEFORE the popup opens: the save is synchronous, so it lands before
+		// expo's window.open and the popup's sessionStorage copy carries it.
+		if (attemptState) {
+			saveRedirectState(config.site.wcpos_login_url, attemptState, config.claimKey);
+		} else {
+			oauthLogger.debug('Auth request has no state, skipping the pre-popup save');
+		}
 
 		try {
 			oauthLogger.debug('Calling expoPromptAsync...');
