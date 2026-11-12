@@ -52,9 +52,10 @@ function keptTenders(
 	return differing.length ? Object.fromEntries(differing) : null;
 }
 
-// Recovery must never run beside a live close (#3531 review): a second close of the same session
-// rewrites its closure, drops the receipt snapshot and records the close twice.
-const closing = new Set<string>();
+// Two closes of one session never run side by side (#3531 review), a recovery during a manual close
+// or a manual close during a recovery: a second close would rewrite the closure, drop its receipt
+// snapshot and record the close twice, so it joins the running one (and the bridge skips it).
+const closing = new Map<string, Promise<CloseResult>>();
 /** Whether `closeRegister` is still running for this session, on this device. */
 export const isCloseInFlight = (sessionId: string) => closing.has(sessionId);
 
@@ -63,17 +64,19 @@ export const isCloseInFlight = (sessionId: string) => closing.has(sessionId);
  * closure (its expected figures derived once, by `writeClosure`), a refused close's requeue, the
  * device's live copy and the audit fact.
  */
-export async function closeRegister(
+export function closeRegister(
 	ctx: CloseContext,
 	sessionId: string,
 	count: RegisterCount
 ): Promise<CloseResult> {
-	closing.add(sessionId);
-	try {
-		return await closeOnce(ctx, sessionId, count);
-	} finally {
-		closing.delete(sessionId);
-	}
+	// A close already running is joined, its count kept (both take the recorded count here).
+	const running = closing.get(sessionId);
+	if (running) return running;
+	const run = closeOnce(ctx, sessionId, count).finally(() => {
+		if (closing.get(sessionId) === run) closing.delete(sessionId);
+	});
+	closing.set(sessionId, run);
+	return run;
 }
 
 async function closeOnce(

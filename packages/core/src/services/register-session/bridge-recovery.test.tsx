@@ -278,6 +278,40 @@ it('#3531: a cycle during a live close leaves it alone: one closure write, one c
 	}).toEqual({ writes: written.split('-')[0], receipt: 'printed receipt', closedFacts: 1 });
 });
 
+it('#3531: a manual close during a recovery joins it: one closure write, one closed fact, the receipt kept', async () => {
+	const { storeDB, id } = await crashAfterCloseSession({}, true);
+	const info = jest.mocked(getLogger(['wcpos', 'registerSession'])).info;
+	info.mockClear();
+
+	// The bridge's first-cycle recovery, held inside its accounting settle; the cashier closes meanwhile.
+	mockHold.on = true;
+	const view = render(<RegisterSessionBridge />);
+	await waitFor(() => expect(mockHold.held).toHaveLength(1), { timeout: 3000 });
+	mockHold.on = false;
+	const manual = manualClose(storeDB, id);
+
+	// The recovery finishes; the manual close returns the same closure, and the pane stores its receipt.
+	mockHold.held.shift()!();
+	await waitFor(
+		async () => expect((await storeDB.closures.findOne(id).exec())?.sync_status).toBe('synced'),
+		{ timeout: 3000 }
+	);
+	const { closure } = await manual;
+	expect(closure.id).toBe((await storeDB.closures.findOne(id).exec())!.id);
+	await setClosureReceiptSnapshot(storeDB, closure.id, 'printed receipt');
+	const written = (await storeDB.closures.findOne(id).exec())!.toJSON(true)._rev;
+	await secondCycle(storeDB, http.get.mock.calls.length);
+	view.unmount();
+
+	const row = (await storeDB.closures.findOne(id).exec())!.toJSON(true);
+	const closedFacts = info.mock.calls.filter(([message]) => message === 'Register session closed');
+	expect({
+		writes: row._rev.split('-')[0],
+		receipt: row.receipt_snapshot,
+		closedFacts: closedFacts.length,
+	}).toEqual({ writes: written.split('-')[0], receipt: 'printed receipt', closedFacts: 1 });
+});
+
 it('#3531: a manual close that fails is no longer in flight, so the bridge finishes it', async () => {
 	const { storeDB, id } = await crashAfterCloseSession({}, false);
 	const view = render(<RegisterSessionBridge />);
