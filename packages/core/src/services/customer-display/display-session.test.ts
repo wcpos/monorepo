@@ -6,9 +6,13 @@ import type { OffererPeer } from './peer';
 import type { DisplayRegistryRow, IncomingSignal, SignalingClient } from './signaling-client';
 
 const mockLoggerWarn = jest.fn();
+const mockLoggerDebug = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-	getLogger: () => ({ warn: (...args: unknown[]) => mockLoggerWarn(...args) }),
+	getLogger: () => ({
+		warn: (...args: unknown[]) => mockLoggerWarn(...args),
+		debug: (...args: unknown[]) => mockLoggerDebug(...args),
+	}),
 }));
 
 class FakePeer implements OffererPeer {
@@ -75,6 +79,10 @@ const config = {
 	i18n: { total: 'Total' },
 };
 
+// A configured session keeps a heartbeat interval; close every one so no real timer outlives its test.
+const created: DisplaySession[] = [];
+afterEach(() => created.splice(0).forEach((session) => session.close()));
+
 function setup(
 	currentState: DisplayEvent | null = { action: 'display.idle', payload: { reason: 'no_cart' } },
 	initialConfig: typeof config | null = config,
@@ -87,7 +95,7 @@ function setup(
 		postSignal: jest.fn(async () => undefined),
 		readSignals: jest.fn(async () => signals.splice(0)),
 	} as unknown as SignalingClient;
-	const ids = ['session-1', 'session-2'];
+	let sessions = 0;
 	const session = new DisplaySession({
 		display,
 		deviceId: 'device-1',
@@ -99,11 +107,12 @@ function setup(
 		},
 		getConfig: () => currentConfig,
 		getCurrentState: () => currentState,
-		uuid: () => ids.shift()!,
+		uuid: () => `session-${++sessions}`,
 		now: () => new Date('2026-09-03T10:00:00Z'),
 		onConnectionChange: jest.fn(),
 		...extra,
 	});
+	created.push(session);
 	return {
 		session,
 		peers,
@@ -391,6 +400,132 @@ test('forget posts bye then closes the peer', async () => {
 	expect(peers[0].channelState).toBe('closed');
 });
 
+describe('reconnect', () => {
+	const ready = (id: number) => signal({ id, type: 'ready', session: `boot-${id}`, body: {} });
+	const offers = (signaling: SignalingClient) =>
+		jest.mocked(signaling.postSignal).mock.calls.filter(([, s]) => s.type === 'offer');
+	const hello = (peer: FakePeer) => {
+		peer.open();
+		peer.message({
+			wcpos: 1,
+			id: 'hello-id',
+			action: 'display.hello',
+			payload: { template: { id: 'ledger', version: 2 } },
+		});
+	};
+	const pings = (peer: FakePeer) => peer.sent.filter((text) => text === '{"type":"ping"}');
+	beforeEach(() => {
+		jest.useFakeTimers();
+		mockLoggerWarn.mockClear();
+	});
+	afterEach(() => jest.useRealTimers());
+
+	test('a ready at or below the offer id is stale; a newer one re-offers once', async () => {
+		const { session, peers, signaling, setSignals } = setup();
+		const offerIds = [10, 13]; // the server's ids only grow, so the re-offer lands above ready 12
+		jest.mocked(signaling.postSignal).mockImplementation(async () => offerIds.shift() ?? null);
+		await session.poll();
+		hello(peers[0]);
+
+		setSignals([ready(4), ready(10)]);
+		await session.poll();
+		expect(offers(signaling)).toHaveLength(1);
+		expect(peers[0].channelState).toBe('open');
+
+		setSignals([ready(12)]);
+		await session.poll();
+		expect(offers(signaling)).toHaveLength(2);
+		expect(peers[0].channelState).toBe('closed');
+		expect(offers(signaling)[1][1].session).toBe('session-2');
+
+		setSignals([ready(12)]);
+		await session.poll();
+		expect(offers(signaling)).toHaveLength(2);
+	});
+
+	test('a server that returns no offer id still re-offers at most once per ready', async () => {
+		const { session, signaling, setSignals } = setup();
+		jest.mocked(signaling.postSignal).mockResolvedValue(null);
+		await session.poll();
+
+		setSignals([ready(5)]);
+		await session.poll();
+		setSignals([ready(5)]);
+		await session.poll();
+		setSignals([ready(6), ready(7)]);
+		await session.poll();
+
+		expect(offers(signaling)).toHaveLength(3);
+	});
+
+	test('pings after the config and never times out a display that never pings', async () => {
+		const { session, peers } = setup();
+		await session.poll();
+		hello(peers[0]);
+		expect(pings(peers[0])).toHaveLength(0);
+
+		await jest.advanceTimersByTimeAsync(60_000);
+
+		expect(pings(peers[0])).toHaveLength(12);
+		expect(session.isOpen).toBe(true);
+		session.close();
+		expect(jest.getTimerCount()).toBe(0);
+	});
+
+	test('a display that pinged and then went silent for 15 s is closed and re-offered', async () => {
+		const { session, peers, signaling } = setup();
+		await session.poll();
+		hello(peers[0]);
+		peers[0].message({ type: 'ping' });
+		await jest.advanceTimersByTimeAsync(10_000);
+		peers[0].message({ type: 'ping' });
+
+		await jest.advanceTimersByTimeAsync(14_999);
+		expect(session.isOpen).toBe(true);
+		await jest.advanceTimersByTimeAsync(1);
+		expect(peers[0].channelState).toBe('closed');
+
+		await session.poll();
+		expect(offers(signaling)).toHaveLength(2);
+		expect(offers(signaling)[1][1].session).toBe('session-2');
+	});
+
+	test('an incoming ping is consumed without a dropped-message warning', async () => {
+		const { session, peers } = setup();
+		await session.poll();
+		hello(peers[0]);
+		peers[0].message({ type: 'ping' });
+
+		expect(mockLoggerWarn).not.toHaveBeenCalledWith(
+			'Dropped unexpected customer display message',
+			expect.anything()
+		);
+		session.close();
+	});
+
+	test('close posts one best-effort bye for the active session', async () => {
+		const { session, peers, signaling } = setup();
+		await session.poll();
+		jest.mocked(signaling.postSignal).mockRejectedValue(new Error('offline'));
+
+		expect(() => session.close()).not.toThrow();
+		session.close();
+		await jest.advanceTimersByTimeAsync(0);
+
+		const byes = jest.mocked(signaling.postSignal).mock.calls.filter(([, s]) => s.type === 'bye');
+		expect(byes).toEqual([
+			[
+				'display-1',
+				{ from: 'pos:device-1', to: 'display', type: 'bye', session: 'session-1', body: {} },
+			],
+		]);
+		expect(peers[0].channelState).toBe('closed');
+		expect(mockLoggerDebug).toHaveBeenCalledWith('Customer display bye failed', {
+			context: { displayId: 'display-1', error: 'offline' },
+		});
+	});
+});
+
 describe('snapshot fallback', () => {
 	const extra = {
 		snapshotFallback: true,
@@ -506,6 +641,7 @@ describe('snapshot fallback', () => {
 		});
 		jest.mocked(signaling.postSignal).mockImplementation(async (_id, signal) => {
 			if (signal.type === 'snapshot') await pending;
+			return null;
 		});
 		await session.poll();
 		await jest.advanceTimersByTimeAsync(0);
@@ -534,6 +670,7 @@ describe('snapshot fallback', () => {
 		jest.mocked(signaling.postSignal).mockImplementation(async (_id, signal) => {
 			if (signal.type === 'snapshot') await pending;
 			if (signal.type === 'bye') throw new Error('bye failed');
+			return null;
 		});
 		await session.poll();
 		await jest.advanceTimersByTimeAsync(0);
@@ -610,6 +747,7 @@ describe('snapshot fallback', () => {
 			if (signal.type === 'snapshot') {
 				throw Object.assign(new Error('too large'), { response: { status: 413 } });
 			}
+			return null;
 		});
 		await session.poll();
 		await jest.advanceTimersByTimeAsync(60_000);
@@ -652,7 +790,8 @@ describe('snapshot fallback', () => {
 		session.close();
 		await jest.advanceTimersByTimeAsync(60_000);
 
-		expect(signaling.postSignal).toHaveBeenCalledTimes(2);
+		const posts = jest.mocked(signaling.postSignal).mock.calls.filter(([, s]) => s.type !== 'bye');
+		expect(posts).toHaveLength(2);
 		expect(jest.getTimerCount()).toBe(0);
 	});
 });

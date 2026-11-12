@@ -8,7 +8,7 @@ import type { DisplayRegistryRow, HttpFunction, PairingCode } from './signaling-
 const mockLoggerWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-	getLogger: () => ({ warn: (...args: unknown[]) => mockLoggerWarn(...args) }),
+	getLogger: () => ({ warn: (...args: unknown[]) => mockLoggerWarn(...args), debug: jest.fn() }),
 }));
 
 class FakePeer implements OffererPeer {
@@ -71,6 +71,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 	let byeFailures = 0;
 	let deleteFailures = 0;
 	const signalReadFailures = new Set<string>();
+	let signals: unknown[] = [];
 	let now = new Date('2026-09-03T10:00:00Z');
 	const requests: Parameters<HttpFunction>[0][] = [];
 	const http: HttpFunction = async <T>(request: Parameters<HttpFunction>[0]) => {
@@ -92,7 +93,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 				throw new Error('signal unavailable');
 			}
 		if (request.method === 'GET' && request.url.endsWith('/signal'))
-			return { data: { messages: [] } as T };
+			return { data: { messages: signals.splice(0) } as T };
 		if (request.method === 'DELETE' && deleteFailures > 0) {
 			deleteFailures -= 1;
 			throw new Error('delete unavailable');
@@ -125,6 +126,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 		peers,
 		requests,
 		setDisplays: (next: DisplayRegistryRow[]) => (displays = next),
+		setSignals: (next: unknown[]) => (signals = next),
 		failRegistryReads: (count = 1) => (registryFailures = count),
 		failByes: (count = 1) => (byeFailures = count),
 		failDeletes: (count = 1) => (deleteFailures = count),
@@ -187,14 +189,54 @@ describe('CustomerDisplayService', () => {
 		}
 	});
 
-	test('polls only while a display is disconnected', async () => {
-		const { service, peers } = setup([registryRow('one')]);
+	test('slow-polls every 10 s once every display is configured', async () => {
+		const { service, peers, requests } = setup([registryRow('one')]);
 		await service.refreshDisplays();
-		expect(jest.getTimerCount()).toBe(1);
-
 		peers[0].open();
-		expect(jest.getTimerCount()).toBe(0);
+		const reads = () => requests.filter(({ url }) => url.endsWith('/displays')).length;
+		const before = reads();
+
+		await jest.advanceTimersByTimeAsync(9999);
+		expect(reads()).toBe(before);
+		await jest.advanceTimersByTimeAsync(1);
+		expect(reads()).toBe(before + 1);
 		service.stop();
+	});
+
+	test('reads an open session’s signals, so a rebooted display’s ready re-offers', async () => {
+		const { service, peers, requests, setSignals } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		peers[0].open();
+		setSignals([
+			{ id: 3, from: 'display', to: 'pos:device-1', type: 'ready', session: 'boot', body: {} },
+		]);
+
+		await jest.advanceTimersByTimeAsync(10_000);
+
+		const offers = requests.filter(
+			({ method, data }) => method === 'POST' && (data as { type?: unknown }).type === 'offer'
+		);
+		expect(offers).toHaveLength(2);
+		expect(peers[0].channelState).toBe('closed');
+		expect(peers).toHaveLength(2);
+		service.stop();
+	});
+
+	test('wake refreshes at once, and does nothing after stop', async () => {
+		const { service, peers, requests } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		peers[0].open();
+		const reads = () => requests.filter(({ url }) => url.endsWith('/displays')).length;
+		const before = reads();
+
+		service.wake();
+		await jest.advanceTimersByTimeAsync(0);
+		expect(reads()).toBe(before + 1);
+
+		service.stop();
+		service.wake();
+		await jest.advanceTimersByTimeAsync(0);
+		expect(reads()).toBe(before + 1);
 	});
 
 	test('continues polling other displays when one session poll fails', async () => {
@@ -264,16 +306,14 @@ describe('CustomerDisplayService', () => {
 		service.stop();
 	});
 
-	test('stops polling once the online display is configured', async () => {
+	test('drops from the 2 s poll to the 10 s poll once the online display is configured', async () => {
 		const { service, peers, requests } = setup([{ ...registryRow('one'), connected: true }]);
 		await service.refreshDisplays();
-		expect(jest.getTimerCount()).toBe(1);
 
 		peers[0].open();
 		const registryReads = requests.filter(({ url }) => url.endsWith('/displays')).length;
-		await jest.advanceTimersByTimeAsync(10000);
+		await jest.advanceTimersByTimeAsync(9999);
 
-		expect(jest.getTimerCount()).toBe(0);
 		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads);
 		service.stop();
 	});
@@ -407,6 +447,7 @@ describe('CustomerDisplayService', () => {
 		const { service, peers, advance } = setup([registryRow('one')]);
 		await service.refreshDisplays();
 		peers[0].open();
+		const baseTimers = jest.getTimerCount(); // the slow poll and the channel heartbeat
 		service.publish({ action: 'payment.state', payload: { state: 'complete' } });
 		const afterComplete = peers[0].sent.length;
 
@@ -414,7 +455,7 @@ describe('CustomerDisplayService', () => {
 		expect(peers[0].sent).toHaveLength(afterComplete);
 		service.publish({ action: 'cart.updated', payload: { order: {}, ledger: {} } });
 		expect(peers[0].sent).toHaveLength(afterComplete + 1);
-		expect(jest.getTimerCount()).toBe(0);
+		expect(jest.getTimerCount()).toBe(baseTimers);
 
 		service.publish({ action: 'payment.state', payload: { state: 'complete' } });
 		service.publish({ action: 'display.idle', payload: { reason: 'no_cart' } });
@@ -501,9 +542,10 @@ describe('CustomerDisplayService', () => {
 		const { service, peers } = setup([registryRow('one')]);
 		await service.refreshDisplays();
 		peers[0].open();
+		const baseTimers = jest.getTimerCount(); // the slow poll and the channel heartbeat
 		service.publish({ action: 'payment.state', payload: { state: 'complete' } });
 		service.publish({ action: 'display.idle', payload: { reason: 'no_cart' } });
-		expect(jest.getTimerCount()).toBe(1);
+		expect(jest.getTimerCount()).toBe(baseTimers + 1);
 
 		service.stop();
 

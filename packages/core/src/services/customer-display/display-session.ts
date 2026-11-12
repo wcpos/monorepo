@@ -16,6 +16,11 @@ const OFFER_LIFETIME_MS = 2 * 60 * 1000;
 const SNAPSHOT_THROTTLE_MS = 1000;
 // The server serves a snapshot for 60 s, so re-send while the channel stays shut.
 const SNAPSHOT_KEEPALIVE_MS = 20_000;
+// Channel heartbeat: the POS pings first, every 5 s, once the config is sent. A display that has
+// pinged back is dead after 15 s of silence; one that never pings is an older build and never times out.
+const PING_TEXT = '{"type":"ping"}';
+const PING_INTERVAL_MS = 5000;
+const PEER_SILENCE_MS = 15_000;
 export interface DisplayEvent {
 	action: string;
 	payload: Record<string, unknown>;
@@ -81,6 +86,11 @@ export class DisplaySession {
 	private snapshotDirty = false;
 	private lastSnapshotAt = 0;
 	private rejectedSnapshotSeq = 0;
+	// Newest id predating the current offer (null before one); a `ready` above it is a reboot.
+	private readyFloor: number | null = null;
+	private pingTimer: ReturnType<typeof setInterval> | null = null;
+	private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+	private peerPings = false;
 
 	constructor(options: DisplaySessionOptions) {
 		this.display = options.display;
@@ -116,8 +126,14 @@ export class DisplaySession {
 		if (!this.peer) await this.postOffer();
 		const activeSession = this.sessionId;
 		const messages = await this.signaling.readSignals(this.display.id, this.cursor);
+		let rebooted: number | null = null;
 		for (const message of messages) {
 			this.cursor = Math.max(this.cursor, message.id);
+			if (message.type === 'ready') {
+				// Readies at or below the floor are still in the mailbox from before this offer.
+				if (this.readyFloor !== null && message.id > this.readyFloor) rebooted = message.id;
+				continue;
+			}
 			if (message.session !== activeSession) continue;
 			if (message.type === 'answer') {
 				const sdp = (message.body as { sdp?: unknown }).sdp;
@@ -135,6 +151,12 @@ export class DisplaySession {
 			} else if (message.type === 'bye') {
 				this.peer?.close();
 			}
+		}
+		if (rebooted !== null && !this.stopped) {
+			// Without a server offer id the floor is the ready itself, so one ready re-offers once.
+			this.readyFloor = rebooted;
+			this.peer?.close();
+			await this.postOffer();
 		}
 	}
 	private async applySignal(operation: (peer: OffererPeer) => Promise<void>): Promise<void> {
@@ -159,6 +181,7 @@ export class DisplaySession {
 	private async postOffer(): Promise<void> {
 		const peer = this.createPeer();
 		const sessionId = this.uuid();
+		this.stopHeartbeat();
 		this.peer = peer;
 		this.sessionId = sessionId;
 		this.offeredAt = this.now().getTime();
@@ -179,6 +202,7 @@ export class DisplaySession {
 			if (this.peer !== peer) return;
 			if (this.helloTimer) clearTimeout(this.helloTimer);
 			this.helloTimer = null;
+			this.stopHeartbeat();
 			this.peer = null;
 			this.sessionId = null;
 			this.configured = false;
@@ -192,13 +216,14 @@ export class DisplaySession {
 		});
 		try {
 			const offer = await peer.createOffer();
-			await this.signaling.postSignal(this.display.id, {
+			const offerId = await this.signaling.postSignal(this.display.id, {
 				from: `pos:${this.deviceId}`,
 				to: 'display',
 				type: 'offer',
 				session: sessionId,
 				body: offer,
 			});
+			this.readyFloor = offerId ?? this.readyFloor ?? 0;
 			this.snapshotSession = sessionId;
 			this.queueSnapshot();
 		} catch (error) {
@@ -214,6 +239,8 @@ export class DisplaySession {
 		}
 	}
 	private handleMessage(text: string): void {
+		// Any message is liveness; the silence deadline runs only once the display has pinged.
+		if (this.peerPings) this.armSilence();
 		let message: { wcpos?: unknown; id?: unknown; action?: unknown; payload?: unknown };
 		try {
 			message = JSON.parse(text);
@@ -221,6 +248,11 @@ export class DisplaySession {
 			logger.warn('Dropped malformed customer display message', {
 				context: { displayId: this.display.id },
 			});
+			return;
+		}
+		if ((message as { type?: unknown } | null)?.type === 'ping') {
+			this.peerPings = true;
+			this.armSilence();
 			return;
 		}
 		if (
@@ -261,6 +293,7 @@ export class DisplaySession {
 		);
 		if (!sent) return;
 		this.configured = true;
+		this.startHeartbeat();
 		this.onConnectionChange();
 		this.pendingHelloId = null;
 		const current = this.getCurrentState();
@@ -391,6 +424,43 @@ export class DisplaySession {
 		}
 	}
 
+	private startHeartbeat(): void {
+		const peer = this.peer;
+		if (this.pingTimer || !peer) return;
+		this.pingTimer = setInterval(() => {
+			if (this.peer !== peer || peer.channelState !== 'open') this.stopHeartbeat();
+			else this.send(PING_TEXT);
+		}, PING_INTERVAL_MS);
+	}
+	private armSilence(): void {
+		const peer = this.peer;
+		if (this.silenceTimer) clearTimeout(this.silenceTimer);
+		// Closing runs the channel-close path: session reset, then the service's fast poll re-offers.
+		this.silenceTimer = setTimeout(() => peer?.close(), PEER_SILENCE_MS);
+	}
+	private stopHeartbeat(): void {
+		if (this.pingTimer) clearInterval(this.pingTimer);
+		if (this.silenceTimer) clearTimeout(this.silenceTimer);
+		this.pingTimer = null;
+		this.silenceTimer = null;
+		this.peerPings = false;
+	}
+	private async postBye(session: string): Promise<void> {
+		try {
+			await this.signaling.postSignal(this.display.id, {
+				from: `pos:${this.deviceId}`,
+				to: 'display',
+				type: 'bye',
+				session,
+				body: {},
+			});
+		} catch (error) {
+			logger.debug('Customer display bye failed', {
+				context: { displayId: this.display.id, error: getErrorMessage(error) },
+			});
+		}
+	}
+
 	async forget(): Promise<void> {
 		try {
 			if (this.sessionId) {
@@ -404,13 +474,17 @@ export class DisplaySession {
 			}
 		} finally {
 			this.stopped = true;
+			this.stopHeartbeat();
 			this.peer?.close();
 			this.clearSnapshotTimer();
 		}
 	}
 
 	close(): void {
+		// Best effort: the display sees a clean stop at once instead of waiting out a timeout.
+		if (this.sessionId && !this.stopped) void this.postBye(this.sessionId);
 		this.stopped = true;
+		this.stopHeartbeat();
 		this.clearSnapshotTimer();
 		this.peer?.close();
 	}
