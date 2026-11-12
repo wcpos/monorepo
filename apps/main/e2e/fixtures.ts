@@ -34,10 +34,14 @@ import {
 import { restoreLocalStorageAsClone, type SavedAuthState } from './indexeddb-helpers';
 import { quarantineGate } from './quarantine';
 import {
+	assertStillBound,
 	boundRegister,
+	createRegisterReadRecorder,
 	isSuiteRegister,
 	pickSuiteRegister,
+	registerIdOf,
 	type RegisterName,
+	type RegisterReadRecorder,
 	SUITE_REGISTER_NAME,
 } from './suite-register';
 
@@ -199,9 +203,10 @@ export async function ensureRegisterOpen(
 		await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
 	}
 	if (!(await card.isVisible())) return false;
-	await assertSuiteRegisterBound(page);
+	const bound = await assertSuiteRegisterBound(page);
 	const amount = page.getByTestId('open-register-amount');
 	await amount.fill((await amount.inputValue()) || '100');
+	assertStillBound(bound.id, await barRegisterAttribute(page));
 	await page.getByTestId('open-register-button').click();
 	await expect(card).toBeHidden({ timeout: 30_000 });
 	// A healthy open register has no warning pill; its cart header is ready instead.
@@ -216,30 +221,35 @@ export async function ensureRegisterOpen(
  */
 const REGISTER_SETTLE_TIMEOUT_MS = 30_000;
 
-/** The latest register list each page's app read (`GET wcpos/v2/registers`), as the store answered it. */
-const registerDirectories = new WeakMap<Page, RegisterName[]>();
+/** Register names each page's app read, keyed by id across all stores. */
+const registerDirectories = new WeakMap<Page, RegisterReadRecorder>();
 
-/** Record the app's register list reads; attached before boot by `hydrateAuthenticatedPage`. */
+async function barRegisterAttribute(page: Page): Promise<string | null> {
+	try {
+		return await page.getByTestId('register-bar-place').first().getAttribute('data-register-id');
+	} catch {
+		return null;
+	}
+}
+
+/** Record the app's register reads; attached before boot by `hydrateAuthenticatedPage`. */
 function observeRegisterDirectory(page: Page): void {
+	const recorder = createRegisterReadRecorder();
+	registerDirectories.set(page, recorder);
 	page.on('response', (response) => {
-		if (wcposRestRoute(response.url()) !== '/wcpos/v2/registers') return;
-		response.json().then(
-			(body) => registerDirectories.set(page, Array.isArray(body) ? body : []),
-			() => registerDirectories.set(page, [])
-		);
+		recorder.observe(wcposRestRoute(response.url()), () => response.json());
 	});
 }
 
-/** The register the device is bound to, or null until the app's list and the bar settle. */
+/** The register the device is bound to, or null until the app's reads and the bar settle. */
 async function readBoundRegister(page: Page): Promise<RegisterName | null> {
-	const directory = registerDirectories.get(page);
+	const directory = registerDirectories.get(page)?.current();
 	if (!directory) return null;
-	const place = page.getByTestId('register-bar-place').first();
-	return boundRegister((await place.textContent().catch(() => null)) ?? '', directory);
+	return boundRegister(await barRegisterAttribute(page), directory.names);
 }
 
 /** Throws, before any click, unless the bound register is one the suite created (`isSuiteRegister`). */
-async function assertSuiteRegisterBound(page: Page): Promise<void> {
+async function assertSuiteRegisterBound(page: Page): Promise<RegisterName> {
 	// A restored binding shows the card before the app's register list answers: wait for it.
 	const bound = await expect
 		.poll(() => readBoundRegister(page), { timeout: REGISTER_SETTLE_TIMEOUT_MS })
@@ -248,9 +258,11 @@ async function assertSuiteRegisterBound(page: Page): Promise<void> {
 			() => readBoundRegister(page),
 			() => null
 		);
-	if (bound && isSuiteRegister(bound)) return;
+	if (bound && isSuiteRegister(bound)) return bound;
+	const id = registerIdOf(await barRegisterAttribute(page));
+	const unknown = `a register whose name was never read${id ? ` (bar states "${id}")` : ''}`;
 	throw new Error(
-		`[register] refusing to open a session on ${bound ? `"${bound.name}" (${bound.id})` : 'a register whose name was never read'}: the suite sells only on "${SUITE_REGISTER_NAME}" or the docs register`
+		`[register] refusing to open a session on ${bound ? `"${bound.name}" (${bound.id})` : unknown}: the suite sells only on "${SUITE_REGISTER_NAME}" or the docs register`
 	);
 }
 
@@ -259,9 +271,10 @@ async function pickSuiteRegisterIfShown(page: Page): Promise<void> {
 	const rows = page.locator('[data-testid^="register-picker-row-"]');
 	const state = async () => {
 		if ((await rows.count()) > 0) return 'picker';
-		const directory = registerDirectories.get(page);
-		if (!directory) return 'pending';
-		return directory.length <= 1 || (await readBoundRegister(page)) ? 'bound' : 'pending';
+		const directory = registerDirectories.get(page)?.current();
+		return registerIdOf(await barRegisterAttribute(page)) || directory?.smallList
+			? 'bound'
+			: 'pending';
 	};
 	const settled = await expect
 		.poll(state, { timeout: REGISTER_SETTLE_TIMEOUT_MS })

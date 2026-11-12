@@ -1,8 +1,11 @@
 import { closeOpenRegisterSessions, type SessionTransport } from '../e2e/register-session-cleanup';
 import {
+	assertStillBound,
 	boundRegister,
+	createRegisterReadRecorder,
 	DOCS_REGISTER_PREFIX,
 	isSuiteRegister,
+	registerIdOf,
 	suiteRegisterRowIndex,
 } from '../e2e/suite-register';
 
@@ -54,17 +57,175 @@ describe('suiteRegisterRowIndex', () => {
 	});
 });
 
-describe('boundRegister', () => {
-	it('is the one register of a one-register store, whose name the bar leaves out', () => {
-		expect(boundRegister('Tienda', [CLIMB])).toEqual(CLIMB);
+describe('register read regressions', () => {
+	it('D1: another store list must not identify the bound climb register as SUITE', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => [CLIMB]);
+		await recorder.settled();
+		recorder.observe('/wcpos/v2/registers', async () => [SUITE]);
+		await recorder.settled();
+		expect(boundRegister(CLIMB.id, recorder.current().names)).toEqual(CLIMB);
 	});
 
-	it('is the register the bar names after the store', () => {
-		expect(boundRegister('Tienda · Climb Register', [SUITE, CLIMB])).toEqual(CLIMB);
-		expect(boundRegister('Tienda · Register', [CLIMB, SUITE])).toEqual(SUITE);
-		// Unbound on a two-register store: the bar names only the store.
-		expect(boundRegister('Tienda', [SUITE, CLIMB])).toBeNull();
+	it('D2: follows an in-page store switch and refuses a previously decided id', async () => {
+		const recorder = createRegisterReadRecorder();
+		const SUITE_A = SUITE;
+		const SUITE_B = { ...SUITE, id: '0f000000-0000-4000-8000-000000000002' };
+		const CLIMB_B = CLIMB;
+		recorder.observe('/wcpos/v2/registers', async () => [SUITE_A]);
+		await recorder.settled();
+		recorder.observe('/wcpos/v2/registers', async () => [CLIMB_B, SUITE_B]);
+		await recorder.settled();
+		expect(boundRegister(SUITE_B.id, recorder.current().names)).toEqual(SUITE_B);
+		expect(() => assertStillBound(SUITE_A.id, SUITE_B.id)).toThrow(
+			`[register] the bar changed register before the session opened: decided "${SUITE_A.id}", now "${SUITE_B.id}"`
+		);
+		expect(() => assertStillBound(SUITE_B.id, SUITE_B.id)).not.toThrow();
 	});
+
+	it('F1: keeps all names after a rejected list and follows the id read by a single', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => [SUITE]);
+		await recorder.settled();
+		recorder.observe('/wcpos/v2/registers', () => Promise.reject(new Error('unavailable')));
+		recorder.observe(`/wcpos/v2/registers/${CLIMB.id}`, async () => CLIMB);
+		await recorder.settled();
+		expect(boundRegister(CLIMB.id, recorder.current().names)).toEqual(CLIMB);
+		expect(boundRegister(SUITE.id, recorder.current().names)).toEqual(SUITE);
+	});
+
+	it.each([
+		[CLIMB, SUITE],
+		[SUITE, CLIMB],
+	])('F2/F3: follows only the bar id after single reads of %s then %s', async (first, second) => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => [SUITE, CLIMB]);
+		await recorder.settled();
+		for (const row of [first, second]) {
+			recorder.observe(`/wcpos/v2/registers/${row.id}`, async () => row);
+			await recorder.settled();
+		}
+		expect(boundRegister(CLIMB.id, recorder.current().names)).toEqual(CLIMB);
+		expect(boundRegister(SUITE.id, recorder.current().names)).toEqual(SUITE);
+	});
+});
+
+describe('createRegisterReadRecorder', () => {
+	it('E1: records both names from an enveloped list and identifies the bound suite register', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => ({
+			data: [SUITE, CLIMB],
+			_wcpos: { v: 1 },
+		}));
+		await recorder.settled();
+		const { names } = recorder.current();
+		expect(names).toEqual(new Map([SUITE, CLIMB].map(({ id, name }) => [id, name])));
+		expect(boundRegister(SUITE.id, names)).toEqual(SUITE);
+	});
+
+	it('E2: records the climb register from an enveloped single read', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe(`/wcpos/v2/registers/${CLIMB.id}`, async () => ({
+			data: CLIMB,
+			_wcpos: { v: 1 },
+		}));
+		await recorder.settled();
+		expect(recorder.current().names).toEqual(new Map([[CLIMB.id, CLIMB.name]]));
+	});
+
+	it('E3: marks an enveloped one-row list as small', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => ({ data: [SUITE], _wcpos: { v: 1 } }));
+		await recorder.settled();
+		expect(recorder.current().smallList).toBe(true);
+	});
+
+	it('F5: ignores health without reading its body', async () => {
+		const recorder = createRegisterReadRecorder();
+		const body = jest.fn(async () => CLIMB);
+		recorder.observe('/wcpos/v2/registers/health', body);
+		await recorder.settled();
+		expect(body).not.toHaveBeenCalled();
+		expect(recorder.current()).toEqual({ names: new Map(), smallList: false });
+	});
+
+	it('T1: keeps names when response.json() rejects (run 43172345446)', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => [SUITE, CLIMB]);
+		await recorder.settled();
+		const body = () => Promise.reject(new Error('response body unavailable'));
+		recorder.observe('/wcpos/v2/registers', body);
+		recorder.observe(`/wcpos/v2/registers/${SUITE.id}`, body);
+		await recorder.settled();
+		expect(recorder.current()).toEqual({
+			names: new Map([SUITE, CLIMB].map(({ id, name }) => [id, name])),
+			smallList: false,
+		});
+	});
+
+	it('T2: records a one-row list resolving after a rejected list', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', () => Promise.reject(new Error('unavailable')));
+		await recorder.settled();
+		expect(recorder.current()).toEqual({ names: new Map(), smallList: false });
+		recorder.observe('/wcpos/v2/registers', async () => [SUITE]);
+		await recorder.settled();
+		expect(recorder.current()).toEqual({
+			names: new Map([[SUITE.id, SUITE.name]]),
+			smallList: true,
+		});
+	});
+
+	it('T3: skips a non-array list and rows without string ids and names', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => ({ code: 'x' }));
+		await recorder.settled();
+		expect(recorder.current()).toEqual({ names: new Map(), smallList: false });
+		recorder.observe('/wcpos/v2/registers', async () => [
+			null,
+			{},
+			{ id: 1, name: 'bad' },
+			{ id: 'bad', name: 1 },
+			SUITE,
+		]);
+		await recorder.settled();
+		expect(recorder.current()).toEqual({
+			names: new Map([[SUITE.id, SUITE.name]]),
+			smallList: false,
+		});
+	});
+
+	it.each([`/wcpos/v2/registers/${SUITE.id}/sessions`, '/wcpos/v2/sessions'])(
+		'T4: ignores %s without reading its body',
+		async (route) => {
+			const recorder = createRegisterReadRecorder();
+			const body = jest.fn();
+			recorder.observe(route, body);
+			await recorder.settled();
+			expect(recorder.current()).toEqual({ names: new Map(), smallList: false });
+			expect(body).not.toHaveBeenCalled();
+		}
+	);
+});
+
+describe('boundRegister', () => {
+	const names = new Map([[SUITE.id, SUITE.name]]);
+	it.each([null, undefined, '', 'Register', '944ef7dc'])(
+		'D3: refuses an unbound or malformed bar attribute %s',
+		(attribute) => {
+			expect(registerIdOf(attribute)).toBeNull();
+			expect(boundRegister(attribute, names)).toBeNull();
+		}
+	);
+	it('D3: accepts an upper-case UUID unchanged', () => {
+		expect(registerIdOf(SUITE.id.toUpperCase())).toBe(SUITE.id.toUpperCase());
+	});
+	it.each([CLIMB.id, '944ef7dc-0000-4000-8000-000000000001'])(
+		'D4: refuses a valid id whose name was never read, including docs: %s',
+		(id) => {
+			expect(boundRegister(id, names)).toBeNull();
+		}
+	);
 });
 
 describe('closeOpenRegisterSessions across registers', () => {
