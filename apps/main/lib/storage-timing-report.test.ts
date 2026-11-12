@@ -22,11 +22,14 @@ jest.mock('@wcpos/utils/logger', () => ({
 
 type NativeLoggingGlobal = typeof globalThis & {
 	nativeLoggingHook?: (line: string, level: number) => void;
+	HermesInternal?: { getInstrumentedStats?: () => Record<string, number> };
 };
 const nativeGlobal = globalThis as NativeLoggingGlobal;
 const originalFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
 const originalHook = nativeGlobal.nativeLoggingHook;
+const originalHermes = nativeGlobal.HermesInternal;
 const PREFIX = 'WCPOS_E2E_STORAGE ';
+const HERMES_PREFIX = 'WCPOS_E2E_HERMES ';
 
 const entry = (name: string, extra: Record<string, unknown> = {}) => ({
 	layer: 'raw',
@@ -66,6 +69,8 @@ describe('startStorageTimingReporter', () => {
 		else process.env.EXPO_PUBLIC_WCPOS_E2E = originalFlag;
 		if (originalHook === undefined) delete nativeGlobal.nativeLoggingHook;
 		else nativeGlobal.nativeLoggingHook = originalHook;
+		if (originalHermes === undefined) delete nativeGlobal.HermesInternal;
+		else nativeGlobal.HermesInternal = originalHermes;
 	});
 
 	it('reports every 60 s and writes no native line when the E2E flag is unset', () => {
@@ -174,6 +179,98 @@ describe('startStorageTimingReporter', () => {
 
 		expect(() => jest.advanceTimersByTime(10_000)).not.toThrow();
 		expect(mockInfo).toHaveBeenCalledTimes(1);
+		stop();
+	});
+
+	it('emits a WCPOS_E2E_HERMES line with heap and GC stats under E2E', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		nativeGlobal.HermesInternal = {
+			getInstrumentedStats: () => ({
+				js_heapSize: 1_048_576,
+				js_allocatedBytes: 524_288.4,
+				js_totalAllocatedBytes: 9_999_999,
+				js_numGCs: 12,
+				js_gcTime: 0.2346,
+				js_gcCPUTime: 1.5,
+				js_mallocSizeEstimate: 77,
+			}),
+		};
+		const stop = startStorageTimingReporter();
+
+		jest.advanceTimersByTime(10_000);
+
+		const lines: string[] = hook.mock.calls.map(([line]) => line);
+		expect(lines.filter((line) => line.startsWith(PREFIX))).toHaveLength(1);
+		const hermesLines = lines.filter((line) => line.startsWith(HERMES_PREFIX));
+		expect(hermesLines).toHaveLength(1);
+		expect(hermesLines[0].length).toBeLessThan(1_000);
+		const { t, ...stats } = JSON.parse(hermesLines[0].slice(HERMES_PREFIX.length));
+		expect(typeof t).toBe('number');
+		expect(stats).toEqual({
+			heapSize: 1_048_576,
+			allocatedBytes: 524_288,
+			totalAllocatedBytes: 9_999_999,
+			numGCs: 12,
+			gcTimeMs: 235,
+			gcCPUTimeMs: 1_500,
+		});
+		stop();
+	});
+
+	it('omits Hermes stats the runtime does not report', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		nativeGlobal.HermesInternal = { getInstrumentedStats: () => ({ js_numGCs: 3 }) };
+		const stop = startStorageTimingReporter();
+
+		jest.advanceTimersByTime(10_000);
+
+		const line = hook.mock.calls.map(([l]) => l).find((l) => l.startsWith(HERMES_PREFIX));
+		const { t: _t, ...stats } = JSON.parse(line.slice(HERMES_PREFIX.length));
+		expect(stats).toEqual({ numGCs: 3 });
+		stop();
+	});
+
+	it('emits no Hermes line when HermesInternal is absent', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		delete nativeGlobal.HermesInternal;
+		const stop = startStorageTimingReporter();
+
+		jest.advanceTimersByTime(10_000);
+
+		expect(hook).toHaveBeenCalledTimes(1);
+		expect(hook.mock.calls[0][0].startsWith(PREFIX)).toBe(true);
+		nativeGlobal.HermesInternal = {};
+		jest.advanceTimersByTime(10_000);
+		expect(hook).toHaveBeenCalledTimes(2);
+		expect(hook.mock.calls.some(([line]) => line.startsWith(HERMES_PREFIX))).toBe(false);
+		stop();
+	});
+
+	it('emits no Hermes line outside E2E', () => {
+		delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+		const getInstrumentedStats = jest.fn(() => ({ js_numGCs: 1 }));
+		nativeGlobal.HermesInternal = { getInstrumentedStats };
+		const stop = startStorageTimingReporter();
+
+		jest.advanceTimersByTime(60_000);
+
+		expect(mockInfo).toHaveBeenCalledTimes(1);
+		expect(hook).not.toHaveBeenCalled();
+		expect(getInstrumentedStats).not.toHaveBeenCalled();
+		stop();
+	});
+
+	it('never throws when getInstrumentedStats throws', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		nativeGlobal.HermesInternal = {
+			getInstrumentedStats: () => {
+				throw new Error('stats down');
+			},
+		};
+		const stop = startStorageTimingReporter();
+
+		expect(() => jest.advanceTimersByTime(10_000)).not.toThrow();
+		expect(hook).toHaveBeenCalledTimes(1);
 		stop();
 	});
 

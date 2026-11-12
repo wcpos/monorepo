@@ -627,6 +627,8 @@ jobs:
           done
           curl -sf --max-time 120 -o /dev/null -w "warm bundle: %{time_total}s (%{size_download} bytes)\n" "$BUNDLE_URL"
           echo "Metro up; Android bundle compiled."
+          # Hermes CPU profile collector (probe #3552); `🔬 CPU profile summary` stops it.
+          mkdir -p "$HOME/.maestro/tests/cpu-profiles"; nohup node ../../scripts/e2e-cpu-profile.mjs "$HOME/.maestro/tests/cpu-profiles" "$HOME/.maestro/tests/stop-cpu-profile" > "$HOME/.maestro/tests/cpu-profile-collector.log" 2>&1 &
 
       - name: 🧰 Install Maestro
         run: |
@@ -882,6 +884,15 @@ jobs:
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
+      # Probe #3552: top self-time functions over flow 04 into the job log; fail-soft, never gates.
+      - name: 🔬 CPU profile summary
+        if: always()
+        continue-on-error: true
+        run: |
+          log="$HOME/.maestro/tests/cpu-profile-collector.log"; touch "$HOME/.maestro/tests/stop-cpu-profile"
+          for _ in $(seq 1 45); do grep -qs 'status=stopped' "$log" && break; sleep 1; done
+          grep -sv 'status=window' "$log" || echo "WCPOS_PROFILE status=error no collector status line"
+          WCPOS_PROFILE_LABEL=android-${{ matrix.device.name }} node scripts/e2e-cpu-profile-summary.mjs "$HOME/.maestro/tests/cpu-profiles" "$HOME/.maestro/tests" 04-cash-sale --top 20 || true
       # The same probe after a failure: a store that answered in 600 ms before the
       # flows and 6 s after them is the run's story, not the diff's.
       - name: 🩺 Probe store health after a failure
@@ -1189,6 +1200,8 @@ jobs:
           done
           curl -sf --max-time 120 -o /dev/null -w "warm bundle: %{time_total}s (%{size_download} bytes)\n" "$BUNDLE_URL"
           echo "Metro up; iOS bundle compiled."
+          # Hermes CPU profile collector (probe #3552); `🔬 CPU profile summary` stops it.
+          mkdir -p "$HOME/.maestro/tests/cpu-profiles"; nohup node ../../scripts/e2e-cpu-profile.mjs "$HOME/.maestro/tests/cpu-profiles" "$HOME/.maestro/tests/stop-cpu-profile" > "$HOME/.maestro/tests/cpu-profile-collector.log" 2>&1 &
 
       - name: 🧰 Install Maestro
         run: |
@@ -1411,6 +1424,15 @@ jobs:
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
+      # Probe #3552: top self-time functions over flow 04 into the job log; fail-soft, never gates.
+      - name: 🔬 CPU profile summary
+        if: always()
+        continue-on-error: true
+        run: |
+          log="$HOME/.maestro/tests/cpu-profile-collector.log"; touch "$HOME/.maestro/tests/stop-cpu-profile"
+          for _ in $(seq 1 45); do grep -qs 'status=stopped' "$log" && break; sleep 1; done
+          grep -sv 'status=window' "$log" || echo "WCPOS_PROFILE status=error no collector status line"
+          WCPOS_PROFILE_LABEL=ios-${{ matrix.device.name }} node scripts/e2e-cpu-profile-summary.mjs "$HOME/.maestro/tests/cpu-profiles" "$HOME/.maestro/tests" 04-cash-sale --top 20 || true
       # The same probe after a failure: a store that answered in 600 ms before the
       # flows and 6 s after them is the run's story, not the diff's.
       - name: 🩺 Probe store health after a failure
