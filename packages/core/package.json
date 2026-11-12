@@ -91,7 +91,7 @@
 		"react-native-safe-area-context": "~5.11.1",
 		"react-native-screens": "~4.30.1",
 		"react-native-svg": "15.16.0",
-		"victory-native": "^42.0.1"
+		"victory-native": "^43.0.1"
 	},
 	"peerDependenciesMeta": {
 		"react-native-ble-plx": {
@@ -120,12 +120,12 @@
 		"barcode-detector": "^3.2.3",
 		"date-fns": "^4.4.0",
 		"html-entities": "2.6.0",
-		"i18next": "^26.7.1",
+		"i18next": "^27.0.1",
 		"lodash": "^4.18.1",
 		"mustache": "^4.2.0",
 		"observable-hooks": "4.2.4",
 		"react-error-boundary": "^6.1.6",
-		"react-i18next": "^17.1.12",
+		"react-i18next": "^18.0.1",
 		"react-number-format": "^5.4.5",
 		"react-to-print": "^3.3.0",
 		"rxjs": "7.8.2",
@@ -153,6 +153,6 @@
 		"react-native-screens": "~4.30.1",
 		"react-native-svg": "15.16.0",
 		"ts-jest": "29.4.15",
-		"victory-native": "^42.0.1"
+		"victory-native": "^43.0.1"
 	}
 }
