@@ -37,7 +37,9 @@ export type Deps<T> = {
 export type BoundaryCommit = (
 	order: CurrentOrderRecord,
 	queue: OrderMutationContext,
-	coupons?: Input['coupons']
+	coupons?: Input['coupons'],
+	/** The payload of the revision the write produced: the cart its coupons priced. */
+	written?: OrderPayload
 ) => Promise<BoundaryOutcome>;
 
 // Birth intents remain synchronous; persisted cart commands await completion in their held slot.
@@ -119,7 +121,9 @@ export function settleCartWrite<T>(
 		if (refusal) return refusal;
 		if (closed) return { deny: { reasonKey: 'pos_checkout.order_changed_retry' } };
 		if (boundary && value) {
-			const outcome = await deps.commitAtBoundary!(document, input.queue!, input.coupons);
+			// applyLocalPatch resolves `{ document }`, the revision this write produced; never a re-read.
+			const revision = (value as { document?: { payload?: OrderPayload } }).document?.payload;
+			const outcome = await deps.commitAtBoundary!(document, input.queue!, input.coupons, revision);
 			if (outcome.kind === 'refused') return outcome.refusal;
 		}
 		return value;

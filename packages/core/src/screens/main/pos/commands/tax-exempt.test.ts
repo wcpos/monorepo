@@ -555,7 +555,8 @@ it.each(['repair', 'user'] as const)('couponed paid-balance crossing from %s', a
 				context: expect.objectContaining({
 					coupons: new Map([['ten', { code: 'ten', discount_type: 'percent', amount: '10' }]]),
 				}),
-			})
+			}),
+			expect.anything()
 		);
 		expect(h.order.payload.fee_lines?.[0].total_tax).toBe('0');
 	}

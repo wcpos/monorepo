@@ -171,7 +171,7 @@ it.each(['remove', 'reduce'])('%s routes only a covered balance to commit', asyn
 	);
 	if (operation === 'remove') {
 		expect(localPatch).toHaveBeenCalledWith({ document: order, data });
-		expect(commitAtBoundary).toHaveBeenCalledWith(order, queue, undefined);
+		expect(commitAtBoundary).toHaveBeenCalledWith(order, queue, undefined, undefined);
 	} else {
 		expect(order.payload.total).toBe('6');
 		expect(commitAtBoundary).not.toHaveBeenCalled();
@@ -259,6 +259,7 @@ it.each([true, false])(
 	}
 );
 
+// These pass on 786366e9 too: they describe the write side only, not that regression.
 describe('a coupon write settles the total it priced', () => {
 	const percent = { code: 'ten', discount_type: 'percent' as const, amount: '10' };
 	const context = (...coupons: CouponInput[]) => ({
@@ -289,8 +290,11 @@ describe('a coupon write settles the total it priced', () => {
 			{ document: order, data: () => ({ coupon_lines: codes }), coupons, queue },
 			{
 				localPatch: ({ changes }) => {
-					writes.push(changes(order.payload));
-					return Promise.resolve(order);
+					const landed = changes(order.payload);
+					writes.push(landed);
+					// As applyLocalPatch: resolves the revision the write produced.
+					const document = { payload: { ...order.payload, ...landed } };
+					return Promise.resolve({ changes: landed, document });
 				},
 				commitAtBoundary,
 				configForOrder,
@@ -411,8 +415,52 @@ describe('a coupon write settles the total it priced', () => {
 			for (const key of ['total', 'total_tax', 'discount_total', 'discount_tax'])
 				expect(writes[0]).not.toHaveProperty(key);
 			expect(commitAtBoundary).toHaveBeenCalledTimes(1);
-			expect(commitAtBoundary).toHaveBeenCalledWith(order, queue, coupons);
+			expect(commitAtBoundary).toHaveBeenCalledWith(order, queue, coupons, expect.anything());
 			expect(commitAtBoundary.mock.calls[0][2]?.context).toBe(coupons.context);
 		}
 	);
+
+	it('hands the boundary commit the revision its write landed', async () => {
+		const order = record({
+			...payload,
+			status: 'pos-partial',
+			meta_data: captured('9'),
+		} as never);
+		const { writes, commitAtBoundary } = await write(order, { context: context(percent), missing });
+		// At the balance the write lands the coupon line on the unchanged product line.
+		expect(writes).toEqual([{ coupon_lines: [{ code: 'ten' }] }]);
+		const written = commitAtBoundary.mock.calls[0][3];
+		expect({ line_items: written?.line_items, coupon_lines: written?.coupon_lines }).toEqual({
+			line_items: [{ product_id: 1, subtotal: '10', total: '8' }],
+			coupon_lines: [{ code: 'ten' }],
+		});
+	});
+
+	it('settles a part-paid order a coupon is removed from in one write', async () => {
+		// 10% of 20 = 2 and a fixed 2: 20 - 2 - 2 = 16, 4 of it paid.
+		const order = record({
+			...payload,
+			status: 'pos-partial',
+			total: '16',
+			discount_total: '4',
+			line_items: [{ product_id: 1, subtotal: '20', total: '16' }],
+			coupon_lines: [
+				{ code: 'ten', discount: '2' },
+				{ code: 'two', discount: '2' },
+			],
+			meta_data: captured('4'),
+		} as never);
+		// The write drops the fixed_cart coupon and keeps the percent one.
+		const { writes, commitAtBoundary } = await write(order, { context: context(percent), missing });
+		// Without the fixed 2: 20 - 2 = 18, above the 4 paid.
+		expect(writes).toEqual([
+			expect.objectContaining({
+				total: '18',
+				discount_total: '2',
+				line_items: [expect.objectContaining({ subtotal: '20', total: '18' })],
+				coupon_lines: [expect.objectContaining({ code: 'ten', discount: '2' })],
+			}),
+		]);
+		expect(commitAtBoundary).not.toHaveBeenCalled();
+	});
 });

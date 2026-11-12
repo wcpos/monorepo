@@ -17,9 +17,14 @@ const pricedContent = ({ line_items, coupon_lines }: OrderPayload) =>
 export function useBoundaryCommit(write: ReturnType<typeof useLocalMutation>['localPatch']) {
 	const commit = useBoundaryCommitter('user');
 	return React.useCallback(
-		(order: CurrentOrderRecord, queue: OrderMutationContext, coupons?: CartWriteCoupons) => {
-			// Taken before the guards: the write priced exactly these lines with `coupons`.
-			const priced = coupons && pricedContent(order.getLatest().payload);
+		(
+			order: CurrentOrderRecord,
+			queue: OrderMutationContext,
+			coupons?: CartWriteCoupons,
+			written?: OrderPayload
+		) => {
+			// The revision the write landed, not a re-read: it priced exactly these lines with `coupons`.
+			const priced = coupons && written && pricedContent(written);
 			return commit({
 				order: order as EngineRecord<'orders'>,
 				queue,

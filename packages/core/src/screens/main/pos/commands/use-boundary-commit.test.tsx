@@ -7,12 +7,14 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import type { OrderPaymentSummary } from '@wcpos/order-math';
 import type { ReadonlyEngineRecord } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { config } from '../../../../../jest/cart-write';
 import { createActionContext } from '../../../../extensions/actions';
 import { completeSale, type SaleContext } from '../checkout/sale-completion';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { commitAtBoundary } from './boundary-commit';
+import { settleCartWrite } from './settle-cart-write';
 import { useBoundaryCommit } from './use-boundary-commit';
 
 import type { CloseOutcome } from './close-sale';
@@ -63,7 +65,8 @@ const localPatch = jest.fn(
 		const written = changes(document.payload as never);
 		writes.push(written);
 		Object.assign(document.payload, written);
-		return document;
+		// As applyLocalPatch: the revision the write produced.
+		return { changes: written, document };
 	}
 );
 const committed = () => mockCommit.mock.calls[0][0];
@@ -73,6 +76,7 @@ beforeEach(() => {
 	writes.length = 0;
 });
 
+// Catches the 786366e9 regression (fails there).
 it.each([
 	['the write supplies', jest.fn()],
 	['the context keeps', undefined],
@@ -81,11 +85,12 @@ it.each([
 	async (_, taxStatusFor) => {
 		const own = jest.fn();
 		const order = cart();
-		await hook()(order, queue, {
-			context: { ...context, taxStatusFor: own },
-			taxStatusFor,
-			missing,
-		});
+		await hook()(
+			order,
+			queue,
+			{ context: { ...context, taxStatusFor: own }, taxStatusFor, missing },
+			order.payload
+		);
 		const { coupons, allowed } = committed();
 		expect(coupons).toEqual({ ...context, taxStatusFor: taxStatusFor ?? own });
 		expect(coupons?.coupons).toBe(context.coupons);
@@ -95,7 +100,7 @@ it.each([
 
 it('leaves a coupon that arrives during the guards to the continuation', async () => {
 	const order = cart();
-	await hook()(order, queue, { context, missing });
+	await hook()(order, queue, { context, missing }, order.payload);
 	order.payload.coupon_lines = [...order.payload.coupon_lines!, { code: 'five' }];
 	expect(committed().allowed?.(order.getLatest().payload)).toBe(false);
 });
@@ -109,7 +114,19 @@ it('without coupons, refuses a coupon cart and allows a cart without coupons', a
 	expect(allowed?.(recordOf({ line_items: [] }).payload)).toBe(true);
 });
 
-it('settles the total and coupon discount when a coupon takes a part-paid order to its paid balance', async () => {
+it('prices against the revision the write landed, never a re-read of the order', async () => {
+	const landed = cart().payload;
+	// The order already carries a second coupon line the write never priced.
+	const order = cart([{ code: 'ten' }, { code: 'five' }]);
+	await hook()(order, queue, { context, missing }, landed);
+	expect(committed().allowed?.(landed)).toBe(true);
+	expect(committed().allowed?.(order.getLatest().payload)).toBe(false);
+	await hook()(order, queue, { context, missing });
+	expect(mockCommit.mock.calls[1][0].allowed?.(landed)).toBe(false);
+});
+
+/** The real boundary commit on an RxDB memory db, for a part-paid order with `paid` captured. */
+async function boundaryOrder(paid: string, coupon_lines: { code: string }[]) {
 	const storeDB = await createRxDatabase({
 		name: `boundary${Math.random().toString(36).slice(2)}`,
 		storage: getRxStorageMemory(),
@@ -164,25 +181,33 @@ it('settles the total and coupon discount when a coupon takes a part-paid order 
 			input
 		)
 	);
-	// The cart write landed the coupon line; the stale total waits for this commit.
 	const order = recordOf({
 		status: 'pos-partial',
 		total: '10',
 		line_items: [{ product_id: 1, subtotal: '10', total: '10' }],
-		coupon_lines: [{ code: 'ten' }],
+		coupon_lines,
 		meta_data: [
 			{
 				key: '_wcpos_payments',
 				value: {
 					schema: 1,
-					payments: [{ id: 'leg', status: 'captured', amount: '9', refunded_amount: '0' }],
+					payments: [{ id: 'leg', status: 'captured', amount: paid, refunded_amount: '0' }],
 				},
 			},
 		],
 	});
-	const coupons: CartWriteCoupons = { context, missing };
+	return { order, close, storeDB };
+}
+const coupons: CartWriteCoupons = { context, missing };
+
+// Catches the 786366e9 regression (fails there).
+it('settles the total and coupon discount when a coupon takes a part-paid order to its paid balance', async () => {
+	// The cart write landed the coupon line; the stale total waits for this commit.
+	const { order, close, storeDB } = await boundaryOrder('9', [{ code: 'ten' }]);
 	try {
-		const outcome = await enqueueOrderMutation(order.uuid, (slot) => hook()(order, slot, coupons));
+		const outcome = await enqueueOrderMutation(order.uuid, (slot) =>
+			hook()(order, slot, coupons, order.payload)
+		);
 		expect(outcome).toEqual({ kind: 'closed' });
 		// 10 less 10% = 9, exactly the 9 captured.
 		expect(writes).toEqual([
@@ -194,6 +219,52 @@ it('settles the total and coupon discount when a coupon takes a part-paid order 
 		]);
 		expect(order.payload.status).toBe('completed');
 		expect(close).toHaveBeenCalledTimes(1);
+	} finally {
+		await storeDB.remove();
+	}
+});
+
+// Today's outcome on main too: the coordinator's system pass closes through the same
+// commitAtBoundary (boundary-commit.test.ts overpaid case). This PR moves the close to the
+// cashier's press; it does not change it.
+it('closes a part-paid order a coupon takes below its paid balance, overpaid, with a warning', async () => {
+	const { order, close, storeDB } = await boundaryOrder('10', []);
+	try {
+		await enqueueOrderMutation(order.uuid, (slot) =>
+			settleCartWrite(
+				{
+					document: order,
+					data: () => ({ coupon_lines: [{ code: 'ten' }] }),
+					coupons,
+					queue: slot,
+				},
+				{
+					localPatch,
+					commitAtBoundary: hook(),
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+				}
+			)
+		);
+		expect(await mockCommit.mock.results[0].value).toEqual({ kind: 'closed' });
+		// 10 less 10% = 9, 1 below the 10 captured: the cart write lands the line, the boundary the total.
+		expect(writes).toEqual([
+			{ coupon_lines: [{ code: 'ten' }] },
+			expect.objectContaining({
+				total: '9',
+				discount_total: '1',
+				coupon_lines: [expect.objectContaining({ code: 'ten', discount: '1' })],
+			}),
+		]);
+		expect(order.payload.status).toBe('completed');
+		expect(close).toHaveBeenCalledTimes(1);
+		const warned = jest.mocked(getLogger(['test']).warn).mock.calls;
+		expect(warned.filter(([message]) => message === 'settlement.boundary-overpaid')).toEqual([
+			[
+				'settlement.boundary-overpaid',
+				{ context: { orderId: 'boundary', total: '9', netPaid: 10 } },
+			],
+		]);
 	} finally {
 		await storeDB.remove();
 	}
