@@ -1,13 +1,12 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { isAsleepBlock, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { type ReadonlySiteRecord, recordSiteInfo } from '@wcpos/query/user-db';
 
+import { fetchLiveSiteInfo, SiteInfoStatusError } from '../utils/fetch-live-site-info';
 import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
 const appLogger = getLogger(['wcpos', 'app', 'site']);
@@ -65,35 +64,25 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 			setError(null);
 
 			try {
-				const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
+				const data = await fetchLiveSiteInfo(http, wpApiUrl);
 
-				// Check if response is successful
-				if (!response || response.status < 200 || response.status >= 300) {
-					const errorMsg = `Invalid response status: ${response?.status}`;
-					appLogger.error('Failed to fetch site info: Invalid response status', {
-						code: ERROR_CODES.STORE_SERVER_ERROR,
-						context: {
-							status: response?.status,
-							statusText: response?.statusText,
-							siteUrl,
-						},
-					});
-					setError(errorMsg);
-					return;
-				}
-
-				const data = get(response, 'data', {});
-
-				// Check if data exists and has expected structure
-				if (!data || typeof data !== 'object') {
+				if (!data) {
 					appLogger.debug('Site info response contains no valid data', {
-						context: { siteUrl, hasData: !!data },
+						context: { siteUrl, hasData: false },
 					});
 					return;
 				}
 
 				await recordSiteInfo(site, data);
 			} catch (err) {
+				if (err instanceof SiteInfoStatusError) {
+					appLogger.error('Failed to fetch site info: Invalid response status', {
+						code: ERROR_CODES.STORE_SERVER_ERROR,
+						context: { status: err.status, statusText: err.statusText, siteUrl },
+					});
+					setError(err.message);
+					return;
+				}
 				if (isAsleepBlock(err)) {
 					deferredRef.current = true;
 					// Nothing was attempted, so nothing failed: leave `error` unset and

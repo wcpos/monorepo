@@ -9,11 +9,16 @@ import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { TONE } from '../lib/tone';
 import { Notice } from './index';
 
+type TextMockProps = Record<string, unknown> & { testID?: string };
+
 // Uniwind is not compiled in Jest; expose root classes, retaining real web pressables.
 jest.mock('react-native', () => ({
 	...jest.requireActual('react-native'),
 	View: ({ testID, dataSet, ...props }: { testID?: string; dataSet?: { kind?: string } }) =>
 		React.createElement('div', { ...props, 'data-testid': testID, 'data-kind': dataSet?.kind }),
+	// RN-only props are dropped so the span keeps only what the DOM takes, the className among them.
+	Text: ({ testID, numberOfLines, maxFontSizeMultiplier, style, ...props }: TextMockProps) =>
+		React.createElement('span', { ...props, 'data-testid': testID }),
 }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('expo-haptics', () => ({
@@ -184,4 +189,20 @@ it('icon={null} draws no glyph', () => {
 	const { container } = render(<Notice tone="warning" title="Title" testID="notice" icon={null} />);
 	expect(container.querySelector('[data-icon]')).toBeNull();
 	expect(screen.getByTestId('notice')).toHaveClass(...TONE.warning.band.split(' '));
+});
+it('a primary action takes the accent text', () => {
+	render(
+		<Notice
+			tone="info"
+			title="Title"
+			testID="notice"
+			actions={[
+				{ label: 'Go', onPress: jest.fn(), primary: true },
+				{ label: 'Later', onPress: jest.fn() },
+			]}
+		/>
+	);
+	expect(screen.getByText('Go')).toHaveClass('text-primary');
+	expect(screen.getByText('Later')).toHaveClass('text-muted-foreground');
+	expect(screen.getByText('Later')).not.toHaveClass('text-primary');
 });

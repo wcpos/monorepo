@@ -167,6 +167,15 @@ export function captureRedirectResult(): void {
 }
 
 /**
+ * The popup posted its URL to the opener, which owns the login: this page
+ * never parses, validates, strips or claims the URL.
+ */
+export function markRedirectHandedToOpener(): void {
+	captured = true;
+	pending = null;
+}
+
+/**
  * Claim the pending redirect result. One-shot: the first matching claimant
  * consumes it. A result whose origin is known is handed only to the consumer
  * with the same wcpos_login_url AND the same claimKey — several consumers for

@@ -93,8 +93,10 @@ function loadCreateAppEngine(
 	scopeDatabaseFiles: { list(): Promise<string[]> } | null = null
 ) {
 	jest.resetModules();
-	const purgeLegacyDatabases = jest.fn(async () => undefined);
+	const purgeLegacyDatabases = jest.fn(async (): Promise<unknown> => undefined);
 	jest.doMock('@wcpos/database/purge-legacy-db', () => ({ purgeLegacyDatabases }));
+	const armScannerResetNotice = jest.fn();
+	jest.doMock('@wcpos/utils/scanner-reset-notice', () => ({ armScannerResetNotice }));
 	const appMetricsObserver = jest.fn();
 	const reportNetworkResponse = jest.fn();
 	const recordTransport = jest.fn();
@@ -211,6 +213,7 @@ function loadCreateAppEngine(
 		setAppOnlineStatus,
 		networkDebug,
 		purgeLegacyDatabases,
+		armScannerResetNotice,
 		createSessionFetcherOptions,
 		switchAppEngineScope,
 		createRxdbSyncEngine,
@@ -2024,6 +2027,29 @@ describe('legacy database purge', () => {
 			'Failed to purge legacy databases',
 			expect.any(Object)
 		);
+	});
+
+	it('arms the scanner reset notice once when the purge removed a retired user database', async () => {
+		const { createAppSyncEngine, purgeLegacyDatabases, armScannerResetNotice } =
+			loadCreateAppEngine();
+		purgeLegacyDatabases.mockResolvedValue({ legacyUserDatabaseFound: true });
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(armScannerResetNotice).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		['no user database', async () => ({ legacyUserDatabaseFound: false })],
+		['an answer without the field', async () => undefined],
+		['a rejected purge', async () => Promise.reject(new Error('purge failed'))],
+	])('never arms the scanner reset notice on %s', async (_, purge) => {
+		const { createAppSyncEngine, purgeLegacyDatabases, armScannerResetNotice } =
+			loadCreateAppEngine();
+		purgeLegacyDatabases.mockImplementation(purge);
+		await createAppSyncEngine(BASE_OPTIONS).ready;
+		await settle();
+		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+		expect(armScannerResetNotice).not.toHaveBeenCalled();
 	});
 
 	it('does not purge when engine readiness fails', async () => {
