@@ -19,6 +19,9 @@ const SNAPSHOT_KEEPALIVE_MS = 20_000;
 // Channel heartbeat: the POS pings first, every 5 s, once the config is sent. A display that has
 // pinged back is dead after 15 s of silence; one that never pings is an older build and never times out.
 const PING_TEXT = '{"type":"ping"}';
+// Do not slow this ping to save requests (front desk ruling, 2026-11-12). It is about 12 of a
+// pair's ~20 signal requests a minute, but 5 s pings with 15 s silence (three missed pings) are
+// what keep dead-peer recovery under 15 s. Adaptive pinging is a possible future, not planned.
 const PING_INTERVAL_MS = 5000;
 const PEER_SILENCE_MS = 15_000;
 export interface DisplayEvent {
