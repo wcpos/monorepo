@@ -22,9 +22,10 @@ const REGISTRY_POLL_MS = 5000;
 // Two seconds matches the display page's own poll; used only while the server reports a display
 // online but its session is not yet configured, so a switched-off display adds no load.
 const HANDSHAKE_POLL_MS = 2000;
-// Slow poll while every display is configured, so a rebooted display's `ready` is read. The 20 s
-// reconnect budget is ≤10 s to see `ready` plus a 2-6 s handshake.
-const CONNECTED_POLL_MS = 10_000;
+// Slow poll while every display is configured, so a rebooted display's `ready` is read. The front
+// desk ruled the reconnect cadence at 5 s on Pro #824 step 5 (step limit 15 s): a 5 s poll sees a
+// display's `ready` within 5 s, leaving room for the 2-6 s handshake.
+const CONNECTED_POLL_MS = 5_000;
 export interface CustomerDisplayServiceOptions {
 	http: HttpFunction;
 	deviceId: string;

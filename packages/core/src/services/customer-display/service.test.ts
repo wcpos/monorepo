@@ -189,14 +189,14 @@ describe('CustomerDisplayService', () => {
 		}
 	});
 
-	test('slow-polls every 10 s once every display is configured', async () => {
+	test('slow-polls every 5 s once every display is configured', async () => {
 		const { service, peers, requests } = setup([registryRow('one')]);
 		await service.refreshDisplays();
 		peers[0].open();
 		const reads = () => requests.filter(({ url }) => url.endsWith('/displays')).length;
 		const before = reads();
 
-		await jest.advanceTimersByTimeAsync(9999);
+		await jest.advanceTimersByTimeAsync(4999);
 		expect(reads()).toBe(before);
 		await jest.advanceTimersByTimeAsync(1);
 		expect(reads()).toBe(before + 1);
@@ -306,15 +306,18 @@ describe('CustomerDisplayService', () => {
 		service.stop();
 	});
 
-	test('drops from the 2 s poll to the 10 s poll once the online display is configured', async () => {
+	test('drops from the 2 s poll to the 5 s poll once the online display is configured', async () => {
 		const { service, peers, requests } = setup([{ ...registryRow('one'), connected: true }]);
 		await service.refreshDisplays();
 
 		peers[0].open();
 		const registryReads = requests.filter(({ url }) => url.endsWith('/displays')).length;
-		await jest.advanceTimersByTimeAsync(9999);
+		await jest.advanceTimersByTimeAsync(4999);
 
 		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads);
+		await jest.advanceTimersByTimeAsync(1);
+
+		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads + 1);
 		service.stop();
 	});
 
