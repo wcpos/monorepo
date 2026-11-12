@@ -24,6 +24,11 @@ type Input = {
 	queue?: OrderMutationContext;
 };
 export type CartWriteCoupons = NonNullable<Input['coupons']>;
+/** The context a coupon write prices with; its boundary commit must settle with the same one. */
+export const settleCouponContext = (coupons: CartWriteCoupons): CouponContext => ({
+	...coupons.context,
+	taxStatusFor: coupons.taxStatusFor ?? coupons.context.taxStatusFor,
+});
 export type Deps<T> = {
 	localPatch: (input: { document: CurrentOrderRecord; changes: PayloadChanges }) => T;
 	configForOrder: (order: OrderPayload) => CartConfig;
@@ -88,13 +93,7 @@ export function settleCartWrite<T>(
 					: settlePayload({
 							payload: after,
 							config: deps.configForOrder(after),
-							coupons: hasCoupons
-								? {
-										...input.coupons!.context,
-										taxStatusFor:
-											input.coupons!.taxStatusFor ?? input.coupons!.context.taxStatusFor,
-									}
-								: undefined,
+							coupons: hasCoupons ? settleCouponContext(input.coupons!) : undefined,
 							owner: { uuid: document.uuid, serverOwnsMoney: deps.serverOwnsMoney },
 						});
 			if (outcome.kind === 'error') {
