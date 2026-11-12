@@ -32,6 +32,9 @@ type CarriedFrom = {
 	register_id: string;
 };
 
+/** `delivered`: the server has the closure, so its counters carry the period (#3307). */
+type ClosureReservation = { row: DeepReadonly<ClosureRow>; applied: boolean; delivered?: boolean };
+
 export interface RegisterDocument {
 	id: string;
 	name: string;
@@ -54,7 +57,7 @@ export interface RegisterDocument {
 					carried_from?: CarriedFrom;
 					/** The session another till closed while this device held it live; cleared by the next open. */
 					closed_elsewhere?: { session_id: string; at: string };
-					closure_reservation?: { row: DeepReadonly<ClosureRow>; applied: boolean };
+					closure_reservation?: ClosureReservation;
 				}
 			>;
 			register_id?: string | null;
@@ -405,18 +408,21 @@ export async function adoptCounters(
 	userDB: UserDatabase,
 	siteUuid: string,
 	registerId: string,
-	counters: RegisterCounters
+	counters: RegisterCounters,
+	options: { deliveredClosureId?: string } = {}
 ) {
 	const doc = await userDB.getLocal<RegisterDocument>('register');
 	if (!doc) throw new Error('Register is not initialized');
 	const updated = await doc.incrementalModify((data) => {
 		const bucket = data.sites[siteUuid] ?? { sale_counter: 0 };
-		const register = bucket.registers?.[registerId] ?? {};
+		const found = bucket.registers?.[registerId] ?? {};
+		const register = markDelivered(found, options.deliveredClosureId);
 		// A closure already applied locally but not yet on the server sits on top of the
 		// adopted floor: take its period out before the max and put it back after.
 		const applied = register.closure_reservation?.applied ? register.closure_reservation.row : null;
-		const periodSales = applied ? toMinor(applied.period_sales_total, 4) : 0;
-		const periodRefunds = applied ? toMinor(applied.period_refunds_total, 4) : 0;
+		const carried = applied && !register.closure_reservation?.delivered ? applied : null;
+		const periodSales = carried ? toMinor(carried.period_sales_total, 4) : 0;
+		const periodRefunds = carried ? toMinor(carried.period_refunds_total, 4) : 0;
 		const sales =
 			Math.max(
 				toMinor(register.perpetual_sales_total ?? '0', 4) - periodSales,
@@ -452,6 +458,34 @@ export async function adoptCounters(
 					: {}),
 			},
 		};
+		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
+	});
+	currentRegister = updated.toJSON(true).data;
+}
+/** The register with this closure's reservation marked delivered; any other register as it is. */
+function markDelivered<T extends { closure_reservation?: ClosureReservation }>(
+	register: T,
+	closureId?: string
+): T {
+	const reservation = register.closure_reservation;
+	if (!reservation || reservation.delivered || reservation.row.id !== closureId) return register;
+	return { ...register, closure_reservation: { ...reservation, delivered: true } };
+}
+/** The server has this closure (#3307): its period is in the counters, not on top of them. */
+export async function markReservationDelivered(
+	userDB: UserDatabase,
+	siteUuid: string,
+	registerId: string,
+	closureId: string
+) {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) return;
+	const updated = await doc.incrementalModify((data) => {
+		const bucket = data.sites[siteUuid];
+		const register = bucket?.registers?.[registerId];
+		const marked = register && markDelivered(register, closureId);
+		if (!marked || marked === register) return data;
+		const registers = { ...bucket.registers, [registerId]: marked };
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
 	});
 	currentRegister = updated.toJSON(true).data;
