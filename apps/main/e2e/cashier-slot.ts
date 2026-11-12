@@ -17,6 +17,12 @@ export function selectCashierSlot(eventName: string | undefined, normalizedIndex
 	return bandStart + normalizedIndex;
 }
 
+/** Every cashier login either band can name: `e2e-cashier-1` to `e2e-cashier-16`. */
+export const ALL_E2E_CASHIER_USERNAMES: readonly string[] = Array.from(
+	{ length: 16 },
+	(_, index) => `e2e-cashier-${index + 1}`
+);
+
 /**
  * 0-based index of the shard this process is running.
  *
