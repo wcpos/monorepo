@@ -20,9 +20,11 @@ export type ClearLocalDataStartupState = 'idle' | 'clearing' | 'blocked';
  * part-way through the databases) or the armed flag could not be proven gone
  * afterwards — hydrating in either state would let the marker's retry on a
  * later launch destroy everything sold in between, so nothing may open the
- * databases until a relaunch retries the clear.
+ * databases until a relaunch retries the clear. 'relaunching' (Electron only):
+ * the user confirmed the main process's dialog, which relaunches the app to
+ * delete the databases, so nothing may hydrate in the meantime.
  */
-export async function performScheduledClear(): Promise<'done' | 'blocked'> {
+export async function performScheduledClear(): Promise<'done' | 'blocked' | 'relaunching'> {
 	try {
 		// Lazy call-time require (not a static import): the clear module must not
 		// load — its native variant builds Directory handles at module scope —
@@ -43,6 +45,15 @@ export async function performScheduledClear(): Promise<'done' | 'blocked'> {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 			});
 			return 'blocked';
+		}
+
+		if (
+			result &&
+			typeof result === 'object' &&
+			'relaunching' in result &&
+			result.relaunching === true
+		) {
+			return 'relaunching';
 		}
 
 		return 'done';
@@ -81,6 +92,11 @@ export function useClearLocalDataOnStartup(): ClearLocalDataStartupState {
 			}
 			if (outcome === 'blocked') {
 				setState('blocked');
+				return;
+			}
+			// The main process is about to quit and relaunch to delete the databases:
+			// stay 'clearing' so the layout renders null and nothing hydrates meanwhile.
+			if (outcome === 'relaunching') {
 				return;
 			}
 			if (Platform.OS === 'web') {

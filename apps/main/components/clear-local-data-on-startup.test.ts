@@ -13,14 +13,19 @@ function loadPerformScheduledClear({
 		databasesDeleted: 2,
 	}),
 	flagAfterClear = 'not-scheduled',
+	flagBeforeClear = flagAfterClear,
 }: {
 	clearAllDB?: jest.Mock;
 	flagAfterClear?: 'scheduled' | 'not-scheduled' | 'unknown';
+	flagBeforeClear?: 'scheduled' | 'not-scheduled' | 'unknown';
 } = {}) {
 	jest.resetModules();
 
-	const readClearLocalDataOnNextLoadFlag = jest.fn().mockReturnValue(flagAfterClear);
-	const unscheduleClearLocalDataOnNextLoad = jest.fn();
+	let flag = flagBeforeClear;
+	const readClearLocalDataOnNextLoadFlag = jest.fn(() => flag);
+	const unscheduleClearLocalDataOnNextLoad = jest.fn(() => {
+		flag = flagAfterClear;
+	});
 
 	jest.doMock('@wcpos/database', () => ({
 		readClearLocalDataOnNextLoadFlag,
@@ -35,12 +40,29 @@ function loadPerformScheduledClear({
 		ERROR_CODES: { UNEXPECTED_ERROR: 'UNEXPECTED_ERROR' },
 	}));
 
-	const { performScheduledClear } = jest.requireActual<
+	const { performScheduledClear, useClearLocalDataOnStartup } = jest.requireActual<
 		typeof import('./clear-local-data-on-startup')
 	>('./clear-local-data-on-startup');
+	// From the same post-reset registry as the module under test, so the hook and the
+	// renderer share one React. `pure`: no auto-cleanup hooks registered inside a test.
+	const { Platform } = jest.requireActual<typeof import('react-native')>('react-native');
+	const { renderHook, act } = jest.requireActual<
+		typeof import('@testing-library/react-native/pure')
+	>('@testing-library/react-native/pure');
 
-	return { performScheduledClear, clearAllDB, unscheduleClearLocalDataOnNextLoad };
+	return {
+		performScheduledClear,
+		useClearLocalDataOnStartup,
+		clearAllDB,
+		unscheduleClearLocalDataOnNextLoad,
+		Platform,
+		renderHook,
+		act,
+	};
 }
+
+const relaunchingClear = () =>
+	jest.fn().mockResolvedValue({ success: true, relaunching: true, message: 'relaunching' });
 
 describe('performScheduledClear', () => {
 	it("returns 'done' when the clear succeeds and the flag is verifiably gone", async () => {
@@ -73,5 +95,76 @@ describe('performScheduledClear', () => {
 
 		await expect(performScheduledClear()).resolves.toBe('blocked');
 		expect(unscheduleClearLocalDataOnNextLoad).not.toHaveBeenCalled();
+	});
+
+	it("returns 'relaunching' when the main process will relaunch to clear, and unschedules the flag", async () => {
+		const { performScheduledClear, unscheduleClearLocalDataOnNextLoad } = loadPerformScheduledClear(
+			{ clearAllDB: relaunchingClear() }
+		);
+
+		await expect(performScheduledClear()).resolves.toBe('relaunching');
+		expect(unscheduleClearLocalDataOnNextLoad).toHaveBeenCalled();
+	});
+
+	it("returns 'blocked' when the main process will relaunch but the flag survives", async () => {
+		const { performScheduledClear } = loadPerformScheduledClear({
+			clearAllDB: relaunchingClear(),
+			flagAfterClear: 'scheduled',
+		});
+
+		await expect(performScheduledClear()).resolves.toBe('blocked');
+	});
+
+	it("a declined dialog unschedules the flag and returns 'done' so the app hydrates", async () => {
+		const { performScheduledClear, unscheduleClearLocalDataOnNextLoad } = loadPerformScheduledClear(
+			{
+				clearAllDB: jest
+					.fn()
+					.mockResolvedValue({ success: false, declined: true, message: 'declined' }),
+			}
+		);
+
+		await expect(performScheduledClear()).resolves.toBe('done');
+		expect(unscheduleClearLocalDataOnNextLoad).toHaveBeenCalled();
+	});
+});
+
+describe('useClearLocalDataOnStartup', () => {
+	const globalWithLocation = globalThis as { location?: unknown };
+	const originalLocation = globalWithLocation.location;
+
+	afterEach(() => {
+		globalWithLocation.location = originalLocation;
+	});
+
+	it('does not reload while the main process relaunches', async () => {
+		const {
+			useClearLocalDataOnStartup,
+			unscheduleClearLocalDataOnNextLoad,
+			Platform,
+			renderHook,
+			act,
+		} = loadPerformScheduledClear({
+			clearAllDB: relaunchingClear(),
+			flagBeforeClear: 'scheduled',
+		});
+		const reload = jest.fn();
+		globalWithLocation.location = { reload };
+		const originalOS = Platform.OS;
+		Platform.OS = 'web';
+
+		try {
+			const { result, unmount } = await renderHook(() => useClearLocalDataOnStartup());
+			await act(async () => {
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			});
+
+			expect(unscheduleClearLocalDataOnNextLoad).toHaveBeenCalled();
+			expect(reload).not.toHaveBeenCalled();
+			expect(result.current).toBe('clearing');
+			await unmount();
+		} finally {
+			Platform.OS = originalOS;
+		}
 	});
 });
