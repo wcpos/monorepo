@@ -288,17 +288,22 @@ it('#3531: a manual close during a recovery joins it: one closure write, one clo
 	const view = render(<RegisterSessionBridge />);
 	await waitFor(() => expect(mockHold.held).toHaveLength(1), { timeout: 3000 });
 	mockHold.on = false;
-	const manual = manualClose(storeDB, id);
+	// The pane stores the receipt the moment its own close returns.
+	const manual = manualClose(storeDB, id).then(async (result) => {
+		await setClosureReceiptSnapshot(storeDB, result.closure.id, 'printed receipt');
+		return result;
+	});
+	await new Promise((resolve) => setTimeout(resolve, 50));
 
-	// The recovery finishes; the manual close returns the same closure, and the pane stores its receipt.
+	// The recovery finishes; the joined manual close returns the same closure.
 	mockHold.held.shift()!();
+	const { closure } = await manual;
 	await waitFor(
 		async () => expect((await storeDB.closures.findOne(id).exec())?.sync_status).toBe('synced'),
 		{ timeout: 3000 }
 	);
-	const { closure } = await manual;
 	expect(closure.id).toBe((await storeDB.closures.findOne(id).exec())!.id);
-	await setClosureReceiptSnapshot(storeDB, closure.id, 'printed receipt');
+	expect(mockHold.held).toHaveLength(0);
 	const written = (await storeDB.closures.findOne(id).exec())!.toJSON(true)._rev;
 	await secondCycle(storeDB, http.get.mock.calls.length);
 	view.unmount();
