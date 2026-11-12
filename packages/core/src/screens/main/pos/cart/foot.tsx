@@ -4,6 +4,8 @@ import { View } from 'react-native';
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useRegisterStatus } from '../../../../services/register-session/use-register-status';
 import { NoteRow } from './note-row';
@@ -33,13 +35,20 @@ export function CartFoot({
 		<>
 			<NoteRow order={currentOrderRecord} onPress={onOpenSheet} />
 			<HStack className="gap-2 p-2">
-				<IconButton
-					name="more"
-					variant="outline"
-					testID="order-meta-button"
-					accessibilityLabel={t('pos_cart.order_details')}
-					onPress={onOpenSheet}
-				/>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<IconButton
+							name="more"
+							variant="outline"
+							testID="order-meta-button"
+							accessibilityLabel={t('pos_cart.order_details')}
+							onPress={onOpenSheet}
+						/>
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{t('pos_cart.order_details')}</Text>
+					</TooltipContent>
+				</Tooltip>
 				<View className="flex-1">
 					{sessionsOn && !session ? (
 						<Button
