@@ -23,6 +23,7 @@ export { failureFacts } from './failure-facts';
 export { sessionRefreshRequests } from './refresh';
 export {
 	findOpenSession,
+	findUnwrittenCloses,
 	isRegisterCounting,
 	openSession,
 	recordMovement,

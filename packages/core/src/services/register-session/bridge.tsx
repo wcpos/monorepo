@@ -4,8 +4,12 @@ import { debounceTime, filter } from 'rxjs';
 
 import { useQueryRuntime } from '@wcpos/query';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
+	closeRegister,
 	failureFacts,
+	findUnwrittenCloses,
 	observeRegisterSessionAvailability,
 	runRegisterSessionCycle,
 	sessionRefreshRequests,
@@ -13,14 +17,30 @@ import {
 
 import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
+import { useStoreDay } from '../../hooks/use-store-day';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import { useRegisterBinding } from '../register/use-register-binding';
 
+/**
+ * Closes whose closure write a restart interrupted (#3289), keyed by session id, per app start:
+ * at most five attempts, each retry no sooner than 1, 2, 5 and 10 minutes after the failure
+ * before it, taken on the bridge's next cycle (the minute tick). Then none until the next start.
+ */
+const RECOVERY_BACKOFF_MS = [60_000, 120_000, 300_000, 600_000];
+const recovering = new Map<string, { attempt: number; dueAt: number }>();
+const log = getLogger(['wcpos', 'registerSession']);
+
 export function RegisterSessionBridge() {
-	const { storeDB, userDB, site, store } = useStoreSession();
+	const { storeDB, userDB, site, store, wpCredentials } = useStoreSession();
 	const runtime = useQueryRuntime();
 	const http = useRestHttpClient();
-	const { registerId } = useRegisterBinding();
+	const { registerId, registerName } = useRegisterBinding();
+	const { timezone } = useStoreDay();
+	// What a manual close passes `closeRegister`; a recovered close needs no cashier input.
+	const closeRef = React.useRef({ site, credentials: wpCredentials, timezone, registerName });
+	React.useEffect(() => {
+		closeRef.current = { site, credentials: wpCredentials, timezone, registerName };
+	}, [site, wpCredentials, timezone, registerName]);
 	const online = useOnlineStatus().status === 'online-website-available';
 	// The cycle names the opener by the signed-in user; a cashier switch is no reason to re-run it.
 	const actor = useRegisterActor();
@@ -56,6 +76,48 @@ export function RegisterSessionBridge() {
 				consecutiveFailures: failures,
 			});
 		};
+		// The reused close (`countRecorded`): the closure from the recorded count, no second close.
+		const finishCloses = async () => {
+			let finished = false;
+			for (const session of registerId ? await findUnwrittenCloses(storeDB, registerId) : []) {
+				const { attempt = 0, dueAt = 0 } = recovering.get(session.id) ?? {};
+				if (Date.now() < dueAt) continue;
+				// In flight: due again only once this attempt has failed.
+				recovering.set(session.id, { attempt: attempt + 1, dueAt: Infinity });
+				const { registerName: name, ...close } = closeRef.current;
+				try {
+					await closeRegister(
+						{
+							...close,
+							storeDB,
+							userDB,
+							siteUuid: site.uuid!,
+							actor: actorRef.current,
+							engine: runtime.engine,
+							registerName: name ?? '',
+						},
+						session.id,
+						{ counted: { ...session.counted } as { cash: string } }
+					);
+					finished = true;
+				} catch (error) {
+					const wait = RECOVERY_BACKOFF_MS[attempt] ?? Infinity;
+					recovering.set(session.id, { attempt: attempt + 1, dueAt: Date.now() + wait });
+					// Error level reaches the app log and Sentry; no toast, nothing shown to the cashier.
+					log.error('Register close recovery failed', {
+						code: ERROR_CODES.SYNC_UNEXPECTED,
+						context: {
+							stage: 'close-recovery',
+							sessionId: session.id,
+							registerId,
+							attempt: attempt + 1,
+							...failureFacts(error),
+						},
+					});
+				}
+			}
+			return finished;
+		};
 		const cycle = () => {
 			if (!ready) return;
 			// Coalesce triggers so an older response cannot overwrite a newer snapshot.
@@ -78,6 +140,14 @@ export function RegisterSessionBridge() {
 				.then(() => {
 					consecutiveFailures.current = 0;
 				}, report)
+				// Then the outbox sends counting, closed and the closure, in order, on the rerun.
+				.then(finishCloses)
+				.then(
+					(finished) => {
+						if (finished) rerun.current = cycle;
+					},
+					(error: unknown) => report(Object.assign(Object(error), { stage: 'close-recovery' }))
+				)
 				.finally(() => {
 					inFlight.current = false;
 					const next = rerun.current;

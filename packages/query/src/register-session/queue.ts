@@ -414,6 +414,10 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 	for (const snapshot of rows) {
 		const row = snapshot.getLatest();
 		if (!due(row) || !row.server_status || !row.pending_status) continue;
+		// A close leaves only once its closure exists (#3289): a tab dying between `closeSession`
+		// and `writeClosure` must not leave the store a closed session with no closure. Skipped,
+		// not attempted; the bridge finishes such a close at the next start.
+		if (row.pending_status === 'closed' && !(await closures.findOne(row.id).exec())) continue;
 		// Counting closes the movement route. Flush this session's movements on this pass first.
 		if (
 			await movements.findOne({ selector: { session_id: row.id, sync_status: 'pending' } }).exec()
