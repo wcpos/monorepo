@@ -31,11 +31,27 @@ it('names the lines without a local product', () => {
 	mockProducts.next([]);
 	render(<CategoriesCard />);
 	expect(screen.getByTestId('card-categories-unknown').textContent).toBe(
-		'1 of 1 lines have no local product'
+		'1 of 1 lines are for products not on this device'
 	);
 	expect(screen.getByTestId('card-categories-donut-row-unknown').textContent).toContain(
-		'Unknown product'
+		'Not on this device'
 	);
+});
+it('counts only real categories in the centre', () => {
+	mockProducts.next([{ id: 1, categories: [{ id: 2, name: 'Food' }] }]);
+	mockCategories.next([{ id: 2, name: 'Food', parent: 0 }]);
+	setOrders([
+		{
+			total: '20',
+			line_items: [
+				{ product_id: 1, total: '10', quantity: 1 },
+				{ product_id: 9, total: '10', quantity: 1 },
+			],
+		},
+	] as ReportOrder[]);
+	render(<CategoriesCard />);
+	expect(screen.getByTestId('card-categories-donut').textContent).toContain('1 category');
+	expect(screen.getByTestId('card-categories-donut').textContent).not.toContain('2 categories');
 });
 it('groups a sub-category under its top-level parent in the card', () => {
 	mockProducts.next([{ id: 1, categories: [{ id: 2, name: 'Beans' }] }]);

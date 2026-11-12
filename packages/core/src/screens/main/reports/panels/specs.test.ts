@@ -124,7 +124,7 @@ it('categories retain unknown and uncategorised rows and fractional quantities',
 		},
 	};
 	expect(specOf('categories', data).rows.map((row) => row.cells)).toEqual([
-		['Unknown product', 'qty:1.5', '£3.00', '75.0%'],
+		['Not on this device', 'qty:1.5', '£3.00', '75.0%'],
 		['Uncategorised', 'qty:1', '£1.00', '25.0%'],
 	]);
 });
