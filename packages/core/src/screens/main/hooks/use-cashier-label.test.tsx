@@ -33,6 +33,7 @@ const engine = {
 	db$,
 };
 const manager = { engine };
+const mockCredentials$ = new BehaviorSubject<unknown>([]);
 
 jest.mock('../../../../../query/src/provider', () => ({
 	...jest.requireActual('../../../../../query/src/provider'),
@@ -41,6 +42,13 @@ jest.mock('../../../../../query/src/provider', () => ({
 
 jest.mock('./use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: mockFormat }),
+}));
+
+jest.mock('../../../contexts/app-state', () => ({ useStoreSession: () => ({ site: {} }) }));
+
+jest.mock('@wcpos/query/user-db', () => ({
+	PENDING_USER_DB_READ: 'pending',
+	observeSiteCredentials: () => mockCredentials$.asObservable(),
 }));
 
 function fakeCustomer(): RxDocument<EngineDocument> {
@@ -74,6 +82,7 @@ describe('useCashierLabel', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		document$.next(null);
+		mockCredentials$.next([]);
 	});
 
 	it('resolves and formats an engine-resident customer record', async () => {
@@ -104,6 +113,16 @@ describe('useCashierLabel', () => {
 
 		await waitFor(() => expect(result.current.label).toBe('Ada Lovelace'));
 		expect(result.current.record?.payload.id).toBe(42);
+	});
+
+	// Revert: look the cashier up only in customers, so a staff user shows as an id.
+	it("names a cashier who is not a customer from the site's logged-in users", async () => {
+		document$.next(null);
+		mockCredentials$.next([{ id: 7, display_name: 'Demo Cashier' }]);
+
+		const { result } = renderHook(() => useCashierLabel(7));
+
+		await waitFor(() => expect(result.current.label).toBe('Demo Cashier'));
 	});
 
 	it.each([undefined, 'not-a-number'])('returns an empty label without querying for %p', (id) => {
