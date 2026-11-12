@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
+import { Text } from 'react-native';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
@@ -56,6 +57,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 let mockBinding: Record<string, unknown> = {
 	status: 'bound',
+	registerId: 'r',
 	registerName: 'Front',
 	registers: [{ id: 'r' }],
 };
@@ -84,8 +86,18 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ testID, children }: { testID: string; children: React.ReactNode }) => (
-		<span data-testid={testID}>{children}</span>
+	Text: ({
+		testID,
+		children,
+		dataSet,
+	}: {
+		testID: string;
+		children: React.ReactNode;
+		dataSet?: { registerId?: string };
+	}) => (
+		<span data-testid={testID} data-register-id={dataSet?.registerId}>
+			{children}
+		</span>
 	),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
@@ -105,7 +117,38 @@ jest.mock('../../components/user-avatar', () => ({ UserAvatar: () => null }));
 
 beforeEach(() => {
 	mockIsPhone = true;
-	mockBinding = { status: 'bound', registerName: 'Front', registers: [{ id: 'r' }] };
+	mockBinding = {
+		status: 'bound',
+		registerId: 'r',
+		registerName: 'Front',
+		registers: [{ id: 'r' }],
+	};
+});
+
+it.each([{ stores: [] }, { stores: ['a', 'b'] }])(
+	'B1: exposes the bound id with stores $stores',
+	({ stores }) => {
+		mockStores = stores;
+		const registerId = '0f000000-0000-4000-8000-000000000001';
+		mockBinding = { ...mockBinding, status: 'bound', registerId };
+		render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
+		expect(screen.getByTestId('register-bar-place').getAttribute('data-register-id')).toBe(
+			registerId
+		);
+		mockStores = [];
+	}
+);
+it.each([
+	['B2', 'choose', null],
+	['B3', 'unknown', '0f000000-0000-4000-8000-000000000001'],
+])('%s: omits the attribute when binding is %s', (_case, status, registerId) => {
+	mockBinding = { ...mockBinding, status, registerId };
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-bar-place').hasAttribute('data-register-id')).toBe(false);
+});
+it('B4: react-native-web emits data-register-id for dataSet.registerId', () => {
+	render(<Text testID="real-text" {...{ dataSet: { registerId: 'x' } }} />);
+	expect(screen.getByTestId('real-text').getAttribute('data-register-id')).toBe('x');
 });
 
 // Try again republishes `unknown` while it runs; the pill keeps the state being retried.
