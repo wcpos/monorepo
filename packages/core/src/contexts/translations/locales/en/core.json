@@ -1286,7 +1286,7 @@
 	"pos_checkout.offline_nothing_charged": "You're offline, so nothing was charged.",
 	"pos_checkout.sign_in_nothing_charged": "Nothing was charged — sign in, then try again.",
 	"pos_checkout.background_nothing_charged": "WCPOS was in the background, so nothing was charged.",
-	"pos_checkout.process_payment": "Process Payment",
+	"pos_checkout.charge_amount": "Charge {amount}",
 	"pos_checkout.return_to_cart": "Return to Cart",
 	"pos_checkout.order_deleted_on_store": "Order deleted on the store",
 	"pos_checkout.order_deleted_on_store_recreated": "Order #{number} was deleted on the store. The cart has been kept as a new order.",

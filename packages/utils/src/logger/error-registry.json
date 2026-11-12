@@ -485,7 +485,7 @@
 		"summary": "WCPOS could not confirm whether checkout completed.",
 		"docsBody": "Do not retry blindly. Check the store for the order first, then export diagnostics if its outcome is still unclear.",
 		"troubleshooting": [
-			"Do not press Process Payment again and do not charge the customer again until you know what happened.",
+			"Do not press Charge again and do not charge the customer again until you know what happened.",
 			"Check the payment side first — the payment provider's own screen, receipt or dashboard shows whether the customer was charged.",
 			"Refresh the till's orders: in Store health → Database, open the ⋮ menu on the Orders row and choose Check for changes now. An order that arrives as paid normally leaves the cart and, on WCPOS Pro, shows as paid in Orders; without Pro, ask someone to check WooCommerce → Orders in WP Admin, searching by the total and the last few minutes.",
 			"If the provider shows a charge, do not charge again: reload the app and refresh the orders again — the sale is complete once the order shows as paid. If money was taken but no paid order appears, go to the last step.",
