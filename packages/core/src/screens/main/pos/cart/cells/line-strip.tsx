@@ -452,6 +452,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			<GestureDetector gesture={pan} touchAction="pan-y">
 				<Animated.View
 					ref={bodyRef}
+					testID="cart-line-body"
 					className={
 						dragging ? 'web:select-none bg-card min-h-row flex-row' : 'bg-card min-h-row flex-row'
 					}

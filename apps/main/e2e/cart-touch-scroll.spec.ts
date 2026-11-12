@@ -54,7 +54,7 @@ async function fillCartUntilScrollable(page: Page) {
 
 async function scrollsAndSwipes(page: Page) {
 	await fillCartUntilScrollable(page);
-	const bodies = page.locator('[data-testid="cart-line-row"] > div:last-child');
+	const bodies = page.getByTestId('cart-line-body');
 	const body = bodies.nth(1);
 	expect(await body.evaluate((el) => getComputedStyle(el).touchAction)).toBe('pan-y');
 	const scroller = page.getByTestId('cart-table-scroll');
