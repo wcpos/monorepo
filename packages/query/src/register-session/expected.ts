@@ -363,10 +363,17 @@ function baselineView(
 ): Parameters<typeof deriveExpected>[0] {
 	return {
 		...input,
+		// Name each field, never spread the row: the drawer and the close pass RxDocuments, whose
+		// fields are getters a spread drops, and a baseline of empty rows double-counts (#3498).
 		movements: input.movements
 			.filter((row) => baselineHas(row.id))
 			.map((row) => ({
-				...row,
+				id: row.id,
+				session_id: row.session_id,
+				type: row.type,
+				amount: row.amount,
+				reason: row.reason,
+				voids: row.voids,
 				voided_by: baselineHas(row.voided_by) ? row.voided_by : null,
 			})),
 		ledgerRowsBySession: input.ledgerRowsBySession
