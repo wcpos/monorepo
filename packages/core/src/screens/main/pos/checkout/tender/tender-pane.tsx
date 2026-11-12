@@ -913,7 +913,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							}
 							testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
 							disabled={busy}
-							onPress={() => flow.commands.dispatch({ type: 'set-entry', minor: exactMinor })}
+							onPress={() =>
+								flow.commands.dispatch({ type: 'set-entry', minor: figures.exactEntryMinor })
+							}
 						/>
 					) : null}
 				</View>
