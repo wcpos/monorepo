@@ -34,10 +34,12 @@ import {
 import { restoreLocalStorageAsClone, type SavedAuthState } from './indexeddb-helpers';
 import { quarantineGate } from './quarantine';
 import {
+	assertStillBound,
 	boundRegister,
 	createRegisterReadRecorder,
 	isSuiteRegister,
 	pickSuiteRegister,
+	registerIdOf,
 	type RegisterName,
 	type RegisterReadRecorder,
 	SUITE_REGISTER_NAME,
@@ -201,9 +203,10 @@ export async function ensureRegisterOpen(
 		await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
 	}
 	if (!(await card.isVisible())) return false;
-	await assertSuiteRegisterBound(page);
+	const bound = await assertSuiteRegisterBound(page);
 	const amount = page.getByTestId('open-register-amount');
 	await amount.fill((await amount.inputValue()) || '100');
+	assertStillBound(bound.id, await barRegisterAttribute(page));
 	await page.getByTestId('open-register-button').click();
 	await expect(card).toBeHidden({ timeout: 30_000 });
 	// A healthy open register has no warning pill; its cart header is ready instead.
@@ -218,12 +221,12 @@ export async function ensureRegisterOpen(
  */
 const REGISTER_SETTLE_TIMEOUT_MS = 30_000;
 
-/** The register list and last single register each page's app read, as the store answered them. */
+/** Register names each page's app read, keyed by id across all stores. */
 const registerDirectories = new WeakMap<Page, RegisterReadRecorder>();
 
-function storeIdOf(url: string): string | null {
+async function barRegisterAttribute(page: Page): Promise<string | null> {
 	try {
-		return new URL(url).searchParams.get('store_id');
+		return await page.getByTestId('register-bar-place').first().getAttribute('data-register-id');
 	} catch {
 		return null;
 	}
@@ -234,9 +237,7 @@ function observeRegisterDirectory(page: Page): void {
 	const recorder = createRegisterReadRecorder();
 	registerDirectories.set(page, recorder);
 	page.on('response', (response) => {
-		recorder.observe(wcposRestRoute(response.url()), storeIdOf(response.url()), () =>
-			response.json()
-		);
+		recorder.observe(wcposRestRoute(response.url()), () => response.json());
 	});
 }
 
@@ -244,16 +245,11 @@ function observeRegisterDirectory(page: Page): void {
 async function readBoundRegister(page: Page): Promise<RegisterName | null> {
 	const directory = registerDirectories.get(page)?.current();
 	if (!directory) return null;
-	const place = page.getByTestId('register-bar-place').first();
-	return boundRegister(
-		(await place.textContent().catch(() => null)) ?? '',
-		directory.list ?? [],
-		directory.single
-	);
+	return boundRegister(await barRegisterAttribute(page), directory.names);
 }
 
 /** Throws, before any click, unless the bound register is one the suite created (`isSuiteRegister`). */
-async function assertSuiteRegisterBound(page: Page): Promise<void> {
+async function assertSuiteRegisterBound(page: Page): Promise<RegisterName> {
 	// A restored binding shows the card before the app's register list answers: wait for it.
 	const bound = await expect
 		.poll(() => readBoundRegister(page), { timeout: REGISTER_SETTLE_TIMEOUT_MS })
@@ -262,9 +258,11 @@ async function assertSuiteRegisterBound(page: Page): Promise<void> {
 			() => readBoundRegister(page),
 			() => null
 		);
-	if (bound && isSuiteRegister(bound)) return;
+	if (bound && isSuiteRegister(bound)) return bound;
+	const id = registerIdOf(await barRegisterAttribute(page));
+	const unknown = `a register whose name was never read${id ? ` (bar states "${id}")` : ''}`;
 	throw new Error(
-		`[register] refusing to open a session on ${bound ? `"${bound.name}" (${bound.id})` : 'a register whose name was never read'}: the suite sells only on "${SUITE_REGISTER_NAME}" or the docs register`
+		`[register] refusing to open a session on ${bound ? `"${bound.name}" (${bound.id})` : unknown}: the suite sells only on "${SUITE_REGISTER_NAME}" or the docs register`
 	);
 }
 
@@ -274,9 +272,7 @@ async function pickSuiteRegisterIfShown(page: Page): Promise<void> {
 	const state = async () => {
 		if ((await rows.count()) > 0) return 'picker';
 		const directory = registerDirectories.get(page)?.current();
-		if (!directory) return 'pending';
-		return ((directory.list?.length ?? 0) <= 1 && (directory.list || directory.single)) ||
-			(await readBoundRegister(page))
+		return registerIdOf(await barRegisterAttribute(page)) || directory?.smallList
 			? 'bound'
 			: 'pending';
 	};

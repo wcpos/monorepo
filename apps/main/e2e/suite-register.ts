@@ -5,7 +5,9 @@
  * (`use-register-binding.ts`); with two it shows the picker. dev-pro store 24128 also lists
  * ui-climb's "Climb Register", which the climb needs and keeps, so the suite picks its own
  * register by name and never opens a session on any other (front desk, 2026-11-12; the native
- * twin is `ensure-pos-ready.yml`, monorepo#3522).
+ * twin is `ensure-pos-ready.yml`, monorepo#3522). Which register is bound comes from the app:
+ * the bar's place states its id (`data-register-id`), and the app's own register reads supply
+ * the name for that id (#3535).
  */
 import { expect, type Page } from '@playwright/test';
 
@@ -21,64 +23,42 @@ export interface RegisterName {
 	name: string;
 }
 
-/** What a page's app has read about registers: the list, and the last single-register read. */
-export interface RegisterReads {
-	list?: RegisterName[];
-	single?: RegisterName;
-}
-
-/** One page's register reads, kept in arrival order. `observe` never throws or rejects. */
+/** One page's register reads: every register name the app was told, by id. `observe` never throws or rejects. */
 export interface RegisterReadRecorder {
-	/**
-	 * `route` is `wcposRestRoute(url)`. `storeId` is the request's `store_id` query value, or null.
-	 * `body` is the response's json() promise.
-	 */
-	observe(
-		route: string | null | undefined,
-		storeId: string | null,
-		body: () => Promise<unknown>
-	): void;
-	/** The reads so far, or undefined before the first list or single read is recorded. */
-	current(): RegisterReads | undefined;
+	/** `route` is `wcposRestRoute(url)`; `body` is the response's json() promise. */
+	observe(route: string | null | undefined, body: () => Promise<unknown>): void;
+	/** Names by id from every list and single read so far, and whether a list read resolved with at most one row. */
+	current(): { names: ReadonlyMap<string, string>; smallList: boolean };
 	/** Resolves when every body observed so far has settled (for tests; never rejects). */
 	settled(): Promise<void>;
 }
 
 export function createRegisterReadRecorder(): RegisterReadRecorder {
-	let generation = 0;
-	let singleTaken = false;
-	let store: string | null | undefined;
-	let list: RegisterName[] | undefined;
-	let single: RegisterName | undefined;
+	const names = new Map<string, string>();
+	let smallList = false;
 	const pending: Promise<void>[] = [];
 	return {
-		observe(route, storeId, body) {
+		observe(route, body) {
 			const isList = route === '/wcpos/v2/registers';
 			const id = /^\/wcpos\/v2\/registers\/([^/]+)$/.exec(route ?? '')?.[1];
-			if (!isList && (!id || id === 'health' || !generation || singleTaken)) return;
-			if (isList) {
-				generation++;
-				single = undefined;
-				singleTaken = false;
-				if (storeId !== store) list = undefined;
-				store = storeId;
-			} else singleTaken = true;
-			const observed = generation;
+			if (!isList && (!id || id === 'health')) return;
 			pending.push(
 				(async () => {
 					try {
-						const row = (await body()) as RegisterName;
-						if (observed !== generation) return;
-						if (isList) list = Array.isArray(row) ? row : [];
-						else if (typeof row?.id === 'string' && typeof row?.name === 'string')
-							single = { id: row.id, name: row.name };
+						const value = await body();
+						if (isList && Array.isArray(value) && value.length <= 1) smallList = true;
+						const rows = isList ? (Array.isArray(value) ? value : []) : [value];
+						for (const row of rows) {
+							if (typeof row?.id === 'string' && typeof row?.name === 'string')
+								names.set(row.id, row.name);
+						}
 					} catch {
-						// An unreadable body keeps only the same store's last list.
+						// An unreadable body changes no recorded names.
 					}
 				})()
 			);
 		},
-		current: () => (generation ? { ...(list && { list }), ...(single && { single }) } : undefined),
+		current: () => ({ names, smallList }),
 		settled: async () => {
 			await Promise.all(pending);
 		},
@@ -106,25 +86,33 @@ export function suiteRegisterRowIndex(rowTexts: readonly string[]): number {
 	return index;
 }
 
+/** A register id as the app's bar states it: a UUID, or null for anything else (missing, empty, malformed). */
+export function registerIdOf(attribute: string | null | undefined): string | null {
+	return attribute &&
+		/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(attribute)
+		? attribute
+		: null;
+}
+
 /**
- * The register this device is bound to, from the bar's place and the register list the app read:
- * a one-register store's bar names only the store (its one register is the bound one), a larger
- * store's reads `Store · Register`. An empty list can use the app's single-register read.
+ * The register the bar says this device is bound to. Null when the bar states no valid id, or when no
+ * read named that id (name unknown: the guard waits for it, then throws).
  */
-export function boundRegister<T extends RegisterName>(
-	place: string,
-	directory: readonly T[],
-	single?: RegisterName
-): T | RegisterName | null {
-	const namesNone = !place.includes(' · ');
-	const named = directory.filter(
-		(row) => (directory.length === 1 && namesNone) || place.endsWith(` · ${row.name}`)
-	);
-	// "Store · A · Register" names "A · Register" before "Register": the longest name is the one.
-	const bound = named.sort((a, b) => b.name.length - a.name.length)[0] ?? null;
-	if (bound && single && bound.id !== single.id) return null;
-	if (bound || directory.length > 0 || !single) return bound;
-	return namesNone || place.endsWith(` · ${single.name}`) ? single : null;
+export function boundRegister(
+	attribute: string | null | undefined,
+	names: ReadonlyMap<string, string>
+): RegisterName | null {
+	const id = registerIdOf(attribute);
+	const name = id ? names.get(id) : undefined;
+	return id && name !== undefined ? { id, name } : null;
+}
+
+/** Throws unless the bar still states `decidedId`: an in-page store switch between the check and the open. */
+export function assertStillBound(decidedId: string, attribute: string | null | undefined): void {
+	if (registerIdOf(attribute) !== decidedId)
+		throw new Error(
+			`[register] the bar changed register before the session opened: decided "${decidedId}", now "${registerIdOf(attribute) ?? 'none'}"`
+		);
 }
 
 const PICKER_ROWS = '[data-testid^="register-picker-row-"]';
