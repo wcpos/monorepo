@@ -19,3 +19,8 @@ export const couponFormSchema = z.object({
 	email_restrictions: z.array(z.string()).optional().default([]),
 	meta_data: metaDataSchema.optional(),
 });
+
+/** The cashier's words for the form's one reachable refusal, an empty code (F37); zod's own text never reaches the screen. */
+export function couponFormErrors(t: (key: string) => string): z.core.$ZodErrorMap {
+	return (issue) => (issue.path?.[0] === 'code' ? t('coupons.code_required') : undefined);
+}

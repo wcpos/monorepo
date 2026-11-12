@@ -957,6 +957,7 @@
 	"coupons.cannot_be_combined": "Cannot be combined",
 	"coupons.cannot_be_combined_help": "Reject this coupon if other coupons are already applied",
 	"coupons.code": "Code",
+	"coupons.code_required": "Enter a coupon code, or tap Generate.",
 	"coupons.confirm": "Confirm",
 	"coupons.coupon_settings": "Coupon Settings",
 	"coupons.delete": "Delete {name}",

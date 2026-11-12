@@ -171,7 +171,7 @@ export function CouponForm({ form, footer }: CouponFormProps) {
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
-				<FormErrors />
+				<FormErrors labels={{ code: t('coupons.code') }} />
 				<PropertyList prefix="coupon">
 					<PropertyRow
 						id="code"
