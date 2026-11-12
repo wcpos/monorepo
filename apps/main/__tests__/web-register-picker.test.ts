@@ -111,6 +111,35 @@ describe('register read regressions', () => {
 });
 
 describe('createRegisterReadRecorder', () => {
+	it('E1: records both names from an enveloped list and identifies the bound suite register', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => ({
+			data: [SUITE, CLIMB],
+			_wcpos: { v: 1 },
+		}));
+		await recorder.settled();
+		const { names } = recorder.current();
+		expect(names).toEqual(new Map([SUITE, CLIMB].map(({ id, name }) => [id, name])));
+		expect(boundRegister(SUITE.id, names)).toEqual(SUITE);
+	});
+
+	it('E2: records the climb register from an enveloped single read', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe(`/wcpos/v2/registers/${CLIMB.id}`, async () => ({
+			data: CLIMB,
+			_wcpos: { v: 1 },
+		}));
+		await recorder.settled();
+		expect(recorder.current().names).toEqual(new Map([[CLIMB.id, CLIMB.name]]));
+	});
+
+	it('E3: marks an enveloped one-row list as small', async () => {
+		const recorder = createRegisterReadRecorder();
+		recorder.observe('/wcpos/v2/registers', async () => ({ data: [SUITE], _wcpos: { v: 1 } }));
+		await recorder.settled();
+		expect(recorder.current().smallList).toBe(true);
+	});
+
 	it('F5: ignores health without reading its body', async () => {
 		const recorder = createRegisterReadRecorder();
 		const body = jest.fn(async () => CLIMB);

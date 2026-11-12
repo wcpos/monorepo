@@ -13,6 +13,8 @@ import { expect, type Page } from '@playwright/test';
 
 import { log } from '@wcpos/utils/logger';
 
+import { unwrapWireBody } from './wire-envelope';
+
 /** The suite's register on the E2E stores: matched whole, never as a prefix or substring. */
 export const SUITE_REGISTER_NAME = 'Register';
 /** The docs register's id begins with this; the full id lives on demo, which this code never reads. */
@@ -25,7 +27,7 @@ export interface RegisterName {
 
 /** One page's register reads: every register name the app was told, by id. `observe` never throws or rejects. */
 export interface RegisterReadRecorder {
-	/** `route` is `wcposRestRoute(url)`; `body` is the response's json() promise. */
+	/** `route` is `wcposRestRoute(url)`; `body` resolves the raw wire json, envelope included. */
 	observe(route: string | null | undefined, body: () => Promise<unknown>): void;
 	/** Names by id from every list and single read so far, and whether a list read resolved with at most one row. */
 	current(): { names: ReadonlyMap<string, string>; smallList: boolean };
@@ -45,7 +47,7 @@ export function createRegisterReadRecorder(): RegisterReadRecorder {
 			pending.push(
 				(async () => {
 					try {
-						const value = await body();
+						const value = unwrapWireBody(await body());
 						if (isList && Array.isArray(value) && value.length <= 1) smallList = true;
 						const rows = isList ? (Array.isArray(value) ? value : []) : [value];
 						for (const row of rows) {
