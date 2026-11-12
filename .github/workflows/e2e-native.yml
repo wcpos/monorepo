@@ -579,6 +579,8 @@ jobs:
         env:
           EXPO_PUBLIC_WCPOS_E2E: '1'
           EXPO_NO_METRO_LAZY: '1'
+          # Storage + JS-thread timing probe; grep WCPOS_E2E_STORAGE in logcat/app-console (Android slow cart add, 2026-11-12).
+          EXPO_PUBLIC_WCPOS_STORAGE_PROBE: '1'
         run: |
           # This checkout is immutable during CI. Reuse its exact runtime: the
           # dev launcher issues two serialized manifest requests per relaunch,
@@ -1151,6 +1153,8 @@ jobs:
         env:
           EXPO_PUBLIC_WCPOS_E2E: '1'
           EXPO_NO_METRO_LAZY: '1'
+          # Storage + JS-thread timing probe; grep WCPOS_E2E_STORAGE in logcat/app-console (Android slow cart add, 2026-11-12).
+          EXPO_PUBLIC_WCPOS_STORAGE_PROBE: '1'
         run: |
           # This checkout is immutable during CI. Reuse its exact runtime instead
           # of recomputing the fingerprint inside every 10 s launcher request.
