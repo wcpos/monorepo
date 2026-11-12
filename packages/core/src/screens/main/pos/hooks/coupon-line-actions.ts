@@ -1,4 +1,5 @@
 import { wooMetaCarrier } from '@wcpos/sync-core';
+import type { CouponContext } from '@wcpos/order-math';
 
 import { exemptCouponsSupported } from '../commands/tax-exempt';
 import { type ActionRefusal, isActionRefusal } from '../../../../extensions/actions';
@@ -19,7 +20,12 @@ export class CartChangedError extends Error {
 	}
 }
 
-type Recalculate = (order: OrderDocument, couponLines: CouponLine[]) => Promise<RecalculateResult>;
+type Recalculate = (
+	order: OrderDocument,
+	couponLines: CouponLine[]
+) => Promise<RecalculateResult & { context?: CouponContext }>;
+// Unreachable after the recalculation's own missing-code throw; a refusal, never a throw.
+const couponMissing: ActionRefusal = { deny: { reasonKey: 'pos_cart.coupon_not_found' } };
 export interface CouponLineWriter {
 	wcVersion: () => string;
 	recalculate: Recalculate;
@@ -52,7 +58,13 @@ async function writeCouponLines(
 	if (!result) return false;
 	// The recalculation reads the engine; a cart that moved meanwhile is not the cart it priced.
 	if (cartSnapshot(order) !== before) throw new CartChangedError();
-	const patched = await write({ coupon_lines: result.couponLines, line_items: result.lineItems });
+	// The context that priced the lines settles the order total in the same write, so the
+	// Checkout total does not wait for the coordinator's reference pull.
+	const patched = await write(
+		{ coupon_lines: result.couponLines, line_items: result.lineItems },
+		undefined,
+		result.context && { context: result.context, missing: couponMissing }
+	);
 	if (isActionRefusal(patched)) return patched;
 	return patched ? { patched, couponLines: result.couponLines } : false;
 }
