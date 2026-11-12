@@ -54,7 +54,7 @@ test('a template, a variable or a ternary key is a site; a literal is none', () 
 });
 
 test('a catalog key passed to any function but t is a site', () => {
-	assert.deepEqual(scanSource("const a = translate('common.save');", path), [
+	assert.deepEqual(scanSource("const a = translate('common.saved');", path), [
 		`${path}:1:1:${CONSTRUCT}`,
 	]);
 	assert.deepEqual(scanSource("const a = logger.info('common.not_a_key_here');", path), []);
