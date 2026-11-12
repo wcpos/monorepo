@@ -832,6 +832,16 @@ jobs:
             # `adb reverse --list` is the evidence trail for the next red. Ends
             # with the screenrecord sentinel. ONE LINE, per the rule above.
             nohup sh -c 'while [ ! -f "$HOME/.maestro/tests/stop-screenrecord" ]; do { date -u +%FT%TZ; adb reverse --list; } >> "$HOME/.maestro/tests/adb-reverse.log" 2>&1; adb reverse tcp:8081 tcp:8081 >/dev/null 2>&1; sleep 10; done' >/dev/null 2>&1 &
+            # Load sampler (FINDINGS e2e-native-red-2026-11-11 §Harness): Android
+            # hierarchy dumps grew from ~50 ms to 5–12 s on the POS screen. Every
+            # 30 s, log the emulator's 8 busiest processes and the app's mounted
+            # native view count, so the next run shows whether dumps track tree
+            # size (app) or emulator CPU (runner). Views come from `dumpsys
+            # activity top`, not `uiautomator dump`: Maestro's driver holds the
+            # device's one UiAutomation connection for the whole suite, and a
+            # second client is refused or disturbs it mid-flow. Ends with the
+            # screenrecord sentinel. ONE LINE, per the rule above.
+            nohup sh -c 'while [ ! -f "$HOME/.maestro/tests/stop-screenrecord" ]; do { date -u +%FT%TZ; timeout 20 adb shell top -b -n 1 -m 8; timeout 20 adb shell dumpsys activity top > /tmp/wcpos-viewtree.txt 2>&1; echo "views total=$(grep -c -E "\{[0-9a-f]+ [VIG][F.][E.]" /tmp/wcpos-viewtree.txt) visible=$(grep -c -E "\{[0-9a-f]+ V[F.][E.]" /tmp/wcpos-viewtree.txt)"; } >> "$HOME/.maestro/tests/android-sampler.log" 2>&1; sleep 30; done' >/dev/null 2>&1 &
             { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee ~/.maestro/tests/suite.log
             # A newly booted emulator can briefly drop its ADB transport after
             # the APK install (run 33237853311: clearState succeeded, then the
