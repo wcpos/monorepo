@@ -179,6 +179,16 @@ it.each(['loading', 'unavailable', 'denied', 'error'])(
 		status = 'ready';
 	}
 );
+// Revert: drop the `unknown=` prop index.tsx passes to ClosureList.
+it.each([
+	['unavailable', true],
+	['ready', false],
+])('tells the list its counts are unknown when the read is %s', (state, unknown) => {
+	status = state;
+	render(<Closures scope={scope} />);
+	expect(closureList).toHaveBeenLastCalledWith(expect.objectContaining({ unknown }));
+	status = 'ready';
+});
 // Revert: never expose the next-page action.
 it('loads the next page on demand', () => {
 	render(<Closures scope={scope} />);

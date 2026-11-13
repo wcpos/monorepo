@@ -45,6 +45,7 @@ export function ClosureStats({
 	blind,
 	storeId,
 	partial = false,
+	unknown = false,
 }: {
 	rows: readonly ClosureRow[];
 	sessions: readonly SessionSummary[];
@@ -52,6 +53,8 @@ export function ClosureStats({
 	storeId?: number;
 	/** More pages of the period remain unloaded: the figures are a prefix, and say so. */
 	partial?: boolean;
+	/** The closures read is unavailable (offline): counts are unknown, not zero. */
+	unknown?: boolean;
 }) {
 	const t = useT();
 	const phone = useIsPhone();
@@ -118,6 +121,8 @@ export function ClosureStats({
 			countNote,
 		],
 	};
+	// An empty note, not none, keeps the cells the same height.
+	if (unknown) cells.sessions = [cells.sessions[0], '—', ''];
 	return (
 		<View className={cn('border-border flex-row border-b pb-3', phone && 'flex-wrap')}>
 			{Object.entries(cells).map(([id, [label, value, note]], index) => (
