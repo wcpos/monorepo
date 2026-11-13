@@ -602,6 +602,7 @@
 	"common.calculated_from": "Calculated from",
 	"common.cancel": "Cancel",
 	"common.cashier": "Cashier",
+	"common.cashier_number": "Cashier #{id}",
 	"common.categories": "Categories",
 	"common.category": "Category",
 	"common.change_in_settings_tax": "Change in Settings › Tax",
