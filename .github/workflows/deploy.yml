@@ -231,8 +231,11 @@ jobs:
         if: (github.event_name == 'push' && github.ref_name == 'main') || github.event.inputs.target == 'production'
         working-directory: apps/main
         run: |
-          eas deploy --export-dir ./build --production
+          # --json moves only eas's human output to stderr; the deploy and alias move are unchanged. `.url` is this deploy's own URL.
+          DEPLOY_JSON=$(eas deploy --export-dir ./build --production --json)
+          echo "$DEPLOY_JSON"
           echo "production_url=https://wcpos.expo.app" >> $GITHUB_OUTPUT
+          echo "deploy_url=$(echo "$DEPLOY_JSON" | jq -r '.url // empty' 2>/dev/null || true)" >> $GITHUB_OUTPUT
 
       - name: 📝 Get deployment URL
         id: get-url
@@ -241,7 +244,7 @@ jobs:
             echo "url=${{ steps.deploy-preview.outputs.preview_url }}" >> $GITHUB_OUTPUT
             echo "is_production=false" >> $GITHUB_OUTPUT
           else
-            echo "url=https://wcpos.expo.app" >> $GITHUB_OUTPUT
+            echo "url=${{ steps.deploy-production.outputs.deploy_url }}" >> $GITHUB_OUTPUT
             echo "is_production=true" >> $GITHUB_OUTPUT
           fi
 
@@ -719,6 +722,7 @@ jobs:
           # legitimately skipped deploy (dependabot actor, nothing app-affecting)
           # takes the skipped-deploy path further down like any other run.
           if [ "$EVENT_NAME" = "push" ] && [ "$DEPLOY_RESULT" = "success" ]; then
+            [ -n "$DEPLOY_URL" ] || { echo "::error::Production deployed, but its own URL was not captured from 'eas deploy --json' (see 🚀 Deploy production), so no E2E ran. No fallback to the https://wcpos.expo.app alias."; exit 1; }
             if [ "$E2E_RESULT" = "cancelled" ]; then
               echo "::error::E2E verification was superseded by a newer main push"
               exit 1

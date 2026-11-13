@@ -1737,6 +1737,13 @@ test('main-lane web E2E shards queue across runs per dev store', () => {
 	assert.match(concurrency.group, /needs\.changes\.outputs\.lane == ''/);
 });
 
+test('main web E2E tests its own production deploy, never the alias', () => {
+	const workflow = readWorkflow('deploy.yml');
+	assert.match(findStep(workflow, 'deploy', '🚀 Deploy production').run, /DEPLOY_JSON=\$\(eas deploy --export-dir \.\/build --production --json\)\n[\s\S]*deploy_url=\$\(echo "\$DEPLOY_JSON" \| jq -r '\.url \/\/ empty'/);
+	assert.match(findStep(workflow, 'deploy', '📝 Get deployment URL').run, /else\n\s+echo "url=\$\{\{ steps\.deploy-production\.outputs\.deploy_url \}\}"/);
+	assert.match(findStep(workflow, 'e2e-gate', 'Check shard results').run, /\[ -n "\$DEPLOY_URL" \] \|\| \{ echo "::error::Production deployed, but its own URL was not captured/);
+});
+
 test('a failed shared login fails e2e-setup and the shards refuse to start', () => {
 	const workflow = readWorkflow('deploy.yml');
 	const setup = workflow.jobs['e2e-setup'];
