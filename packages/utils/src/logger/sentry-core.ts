@@ -108,6 +108,10 @@ export function prepareEvent<T extends SentryEventLike>(
 function stripOrigin(url: string): string {
 	try {
 		const parsedUrl = new URL(url);
+		// Log text like `write: orders/…` parses with a `write:` scheme; only web URLs carry an origin.
+		if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+			return redactSensitiveText(url);
+		}
 		return redactSensitiveText(`${parsedUrl.pathname}${parsedUrl.search}`);
 	} catch {
 		return redactSensitiveText(url);
