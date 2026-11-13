@@ -28,6 +28,7 @@ export function ReaderConnection({
 	method,
 	bootstrap,
 	remembered,
+	rememberedTransport,
 	remember,
 	pickTransport,
 	online,
@@ -35,6 +36,8 @@ export function ReaderConnection({
 }: {
 	method: PaymentMethodDescriptor;
 	remembered: string | null;
+	/** The transport the reader was remembered on; null for a memory that has none. */
+	rememberedTransport: PaymentTransport | null;
 	remember: (reader: RememberedReader) => Promise<void>;
 	bootstrap: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
 	transport: PaymentTransport | null;
@@ -88,7 +91,12 @@ export function ReaderConnection({
 				pickTransport(held.reader!.transport);
 				return;
 			}
-			for (const item of deviceTransports(method)) {
+			// Scan only the reader's own transport: a Tap to Pay reader never waits on, or fails
+			// with, a Bluetooth scan (roadmap#574). A memory with no transport, or one the method no
+			// longer lists, scans them all.
+			const all = deviceTransports(method);
+			const own = all.filter((item) => item.transport === rememberedTransport);
+			for (const item of own.length > 0 ? own : all) {
 				const reader = (await driver.discoverReaders!(item.transport, { until: remembered })).find(
 					(r) => r.id === remembered
 				);
@@ -121,7 +129,7 @@ export function ReaderConnection({
 				attempted.current = false;
 			}
 		};
-	}, [remembered, driver, method, disabled, connect, pickTransport]);
+	}, [remembered, rememberedTransport, driver, method, disabled, connect, pickTransport]);
 	const connected = status.connection === 'connected' && !working;
 	let line: string;
 	// The name Settings → Card readers shows ("WisePad 3"), never the SDK key or the serial.
