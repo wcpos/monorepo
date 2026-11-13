@@ -20,6 +20,3 @@ executionOrder:
     - 05-drawer-navigation
     - 06-cart-quantity-editing
     - 07-variation-add-to-cart
-    - 08-void-order
-    - 09-pos-panel-resize
-    - 10-cart-add-burst
