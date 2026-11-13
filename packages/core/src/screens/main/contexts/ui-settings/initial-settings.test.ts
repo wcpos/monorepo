@@ -160,3 +160,13 @@ it.each(['orders', 'reports-orders'] as const)(
 		});
 	}
 );
+
+// Climb F47: since F43 the orders cashier column shows a person's name, and at the
+// default flex share of 1 a tablet (1024 px) cut "Jordan" to "Jord…". The column's
+// width comes from the grid (flex), never from the label length.
+it('the orders cashier column has room for a name (F47)', () => {
+	const cashier = (initialSettings.orders.columns as { key: string; flex?: number }[]).find(
+		(column) => column.key === 'cashier'
+	);
+	expect(cashier?.flex).toBeGreaterThanOrEqual(1.4);
+});
