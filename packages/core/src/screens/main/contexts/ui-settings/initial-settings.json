@@ -450,6 +450,7 @@
       },
       {
         "key": "cashier",
+        "flex": 1.4,
         "disableSort": true,
         "show": true
       },
