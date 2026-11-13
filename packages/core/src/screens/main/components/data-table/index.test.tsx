@@ -269,7 +269,7 @@ it('a custom footer is handed values, never streams, with the table’s collecti
 	});
 });
 
-it('a list footer spins only while this list is loading', () => {
+it('a list footer spins only while this list is loading', async () => {
 	const seen: boolean[] = [];
 	function ListFooter({ active }: { active: boolean }) {
 		seen.push(active);
@@ -277,26 +277,38 @@ it('a list footer spins only while this list is loading', () => {
 	}
 	// One finished row while the engine pulls the collection: no spinner under the answer.
 	const handle = handleWith({ active: true, pending: false, exhausted: true });
-	renderTable({ handle, ListFooterComponent: ListFooter });
+	const { rerender } = renderTable({ handle, ListFooterComponent: ListFooter });
 	expect(seen.at(-1)).toBe(false);
 	act(() => handle.set({ pending: true, exhausted: false }));
 	expect(seen.at(-1)).toBe(true);
-	act(() => handle.set({ pending: false }));
+	act(() => handle.set({ pending: false, exhausted: true }));
+	expect(seen.at(-1)).toBe(false);
+	// A changed query settling behind that exhausted answer is in flight: the spinner turns.
+	const next = handleWith({ ready: false, exhausted: true });
+	rerender(tableTree({ handle: next, ListFooterComponent: ListFooter }));
+	expect(seen.at(-1)).toBe(true);
+	await act(async () => next.set({ ready: true }));
 	expect(seen.at(-1)).toBe(false);
 });
 
-it('the default list footer’s spinner turns only while this list is loading', () => {
+it('the default list footer’s spinner turns only while this list is loading', async () => {
 	// The fixture stubs the default footer out; this test draws the real one.
 	const real = jest.requireActual<typeof import('./list-footer')>('./list-footer');
 	const stub = jest.requireMock<typeof import('./list-footer')>('./list-footer');
 	const spy = jest.spyOn(stub, 'ListFooterComponent').mockImplementation(real.ListFooterComponent);
 	try {
 		const handle = handleWith({ active: true, pending: false, exhausted: true });
-		renderTable({ handle });
+		const { rerender } = renderTable({ handle });
 		expect(screen.queryByTestId('list-footer-spinner')).toBeNull();
 		act(() => handle.set({ pending: true, exhausted: false }));
 		expect(screen.getByTestId('list-footer-spinner')).toBeTruthy();
-		act(() => handle.set({ pending: false }));
+		act(() => handle.set({ pending: false, exhausted: true }));
+		expect(screen.queryByTestId('list-footer-spinner')).toBeNull();
+		// A changed query settling behind that exhausted answer is in flight: the spinner turns.
+		const next = handleWith({ ready: false, exhausted: true });
+		rerender(tableTree({ handle: next }));
+		expect(screen.getByTestId('list-footer-spinner')).toBeTruthy();
+		await act(async () => next.set({ ready: true }));
 		expect(screen.queryByTestId('list-footer-spinner')).toBeNull();
 	} finally {
 		spy.mockRestore();
