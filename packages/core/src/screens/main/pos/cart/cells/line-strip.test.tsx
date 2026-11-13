@@ -140,8 +140,13 @@ jest.mock('react-native-gesture-handler', () => ({
 			return pan;
 		},
 	},
-	GestureDetector: ({ children }: React.PropsWithChildren) => (
-		<div data-testid="pan-target">{children}</div>
+	GestureDetector: ({
+		children,
+		touchAction,
+	}: React.PropsWithChildren<{ touchAction?: string }>) => (
+		<div data-testid="pan-target" data-touch-action={touchAction}>
+			{children}
+		</div>
 	),
 }));
 
@@ -189,6 +194,10 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	mockDisabled.length = 0;
 	mockPointer = 'coarse';
+});
+it('U1: gives vertical touch pans to the browser', () => {
+	renderStrip();
+	expect(screen.getByTestId('pan-target').getAttribute('data-touch-action')).toBe('pan-y');
 });
 it('coarse uses a pan target without hover affordances', () => {
 	renderStrip();

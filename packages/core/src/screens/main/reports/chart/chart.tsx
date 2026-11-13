@@ -253,7 +253,8 @@ function Chart({ comparison = false }: { comparison?: boolean }) {
 		);
 	};
 	return (
-		<GestureDetector gesture={gesture}>
+		// On web, the detector defaults to touch-action: none and blocks vertical drags on the chart from scrolling reports; pan-y gives vertical pans to the browser and keeps hover (ignored on native).
+		<GestureDetector gesture={gesture} touchAction="pan-y">
 			<View collapsable={false} className="flex-1">
 				<CartesianChart
 					data={data}
