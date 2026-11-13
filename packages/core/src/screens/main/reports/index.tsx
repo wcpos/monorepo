@@ -348,7 +348,11 @@ function ReportsShell({
 		{
 			from: license?.isPro ? closureDay : today,
 			to: license?.isPro ? closureDay : today,
-			registerId: (license?.isPro && params.registerId) || binding.registerId || 'unbound',
+			// Pro starts an unbound device on All registers, matching Sales and the bar.
+			// Free's 'unbound' means nothing until a register is chosen; the server refuses it as an id.
+			registerId: license?.isPro
+				? params.registerId || binding.registerId || ''
+				: binding.registerId || 'unbound',
 			storeId: store?.id,
 			cashier: room === 'sales' ? wpCredentials?.id : undefined,
 		},

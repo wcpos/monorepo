@@ -179,15 +179,18 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	const shown = useDrawnHandle(handle);
 	const settling = shown !== handle;
 	const snapshot = useQuerySnapshot(shown, TABLE_FIELDS);
-	// The spinner is the engine's now, whichever query is drawn.
+	// The engine's activity, whichever query is drawn, for the empty skeleton and the sync glyph;
+	// the spinner under the last row is this list's paging instead (climb F48).
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
+	// A changed query that has not answered is not exhausted by the drawn answer's flag (F48).
+	const exhausted = settling ? null : snapshot.exhausted;
 	return (
 		<DataTableBody<TData, TSortField>
 			{...rest}
 			result={snapshot.result}
 			syncing={active}
 			// A changed query that has not answered is in flight for paging (#1221).
-			paging={{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }}
+			paging={{ pending: snapshot.pending || settling, exhausted }}
 			// Handles as data, not a component per handle: the footer (and its sync button's
 			// state) stays mounted across a query change.
 			handle={handle}
@@ -422,9 +425,11 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 								}}
 								ListFooterComponent={() =>
 									ListFooterComponent ? (
-										<ListFooterComponent active={syncing} />
+										<ListFooterComponent active={paging.pending && paging.exhausted !== true} />
 									) : (
-										<DefaultListFooterComponent active={syncing} />
+										<DefaultListFooterComponent
+											active={paging.pending && paging.exhausted !== true}
+										/>
 									)
 								}
 								extraData={extraData}

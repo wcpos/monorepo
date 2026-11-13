@@ -42,7 +42,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 
 jest.mock('@wcpos/components/form', () => ({
 	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	FormField: () => null,
+	FormField: jest.requireActual('react-hook-form').Controller,
 	FormInput: () => null,
 	FormItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	FormSegmentedControl: () => null,
@@ -76,7 +76,21 @@ jest.mock('../../../../contexts/translations', () => ({
 
 jest.mock('../../components/amount-field', () => ({
 	AmountField: () => null,
-	FormAmountField: () => null,
+	FormAmountField: ({
+		value,
+		onChange,
+		testID,
+	}: {
+		value?: string;
+		onChange: (value: string) => void;
+		testID?: string;
+	}) => (
+		<input
+			data-testid={testID}
+			value={value ?? ''}
+			onChange={(event) => onChange(event.target.value)}
+		/>
+	),
 }));
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../components/product/category-select', () => ({ CategoryTreeLoader: () => null }));
@@ -111,6 +125,7 @@ describe('cart line dialogs', () => {
 		render(<AddFee />);
 
 		const submit = screen.getByTestId('add-to-cart-submit');
+		fireEvent.change(screen.getByTestId('fee-amount-input'), { target: { value: '5' } });
 		fireEvent.click(submit);
 		await waitFor(() => expect(mockAddFee).toHaveBeenCalledTimes(1));
 		expect(submit).toBeDisabled();

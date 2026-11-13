@@ -319,3 +319,26 @@ it('§ 4.9 invariant 1: a seeded session’s figures are pending until the serve
 	const settled = await drawer((value) => !value.figuresPending);
 	expect(settled.expected.cash).toBe('100');
 });
+
+// F46: a stale server listing re-creates the live entry without this device's count mark.
+it.each([
+	['its own close, the session row closed here', true, null],
+	['a session with no closed row here', false, { by: 8, at: '2026-10-28T18:00:00.000Z' }],
+])('reads the closed-elsewhere marker for %s', async (_, closedHere, want) => {
+	if (closedHere) await insert({ status: 'closed', closure_id: 's1' });
+	await storeDB.closures.insert(closure('s1', 'pending'));
+	await recordLiveSession(userDB, 'site', 'A', {
+		session_id: 's1',
+		status: 'open',
+		opened_at_gmt: row.opened_at_gmt,
+		opened_by: null,
+		acknowledged: true,
+		expected_float: null,
+		counted_float: null,
+		business_day: null,
+	});
+	await recordLiveSession(userDB, 'site', 'A', null);
+	const snapshot = await drawer((value) => value.lastClosure !== null);
+	expect(snapshot.session).toBeNull();
+	expect(snapshot.closedElsewhere).toEqual(want);
+});

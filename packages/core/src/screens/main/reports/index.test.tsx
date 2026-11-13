@@ -28,8 +28,12 @@ jest.mock('@wcpos/query/user-db', () => ({
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: jest.fn() }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 44 }) }));
+let mockBinding: { registerId: string | null; registerName: string | null } = {
+	registerId: 'r',
+	registerName: 'Front',
+};
 jest.mock('../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
+	useRegisterBinding: () => mockBinding,
 }));
 jest.mock('../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({}),
@@ -175,6 +179,7 @@ beforeEach(() => {
 	mockAnswered = true;
 	mockProvided = null;
 	mockPro = true;
+	mockBinding = { registerId: 'r', registerName: 'Front' };
 	mockPhone = true;
 	mockRoute = {};
 	mockClosureScope.mockClear();
@@ -477,6 +482,18 @@ it('does not mount report readers for a cashier without report permission', () =
 	expect(screen.queryByTestId('till-closures')).toBeNull();
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
+// Revert: start an unbound Pro device's Closures room on the 'unbound' sentinel the server refuses.
+it('an unbound Pro device opens Closures on All registers', () => {
+	mockBinding = { registerId: null, registerName: null };
+	mockPro = true;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('till-closures'));
+	expect(mockClosureScope).toHaveBeenLastCalledWith(
+		expect.objectContaining({ scope: expect.objectContaining({ registerId: '' }) })
+	);
+});
+
 // Revert: trust a retained Pro scope after the license becomes Free.
 it('constrains a retained Pro scope before mounting Free closures', () => {
 	jest.useFakeTimers().setSystemTime(new Date('2026-07-15T12:00:00Z'));

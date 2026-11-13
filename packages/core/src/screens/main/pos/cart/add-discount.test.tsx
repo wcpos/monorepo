@@ -345,6 +345,7 @@ describe('Add Fee', () => {
 	it('Not taxable writes tax_status none and leaves the class', async () => {
 		render(<AddFee />);
 		fireEvent.change(screen.getByTestId('fee-tax-select'), { target: { value: 'status:none' } });
+		fireEvent.change(screen.getByTestId('fee-amount-input'), { target: { value: '5' } });
 		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
 		await waitFor(() =>
 			expect(mockFee).toHaveBeenCalledWith(
@@ -358,11 +359,27 @@ describe('Add Fee', () => {
 		fireEvent.change(screen.getByTestId('fee-tax-select'), {
 			target: { value: 'class:reduced-rate' },
 		});
+		fireEvent.change(screen.getByTestId('fee-amount-input'), { target: { value: '5' } });
 		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
 		await waitFor(() =>
 			expect(mockFee).toHaveBeenCalledWith(
 				expect.objectContaining({ tax_status: 'taxable', tax_class: 'reduced-rate' })
 			)
 		);
+	});
+	// Revert: Add Fee takes a blank or zero amount, so a "Fee $0.00" line lands in the cart.
+	it.each([['0'], [''], ['0.00']])('refuses a fee amount of %p', async (amount) => {
+		render(<AddFee />);
+		fireEvent.change(screen.getByTestId('fee-amount-input'), { target: { value: amount } });
+		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
+		await screen.findByText('Enter an amount greater than zero');
+		expect(mockFee).not.toHaveBeenCalled();
+	});
+	it('keeps the negative-fee message for a negative amount', async () => {
+		render(<AddFee />);
+		fireEvent.change(screen.getByTestId('fee-amount-input'), { target: { value: '-5' } });
+		fireEvent.click(screen.getByTestId('add-to-cart-submit'));
+		await screen.findByText('A fee cannot be negative. Use Add Discount instead.');
+		expect(mockFee).not.toHaveBeenCalled();
 	});
 });
