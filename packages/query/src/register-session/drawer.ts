@@ -109,6 +109,8 @@ function deriveDrawer(
 	const live = bucket?.live;
 	const lastClosure =
 		[...closures].sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null;
+	// This device closed that session itself: a stale server listing's marker is not another till.
+	const closedHere = !!lastClosure && rows.closed.some((row) => row.id === lastClosure.session_id);
 	return {
 		session,
 		refusedClose,
@@ -137,7 +139,10 @@ function deriveDrawer(
 		countingHere: !!live?.counting_here,
 		// The refresh clears the live record as the remote close lands; the marker outlives it.
 		closedElsewhere:
-			!session && lastClosure && bucket?.closed_elsewhere?.session_id === lastClosure.id
+			!session &&
+			lastClosure &&
+			!closedHere &&
+			bucket?.closed_elsewhere?.session_id === lastClosure.id
 				? { by: lastClosure.closed_by, at: lastClosure.closed_at }
 				: null,
 		lastClosure,
