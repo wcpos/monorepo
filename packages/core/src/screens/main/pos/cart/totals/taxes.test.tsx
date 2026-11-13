@@ -10,6 +10,7 @@ import { MoneyList } from '@wcpos/components/money-list';
 import { Taxes } from './taxes';
 
 let mockDisplay = 'itemized';
+let mockInclOrExcl = 'excl';
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_: unknown, select: (store: unknown) => unknown) =>
 		select({ tax_total_display: mockDisplay }),
@@ -31,8 +32,12 @@ jest.mock('../../../hooks/use-current-order-currency-format', () => ({
 	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
 jest.mock('../../../hooks/use-tax-incl-or-excl', () => ({
-	useTaxInclOrExcl: () => ({ inclOrExcl: 'excl' }),
+	useTaxInclOrExcl: () => ({ inclOrExcl: mockInclOrExcl }),
 }));
+
+beforeEach(() => {
+	mockInclOrExcl = 'excl';
+});
 
 const taxLines = [
 	{ label: 'VAT', tax_total: '1.00', shipping_tax_total: '0.50' },
@@ -61,4 +66,15 @@ it('without the exemption shows the rate rows', () => {
 	expect(shown).toContain('$1.50');
 	expect(shown).toContain('City');
 	expect(shown).not.toContain('Tax exempt');
+});
+
+it.each([
+	['excl', 'Excluding tax'],
+	['incl', 'Including tax'],
+])('an itemized row is tagged %s as %p', (inclOrExcl, tag) => {
+	mockDisplay = 'itemized';
+	mockInclOrExcl = inclOrExcl;
+	const shown = text({ totalTax: '1.75', taxLines, exempt: false });
+	expect(shown).toContain(tag);
+	expect(shown).not.toMatch(/(incl|excl)\$/);
 });

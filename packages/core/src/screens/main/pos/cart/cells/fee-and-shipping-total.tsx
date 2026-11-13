@@ -7,6 +7,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
+import { useLineTaxLabel } from './use-line-tax-label';
 
 type FeeLine = import('@wcpos/query').OrderFeeLine;
 type ShippingLine = import('@wcpos/query').OrderShippingLine;
@@ -24,6 +25,7 @@ export function FeeAndShippingTotal({ row, column }: CellContext<Props, 'total'>
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { store } = useAppState();
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
+	const taxLabel = useLineTaxLabel();
 
 	/**
 	 * Get display values if cart includes tax
@@ -46,7 +48,7 @@ export function FeeAndShippingTotal({ row, column }: CellContext<Props, 'total'>
 			</Text>
 			{column.columnDef.meta?.show?.('tax') && (
 				<Text variant="key" tabular className="text-right">
-					{`${taxDisplayCart} ${format(Number(item.total_tax) || 0)} tax`}
+					{taxLabel(Number(item.total_tax) || 0)}
 				</Text>
 			)}
 		</VStack>

@@ -1,5 +1,5 @@
 import { createTestT } from '../../../../../../jest/translate';
-import { describeEvent, disabledReasonText, failureReasonLabel } from './labels';
+import { describeEvent, disabledReasonText, failureReasonLabel, statusLabel } from './labels';
 
 const t = createTestT();
 const context = { readerLabel: 'Paul Solo', failureReason: null };
@@ -56,6 +56,13 @@ it('formats the approved amount in the till currency and leaves a foreign one as
 	expect(describeEvent(info('Approved 1.00 GBP'), t, { ...context, formatAmount }).text).toBe(
 		'Approved 1.00 GBP'
 	);
+});
+
+// Climb wording batch W6: the cashier took cash, so its chip says Paid; a card is still Captured.
+// Revert: drop the `kind === 'cash'` branch in statusLabel and the cash case reads "Captured".
+it('reads a captured cash row as Paid and a captured card row as Captured', () => {
+	expect(statusLabel('captured', t, 'cash')).toBe('Paid');
+	expect(statusLabel('captured', t, 'card')).toBe('Captured');
 });
 
 // SumUp reports a decline and a cancel on the reader the same way; the row's reason says so and

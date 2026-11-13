@@ -18,7 +18,7 @@ import { useT } from '../../../contexts/translations';
  * this component would never show errors. useFormState sets up its own subscription
  * so it re-renders independently when errors change.
  */
-export function FormErrors() {
+export function FormErrors({ labels }: { labels?: Record<string, string> } = {}) {
 	const t = useT();
 	const { errors } = useFormState();
 
@@ -32,7 +32,7 @@ export function FormErrors() {
 		<Notice tone="bad" title={t('common.please_fix_the_following_errors')}>
 			{errorMessages.map((error, index) => (
 				<Text className="text-muted-foreground" key={index}>
-					{'\u2022'} {error.path}: {error.message}
+					{'\u2022'} {labels?.[error.path] ?? error.path}: {error.message}
 				</Text>
 			))}
 		</Notice>
