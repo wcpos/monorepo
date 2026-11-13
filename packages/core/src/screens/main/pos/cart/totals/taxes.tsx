@@ -29,7 +29,7 @@ export function Taxes({ totalTax, taxLines = [], exempt = false }: Props) {
 	// The rate's own label (Woo's itemized display), its incl/excl beside it at the help size.
 	const beside = (
 		<Text variant="help">
-			{t(inclOrExcl === 'incl' ? 'common.including_tax' : 'common.excluding_tax')}
+			{inclOrExcl === 'incl' ? t('common.including_tax') : t('common.excluding_tax')}
 		</Text>
 	);
 	if (exempt) return <MoneyList.Row label={t('common.tax_exempt')} amount={format(0)} />;
