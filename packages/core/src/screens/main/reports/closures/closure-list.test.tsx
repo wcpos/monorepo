@@ -6,6 +6,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
 
+import { createTestT } from '../../../../../jest/translate';
 import { useStoreDay } from '../../../../hooks/use-store-day';
 import { closureResult } from '../../../../services/register-session/closure-result';
 import { deriveSettled } from '../../../../services/register-session/settled-figures';
@@ -452,6 +453,22 @@ it('filters All, Open and Closed without changing the scope count', () => {
 	fireEvent.click(screen.getByTestId('closures-filter-all'));
 	expect(getComputedStyle(screen.getByTestId('open-row').parentElement!).display).not.toBe('none');
 	expect(screen.getByText('2 sessions')).toBeTruthy();
+});
+
+// Revert: ignore `unknown` in ClosureStats (the Sessions cell) or for the n_sessions header.
+it('shows the session counts as unknown, not zero, while the read is unavailable', () => {
+	const t = createTestT();
+	const note = t('reports.stat_open_closed', { open: 0, closed: 0 });
+	const header = t('reports.n_sessions', { count: 0 });
+	const view = render(<ClosureList rows={[]} sessions={[]} />);
+	expect(screen.getByTestId('closure-stat-sessions').textContent).toBe('0');
+	expect(screen.getByText(note)).toBeTruthy();
+	expect(screen.getByText(header)).toBeTruthy();
+	view.rerender(<ClosureList rows={[]} sessions={[]} unknown />);
+	expect(screen.getByTestId('closure-stat-sessions').textContent).toBe('—');
+	expect(screen.queryByText(note)).toBeNull();
+	expect(screen.queryByText(header)).toBeNull();
+	expect(screen.getByTestId('closures-filter-all')).toBeTruthy();
 });
 
 // Revert: include open cash activity, prefer expected over counted float, or sum absolute variances.

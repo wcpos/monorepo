@@ -102,6 +102,8 @@ export function SessionCards({
 			})
 		);
 	}, [cards, localSessions, localRegisterId, registerIds, onSessions]);
+	// Offline with no bound till, the list's status line already says the read is unavailable.
+	if (!online && !localRegisterId) return null;
 	return (
 		<>
 			{registers.map((register) =>
