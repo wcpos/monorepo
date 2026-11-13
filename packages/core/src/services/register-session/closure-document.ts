@@ -16,6 +16,20 @@ export type ClosureContext = {
 	expected?: Record<string, string>;
 	breakdowns?: Values;
 };
+// Hermes builds Intl formatters slowly and one date takes 13; an X report formats one date per
+// movement. 64 holds four locale and zone pairs; a session uses one, so overflow just starts over.
+const MAX_CACHED_FORMATTERS = 64;
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+function dateFormatter(locale: string, options: Intl.DateTimeFormatOptions) {
+	const key = JSON.stringify([locale, options]);
+	let formatter = dateFormatters.get(key);
+	if (!formatter) {
+		formatter = new Intl.DateTimeFormat(locale, options);
+		if (dateFormatters.size >= MAX_CACHED_FORMATTERS) dateFormatters.clear();
+		dateFormatters.set(key, formatter);
+	}
+	return formatter;
+}
 // Server Receipt_Date_Formatter keys; absent dates remain empty, not today's date.
 export function formatClosureDate(
 	value: string | null | undefined,
@@ -27,9 +41,7 @@ export function formatClosureDate(
 	const options = context.timezone === 'device' ? {} : { timeZone: context.timezone };
 	const display = (settings: Intl.DateTimeFormatOptions) =>
 		date
-			? new Intl.DateTimeFormat(context.locale, { ...options, ...settings, hour12: false }).format(
-					date
-				)
+			? dateFormatter(context.locale, { ...options, ...settings, hour12: false }).format(date)
 			: '';
 	const result: Record<string, string> = {
 		datetime: display({ dateStyle: 'medium', timeStyle: 'short' }),
@@ -43,6 +55,7 @@ export function formatClosureDate(
 		});
 		result[`date_${style}`] = display({ dateStyle: style });
 	}
+	// The patterns read the zone offset through @date-fns/tz, which keeps one formatter per zone.
 	for (const [key, pattern] of Object.entries({
 		date_ymd: 'yyyy-MM-dd',
 		date_dmy: 'dd/MM/yyyy',

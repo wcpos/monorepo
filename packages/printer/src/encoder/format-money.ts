@@ -1,3 +1,23 @@
+// Hermes builds Intl formatters slowly and a receipt formats every amount. A till prints one
+// locale and currency, so 64 is ample; overflow just starts over.
+const MAX_CACHED_FORMATTERS = 64;
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+
+/**
+ * Keyed on the locale and every option: currency, display and the decimals' fraction digits.
+ * A construction that throws is never cached, so the caller's fallback runs on every call.
+ */
+function currencyFormatter(locale: string, options: Intl.NumberFormatOptions) {
+	const key = JSON.stringify([locale, options]);
+	let formatter = currencyFormatters.get(key);
+	if (!formatter) {
+		formatter = new Intl.NumberFormat(locale, options);
+		if (currencyFormatters.size >= MAX_CACHED_FORMATTERS) currencyFormatters.clear();
+		currencyFormatters.set(key, formatter);
+	}
+	return formatter;
+}
+
 /**
  * narrowSymbol matches the server's wc_price() output, which always prints
  * the bare currency symbol ("42,84 £"). The default 'symbol' display falls
@@ -18,7 +38,7 @@ export function formatMoney(
 			: {};
 
 	try {
-		const formatter = new Intl.NumberFormat(normalizedLocale, {
+		const formatter = currencyFormatter(normalizedLocale, {
 			style: 'currency',
 			currency,
 			currencyDisplay: 'narrowSymbol',
@@ -29,7 +49,7 @@ export function formatMoney(
 				.formatToParts(value)
 				.find((part) => part.type === 'currency')?.value;
 			if (currencySymbol && !isSymbolEncodable(currencySymbol)) {
-				return new Intl.NumberFormat(normalizedLocale, {
+				return currencyFormatter(normalizedLocale, {
 					style: 'currency',
 					currency,
 					currencyDisplay: 'code',
