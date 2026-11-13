@@ -5,7 +5,11 @@ import { firstValueFrom } from 'rxjs';
 import { NO_STORE, POS_META_KEYS } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
-import { OPEN_ORDERS_SORT, openOrdersSelector } from '../../src/open-orders-scope';
+import {
+	inOpenOrdersScope,
+	OPEN_ORDERS_SORT,
+	openOrdersSelector,
+} from '../../src/open-orders-scope';
 import { acquireOpenOrdersQueryHandle, type OpenOrdersScope } from '../../src/open-orders-scope';
 import { queryHandleAnswers$ } from '../../src/query-handle';
 import { canonicalQueryKey } from '../../src/query-state';
@@ -163,6 +167,51 @@ describe.each(storages)('%s open-orders scope', (name, storage) => {
 			.find({ selector: openOrdersSelector(7, 2, 'register-a') })
 			.exec();
 		expect(documents.map((document) => document.primary)).toEqual(['register-a']);
+	});
+	it('inOpenOrdersScope agrees with the storage selector over a cashier/store/register matrix', async () => {
+		// Orders: cashier 7 or 8 x store 11, 12 or none x register a, b or none.
+		const orders = [7, 8].flatMap((cashier) =>
+			[11, 12, undefined].flatMap((store) =>
+				['register-a', 'register-b', undefined].map((register) => ({
+					uuid: `m-${cashier}-${store ?? 'none'}-${register ?? 'none'}`,
+					meta_data: [
+						{ key: '_pos_user', value: String(cashier) },
+						...(store === undefined ? [] : [{ key: '_pos_store', value: String(store) }]),
+						...(register === undefined ? [] : [{ key: POS_META_KEYS.register, value: register }]),
+					],
+				}))
+			)
+		);
+		await database.orders.bulkInsert(
+			orders.map((order) => engineOrder({ ...order, status: 'pos-open' }))
+		);
+		// Not vacuous: a bound store-11 till sees exactly its own order.
+		expect(
+			orders
+				.filter(({ meta_data }) => inOpenOrdersScope(meta_data, 7, 11, 'register-a'))
+				.map(({ uuid }) => uuid)
+		).toEqual(['m-7-11-register-a']);
+		for (const cashier of [7, 8])
+			for (const store of [11, NO_STORE, undefined])
+				for (const register of ['register-a', 'register-b', null, '']) {
+					const matched = await database.orders
+						.find({ selector: openOrdersSelector(cashier, store, register) })
+						.exec();
+					const fromStorage = matched
+						.map((document) => String(document.primary))
+						.filter((uuid) => uuid.startsWith('m-'))
+						.sort();
+					const fromPredicate = orders
+						.filter(({ meta_data }) => inOpenOrdersScope(meta_data, cashier, store, register))
+						.map(({ uuid }) => uuid)
+						.sort();
+					expect({ cashier, store, register, uuids: fromPredicate }).toEqual({
+						cashier,
+						store,
+						register,
+						uuids: fromStorage,
+					});
+				}
 	});
 	it.each([
 		[2, ['early', 'tied', 'late', 'numeric-meta']],
