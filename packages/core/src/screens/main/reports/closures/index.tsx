@@ -141,6 +141,7 @@ export function Closures({
 					scopeFrom={scope.from}
 					scopeTo={scope.to}
 					partial={hasMore}
+					unknown={status === 'unavailable'}
 					filter={filter}
 					onFilterChange={setFilter}
 					scopeDay={scope.from === scope.to ? scope.from : undefined}
