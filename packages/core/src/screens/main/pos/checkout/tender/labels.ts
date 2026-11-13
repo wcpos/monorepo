@@ -3,7 +3,13 @@ import type { PaymentRow } from '@wcpos/order-math';
 
 import type { TileDisabledReason } from './tiles';
 
-export function statusLabel(status: PaymentRow['status'], t: (key: string) => string): string {
+/** A captured cash row reads "Paid": the cashier took the money, nothing was captured. */
+export function statusLabel(
+	status: PaymentRow['status'],
+	t: (key: string) => string,
+	kind?: PaymentRow['kind']
+): string {
+	if (status === 'captured' && kind === 'cash') return t('pos_checkout.paid');
 	const labels: Record<string, string> = {
 		pending: t('pos_checkout.status_pending'),
 		authorized: t('pos_checkout.status_authorized'),

@@ -108,6 +108,13 @@ it('lists the legs without a bar or timeline: event times, Next, and cash-only c
 	// Without `closing` (the phone pane) there are no closing rows.
 	expect(screen.queryByTestId('checkout-ledger-totals')).toBeNull();
 });
+// Climb wording batch W6. Revert: pass statusLabel(row.status, t) without row.kind in ledger-pane.
+it("a captured cash row's chip reads Paid; a captured card row's reads Captured", () => {
+	render(<LedgerLegs view={view} format={format} />);
+	expect(within(screen.getByTestId('checkout-leg-cash')).getByText('Paid')).toBeTruthy();
+	expect(within(screen.getByTestId('checkout-leg-cash')).queryByText('Captured')).toBeNull();
+	expect(within(screen.getByTestId('checkout-leg-card')).getByText('Captured')).toBeTruthy();
+});
 it('lists what each payment paid for, and keeps a cancelled one struck through as Cancelled', () => {
 	render(
 		<LedgerLegs
