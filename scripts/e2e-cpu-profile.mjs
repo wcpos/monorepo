@@ -10,6 +10,9 @@ import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 
 export const METRO_ORIGIN = 'http://localhost:8081'; // The only host this probe talks to: Metro on the runner.
+// Expo CLI's debugger socket check compares the Origin host with its serverBaseUrl, which `expo start`
+// normalises to 127.0.0.1; a mismatch is terminate()d (close code 1006).
+export const EXPO_SERVER_ORIGIN = 'http://127.0.0.1:8081';
 export const WINDOW_MS = 30_000; // One file per 30 s: a relaunch loses at most one window.
 const POLL_MS = 2_000; // How often /json/list is asked for a target while none is attached.
 const REPLY_TIMEOUT_MS = 10_000; // A reply slower than this means the app went away; drop the window.
@@ -38,8 +41,8 @@ async function findTarget() {
 function openSession(target) {
 	const { pathname, search } = new URL(target.webSocketDebuggerUrl);
 	const url = new URL(pathname + search, METRO_ORIGIN.replace(/^http/, 'ws'));
-	// Metro's inspector proxy verifyClient refuses a missing or foreign Origin; ws sends none by default.
-	const ws = new WebSocket(url, { handshakeTimeout: REPLY_TIMEOUT_MS, origin: METRO_ORIGIN });
+	// Metro's verifyClient refuses a missing Origin (ws sends none) and Expo's check a non-127.0.0.1 host.
+	const ws = new WebSocket(url, { handshakeTimeout: REPLY_TIMEOUT_MS, origin: EXPO_SERVER_ORIGIN });
 	const pending = new Map(); // command id -> settle(error, message)
 	let nextId = 0;
 	ws.on('error', () => {}); // 'close' always follows and carries the outcome.
