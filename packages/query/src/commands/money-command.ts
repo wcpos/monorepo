@@ -59,10 +59,12 @@ export interface ProvenanceCommand {
 /**
  * Why a command ended before (or without) an answer that settles it. `preflight_failed`: the
  * pre-flight itself failed (the push of pending work was refused, the resident could not be
- * read), so nothing left the till; the original failure is the `cause`.
+ * read), so nothing left the till; the original failure is the `cause`. `settled_elsewhere`:
+ * another sender (the recovery, Try again, another tab) answered and settled this poster's
+ * command, so the resident holds the answer.
  */
 export type MoneyCommandErrorReason =
-	'revision_unavailable' | 'order_changed' | 'preflight_failed' | 'in_flight';
+	'revision_unavailable' | 'order_changed' | 'preflight_failed' | 'in_flight' | 'settled_elsewhere';
 export class MoneyCommandError extends Error {
 	/** The phase before this send: `unsent` = the store holds nothing from it. */
 	public readonly phase: CommandPhase;
@@ -612,10 +614,19 @@ export function moneyCommandPoster(input: {
 		sentRevision = (body as { revision?: string }).revision ?? null;
 		return input.post(url, body);
 	};
+	// The records this poster put on the wire, by row id, as sent (POS-31A): when the journal later
+	// holds none for that row, another sender answered and settled it.
+	const dispatched = new Map<string, MoneyCommandEntry>();
 	/** Send through the envelope, which alone decides what answers the command. */
 	const dispatch = async (entry: MoneyCommandEntry) => {
+		const post: Post = (url, body) => {
+			const sentRevision = (body as { revision: string }).revision;
+			const sentAt = entry.sentAt ?? new Date().toISOString();
+			if (entry.kind === 'record') dispatched.set(entry.id, { ...entry, sentAt, sentRevision });
+			return send(url, body);
+		};
 		try {
-			const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, { post: send });
+			const response = await sendMoneyCommand(input.runtime, input.storeDB, entry, { post });
 			answered.push({ id: entry.id, chain: answerChain(response.data.revision, Date.now()) });
 			return response;
 		} catch (error) {
@@ -688,6 +699,11 @@ export function moneyCommandPoster(input: {
 		// for one route, in this tab or another, always land on one command id. A sent command is
 		// re-sent under its own id; a new one is frozen only when the journal holds none.
 		let claim = await claimRoute(input.storeDB, commandRoute, claimant, null);
+		// A record this poster sent that the journal no longer holds was settled by another sender:
+		// freezing it again would send a second body under the same row id (POS-31A).
+		const settled = rowId === null ? undefined : dispatched.get(rowId);
+		if (claim.status === 'none' && settled && !input.replay)
+			throw new MoneyCommandError('settled_elsewhere', settled);
 		if (claim.status === 'none' && !input.replay)
 			claim = await claimRoute(
 				input.storeDB,

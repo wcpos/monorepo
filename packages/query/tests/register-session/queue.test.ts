@@ -21,7 +21,12 @@ import {
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
-import { isoGmt, remintRegister } from '../../src/register-session/register-document';
+import {
+	adoptCounters,
+	isoGmt,
+	remintRegister,
+	reviseClosureReservation,
+} from '../../src/register-session/register-document';
 import {
 	adoptSessionRow,
 	drainRegisterSessionQueue,
@@ -1823,6 +1828,87 @@ it('stores the ISO opening time when it adopts a server row in the server form',
 	expect((await db.register_sessions.findOne('served').exec())?.opened_at_gmt).toBe(
 		'2026-09-16T09:05:07.000Z'
 	);
+});
+
+describe('#3307: a delivered closure is counted once in the register totals', () => {
+	type Period = { period_sales_total?: string; period_refunds_total?: string };
+	const server = (sales: string, refunds: string) => ({
+		last_closure_number: 1,
+		perpetual_sales_total: sales,
+		perpetual_refunds_total: refunds,
+	});
+	async function totals() {
+		const register = (await readRegister(userDB))!.sites.site.registers!.register;
+		const row = register.closure_reservation!.row;
+		return {
+			register: [register.perpetual_sales_total, register.perpetual_refunds_total],
+			reservation: [row.perpetual_sales_total, row.perpetual_refunds_total],
+		};
+	}
+	/** A closed session whose applied closure has a period of 10 on totals of 0: the register carries 10. */
+	async function applied(period: Period) {
+		const { session, row } = await closure();
+		await session.incrementalPatch({
+			sync_status: 'synced',
+			server_status: 'closed',
+			pending_status: null,
+		});
+		const reserved = await reviseClosureReservation(userDB, 'site', 'register', {
+			...row.toJSON(),
+			...period,
+		});
+		await row.incrementalPatch({
+			...period,
+			perpetual_sales_total: reserved.perpetual_sales_total,
+			perpetual_refunds_total: reserved.perpetual_refunds_total,
+		});
+		return row;
+	}
+	async function deliver(period: Period, counters: ReturnType<typeof server>) {
+		const row = await applied(period);
+		http.post.mockImplementation(async () => ({
+			data: { ...row.getLatest().toJSON(), number: 1, counters },
+		}));
+		await drain();
+		expect(row.getLatest().sync_status).toBe('synced');
+	}
+
+	it.each([
+		['sales', { period_sales_total: '10' }, server('10.0000', '0.0000'), ['10.0000', '0.0000']],
+		['refunds', { period_refunds_total: '10' }, server('0.0000', '10.0000'), ['0.0000', '10.0000']],
+	])(
+		'a delivered period of %s is already in the server counters it echoes',
+		async (_, period, counters, expected) => {
+			await deliver(period, counters);
+			expect(await totals()).toEqual({ register: expected, reservation: expected });
+		}
+	);
+
+	it('a binding refresh after the delivery adopts the same counters without doubling', async () => {
+		await deliver({ period_sales_total: '10' }, server('10.0000', '0.0000'));
+		await adoptCounters(userDB, 'site', 'register', server('10.0000', '0.0000'));
+		expect(await totals()).toEqual({
+			register: ['10.0000', '0.0000'],
+			reservation: ['10.0000', '0.0000'],
+		});
+	});
+
+	it('a closure the server already has (409 wcpos_closure_exists) is not counted again by a refresh', async () => {
+		const row = await applied({ period_sales_total: '10' });
+		http.post.mockRejectedValue({
+			response: {
+				status: 409,
+				data: { code: 'wcpos_closure_exists', data: { closure_id: 'winner' } },
+			},
+		});
+		await drain();
+		expect(row.getLatest().sync_status).toBe('superseded');
+		await adoptCounters(userDB, 'site', 'register', server('10.0000', '0.0000'));
+		expect(await totals()).toEqual({
+			register: ['10.0000', '0.0000'],
+			reservation: ['10.0000', '0.0000'],
+		});
+	});
 });
 
 describe('#2016: a refused close keeps its count', () => {

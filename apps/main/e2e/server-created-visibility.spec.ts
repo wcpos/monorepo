@@ -13,6 +13,7 @@ import {
 	deleteSearchProbe,
 	mintSearchProbeToken,
 	productWriterAuthorization,
+	renewProductWriterIfExpiring,
 } from './search-probe';
 import { unwrapWireBody } from './wire-envelope';
 
@@ -291,6 +292,7 @@ test('a product created on the server reaches the products grid without a search
 	// least the full arrival window plus teardown remains, whatever setup cost. See
 	// the TIMEOUT ARITHMETIC note above for why this is granted and not predicted.
 	test.setTimeout(testInfo.timeout + ARRIVAL_GRANT_MS);
+	if (writer) await renewProductWriterIfExpiring(request, storeUrl, writer);
 
 	try {
 		if (!created.probe.rowTestId) {
@@ -454,6 +456,7 @@ test('an order created on the server reaches the orders grid without a search', 
 	// Setup is provably complete — grant the full arrival window on top of whatever
 	// setup actually cost (TIMEOUT ARITHMETIC above).
 	test.setTimeout(testInfo.timeout + ARRIVAL_GRANT_MS);
+	if (writer) await renewProductWriterIfExpiring(request, storeUrl, writer);
 
 	try {
 		await expect(
@@ -616,6 +619,7 @@ test('a customer created on the server reaches the customers grid without a sear
 	// Setup is provably complete — grant the full arrival window on top of whatever
 	// setup actually cost (TIMEOUT ARITHMETIC above).
 	test.setTimeout(testInfo.timeout + ARRIVAL_GRANT_MS);
+	if (writer) await renewProductWriterIfExpiring(request, storeUrl, writer);
 
 	try {
 		await expect(

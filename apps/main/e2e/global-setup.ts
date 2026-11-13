@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { chromium, expect, type FullConfig, request } from '@playwright/test';
+import { chromium, expect, type FullConfig } from '@playwright/test';
 
 import {
 	CATALOGUE_READY_TIMEOUT_MS,
@@ -28,7 +28,7 @@ import {
 import { hasTillAnchor, restoreLocalStorageAsClone } from './indexeddb-helpers';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
 import { closeStaleRegisterSessions } from './register-session-cleanup';
-import { mintRunWriterAuthorization } from './search-probe';
+import { startWriterLoginHolder } from './search-probe';
 import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
 // Resolved by playwright.config, never re-derived here: these used to be two
 // independent copies with different fallbacks, so a lane could bootstrap against
@@ -537,14 +537,10 @@ async function globalSetup(config: FullConfig) {
 		console.log('[global-setup] WARNING: no shared e2e-setup state (#2321); this shard logs in');
 	}
 	await setupShard(baseURL, shardIndex, trust);
-	// One writer login per shard instead of per call: concurrent logins on the shared writer row revoke each other.
-	// See ~/agent/research/dev-sites-e2e-red-2026-11-09/report.md §3.
-	const writerRequest = await request.newContext();
-	try {
-		await mintRunWriterAuthorization(writerRequest, [FREE_STORE_URL, PRO_STORE_URL]);
-	} finally {
-		await writerRequest.dispose();
-	}
+	// One writer login holder per shard; workers never log in: concurrent logins on the shared writer row
+	// revoke each other (~/agent/research/dev-sites-e2e-red-2026-11-09/report.md §3, dev-pro 2026-11-12).
+	// Playwright runs the returned function as this setup's teardown.
+	return startWriterLoginHolder([FREE_STORE_URL, PRO_STORE_URL]);
 }
 
 /** Per store: one cashier login to close with, and every shard's cashier as an opener. */

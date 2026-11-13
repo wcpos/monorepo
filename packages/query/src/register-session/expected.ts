@@ -356,6 +356,12 @@ function voidedBaselineLegs(input: Parameters<typeof deriveExpected>[0], baselin
 	});
 }
 
+/** A row's plain data: an RxDocument's `toJSON()` (no `_rev`, `_meta`), or the row itself. */
+function plainRow<T>(row: T): T {
+	const doc = row as { toJSON?: unknown };
+	return typeof doc.toJSON === 'function' ? (doc.toJSON as () => T).call(row) : row;
+}
+
 /** Only the part of the local view the baseline already represents. */
 function baselineView(
 	input: Parameters<typeof deriveExpected>[0],
@@ -363,10 +369,13 @@ function baselineView(
 ): Parameters<typeof deriveExpected>[0] {
 	return {
 		...input,
+		// The drawer and the close pass RxDocuments, whose fields are getters a spread drops (a
+		// baseline of empty rows double-counts, #3498); toJSON gives the plain data, so a new
+		// Movement field is kept.
 		movements: input.movements
 			.filter((row) => baselineHas(row.id))
 			.map((row) => ({
-				...row,
+				...plainRow(row),
 				voided_by: baselineHas(row.voided_by) ? row.voided_by : null,
 			})),
 		ledgerRowsBySession: input.ledgerRowsBySession

@@ -16,6 +16,7 @@ import { answerAdopted, type EngineRecord, type useQueryRuntime } from '@wcpos/q
 import { getLogger } from '@wcpos/utils/logger';
 import {
 	awaitAdoption,
+	pendingCompletions,
 	recordCompletionAttempt,
 	resolveCompletionAttempt,
 	retainCompletionAttempt,
@@ -569,9 +570,18 @@ export async function completeSale(
 				},
 				bottom: () => finishSale(ctx, order, outcome, presentation),
 			});
+		// POS-31A: a replay queued behind the tender's slot re-reads its attempt inside the slot. One
+		// another completion resolved meanwhile is that sale's paid moment, finished: no second event,
+		// audit, stock refresh, receipt or resolve. An attempt still pending (an offline record
+		// awaiting adoption, ADR 0040 Decided 1 rule 3) replays as before.
+		const inSlot = async (token: DispatchToken) =>
+			outcome.source === 'replay' && !(await pendingCompletions(ctx.storeDB))[order.uuid]
+				? null
+				: run(token);
 		const result = queue
-			? await run(queue.dispatchToken)
-			: await enqueueOrderMutation(order.uuid, (q) => run(q.dispatchToken));
+			? await inSlot(queue.dispatchToken)
+			: await enqueueOrderMutation(order.uuid, (q) => inSlot(q.dispatchToken));
+		if (result === null) return 'completed';
 		if (isActionRefusal(result))
 			throw new Error(CHECKOUT_COMPLETE_EVENT + ' refused: ' + result.deny.reasonKey);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.

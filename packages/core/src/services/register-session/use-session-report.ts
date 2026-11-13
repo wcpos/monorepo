@@ -41,29 +41,48 @@ export function useSessionReport(
 	const snapshot = useDocField(closure, (row) => row) ?? knownClosure;
 	const { resolvedPrinter } = useResolvedPrinter({ template: REPORT_TEMPLATE });
 	const context = useClosureDocumentContext();
-	const localReport = snapshot
-		? buildClosureDocument(snapshot, context)
-		: session
-			? buildXReportDocument(
-					session,
-					{
-						...context,
-						expected: blind ? {} : expected,
-						breakdowns: {
-							register_name: binding.registerName,
-							...(variant === 'handover' ? { cashier_name: actor.name } : {}),
-							opened_by_name:
-								String(session.opened_by) === actor.id
-									? actor.name
-									: (cashiers.find((row) => row.id === session.opened_by)?.display_name ??
-										String(session.opened_by ?? '')),
-							movements,
-							transaction_count: salesCount,
-						},
-					},
-					{ handover: variant === 'handover' }
-				)
-			: undefined;
+	// Built once per change, not per render: the till re-renders through a sale, and every
+	// movement's dates go through Intl, which Hermes builds slowly.
+	const localReport = React.useMemo(
+		() =>
+			snapshot
+				? buildClosureDocument(snapshot, context)
+				: session
+					? buildXReportDocument(
+							session,
+							{
+								...context,
+								expected: blind ? {} : expected,
+								breakdowns: {
+									register_name: binding.registerName,
+									...(variant === 'handover' ? { cashier_name: actor.name } : {}),
+									opened_by_name:
+										String(session.opened_by) === actor.id
+											? actor.name
+											: (cashiers.find((row) => row.id === session.opened_by)?.display_name ??
+												String(session.opened_by ?? '')),
+									movements,
+									transaction_count: salesCount,
+								},
+							},
+							{ handover: variant === 'handover' }
+						)
+					: undefined,
+		[
+			snapshot,
+			session,
+			context,
+			blind,
+			expected,
+			binding.registerName,
+			variant,
+			actor.id,
+			actor.name,
+			cashiers,
+			movements,
+			salesCount,
+		]
+	);
 	const report = useReceiptDocument({
 		autoPrintAllowed: false,
 		previewEnabled,

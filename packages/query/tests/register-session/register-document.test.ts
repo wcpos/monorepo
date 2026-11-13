@@ -15,6 +15,7 @@ import {
 	getRegisterSnapshot,
 	markAnchored,
 	markCountingHere,
+	markReservationDelivered,
 	markSeededIn,
 	mintClosureNumber,
 	nextSaleCounter,
@@ -265,6 +266,50 @@ it('a re-mint after adopting a newer server floor carries the period exactly onc
 	expect(await mintClosureNumber(db, 'site', 'a', { ...closure, number_retried: true })).toBe(4);
 	expect(Number(bucket().closure_reservation?.row.perpetual_sales_total)).toBe(120);
 	expect(Number(bucket().closure_reservation?.row.perpetual_refunds_total)).toBe(15);
+});
+describe('#3307: an applied reservation and the server floor', () => {
+	const closure = (id: string, period: string) =>
+		({ id, period_sales_total: period, period_refunds_total: '0' }) as Parameters<
+			typeof mintClosureNumber
+		>[3] &
+			object;
+	const floor = (sales: string) => ({
+		last_closure_number: 0,
+		perpetual_sales_total: sales,
+		perpetual_refunds_total: '0.0000',
+	});
+	const bucket = async () => (await readRegister(db))!.sites.site.registers!.a;
+	/** Totals of 0; a closure with a period of 10 is applied, so the register carries 10. */
+	async function appliedTen() {
+		await remintRegister(db);
+		await mintClosureNumber(db, 'site', 'a', closure('c1', '10'));
+		await advancePerpetual(db, 'site', 'a', { sales: '10', refunds: '0', closureId: 'c1' });
+		expect((await bucket()).perpetual_sales_total).toBe('10.0000');
+	}
+
+	it('an undelivered period still sits on top of the floor', async () => {
+		await appliedTen();
+		await adoptCounters(db, 'site', 'a', floor('5.0000'));
+		expect((await bucket()).perpetual_sales_total).toBe('15.0000');
+		expect((await bucket()).closure_reservation?.row.perpetual_sales_total).toBe('15.0000');
+	});
+
+	it("another closure's delivery leaves this reservation undelivered", async () => {
+		await appliedTen();
+		await adoptCounters(db, 'site', 'a', floor('5.0000'), { deliveredClosureId: 'other' });
+		await markReservationDelivered(db, 'site', 'a', 'other');
+		expect((await bucket()).closure_reservation?.delivered).toBeUndefined();
+		await adoptCounters(db, 'site', 'a', floor('5.0000'));
+		expect((await bucket()).perpetual_sales_total).toBe('15.0000');
+	});
+
+	it('the next closure mints on a delivered one and carries only its own period', async () => {
+		await appliedTen();
+		await adoptCounters(db, 'site', 'a', floor('10.0000'), { deliveredClosureId: 'c1' });
+		expect((await bucket()).closure_reservation).toMatchObject({ applied: true, delivered: true });
+		expect(await mintClosureNumber(db, 'site', 'a', closure('c2', '5'))).toBe(2);
+		expect((await bucket()).closure_reservation?.row.perpetual_sales_total).toBe('15.0000');
+	});
 });
 it('readCounters refuses payloads that cannot serve as a floor', () => {
 	expect(readCounters(null)).toBeNull();
