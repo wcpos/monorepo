@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { useDocField } from '@wcpos/query';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
+import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
 import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
@@ -171,15 +172,17 @@ export function Closures({
 
 					status={
 						status !== 'ready' && (
-							<Text testID={`closures-${status}`}>
-								{status === 'unavailable'
-									? t('reports.unavailable_offline')
-									: status === 'denied'
-										? t('reports.no_access')
-										: status === 'error'
-											? t('reports.load_failed')
-											: t('common.loading')}
-							</Text>
+							<ListRow size="sm">
+								<Text testID={`closures-${status}`} className="text-muted-foreground">
+									{status === 'unavailable'
+										? t('reports.unavailable_offline')
+										: status === 'denied'
+											? t('reports.no_access')
+											: status === 'error'
+												? t('reports.load_failed')
+												: t('common.loading')}
+								</Text>
+							</ListRow>
 						)
 					}
 					footer={
