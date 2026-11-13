@@ -11,6 +11,7 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 import { CouponForm, couponFormSchema } from '../components/coupon/coupon-form';
+import { couponFormErrors } from '../components/coupon/coupon-schema';
 import { useCouponRecord } from './commands/use-coupon-record';
 
 export function AddCouponScreen() {
@@ -20,7 +21,10 @@ export function AddCouponScreen() {
 	const router = useRouter();
 
 	const form = useForm<z.infer<typeof couponFormSchema>>({
-		resolver: zodResolver(couponFormSchema as never) as never,
+		resolver: zodResolver(
+			couponFormSchema as never,
+			{ error: couponFormErrors(t) } as never
+		) as never,
 		defaultValues: {
 			discount_type: 'percent',
 		},
