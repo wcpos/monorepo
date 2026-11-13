@@ -121,6 +121,16 @@ export const resetCollectionPlugin: RxPlugin = {
 					return;
 				}
 
+				// RxDatabase.close() sets closePromise before it closes each collection, so a
+				// database close is not a reset; collection.remove() closes with it unset.
+				const { closePromise } = database as unknown as { closePromise: Promise<boolean> | null };
+				if (closePromise || database.closed) {
+					resetLogger.debug('Skipping re-addition - database is closing', {
+						context: { collection: collectionName, database: database.name },
+					});
+					return;
+				}
+
 				// Guard against re-entrance: if we're already re-adding this collection, skip
 				const reAddKey = `${database.name}:${collectionName}`;
 				if (pendingReAdditions.has(reAddKey)) {
