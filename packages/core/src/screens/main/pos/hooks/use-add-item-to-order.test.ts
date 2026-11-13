@@ -117,11 +117,23 @@ jest.mock('@wcpos/query', () => ({
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	isRecordClosed: jest.requireActual('../../../../../../query/src/records/engine-record')
 		.isRecordClosed,
+	inOpenOrdersScope: jest.requireActual('../../../../../../query/src/open-orders-scope')
+		.inOpenOrdersScope,
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({}),
 }));
 
-jest.mock('@wcpos/query/register-session', () => ({ getCurrentBoundRegisterId: () => 'register' }));
+jest.mock('@wcpos/query/register-session', () => ({
+	boundRegisterIdOf: jest.requireActual(
+		'../../../../../../query/src/register-session/register-document'
+	).boundRegisterIdOf,
+	getCurrentBoundRegisterId: () => 'register',
+}));
+
+// The binding directory's register for this store: the one the `useRegister` mock below binds.
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	scopedRegisterId: () => 'register',
+}));
 
 jest.mock('uuid', () => ({
 	v4: () => 'line-item-uuid',
