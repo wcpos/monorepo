@@ -20,7 +20,17 @@ export type ClosureContext = {
 // movement. 64 holds four locale and zone pairs; a session uses one, so overflow just starts over.
 const MAX_CACHED_FORMATTERS = 64;
 const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+let dateFormattersBuiltBy: typeof Intl.DateTimeFormat | undefined;
+// Tests use this to start from an empty cache.
+export function resetDateFormatterCache() {
+	dateFormatters.clear();
+}
+// Entries belong to the Intl.DateTimeFormat that built them; when the runtime's changes, start over.
 function dateFormatter(locale: string, options: Intl.DateTimeFormatOptions) {
+	if (Intl.DateTimeFormat !== dateFormattersBuiltBy) {
+		dateFormatters.clear();
+		dateFormattersBuiltBy = Intl.DateTimeFormat;
+	}
 	const key = JSON.stringify([locale, options]);
 	let formatter = dateFormatters.get(key);
 	if (!formatter) {

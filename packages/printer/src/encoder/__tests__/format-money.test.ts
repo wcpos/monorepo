@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { formatMoney } from '../format-money';
+import { formatMoney, resetCurrencyFormatterCache } from '../format-money';
 
 /** The pre-cache formatMoney, verbatim: a new Intl.NumberFormat on every call. */
 function uncachedFormatMoney(
@@ -77,10 +77,12 @@ describe('formatMoney formatter cache', () => {
 
 	// Revert: construct a new Intl.NumberFormat on every call again.
 	it('builds no new formatter for a repeat call, the code fallback included', () => {
+		// The spy replaces Intl.NumberFormat, which starts the cache over, so warm under it.
+		const spy = vi.spyOn(Intl, 'NumberFormat');
 		formatMoney(10, 'CHF', 'fr-CH', 2);
 		formatMoney(10, 'EUR', 'en-IE', 2, asciiOnly);
 		const expected = uncachedFormatMoney(12.5, 'CHF', 'fr-CH', 2);
-		const spy = vi.spyOn(Intl, 'NumberFormat');
+		spy.mockClear();
 		expect(formatMoney(12.5, 'CHF', 'fr-CH', 2)).toBe(expected);
 		expect(formatMoney(12.5, 'EUR', 'en-IE', 2, asciiOnly)).toMatch(/^EUR\s12\.50$/);
 		expect(spy).not.toHaveBeenCalled();
@@ -118,5 +120,27 @@ describe('formatMoney formatter cache', () => {
 			([, options]) => options?.currencyDisplay === 'narrowSymbol'
 		);
 		expect(narrow).toHaveLength(2);
+	});
+
+	// Revert: serve a cached formatter after Intl.NumberFormat changes.
+	it('takes the code fallback when Intl.NumberFormat starts throwing after a warm call', () => {
+		expect(formatMoney(5, 'EUR', 'en-US', 2)).toBe('€5.00');
+		const spy = vi.spyOn(Intl, 'NumberFormat').mockImplementation(function () {
+			throw new RangeError('Intl currency formatting unavailable');
+		} as unknown as typeof Intl.NumberFormat);
+		expect(formatMoney(5, 'EUR', 'en-US', 2)).toBe('EUR 5.00');
+		spy.mockRestore();
+		expect(formatMoney(5, 'EUR', 'en-US', 2)).toBe('€5.00');
+	});
+
+	// Revert: make resetCurrencyFormatterCache leave its entries behind.
+	it('builds afresh after resetCurrencyFormatterCache, then caches again', () => {
+		const spy = vi.spyOn(Intl, 'NumberFormat');
+		formatMoney(5, 'EUR', 'en-US', 2);
+		resetCurrencyFormatterCache();
+		spy.mockClear();
+		formatMoney(5, 'EUR', 'en-US', 2);
+		formatMoney(5, 'EUR', 'en-US', 2);
+		expect(spy).toHaveBeenCalledTimes(1);
 	});
 });

@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import type { ClosureRow, RegisterSessionRow } from '@wcpos/database';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 
-import { buildClosureDocument, buildXReportDocument, formatClosureDate } from './closure-document';
+import {
+	buildClosureDocument,
+	buildXReportDocument,
+	formatClosureDate,
+	resetDateFormatterCache,
+} from './closure-document';
 // Copied key contract from plugin templates/gallery/preview-data/closure.json (closure-template).
 const dateKeys = [
 	'datetime',
@@ -551,8 +556,10 @@ describe('formatClosureDate formatter cache', () => {
 	// Revert: build a new Intl.DateTimeFormat per key again.
 	it('builds no new formatter for a repeat locale and zone', () => {
 		const zone = { locale: 'en-GB', timezone: 'Europe/London' };
-		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		// The spy replaces Intl.DateTimeFormat, which starts the cache over, so warm under it.
 		const spy = jest.spyOn(Intl, 'DateTimeFormat');
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		spy.mockClear();
 		const repeat = formatClosureDate('2026-10-01T12:30:00Z', zone);
 		expect(spy).not.toHaveBeenCalled();
 		expect(repeat.time).toBe('13:30');
@@ -568,5 +575,31 @@ describe('formatClosureDate formatter cache', () => {
 		});
 		expect(spy.mock.calls.filter(([locale]) => locale === 'fr-FR')).toHaveLength(13);
 		expect(french.month_long).toBe('septembre');
+	});
+
+	// Revert: serve a cached formatter after Intl.DateTimeFormat changes.
+	it('throws, as the uncached code does, when Intl.DateTimeFormat starts throwing', () => {
+		const zone = { locale: 'en-GB', timezone: 'Europe/London' };
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		const spy = jest.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+			throw new RangeError('Intl date formatting unavailable');
+		});
+		expect(() => uncachedClosureDate('2026-09-11T08:00:00Z', zone)).toThrow(RangeError);
+		expect(() => formatClosureDate('2026-09-11T08:00:00Z', zone)).toThrow(RangeError);
+		spy.mockRestore();
+		expect(formatClosureDate('2026-09-11T08:00:00Z', zone).time).toBe('09:00');
+	});
+
+	// Revert: make resetDateFormatterCache leave its entries behind.
+	it('builds afresh after resetDateFormatterCache, then caches again', () => {
+		const zone = { locale: 'en-GB', timezone: 'Europe/London' };
+		const spy = jest.spyOn(Intl, 'DateTimeFormat');
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		resetDateFormatterCache();
+		spy.mockClear();
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		// One construction per Intl key (13) for the first call, none for the repeat.
+		expect(spy.mock.calls.filter(([locale]) => locale === 'en-GB')).toHaveLength(13);
 	});
 });
