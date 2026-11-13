@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { resolveCouponReplay } from '@wcpos/order-math/internal';
+import type { CouponContext } from '@wcpos/order-math';
 
 import {
 	recalculateCoupons,
@@ -25,7 +26,10 @@ export const useRecalculateCoupons = () => {
 	const { getCouponContext } = useCouponContext();
 
 	const recalculate = React.useCallback(
-		async (order: OrderPayload, couponLines: CouponLine[]): Promise<RecalculateResult> => {
+		async (
+			order: OrderPayload,
+			couponLines: CouponLine[]
+		): Promise<RecalculateResult & { context: CouponContext }> => {
 			const lineItems = order.line_items ?? [];
 			const config = configForOrder(order);
 			// Filter to active coupon codes
@@ -40,19 +44,22 @@ export const useRecalculateCoupons = () => {
 				throw new Error(`Coupon "${replay.missingCodes[0]}" not found in local collection`);
 			}
 
-			return recalculateCoupons({
-				lineItems,
-				couponLines,
-				couponConfigs: replay.couponConfigs,
-				taxStatusFor: context.taxStatusFor,
-				productCategories: replay.productCategories,
-				pricesIncludeTax: config.pricesIncludeTax,
-				vatExempt: config.vatExempt,
-				calcDiscountsSequentially: config.calcDiscountsSequentially,
-				taxRates: [...config.rates] as RecalculateInput['taxRates'],
-				taxRoundAtSubtotal: config.taxRoundAtSubtotal,
-				dp: config.dp,
-			});
+			return {
+				...recalculateCoupons({
+					lineItems,
+					couponLines,
+					couponConfigs: replay.couponConfigs,
+					taxStatusFor: context.taxStatusFor,
+					productCategories: replay.productCategories,
+					pricesIncludeTax: config.pricesIncludeTax,
+					vatExempt: config.vatExempt,
+					calcDiscountsSequentially: config.calcDiscountsSequentially,
+					taxRates: [...config.rates] as RecalculateInput['taxRates'],
+					taxRoundAtSubtotal: config.taxRoundAtSubtotal,
+					dp: config.dp,
+				}),
+				context,
+			};
 		},
 		[configForOrder, getCouponContext]
 	);

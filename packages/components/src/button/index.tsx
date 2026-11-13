@@ -166,8 +166,8 @@ type ButtonRef = React.ComponentRef<typeof Pressable>;
 
 type ButtonProps = Omit<PressableSurfaceProps, 'wash' | 'minTarget' | 'selected' | 'dimmed'> &
 	VariantProps<typeof buttonVariants> & {
-		leftIcon?: IconName | React.ReactNode;
-		rightIcon?: IconName | React.ReactNode;
+		leftIcon?: IconName | React.ReactElement;
+		rightIcon?: IconName | React.ReactElement;
 		loading?: boolean;
 	};
 
@@ -196,9 +196,9 @@ function Button({
 	/**
 	 * Render icon component based on type
 	 */
-	const renderIcon = (icon: IconName | React.ReactNode, position: 'left' | 'right') => {
+	const renderIcon = (icon: IconName | React.ReactElement, position: 'left' | 'right') => {
 		if (typeof icon === 'string') {
-			return <Icon name={icon as IconName} size={size as IconProps['size']} />;
+			return <Icon name={icon} size={size as IconProps['size']} />;
 		}
 		return icon;
 	};

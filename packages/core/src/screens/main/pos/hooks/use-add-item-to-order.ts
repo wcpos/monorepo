@@ -3,12 +3,16 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { calculateCartLine, type CartConfig } from '@wcpos/order-math';
-import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, inOpenOrdersScope, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { birthOrder, documentRecordId, findBirthState } from '@wcpos/query/mutations';
+import { boundRegisterIdOf } from '@wcpos/query/register-session';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useCartWrite } from '../commands/use-cart-write';
 import { useRegister } from '../../../../services/register/use-register';
+import { scopedRegisterId } from '../../../../services/register/use-register-binding';
 import { useCartConfigReader } from './use-cart-config';
 import './stock-guard-hook';
 import { useActionContext } from './use-action-context';
@@ -32,6 +36,8 @@ type CouponLine = NonNullable<EngineRecord<'orders'>['payload']['coupon_lines']>
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 const kinds = { line_items: 'line_item', fee_lines: 'fee', shipping_lines: 'shipping' } as const;
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+type MetaData = Parameters<typeof inOpenOrdersScope>[0];
 /**
  * Provides the queued mutation used to add a cart line to the current order.
  *
@@ -53,11 +59,37 @@ export const useAddItemToOrder = () => {
 		() => ({
 			userId: wpCredentials.id!,
 			tillId: register?.id,
-			registerId: register?.sites[site.uuid!]?.register_id ?? undefined,
+			registerId: boundRegisterIdOf(register, site.uuid!, store.id) ?? undefined,
 			storeId: store.id!,
 			taxBasedOn,
 		}),
 		[store.id, taxBasedOn, wpCredentials.id, register, site.uuid]
+	);
+
+	/**
+	 * A birth or restart rewrites the order's identity; one the cart's own scope cannot match
+	 * would be written out of view (#3358). False (logged, not written) when it would.
+	 */
+	const inCartScope = React.useCallback(
+		(orderId: string | undefined, metaData: MetaData) => {
+			const registerId = scopedRegisterId(site.uuid!, store.id);
+			if (inOpenOrdersScope(metaData, wpCredentials.id!, store.id, registerId)) return true;
+			const stamped = wooMetaCarrier.readIdentity(metaData);
+			cartLogger.error("Cart add refused: the order would fall outside this till's open orders", {
+				code: ERROR_CODES.CART_UPDATE_FAILED,
+				context: {
+					orderId,
+					stampedCashierId: stamped.cashierId,
+					stampedStoreId: stamped.storeId,
+					stampedRegisterId: stamped.registerId ?? null,
+					scopeCashierId: wpCredentials.id,
+					scopeStoreId: store.id ?? null,
+					scopeRegisterId: registerId,
+				},
+			});
+			return false;
+		},
+		[site.uuid, store.id, wpCredentials.id]
 	);
 
 	/**
@@ -162,6 +194,7 @@ export const useAddItemToOrder = () => {
 				};
 				payload = settleIntent(order, orderJSON);
 			}
+			if (!inCartScope(recordId, payload.meta_data as MetaData)) return null;
 			const savedOrder = await birthOrder(runtime, {
 				recordId,
 				payload,
@@ -170,7 +203,15 @@ export const useAddItemToOrder = () => {
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},
-		[buildCartLines, configForOrder, identity, runtime, setCurrentOrderID, settleIntent]
+		[
+			buildCartLines,
+			configForOrder,
+			identity,
+			inCartScope,
+			runtime,
+			setCurrentOrderID,
+			settleIntent,
+		]
 	);
 
 	/**
@@ -256,6 +297,7 @@ export const useAddItemToOrder = () => {
 								priorPayload,
 								orphanedSkeleton,
 							});
+							if (!savedOrder) return null;
 							context.order = savedOrder;
 							result = savedOrder;
 						} else {
@@ -268,6 +310,11 @@ export const useAddItemToOrder = () => {
 										meta_data: ensurePosOrderIdentityMeta(latest.payload.meta_data, identity, true),
 									}
 								: {};
+							if (
+								'meta_data' in restart &&
+								!inCartScope(latest.uuid, restart.meta_data as MetaData)
+							)
+								return null;
 							result = await settledWrite({
 								queue: context,
 								document: latest,
@@ -296,6 +343,7 @@ export const useAddItemToOrder = () => {
 			actor,
 			getCurrentOrderRecord,
 			identity,
+			inCartScope,
 			settledWrite,
 			runtime,
 			reportEngineWarnings,

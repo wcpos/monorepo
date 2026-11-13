@@ -1,5 +1,5 @@
 import { MoneyCommandError } from '@wcpos/query';
-import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
+import type { OrderPaymentSummary, PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import {
 	RECORD_UNKNOWN_RETRY_DELAYS_MS,
@@ -589,6 +589,99 @@ describe('recordManualPayment', () => {
 		expect(deps.post).toHaveBeenCalledTimes(2);
 		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: serverRow });
 		expect(deps.mirror).toHaveBeenCalledTimes(1);
+	});
+
+	// Sentry POS-31A: the recovery re-sent the lost record and settled it before the retry.
+	const settledElsewhere = (
+		deps: ReturnType<typeof createDeps>,
+		row: PaymentRow | null,
+		summary: OrderPaymentSummary | null = null
+	) => {
+		const sent = { sentAt: NOW, sentRevision: 'sha256:r1' } as never;
+		deps.post
+			.mockRejectedValueOnce(new Error('Network Error'))
+			.mockRejectedValueOnce(new MoneyCommandError('settled_elsewhere', sent));
+		deps.settledRecord = jest.fn(async () =>
+			row ? { row, status: 'completed', order: summary } : null
+		);
+		return recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
+	};
+
+	it('a retry whose record another sender settled lands the ledger row as recorded, never a refusal (POS-31A)', async () => {
+		const deps = createDeps();
+		const settledRow = { ...mintedCard, status: 'captured' as const };
+		const result = await settledElsewhere(deps, settledRow);
+
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: settledRow });
+		expect(deps.settledRecord).toHaveBeenCalledWith(mintedCard.id);
+		expect(deps.mirror).toHaveBeenCalledTimes(1);
+		expect(deps.mirror).toHaveBeenCalledWith(
+			{ payment: settledRow, status: 'completed' },
+			{ accepted: true }
+		);
+		expect(deps.raiseAttention).not.toHaveBeenCalled();
+	});
+
+	// The judge reads a real balance, as for an ordinary 200: the resident's status and its
+	// ledger-derived figures, never the press's prediction (Codex r4543471493 on #3513).
+	it('a retry whose record another sender settled returns the resident summary as its order (POS-31A)', async () => {
+		const deps = createDeps();
+		const settledRow = { ...mintedCard, status: 'captured' as const };
+		const summary = {
+			status: 'completed',
+			total: '100.00',
+			paid: '100.00',
+			balance: '0.00',
+			payment_method: 'manual_card',
+			payment_method_title: 'Card',
+		};
+		const result = await settledElsewhere(deps, settledRow, summary);
+
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: settledRow });
+		expect(result).toHaveProperty('order', summary);
+	});
+
+	it('a retry whose record another sender settled, on a resident without a summary, returns order null (POS-31A)', async () => {
+		const deps = createDeps();
+		const settledRow = { ...mintedCard, status: 'captured' as const };
+		const result = await settledElsewhere(deps, settledRow, null);
+
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online', row: settledRow });
+		expect(result).toHaveProperty('order', null);
+	});
+
+	it('a retry whose record another sender settled, but whose settled row is missing, reads as unknown (POS-31A)', async () => {
+		const deps = createDeps();
+		const result = await settledElsewhere(deps, null);
+		expect(result).toMatchObject({ kind: 'unknown', row: { id: mintedCard.id } });
+		expect(deps.mirror).not.toHaveBeenCalled();
+	});
+
+	it('a retry whose record another sender settled, but whose settled row failed, reads as unknown (POS-31A)', async () => {
+		const deps = createDeps();
+		const result = await settledElsewhere(deps, { ...mintedCard, status: 'failed' });
+		expect(result).toMatchObject({ kind: 'unknown', row: { id: mintedCard.id } });
+		expect(deps.mirror).not.toHaveBeenCalled();
+	});
+
+	// The settled branch is for the poster's own `settled_elsewhere` only: a row id the store holds
+	// under another body is a foreign command, and its 422 stays the refusal the cashier is shown.
+	it('a genuine command conflict still refuses with PAYMENT213, not settled_elsewhere (POS-31A)', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValueOnce(responseError(422, 'wcpos_command_conflict'));
+		deps.settledRecord = jest.fn(async () => ({
+			row: { ...mintedCard, status: 'captured' as const },
+			status: 'completed',
+			order: null,
+		}));
+
+		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
+		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentError);
+		await expect(promise).rejects.toMatchObject({ code: 'wcpos_command_conflict', status: 422 });
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(deps.settledRecord).not.toHaveBeenCalled();
+		expect(deps.mirror).not.toHaveBeenCalled();
+		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
 
 	it('returns invalid for card tendered input without any side effect', async () => {

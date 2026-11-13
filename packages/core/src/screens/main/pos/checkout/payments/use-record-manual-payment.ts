@@ -5,7 +5,7 @@ import cloneDeep from 'lodash/cloneDeep';
 import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { type PaymentMethodDescriptor, readLedger, samePaymentId } from '@wcpos/order-math';
+import { derive, type PaymentMethodDescriptor, readLedger, samePaymentId } from '@wcpos/order-math';
 import { readAwaitingAnswer } from '@wcpos/query/store-local';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -93,6 +93,26 @@ export function useRecordManualPayment(): (
 							kind === 'record' && !ledger.some((r) => !!row && samePaymentId(r.id, row.id))
 					);
 					return sent?.row ?? null;
+				},
+				// Another sender settled this record (POS-31A): its answer is in the resident's ledger, so
+				// the judge reads the resident's status and ledger-derived balance, as for its own 200.
+				settledRecord: async (rowId) => {
+					const latest = order.getLatest().payload;
+					const ledger = readLedger(latest.meta_data ?? []);
+					const found = ledger.find((r) => samePaymentId(r.id, rowId));
+					if (!found) return null;
+					const view = derive(latest.total, ledger, methods, { dp: storeDecimals });
+					const summary = latest.status
+						? {
+								status: latest.status,
+								total: String(latest.total ?? '0'),
+								paid: view.paid,
+								balance: view.balance,
+								payment_method: view.payment_method ?? '',
+								payment_method_title: view.payment_method_title,
+							}
+						: null;
+					return { row: cloneDeep(found), status: latest.status ?? null, order: summary };
 				},
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
