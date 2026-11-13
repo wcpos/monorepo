@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Hermes CPU profile collector for the native E2E suite (probe #3552), through Metro's inspector.
 // Every outcome is one `WCPOS_PROFILE status=<word>` line; the exit code is always 0.
-// Usage: node scripts/e2e-cpu-profile.mjs <out dir> <stop marker path>
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+// Usage: node scripts/e2e-cpu-profile.mjs <out dir> <stop marker path> [<start file> <start pattern>]
+// With a start file and pattern, Metro is not contacted until a line of the file matches the pattern.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,9 +43,11 @@ function openSession(target) {
 	const pending = new Map(); // command id -> settle(error, message)
 	let nextId = 0;
 	ws.on('error', () => {}); // 'close' always follows and carries the outcome.
-	ws.on('close', () =>
-		[...pending.values()].forEach((settle) => settle(new Lost('socket closed')))
-	);
+	let closed = 'socket closed'; // Gains the close code and reason once the socket closes.
+	ws.on('close', (code, reason) => {
+		closed = `socket closed code=${code} reason=${String(reason).slice(0, 80)}`;
+		[...pending.values()].forEach((settle) => settle(new Lost(closed)));
+	});
 	ws.on('message', (data) => {
 		try {
 			const message = JSON.parse(String(data)); // Events carry no id and match nothing.
@@ -54,11 +57,12 @@ function openSession(target) {
 		}
 	});
 	const session = {
+		closeMessage: () => closed,
 		isOpen: () => ws.readyState === WebSocket.OPEN,
 		close: () => ws.terminate(),
 		send: (method, params = {}) =>
 			new Promise((resolve, reject) => {
-				if (!session.isOpen()) return reject(new Lost('socket closed'));
+				if (!session.isOpen()) return reject(new Lost(closed));
 				const id = ++nextId;
 				const timeout = new Lost(`no reply to ${method} in ${REPLY_TIMEOUT_MS} ms`);
 				const timer = setTimeout(() => pending.get(id)?.(timeout), REPLY_TIMEOUT_MS);
@@ -73,7 +77,14 @@ function openSession(target) {
 	};
 	return new Promise((resolve, reject) => {
 		ws.once('open', () => resolve(session));
-		ws.once('close', () => reject(new Lost('socket closed before open')));
+		let refused; // Set when the server answers the upgrade with an HTTP error.
+		ws.once(
+			'unexpected-response',
+			(req, res) => (refused = `upgrade refused status=${res.statusCode}`)
+		);
+		ws.once('close', () =>
+			reject(new Lost(refused ?? `${closed.replace('closed', 'closed before open')}`))
+		);
 	});
 }
 
@@ -104,7 +115,7 @@ async function profileTarget(target, outDir, stopReason) {
 		report('connected', { id, start });
 		for (;;) {
 			const outcome = await waitWindow(session, start + WINDOW_MS, stopReason);
-			if (outcome === 'lost') throw new Lost('socket closed');
+			if (outcome === 'lost') throw new Lost(session.closeMessage());
 			const end = Date.now();
 			const body = JSON.stringify((await session.send('Profiler.stop')).profile ?? null);
 			writeFileSync(join(outDir, `profile-${start}-${end}.cpuprofile`), body);
@@ -122,11 +133,28 @@ async function profileTarget(target, outDir, stopReason) {
 	}
 }
 
-export async function collect(outDir, marker) {
+const gateOpen = (file, pattern) => {
+	try {
+		return readFileSync(file, 'utf8')
+			.split('\n')
+			.some((line) => new RegExp(pattern).test(line));
+	} catch {
+		return false; // A missing file counts as no match.
+	}
+};
+
+export async function collect(outDir, marker, startFile, startPattern) {
 	mkdirSync(outDir, { recursive: true });
 	const deadline = Date.now() + MAX_RUN_MS;
 	const stopReason = () =>
 		existsSync(marker) ? 'stopped' : Date.now() >= deadline ? 'capped' : null;
+	if (startFile && startPattern) {
+		while (!gateOpen(startFile, startPattern)) {
+			if (stopReason()) return report(stopReason());
+			await sleep(POLL_MS);
+		}
+		report('armed');
+	}
 	for (;;) {
 		if (stopReason()) return report(stopReason());
 		const target = await findTarget();
@@ -139,7 +167,7 @@ export async function collect(outDir, marker) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	const fail = (error) => report('error', { reason: reasonOf(error) });
 	process.on('uncaughtException', (error) => (fail(error), process.exit(0)));
-	collect(...process.argv.slice(2, 4))
+	collect(...process.argv.slice(2, 6))
 		.catch(fail)
 		.finally(() => process.exit(0));
 }

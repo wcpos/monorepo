@@ -628,7 +628,7 @@ jobs:
           curl -sf --max-time 120 -o /dev/null -w "warm bundle: %{time_total}s (%{size_download} bytes)\n" "$BUNDLE_URL"
           echo "Metro up; Android bundle compiled."
           # Hermes CPU profile collector (probe #3552); `🔬 CPU profile summary` stops it.
-          mkdir -p "$HOME/.maestro/tests/cpu-profiles"; nohup node ../../scripts/e2e-cpu-profile.mjs "$HOME/.maestro/tests/cpu-profiles" "$HOME/.maestro/tests/stop-cpu-profile" > "$HOME/.maestro/tests/cpu-profile-collector.log" 2>&1 &
+          mkdir -p "$HOME/.maestro/tests/cpu-profiles"; nohup node ../../scripts/e2e-cpu-profile.mjs "$HOME/.maestro/tests/cpu-profiles" "$HOME/.maestro/tests/stop-cpu-profile" "$HOME/.maestro/tests/suite.log" '\[(Passed|Failed)\] 03-' > "$HOME/.maestro/tests/cpu-profile-collector.log" 2>&1 &
 
       - name: 🧰 Install Maestro
         run: |
@@ -1201,7 +1201,7 @@ jobs:
           curl -sf --max-time 120 -o /dev/null -w "warm bundle: %{time_total}s (%{size_download} bytes)\n" "$BUNDLE_URL"
           echo "Metro up; iOS bundle compiled."
           # Hermes CPU profile collector (probe #3552); `🔬 CPU profile summary` stops it.
-          mkdir -p "$HOME/.maestro/tests/cpu-profiles"; nohup node ../../scripts/e2e-cpu-profile.mjs "$HOME/.maestro/tests/cpu-profiles" "$HOME/.maestro/tests/stop-cpu-profile" > "$HOME/.maestro/tests/cpu-profile-collector.log" 2>&1 &
+          mkdir -p "$HOME/.maestro/tests/cpu-profiles"; nohup node ../../scripts/e2e-cpu-profile.mjs "$HOME/.maestro/tests/cpu-profiles" "$HOME/.maestro/tests/stop-cpu-profile" "$HOME/.maestro/tests/suite.log" '\[(Passed|Failed)\] 03-' > "$HOME/.maestro/tests/cpu-profile-collector.log" 2>&1 &
 
       - name: 🧰 Install Maestro
         run: |
