@@ -179,7 +179,8 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	const shown = useDrawnHandle(handle);
 	const settling = shown !== handle;
 	const snapshot = useQuerySnapshot(shown, TABLE_FIELDS);
-	// The spinner is the engine's now, whichever query is drawn.
+	// The engine's activity, whichever query is drawn, for the empty skeleton and the sync glyph;
+	// the spinner under the last row is this list's paging instead (climb F48).
 	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
 	return (
 		<DataTableBody<TData, TSortField>
@@ -422,9 +423,11 @@ function DataTableBody<TData extends RowData, TSortField extends string = string
 								}}
 								ListFooterComponent={() =>
 									ListFooterComponent ? (
-										<ListFooterComponent active={syncing} />
+										<ListFooterComponent active={paging.pending && paging.exhausted !== true} />
 									) : (
-										<DefaultListFooterComponent active={syncing} />
+										<DefaultListFooterComponent
+											active={paging.pending && paging.exhausted !== true}
+										/>
 									)
 								}
 								extraData={extraData}

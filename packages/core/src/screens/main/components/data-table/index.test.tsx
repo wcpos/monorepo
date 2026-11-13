@@ -19,6 +19,10 @@ import { DataTableSkeleton } from './skeleton';
 
 import type { DataTableFooterProps } from './footer';
 
+jest.mock('@wcpos/components/loader', () => ({
+	Loader: () => <div data-testid="list-footer-spinner" />,
+}));
+
 beforeEach(reset);
 it('fine headers fill their cells and sorting keeps the applied-sort marker', () => {
 	renderTable();
@@ -265,17 +269,38 @@ it('a custom footer is handed values, never streams, with the table’s collecti
 	});
 });
 
-it('a list footer is handed the live handle’s activity as a value', () => {
+it('a list footer spins only while this list is loading', () => {
 	const seen: boolean[] = [];
 	function ListFooter({ active }: { active: boolean }) {
 		seen.push(active);
 		return null;
 	}
-	const handle = handleWith({ active: true });
+	// One finished row while the engine pulls the collection: no spinner under the answer.
+	const handle = handleWith({ active: true, pending: false, exhausted: true });
 	renderTable({ handle, ListFooterComponent: ListFooter });
-	expect(seen.at(-1)).toBe(true);
-	act(() => handle.set({ active: false }));
 	expect(seen.at(-1)).toBe(false);
+	act(() => handle.set({ pending: true, exhausted: false }));
+	expect(seen.at(-1)).toBe(true);
+	act(() => handle.set({ pending: false }));
+	expect(seen.at(-1)).toBe(false);
+});
+
+it('the default list footer’s spinner turns only while this list is loading', () => {
+	// The fixture stubs the default footer out; this test draws the real one.
+	const real = jest.requireActual<typeof import('./list-footer')>('./list-footer');
+	const stub = jest.requireMock<typeof import('./list-footer')>('./list-footer');
+	const spy = jest.spyOn(stub, 'ListFooterComponent').mockImplementation(real.ListFooterComponent);
+	try {
+		const handle = handleWith({ active: true, pending: false, exhausted: true });
+		renderTable({ handle });
+		expect(screen.queryByTestId('list-footer-spinner')).toBeNull();
+		act(() => handle.set({ pending: true, exhausted: false }));
+		expect(screen.getByTestId('list-footer-spinner')).toBeTruthy();
+		act(() => handle.set({ pending: false }));
+		expect(screen.queryByTestId('list-footer-spinner')).toBeNull();
+	} finally {
+		spy.mockRestore();
+	}
 });
 
 it('pages through the actions on a full read, and holds while the handle’s demand is pending', () => {
