@@ -203,7 +203,10 @@ export function useRegisterSession() {
 			startCounting: async () => {
 				if (figuresPending) throw new Error('register_figures_pending');
 				if (!session) throw new RegisterSessionRequiredError();
-				return beginCount({ storeDB, userDB, siteUuid: site.uuid!, actor }, session.id);
+				const row = await beginCount({ storeDB, userDB, siteUuid: site.uuid!, actor }, session.id);
+				// Send the count's status now, not at the bridge's next minute tick.
+				sessionRefreshRequests.next({ storeDB, registerId: session.register_id });
+				return row;
 			},
 			backToSelling: async () => {
 				if (!session) throw new RegisterSessionRequiredError();
@@ -213,7 +216,7 @@ export function useRegisterSession() {
 				if (!session) throw new RegisterSessionRequiredError();
 				// A seeded `counting` row skips `startCounting`; the close is the second door (§ 4.9).
 				if (figuresPending) throw new Error('register_figures_pending');
-				return closeRegister(
+				const result = await closeRegister(
 					{
 						storeDB,
 						userDB,
@@ -228,6 +231,9 @@ export function useRegisterSession() {
 					session.id,
 					input
 				);
+				// The close is a local write; send it now, not at the bridge's next minute tick.
+				sessionRefreshRequests.next({ storeDB, registerId: session.register_id });
+				return result;
 			},
 			recordMovement: async (input: {
 				type: 'paid_in' | 'paid_out' | 'no_sale';
