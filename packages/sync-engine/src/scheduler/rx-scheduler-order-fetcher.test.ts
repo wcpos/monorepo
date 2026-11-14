@@ -2271,7 +2271,9 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		const params = new URL(fetcher.mock.calls[1][0]).searchParams;
 		expect(params.has('after')).toBe(false);
-		expect(params.get('modified_after')).toBe(new Date(PAID_WINDOW_START * 1_000).toISOString());
+		expect(params.get('modified_after')).toBe(
+			new Date((PAID_WINDOW_START - 1) * 1_000).toISOString()
+		);
 		expect(params.get('before')).toBe(new Date((PAID_WINDOW_START + 1) * 1_000).toISOString());
 		expect(params.get('dates_are_gmt')).toBe('true');
 		expect(params.get('orderby')).toBe('date');
@@ -2299,18 +2301,34 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		const result = await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
 
-		expect(result).toMatchObject({ documentCount: 3, requestCount: 2, completed: true });
+		expect(result).toMatchObject({ documentCount: 4, requestCount: 2, completed: true });
 		expect(
 			repository.upsertMany.mock.calls.flatMap(([docs]) => docs.map((doc) => doc.uuid))
-		).toEqual([uuidFor(1), uuidFor(4), uuidFor(2)]);
+		).toEqual([uuidFor(1), uuidFor(4), uuidFor(5), uuidFor(2)]);
 		expect(coverageRepository.recordCumulativeQueryResult).toHaveBeenCalledTimes(1);
 		expect(coverageRepository.lane()).toMatchObject({ complete: true });
 		expect(coverageRepository.lane()?.rangedResume).toBeUndefined();
 		expect(coverageRepository.publishRangedResume).toHaveBeenLastCalledWith(
 			expect.objectContaining({
-				resume: expect.objectContaining({ totalRecords: 3, downloadedRecords: 3 }),
+				resume: expect.objectContaining({ totalRecords: 4, downloadedRecords: 4 }),
 			})
 		);
+	});
+
+	it('downloads an earlier-created order whose modified time equals the window start', async () => {
+		const coverageRepository = rangedLaneStore();
+		const repository = { upsertMany: vi.fn(async (_documents: OrderDocument[]) => undefined) };
+		const { fetcher } = rangedOrderServer([
+			{ wooId: 7, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START },
+		]);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+
+		const result = await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+		expect(result).toMatchObject({ documentCount: 1, requestCount: 2, completed: true });
+		expect(
+			repository.upsertMany.mock.calls.flatMap(([docs]) => docs.map((doc) => doc.uuid))
+		).toEqual([uuidFor(7)]);
 	});
 
 	it('keeps a rangedResume and never records complete when the phase-2 request fails', async () => {
@@ -2353,7 +2371,9 @@ describe('createOrdersSchedulerFetcher', () => {
 
 			const params = new URL(fetcher.mock.calls[0][0]).searchParams;
 			expect(params.has('after')).toBe(false);
-			expect(params.get('modified_after')).toBe(new Date(PAID_WINDOW_START * 1_000).toISOString());
+			expect(params.get('modified_after')).toBe(
+				new Date((PAID_WINDOW_START - 1) * 1_000).toISOString()
+			);
 			expect(params.get('before')).toBe(new Date(beforeSeconds * 1_000).toISOString());
 			expect(result).toMatchObject({ documentCount: 1, requestCount: 1, completed: true });
 		}

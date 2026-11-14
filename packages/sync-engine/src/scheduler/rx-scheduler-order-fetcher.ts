@@ -858,7 +858,11 @@ async function fetchBrowserOrderQuery(
 			query.set(/^\d+$/.test(descriptor.store) ? 'pos_store' : 'created_via', descriptor.store);
 		}
 		if (paidEarlierPhase && descriptor.modifiedAfterSeconds !== undefined)
-			query.set('modified_after', new Date(descriptor.modifiedAfterSeconds * 1_000).toISOString());
+			// Woo's modified_after is exclusive; A − 1 keeps an order paid (so modified) exactly at A.
+			query.set(
+				'modified_after',
+				new Date((descriptor.modifiedAfterSeconds - 1) * 1_000).toISOString()
+			);
 		else if (descriptor.afterSeconds !== undefined)
 			query.set('after', new Date(descriptor.afterSeconds * 1_000).toISOString());
 		if (cursorBeforeSeconds !== undefined)
