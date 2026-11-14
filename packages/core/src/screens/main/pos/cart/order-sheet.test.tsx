@@ -52,12 +52,18 @@ jest.mock('@wcpos/components/dialog', () => {
 			intent,
 		}: import('@wcpos/components/dialog').DialogFooterProps) => (
 			<>
-				{[destructive, secondary, intent]
-					.flat()
-					.filter((action): action is import('@wcpos/components/dialog').FooterButton => !!action)
-					.map((action) => (
+				{Object.entries({ destructive, secondary, intent })
+					.flatMap(([slot, actions]) => [actions].flat().map((action) => ({ slot, action })))
+					.filter(
+						(
+							entry
+						): entry is { slot: string; action: import('@wcpos/components/dialog').FooterButton } =>
+							!!entry.action
+					)
+					.map(({ slot, action }) => (
 						<button
 							key={action.testID}
+							data-slot={slot}
 							data-testid={action.testID}
 							disabled={action.disabled || action.loading}
 							onClick={action.onPress as unknown as React.MouseEventHandler}
@@ -88,7 +94,11 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-jest.mock('./buttons/edit-order-meta', () => ({ EditOrderMeta: () => null }));
+jest.mock('./buttons/edit-order-meta', () => ({
+	EditOrderMeta: ({ onUnsentChange }: { onUnsentChange?: (unsent: boolean) => void }) => (
+		<button data-testid="mock-hand-over" onClick={() => onUnsentChange?.(true)} />
+	),
+}));
 jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'left' }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
@@ -221,19 +231,46 @@ it('does not run the footer action hooks while the sheet is closed', () => {
 });
 
 // The record dialog's shell has its own suite; this one drives the form and the footer it carries.
+let mockRecordDialogProps: Record<string, unknown> = {};
 jest.mock('../../components/record-dialog', () => ({
-	RecordDialog: ({
-		record,
-		form,
-		footer,
-	}: {
+	RecordDialog: (props: {
 		record: unknown;
 		form: (record: unknown) => React.ReactNode;
 		footer?: React.ReactNode;
-	}) => (
-		<>
-			{form(record)}
-			{footer}
-		</>
-	),
+	}) => {
+		mockRecordDialogProps = props;
+		return (
+			<>
+				{props.form(props.record)}
+				{props.footer}
+			</>
+		);
+	},
 }));
+
+it('a pending hand-over takes the primary: Save to store drops behind Print', () => {
+	renderSheet();
+	const slots = () =>
+		Array.from(document.querySelectorAll('[data-slot]'), (button) => [
+			button.getAttribute('data-testid'),
+			button.getAttribute('data-slot'),
+		]);
+	expect(slots()).toEqual([
+		['void-button', 'destructive'],
+		['order-print-button', 'secondary'],
+		['save-to-server-button', 'intent'],
+	]);
+	fireEvent.click(screen.getByTestId('mock-hand-over'));
+	expect(slots()).toEqual([
+		['void-button', 'destructive'],
+		['order-print-button', 'secondary'],
+		['save-to-server-button', 'secondary'],
+	]);
+	expect(document.querySelector('[data-slot="intent"]')).toBeNull();
+});
+
+it("the cart's Order details has no JSON tab", () => {
+	renderSheet();
+	expect(mockRecordDialogProps.json).toBe(false);
+	expect(mockRecordDialogProps).not.toHaveProperty('payload');
+});
