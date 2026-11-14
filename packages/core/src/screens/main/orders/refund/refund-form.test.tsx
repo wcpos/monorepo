@@ -500,10 +500,10 @@ describe('RefundOrderForm', () => {
 
 		const columns = [
 			'min-w-0 flex-[3]',
-			'min-w-16 flex-1',
-			'min-w-13 flex-1',
-			'min-w-18 flex-1',
-			'min-w-19 flex-1',
+			'min-w-17 flex-1',
+			'min-w-14 flex-1',
+			'min-w-21 flex-1',
+			'min-w-23 flex-1',
 		];
 		expect(
 			screen.getAllByRole('columnheader').map((head) => head.getAttribute('data-classes'))

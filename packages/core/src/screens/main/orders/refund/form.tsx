@@ -114,14 +114,15 @@ function createRefundFormSchema(dp: number) {
 
 type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
-// One column map for the heads and the cells. The number columns keep a floor that holds their
-// longest English head word plus px-3 on a phone; the product column gives way (F62).
+// One column map for the heads and the cells (F62). The number columns' floors are spacing units
+// sized for Compact (3.5 px, a phone), where the unit and px-3 shrink but the 12 px caption does
+// not: n ≥ longest English head word / spacing + 6. The product column gives way.
 const REFUND_COLUMNS = {
 	product: 'min-w-0 flex-[3]',
-	price: 'min-w-16 flex-1',
-	qty: 'min-w-13 flex-1',
-	refundQty: 'min-w-18 flex-1',
-	refundAmount: 'min-w-19 flex-1',
+	price: 'min-w-17 flex-1',
+	qty: 'min-w-14 flex-1',
+	refundQty: 'min-w-21 flex-1',
+	refundAmount: 'min-w-23 flex-1',
 } as const;
 
 /** Renders the form used to calculate and submit an order refund. */
