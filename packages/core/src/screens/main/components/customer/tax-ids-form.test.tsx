@@ -26,9 +26,21 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (_store: unknown, selector: (value: typeof mockStore) => unknown) =>
 		selector(mockStore),
 }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+// A call with options shows them, so an interpolated message can be read back.
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string, options?: object) =>
+		options ? `${key} ${JSON.stringify(options)}` : key,
+}));
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	View: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div data-classes={className}>{children}</div>
+	),
+}));
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	HStack: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div data-classes={className}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
@@ -39,7 +51,21 @@ jest.mock('@wcpos/components/form', () => {
 	const { Controller } = jest.requireActual('react-hook-form') as typeof import('react-hook-form');
 	return {
 		FormField: Controller,
-		FormInput: ({ label }: { label: string }) => <span data-testid={`input-${label}`} />,
+		FormInput: ({
+			label,
+			description,
+			descriptionTone,
+		}: {
+			label: string;
+			description?: string;
+			descriptionTone?: string;
+		}) => (
+			<span
+				data-testid={`input-${label}`}
+				data-description={description}
+				data-tone={descriptionTone}
+			/>
+		),
 		FormSelect: ({
 			customComponent: Component,
 			value,
@@ -170,16 +196,45 @@ describe('TaxIdsForm country defaults', () => {
 	});
 });
 
-// A narrow dialog (nl, 2026-11): the ID input shrank to ~70 px beside Type and Remove; with a 160
-// floor it wraps to its own line instead.
-it('the tax ID input keeps 160 and wraps instead of shrinking', () => {
-	mockStore = { store_country: 'DE' };
-	renderForm({
-		billing: { country: 'DE' },
-		tax_ids: [{ type: 'eu_vat', value: 'DE123456789', country: 'DE' }],
+describe('a tax ID row', () => {
+	beforeEach(() => {
+		mockStore = { store_country: 'DE' };
 	});
-	const wrapper = screen.getByTestId('input-tax_id.value_label').parentElement as HTMLElement;
-	expect(wrapper.dataset.classes?.split(' ')).toEqual(
-		expect.arrayContaining(['min-w-40', 'flex-1'])
-	);
+	const renderRow = (type: TaxIdType, value: string) =>
+		renderForm({ billing: { country: 'DE' }, tax_ids: [{ type, value, country: 'DE' }] });
+	const idInput = () => screen.getByTestId('input-tax_id.value_label');
+
+	// The ID shrank to ~75 px beside Type and Country and cut the number off (decision 8A).
+	it('Type and Country share a line and the ID has its own full line beneath them', () => {
+		renderRow('eu_vat', 'DE123456789');
+		const typeCell = screen.getByTestId('selected-type').closest('[data-classes]') as HTMLElement;
+		const countryCell = screen.getByTestId('input-tax_id.country_label')
+			.parentElement as HTMLElement;
+		const row = typeCell.parentElement as HTMLElement;
+		expect(countryCell.parentElement).toBe(row);
+		expect(row.contains(idInput())).toBe(false);
+		expect(row.compareDocumentPosition(idInput()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		const idClasses = (idInput().parentElement as HTMLElement).dataset.classes?.split(' ');
+		expect(idClasses).toContain('p-2');
+		expect(idClasses?.filter((name) => /^(min-)?w-|^flex-1$/.test(name))).toEqual([]);
+	});
+
+	it('a mismatch names the type and shows its example, in the warning tone', () => {
+		renderRow('eu_vat', 'DE1234');
+		expect(idInput().dataset.description).toBe(
+			'tax_id.invalid_format_example {"type":"tax_id.label.eu_vat","example":"DE123456789"}'
+		);
+		expect(idInput().dataset.tone).toBe('warning');
+	});
+
+	// "Other" has no example, and only a blank value fails its check.
+	it('an Other row keeps the plain message', () => {
+		renderRow('other', ' ');
+		expect(idInput().dataset.description).toBe('tax_id.invalid_format');
+	});
+
+	it('a valid ID shows no description', () => {
+		renderRow('eu_vat', 'DE123456789');
+		expect(idInput().dataset.description).toBeUndefined();
+	});
 });
