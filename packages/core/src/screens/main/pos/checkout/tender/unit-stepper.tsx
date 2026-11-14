@@ -27,7 +27,7 @@ export function UnitStepper({ picked, unpaid, onChange, testIDBase }: Props) {
 				disabled={picked <= 0}
 				onPress={() => onChange(picked - 1)}
 			/>
-			<Text testID={`${testIDBase}-units`} className="text-center tabular-nums">
+			<Text testID={`${testIDBase}-units`} className="text-center tabular-nums" numberOfLines={1}>
 				{t('pos_checkout.n_of_units', { n: picked, total: unpaid })}
 			</Text>
 			<IconButton
