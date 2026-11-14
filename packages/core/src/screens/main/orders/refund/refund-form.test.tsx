@@ -944,8 +944,17 @@ describe('RefundOrderForm', () => {
 			expect(qtyField()).toBeDisabled();
 		});
 
-		it('no saved refunds: no notice and the full quantity', async () => {
+		it('no saved refunds: the lines still lock', async () => {
 			mockRefundsGets(storeError);
+			render(<RefundOrderForm order={{ ...lockedOrder, refunds: [] }} />);
+
+			expect(await screen.findByTestId('refund-history-missing')).toBeInTheDocument();
+			expect(qtyCell()).toHaveTextContent('–');
+			expect(qtyField()).toBeDisabled();
+		});
+
+		it('the history loads empty: no notice and the full quantity', async () => {
+			mockRefundsGets(() => Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '1' } }));
 			render(<RefundOrderForm order={{ ...lockedOrder, refunds: [] }} />);
 
 			await waitFor(() => expect(qtyCell()).toHaveTextContent('3'));

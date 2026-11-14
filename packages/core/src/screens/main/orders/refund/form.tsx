@@ -205,7 +205,7 @@ export function RefundOrderForm({ order }: Props) {
 				});
 				if (!mounted) return;
 				setRefundDetails(getRefundsFallback());
-				setHistoryMissing(getRefundsFallback().length > 0);
+				setHistoryMissing(true);
 				setRefundDetailsLoading(false);
 			});
 
