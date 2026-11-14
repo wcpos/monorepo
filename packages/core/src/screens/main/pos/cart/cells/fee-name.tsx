@@ -46,7 +46,7 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
 			<View className="w-full">
 				{readOnly ? (
-					<Text className="py-1.5" numberOfLines={2} decodeHtml>
+					<Text className="my-1.5" numberOfLines={2} decodeHtml>
 						{item.name ?? ''}
 					</Text>
 				) : (

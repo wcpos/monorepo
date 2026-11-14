@@ -199,6 +199,28 @@ describe('read-only (checkout and receipt)', () => {
 		expect(screen.getByTestId('paid-by').dataset.id).toBe('checkout-line-line-7-paid');
 	});
 
+	it("keeps the clamped name's spacing outside the clamp, read-only and in the picker", () => {
+		const { rerender } = render(
+			<CartTableReadOnlyProvider value={{}}>
+				<ProductName {...props} />
+			</CartTableReadOnlyProvider>
+		);
+		expect(screen.getByText('Belt & Buckle').getAttribute('data-classname')).toBe('my-1.5');
+		const picker = {
+			picked: {},
+			paid: { 'line-7': { units: 1, methods: ['Card'] } },
+			unitMinor: (_key: string | number, units: number) => units * 550,
+			format: (minor: number) => `$${(minor / 100).toFixed(2)}`,
+			pick: jest.fn(),
+		};
+		rerender(
+			<CartTableReadOnlyProvider value={{ picker }}>
+				<ProductName {...props} />
+			</CartTableReadOnlyProvider>
+		);
+		expect(screen.getByText('Belt & Buckle').getAttribute('data-classname')).toBe('my-1.5');
+	});
+
 	it('while Split is on, a tap on the name picks every unpaid unit; a picked line says its price each', () => {
 		const pick = jest.fn();
 		const picker = {

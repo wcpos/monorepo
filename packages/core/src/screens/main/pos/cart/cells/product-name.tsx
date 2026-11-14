@@ -88,12 +88,13 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 						testID={`checkout-line-${key}-pick`}
 						onPress={() => picker.pick(key, unpaid)}
 					>
-						<Text className="py-1.5" numberOfLines={2} decodeHtml>
+						{/* Margin, not padding: a clamped Text's padding sits inside its clip and shows the cut-off line's top (F61). */}
+						<Text className="my-1.5" numberOfLines={2} decodeHtml>
 							{item.name ?? ''}
 						</Text>
 					</PressableSurface>
 				) : readOnly ? (
-					<Text className="py-1.5" numberOfLines={2} decodeHtml>
+					<Text className="my-1.5" numberOfLines={2} decodeHtml>
 						{item.name ?? ''}
 					</Text>
 				) : (
