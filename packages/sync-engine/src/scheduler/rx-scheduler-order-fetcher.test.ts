@@ -12,6 +12,7 @@ import {
 
 import { remoteId } from '../testing';
 import { hydrateResponse } from '../transport/response-envelope';
+import { parseWooGmtSeconds } from './__fixtures__/woo-gmt-bound';
 import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -2135,7 +2136,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	const gmtSeconds = (epochSeconds: number) =>
 		new Date(epochSeconds * 1_000).toISOString().slice(0, 19);
 	const beforeParam = (epochSeconds: number) =>
-		encodeURIComponent(new Date(epochSeconds * 1_000).toISOString());
+		encodeURIComponent(new Date(epochSeconds * 1_000).toISOString().slice(0, 19));
 	const rangedOrder = (wooId: number, epochSeconds: number, modifiedSeconds = epochSeconds) => ({
 		id: wooId,
 		date_created_gmt: gmtSeconds(epochSeconds),
@@ -2161,12 +2162,12 @@ describe('createOrdersSchedulerFetcher', () => {
 		const fetcher = vi.fn(async (url: string) => {
 			const params = new URL(url).searchParams;
 			const beforeParamValue = params.get('before');
-			const before = beforeParamValue === null ? Infinity : Date.parse(beforeParamValue) / 1_000;
+			const before = beforeParamValue === null ? Infinity : parseWooGmtSeconds(beforeParamValue);
 			const afterParamValue = params.get('after');
-			const after = afterParamValue === null ? -Infinity : Date.parse(afterParamValue) / 1_000;
+			const after = afterParamValue === null ? -Infinity : parseWooGmtSeconds(afterParamValue);
 			const modifiedParamValue = params.get('modified_after');
 			const modifiedAfter =
-				modifiedParamValue === null ? -Infinity : Date.parse(modifiedParamValue) / 1_000;
+				modifiedParamValue === null ? -Infinity : parseWooGmtSeconds(modifiedParamValue);
 			const excluded = new Set(
 				(params.get('exclude') ?? '')
 					.split(',')
@@ -2262,6 +2263,62 @@ describe('createOrdersSchedulerFetcher', () => {
 		`:modified_after=${PAID_WINDOW_START}:search=`
 	);
 
+	it.each([
+		{
+			offset: 60,
+			startSeconds: Date.UTC(2026, 10, 8, 23) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 22, 59, 59) / 1000,
+			after: '2026-11-08T23:00:00',
+			before: '2026-11-15T22:59:59',
+			modifiedAfter: '2026-11-08T22:59:59',
+			paidBefore: '2026-11-08T23:00:01',
+		},
+		{
+			offset: 0,
+			startSeconds: Date.UTC(2026, 10, 9) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 23, 59, 59) / 1000,
+			after: '2026-11-09T00:00:00',
+			before: '2026-11-15T23:59:59',
+			modifiedAfter: '2026-11-08T23:59:59',
+			paidBefore: '2026-11-09T00:00:01',
+		},
+		{
+			offset: -300,
+			startSeconds: Date.UTC(2026, 10, 9, 5) / 1000,
+			endSeconds: Date.UTC(2026, 10, 16, 4, 59, 59) / 1000,
+			after: '2026-11-09T05:00:00',
+			before: '2026-11-16T04:59:59',
+			modifiedAfter: '2026-11-09T04:59:59',
+			paidBefore: '2026-11-09T05:00:01',
+		},
+		{
+			offset: 330,
+			startSeconds: Date.UTC(2026, 10, 8, 18, 30) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 18, 29, 59) / 1000,
+			after: '2026-11-08T18:30:00',
+			before: '2026-11-15T18:29:59',
+			modifiedAfter: '2026-11-08T18:29:59',
+			paidBefore: '2026-11-08T18:30:01',
+		},
+	])(
+		'sends bare GMT bounds in both phases at site offset $offset minutes',
+		async ({ startSeconds, endSeconds, after, before, modifiedAfter, paidBefore }) => {
+			const coverageRepository = rangedLaneStore();
+			const { fetcher } = rangedOrderServer([{ wooId: 1, seconds: startSeconds + 10 }]);
+			const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+			const queryKey = `orders:browser:status=completed:after=${startSeconds}:before=${endSeconds}:modified_after=${startSeconds}:search=:limit=all`;
+
+			await schedulerFetcher(orderTask({ queryKey }));
+
+			const first = new URL(fetcher.mock.calls[0][0]).searchParams;
+			expect(first.get('after')).toBe(after);
+			expect(first.get('before')).toBe(before);
+			const second = new URL(fetcher.mock.calls[1][0]).searchParams;
+			expect(second.get('modified_after')).toBe(modifiedAfter);
+			expect(second.get('before')).toBe(paidBefore);
+		}
+	);
+
 	it('switches to a modified_after request after the created-in-range phase is short', async () => {
 		const coverageRepository = rangedLaneStore();
 		const { fetcher } = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
@@ -2271,10 +2328,8 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		const params = new URL(fetcher.mock.calls[1][0]).searchParams;
 		expect(params.has('after')).toBe(false);
-		expect(params.get('modified_after')).toBe(
-			new Date((PAID_WINDOW_START - 1) * 1_000).toISOString()
-		);
-		expect(params.get('before')).toBe(new Date((PAID_WINDOW_START + 1) * 1_000).toISOString());
+		expect(params.get('modified_after')).toBe(gmtSeconds(PAID_WINDOW_START - 1));
+		expect(params.get('before')).toBe(gmtSeconds(PAID_WINDOW_START + 1));
 		expect(params.get('dates_are_gmt')).toBe('true');
 		expect(params.get('orderby')).toBe('date');
 		expect(params.get('order')).toBe('desc');
@@ -2371,10 +2426,8 @@ describe('createOrdersSchedulerFetcher', () => {
 
 			const params = new URL(fetcher.mock.calls[0][0]).searchParams;
 			expect(params.has('after')).toBe(false);
-			expect(params.get('modified_after')).toBe(
-				new Date((PAID_WINDOW_START - 1) * 1_000).toISOString()
-			);
-			expect(params.get('before')).toBe(new Date(beforeSeconds * 1_000).toISOString());
+			expect(params.get('modified_after')).toBe(gmtSeconds(PAID_WINDOW_START - 1));
+			expect(params.get('before')).toBe(gmtSeconds(beforeSeconds));
 			expect(result).toMatchObject({ documentCount: 1, requestCount: 1, completed: true });
 		}
 	);
@@ -2480,13 +2533,13 @@ describe('createOrdersSchedulerFetcher', () => {
 		// A fetch-to-completion lane walks `date desc` — the dimension its cursor is expressed in.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=2026-07-14T23%3A59%3A59.000Z&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=2026-07-14T23%3A59%3A59&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc'
 		);
 		// The second request RE-CURSORS instead of asking for page 2: the window now ends one
 		// second past the oldest record page 1 returned, with that record excluded.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=${beforeParam(
+			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=${beforeParam(
 				RANGE_BASE_SECONDS - 24 + 1
 			)}&dates_are_gmt=true&exclude=976&per_page=25&page=1&orderby=date&order=desc`
 		);
@@ -2616,7 +2669,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledTimes(1);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=${beforeParam(
+			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=${beforeParam(
 				cursorBeforeSeconds
 			)}&dates_are_gmt=true&exclude=15001&per_page=100&page=1&orderby=date&order=desc`
 		);
@@ -2655,7 +2708,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		// The descriptor's own upper bound, with no narrowing and no exclusions.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=2026-07-14T23%3A59%3A59.000Z&dates_are_gmt=true&per_page=100&page=1&orderby=date&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=2026-07-14T23%3A59%3A59&dates_are_gmt=true&per_page=100&page=1&orderby=date&order=desc'
 		);
 		expect(coverageRepository.recordCumulativeQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({ resetCumulativeExpectedIds: true })
@@ -2784,9 +2837,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		// The second request re-asks for the SAME second with the 25 ids already taken excluded.
 		const secondRequest = new URL(fetcher.mock.calls[1][0] as string).searchParams;
 		expect(secondRequest.get('exclude')?.split(',')).toHaveLength(25);
-		expect(secondRequest.get('before')).toBe(
-			new Date((RANGE_BASE_SECONDS + 1) * 1_000).toISOString()
-		);
+		expect(secondRequest.get('before')).toBe(gmtSeconds(RANGE_BASE_SECONDS + 1));
 
 		expect(coverageRepository.lane()).toMatchObject({ complete: true });
 		expect(upserted).toHaveLength(40);

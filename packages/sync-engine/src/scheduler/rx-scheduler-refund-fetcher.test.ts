@@ -170,7 +170,7 @@ describe('refund paged upsert-only fetcher', () => {
 		expect(await h.fetcher(task())).toMatchObject({ completed: true, documentCount: 1 });
 		expect(h.requests.map((u) => Object.fromEntries(u.searchParams))).toEqual([
 			{
-				after: '2026-06-16T00:00:00.000Z',
+				after: '2026-06-16T00:00:00',
 				dates_are_gmt: '1',
 				orderby: 'id',
 				order: 'asc',
@@ -178,7 +178,7 @@ describe('refund paged upsert-only fetcher', () => {
 				page: '1',
 			},
 			{
-				after: '2026-06-16T00:00:00.000Z',
+				after: '2026-06-16T00:00:00',
 				dates_are_gmt: '1',
 				orderby: 'id',
 				order: 'asc',

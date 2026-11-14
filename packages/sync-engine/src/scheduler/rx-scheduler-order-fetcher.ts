@@ -34,6 +34,7 @@ import {
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
 import { chunk, httpGet } from './rx-scheduler-collection-fetcher';
+import { wooGmtDate } from './woo-gmt-date';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
@@ -859,14 +860,10 @@ async function fetchBrowserOrderQuery(
 		}
 		if (paidEarlierPhase && descriptor.modifiedAfterSeconds !== undefined)
 			// Woo's modified_after is exclusive; A − 1 keeps an order paid (so modified) exactly at A.
-			query.set(
-				'modified_after',
-				new Date((descriptor.modifiedAfterSeconds - 1) * 1_000).toISOString()
-			);
+			query.set('modified_after', wooGmtDate(descriptor.modifiedAfterSeconds - 1));
 		else if (descriptor.afterSeconds !== undefined)
-			query.set('after', new Date(descriptor.afterSeconds * 1_000).toISOString());
-		if (cursorBeforeSeconds !== undefined)
-			query.set('before', new Date(cursorBeforeSeconds * 1_000).toISOString());
+			query.set('after', wooGmtDate(descriptor.afterSeconds));
+		if (cursorBeforeSeconds !== undefined) query.set('before', wooGmtDate(cursorBeforeSeconds));
 		if (descriptor.afterSeconds !== undefined || cursorBeforeSeconds !== undefined) {
 			query.set('dates_are_gmt', 'true');
 		}
