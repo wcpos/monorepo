@@ -32,6 +32,10 @@ jest.mock('../../../contexts/translations', () => {
 const timeoutError = () =>
 	Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' });
 
+/** Axios's shape for a request that got no response: ERR_NETWORK, no `response`. */
+const networkError = () =>
+	Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK', isAxiosError: true });
+
 /**
  * The shape `useHttpClient` throws when its pre-flight check rejects a request:
  * a bare Error with no `response`, because nothing was ever sent.
@@ -81,6 +85,7 @@ describe('useUrlDiscovery', () => {
 		expect(mockHead).toHaveBeenNthCalledWith(1, 'https://xn--mnchen-laden-dlb.de', {
 			timeout: 10_000,
 			quietErrors: true,
+			unauthenticated: true,
 		});
 	});
 
@@ -231,8 +236,65 @@ describe('useUrlDiscovery', () => {
 		mockHead.mockRejectedValue(preFlightBlock('preflight-offline', 'No internet connection'));
 
 		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toMatchObject({
+			message: "Couldn't reach the site — check the connection and try again",
+			transportCode: 'preflight-offline',
+		});
+	});
+
+	it('says the site could not be reached when no probe got a response', async () => {
+		mockHead.mockRejectedValue(networkError());
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		const discovery = result.current.discoverWpApiUrl('https://example.com');
+		await expect(discovery).rejects.toMatchObject({
+			message: "Couldn't reach the site — check the connection and try again",
+			transportCode: 'ERR_NETWORK',
+		});
+		await expect(discovery).rejects.not.toThrow('Site does not seem to be a WordPress site');
+	});
+
+	it('falls back to NO_RESPONSE when an unanswered request carries no code', async () => {
+		mockHead.mockRejectedValue(new Error('boom'));
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toMatchObject({
+			message: "Couldn't reach the site — check the connection and try again",
+			transportCode: 'NO_RESPONSE',
+		});
+	});
+
+	it('still blames the site when the front page answers 200 without a Link header', async () => {
+		mockHead.mockResolvedValueOnce({ status: 200, headers: { 'content-type': 'text/html' } });
+		mockHead.mockRejectedValueOnce(
+			Object.assign(new Error('Not Found'), { response: { status: 404, headers: {} } })
+		);
+
+		const { result } = renderHook(() => useUrlDiscovery());
 		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toThrow(
-			'No internet connection'
+			'Site does not seem to be a WordPress site'
+		);
+	});
+
+	it('gives a verdict about the site when one probe got a response', async () => {
+		mockHead.mockRejectedValueOnce(networkError());
+		mockHead.mockRejectedValueOnce(
+			Object.assign(new Error('Not Found'), { response: { status: 404, headers: {} } })
+		);
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toThrow(
+			'Site does not seem to be a WordPress site'
+		);
+	});
+
+	it('keeps the timeout message when one probe timed out and the other got no response', async () => {
+		mockHead.mockRejectedValueOnce(networkError());
+		mockHead.mockRejectedValueOnce(timeoutError());
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toThrow(
+			'The site took too long to respond — check the server and try again'
 		);
 	});
 });

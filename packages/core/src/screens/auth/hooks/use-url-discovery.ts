@@ -32,7 +32,8 @@ interface ProbeResult {
 	challenged: boolean;
 	/** Set when the request never left the device (pre-flight block). */
 	blocked: boolean;
-	offline: boolean;
+	/** Transport code when the probe got no response at all (network, DNS, TLS, CORS, offline); null when a response arrived. */
+	unreachable: string | null;
 }
 
 /**
@@ -57,6 +58,14 @@ const isPreFlightBlocked = (err: unknown): boolean =>
 
 const isOfflineBlock = (err: unknown): boolean =>
 	isPreFlightBlocked(err) && (err as { blockCode?: string })?.blockCode === PREFLIGHT_BLOCK.OFFLINE;
+
+/** No response says nothing about whether the site is WordPress. */
+const unreachableCode = (err: unknown): string | null => {
+	if (isOfflineBlock(err)) return PREFLIGHT_BLOCK.OFFLINE;
+	if (isPreFlightBlocked(err) || isTimeoutError(err) || get(err, ['response'])) return null;
+	const code: unknown = get(err, ['code']);
+	return typeof code === 'string' && code !== '' ? code : 'NO_RESPONSE';
+};
 
 interface UseUrlDiscoveryReturn {
 	status: UrlDiscoveryStatus;
@@ -123,7 +132,13 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				});
 
 				if (!response) {
-					return { url: null, timedOut: false, challenged: false, blocked: false, offline: false };
+					return {
+						url: null,
+						timedOut: false,
+						challenged: false,
+						blocked: false,
+						unreachable: null,
+					};
 				}
 
 				return {
@@ -131,11 +146,17 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					timedOut: false,
 					challenged: false,
 					blocked: false,
-					offline: false,
+					unreachable: null,
 				};
 			} catch (err: unknown) {
 				if (isBotChallengeError(err)) {
-					return { url: null, timedOut: false, challenged: true, blocked: false, offline: false };
+					return {
+						url: null,
+						timedOut: false,
+						challenged: true,
+						blocked: false,
+						unreachable: null,
+					};
 				}
 
 				// Check error response headers for Link header
@@ -145,7 +166,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					timedOut: isTimeoutError(err),
 					challenged: false,
 					blocked: isPreFlightBlocked(err),
-					offline: isOfflineBlock(err),
+					unreachable: unreachableCode(err),
 				};
 			}
 		},
@@ -184,14 +205,20 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 						timedOut: false,
 						challenged: false,
 						blocked: false,
-						offline: false,
+						unreachable: null,
 					};
 				}
 
-				return { url: null, timedOut: false, challenged: false, blocked: false, offline: false };
+				return { url: null, timedOut: false, challenged: false, blocked: false, unreachable: null };
 			} catch (err: unknown) {
 				if (isBotChallengeError(err)) {
-					return { url: null, timedOut: false, challenged: true, blocked: false, offline: false };
+					return {
+						url: null,
+						timedOut: false,
+						challenged: true,
+						blocked: false,
+						unreachable: null,
+					};
 				}
 
 				// A WP REST API error (e.g. rest_unauthorized) proves the endpoint exists
@@ -201,7 +228,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 						timedOut: false,
 						challenged: false,
 						blocked: false,
-						offline: false,
+						unreachable: null,
 					};
 				}
 
@@ -210,7 +237,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					timedOut: isTimeoutError(err),
 					challenged: false,
 					blocked: isPreFlightBlocked(err),
-					offline: isOfflineBlock(err),
+					unreachable: unreachableCode(err),
 				};
 			}
 		},
@@ -245,7 +272,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				let timedOut = linkProbe.timedOut;
 				let challenged = linkProbe.challenged;
 				let blocked = linkProbe.blocked;
-				let offline = linkProbe.offline;
+				let unreachable = linkProbe.unreachable;
 
 				// Step 2: If Link header failed, try fallback
 				if (!discoveredUrl) {
@@ -254,16 +281,19 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					timedOut = timedOut || fallbackProbe.timedOut;
 					challenged = challenged || fallbackProbe.challenged;
 					blocked = blocked || fallbackProbe.blocked;
-					offline = offline || fallbackProbe.offline;
+					unreachable = unreachable && fallbackProbe.unreachable ? unreachable : null;
 				}
 
 				if (!discoveredUrl) {
-					// Order matters: a probe that never left the device proves nothing
-					// about the site, so it can never justify a verdict ABOUT the site.
-					// A bot challenge is different — the host did answer — so it is
-					// reported only once we know the request actually got out.
-					if (offline) {
-						throw new Error(t('common.no_internet_connection'));
+					// Order matters: no response from either probe means unreachable,
+					// then pre-flight blocks, bot challenges, and timeout or site verdicts.
+					if (unreachable) {
+						discoveryLogger.debug('Discovery probes got no response', {
+							context: { url: normalizedUrl, transportCode: unreachable },
+						});
+						throw Object.assign(new Error(t('auth.could_not_reach_the_site')), {
+							transportCode: unreachable,
+						});
 					}
 					if (blocked) {
 						throw new Error(t('auth.could_not_send_the_request'));
