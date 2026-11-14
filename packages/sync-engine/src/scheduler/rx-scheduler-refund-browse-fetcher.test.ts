@@ -15,7 +15,7 @@ const task: FetchTask = {
 	priority: 700,
 	mode: 'greedy',
 };
-function fixture(count: number) {
+function fixture(count: number, metaData = [{ key: '_wcpos_session', value: 'session' }]) {
 	let lane: {
 		complete: boolean;
 		fresh: boolean;
@@ -42,7 +42,7 @@ function fixture(count: number) {
 					id,
 					parent_id: 42,
 					date_created_gmt: new Date(seconds * 1000).toISOString().replace('Z', ''),
-					meta_data: [{ key: '_wcpos_session', value: 'session' }],
+					meta_data: metaData,
 				})),
 				{
 					headers: {
@@ -74,6 +74,25 @@ function fixture(count: number) {
 }
 
 describe('refund browse walker', () => {
+	// Pass the till's scope to browse admission: store 2's refund never reaches Reports.
+	it('a store-scoped till stores a POS refund of another store (reports cover every store)', async () => {
+		const f = fixture(2, [
+			{ key: '_pos_store', value: '2' },
+			{ key: '_pos_user', value: '7' },
+		]);
+		f.input.scope = { storeId: 1 };
+		const upsert = vi.spyOn(f.input.repository, 'upsertMany');
+		const remove = vi.spyOn(f.input.repository, 'removeMany');
+		expect(await createRefundBrowseSchedulerFetcher(f.input)(task)).toMatchObject({
+			documentCount: 2,
+		});
+		expect(upsert.mock.calls.flatMap(([docs]) => docs.map((doc) => doc.payload.id))).toEqual([
+			2, 1,
+		]);
+		expect(remove).not.toHaveBeenCalled();
+		expect(f.lane()?.expectedRecordIds).toEqual(['woo-refund:2', 'woo-refund:1']);
+	});
+
 	it("a refund created exactly on the window's bounds is fetched", async () => {
 		const f = fixture(4);
 		const upsert = vi.spyOn(f.input.repository, 'upsertMany');

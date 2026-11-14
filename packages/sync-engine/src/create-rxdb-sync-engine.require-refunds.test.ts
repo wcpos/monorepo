@@ -592,6 +592,30 @@ describe('refund browse requirements', () => {
 		before: 1788393600,
 		limit: 'all',
 	} as const;
+	// Drop anyStore from the browse call: store 1's refund never reaches this store-3 till's Reports.
+	it('the browse lane stores another store’s POS refund that the history lane rejects, and history keeps it', async () => {
+		const h = await harness(() =>
+			Response.json(
+				[1, 3].map((storeId) => ({
+					...row(storeId),
+					meta_data: [{ key: '_pos_store', value: storeId }],
+				})),
+				{ headers: { 'X-WP-Total': '2', 'X-WP-TotalPages': '1' } }
+			)
+		);
+		await refresh(h);
+		expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([3]);
+		const handle = h.engine.require({ ...range, id: 'foreign-store-browse' });
+		try {
+			await handle.ready;
+		} finally {
+			handle.release();
+		}
+		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([1, 3]);
+		await refresh(h);
+		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([1, 3]);
+	});
+
 	it('refunds-browse fetches the window in date order and continues past one page to completion; coverage is recorded cumulatively', async () => {
 		const h = await harness((url) => {
 			const excluded = new Set((url.searchParams.get('exclude') ?? '').split(',').map(Number));
