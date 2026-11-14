@@ -138,6 +138,8 @@ export function RefundOrderForm({ order }: Props) {
 	const [refundDetails, setRefundDetails] = React.useState<RefundDetail[]>(() =>
 		normalizeRefundDetails(orderData.refunds || [])
 	);
+	const storeHistoryOrderId = React.useRef<number | null>(null);
+	const storeHistoryRefundIds = React.useRef<number[]>([]);
 	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(orderData.id));
 	const [historyMissing, setHistoryMissing] = React.useState(false);
 	const [historyAttempt, setHistoryAttempt] = React.useState(0);
@@ -193,7 +195,12 @@ export function RefundOrderForm({ order }: Props) {
 					)
 				);
 				if (!mounted) return;
-				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
+				const details = normalizeRefundDetails([...firstPage, ...remainingPages.flat()]);
+				setRefundDetails(details);
+				storeHistoryOrderId.current = orderData.id ?? null;
+				storeHistoryRefundIds.current = details
+					.map((refund) => refund.id)
+					.filter((id): id is number => typeof id === 'number');
 				setHistoryMissing(false);
 				setRefundDetailsLoading(false);
 			})
@@ -204,6 +211,20 @@ export function RefundOrderForm({ order }: Props) {
 					context: { orderId: orderData.id, error: getErrorMessage(error) },
 				});
 				if (!mounted) return;
+				// A reconnect reloads with a new client; the saved refunds carry no line detail.
+				// A failed reload keeps the history already read from the store for this order
+				// rather than show already-refunded units as refundable.
+				// Only while that history holds every refund the order lists: one synced in since makes it stale.
+				const heldIds = storeHistoryRefundIds.current;
+				if (
+					storeHistoryOrderId.current === orderData.id &&
+					getRefundsFallback().every(
+						(refund) => typeof refund.id === 'number' && heldIds.includes(refund.id)
+					)
+				) {
+					setRefundDetailsLoading(false);
+					return;
+				}
 				setRefundDetails(getRefundsFallback());
 				setHistoryMissing(true);
 				setRefundDetailsLoading(false);
