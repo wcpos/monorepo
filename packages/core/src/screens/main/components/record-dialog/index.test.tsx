@@ -160,3 +160,51 @@ it.each(['footer', 'tab'])(
 		expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
 	}
 );
+
+it('json false with one tab: the form fills the sheet, no tab bar and no JSON', () => {
+	render(
+		<RecordDialog
+			title="Order"
+			record={record}
+			form={(r) => <p>form for {r.uuid}</p>}
+			payload={{ id: 7 }}
+			json={false}
+		/>
+	);
+	expect(screen.getByText('form for r1')).toBeTruthy();
+	expect(screen.queryByRole('button')).toBeNull();
+	expect(screen.queryByText('common.form')).toBeNull();
+	expect(screen.queryByText('common.json')).toBeNull();
+	expect(screen.queryByText('{"id":7}')).toBeNull();
+});
+
+const twoTabs = [
+	{ value: 'view', label: 'View', render: () => <p>view tab</p> },
+	{ value: 'edit', label: 'Edit', render: () => <p>edit tab</p> },
+];
+
+it('json false with several tabs keeps them and drops only JSON', () => {
+	render(
+		<RecordDialog title="t" record={record} form={twoTabs} payload={{ id: 7 }} json={false} />
+	);
+	expect(screen.getAllByRole('button').map((tab) => tab.textContent)).toEqual(['View', 'Edit']);
+	expect(screen.getByText('view tab')).toBeTruthy();
+	fireEvent.click(screen.getByText('Edit'));
+	expect(screen.getByText('edit tab')).toBeTruthy();
+	expect(screen.queryByText('{"id":7}')).toBeNull();
+});
+
+it('json false ignores initialTab json and opens the first tab', () => {
+	render(
+		<RecordDialog
+			title="t"
+			record={record}
+			form={twoTabs}
+			initialTab="json"
+			payload={{ id: 7 }}
+			json={false}
+		/>
+	);
+	expect(screen.getByText('view tab')).toBeTruthy();
+	expect(screen.queryByText('{"id":7}')).toBeNull();
+});

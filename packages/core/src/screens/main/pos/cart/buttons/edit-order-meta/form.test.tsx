@@ -38,15 +38,18 @@ function mockButton({
 	onPress,
 	disabled,
 	accessibilityLabel,
+	variant,
 }: React.PropsWithChildren<{
 	testID?: string;
 	onPress?: () => void;
 	disabled?: boolean;
 	accessibilityLabel?: string;
+	variant?: string;
 }>) {
 	return (
 		<button
 			data-testid={testID}
+			data-variant={variant}
 			onClick={onPress}
 			disabled={disabled}
 			aria-label={accessibilityLabel}
@@ -713,6 +716,24 @@ describe('the hand-over box', () => {
 			'pos_cart.hand_order_to_question'
 		);
 		expect(screen.getByTestId('order-meta-send-confirm').textContent).toBe('pos_cart.send_to');
+	});
+
+	it('Send rests outlined, turns primary with a staged change, and reports it', async () => {
+		const onUnsentChange = jest.fn();
+		const view = render(
+			<EditOrderMetaForm
+				order={order as never}
+				{...formProps({ ...payload, cashier_id: '7' })}
+				onUnsentChange={onUnsentChange}
+			/>
+		);
+		expect(send().dataset.variant).toBe('outline');
+		expect(onUnsentChange).toHaveBeenLastCalledWith(false);
+		await stage({ cashier_id: '9' });
+		expect(send().dataset.variant).toBe('default');
+		expect(onUnsentChange).toHaveBeenLastCalledWith(true);
+		view.unmount();
+		expect(onUnsentChange).toHaveBeenLastCalledWith(false);
 	});
 
 	it('shows the Store row only when the credential holds more than one store', () => {

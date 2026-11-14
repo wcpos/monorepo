@@ -109,6 +109,12 @@ function deriveDrawer(
 	const live = bucket?.live;
 	const lastClosure =
 		[...closures].sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null;
+	// A stale server listing's marker for this device's own close is not another till (F46).
+	// A closed row with that id proves nothing by itself: refresh adopts every server row,
+	// whichever till closed it. The real invariant is that closures are only ever written
+	// by this device (session-store.ts, id = session id), so any closure is our own close
+	// and `closedElsewhere` cannot fire for a genuine remote close (#3560).
+	const closedHere = !!lastClosure && rows.closed.some((row) => row.id === lastClosure.session_id);
 	return {
 		session,
 		refusedClose,
@@ -137,7 +143,10 @@ function deriveDrawer(
 		countingHere: !!live?.counting_here,
 		// The refresh clears the live record as the remote close lands; the marker outlives it.
 		closedElsewhere:
-			!session && lastClosure && bucket?.closed_elsewhere?.session_id === lastClosure.id
+			!session &&
+			lastClosure &&
+			!closedHere &&
+			bucket?.closed_elsewhere?.session_id === lastClosure.id
 				? { by: lastClosure.closed_by, at: lastClosure.closed_at }
 				: null,
 		lastClosure,

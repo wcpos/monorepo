@@ -52,6 +52,8 @@ export type TenderAction =
 	| { type: 'tender-started' }
 	| { type: 'key'; key: TenderKey }
 	| { type: 'set-entry'; minor: number }
+	/** A quick-cash tile: takes exactly its figure and switches "+ amount" off. */
+	| { type: 'quick-tender'; minor: number }
 	/** The picks (checkout store) changed: they are the entry again until typed over. */
 	| { type: 'picks-changed' }
 	| { type: 'arm-extra' }
@@ -178,6 +180,13 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 					0,
 					Math.min(action.minor, MAX_TENDER_MINOR)
 				),
+				entryDirty: true,
+			};
+		case 'quick-tender':
+			return {
+				...state,
+				extraMinor: null,
+				entryMinor: Math.max(0, Math.min(action.minor, MAX_TENDER_MINOR)),
 				entryDirty: true,
 			};
 		case 'tender-started':

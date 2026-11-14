@@ -13,10 +13,14 @@ export function FormInput({
 	onChange,
 	customComponent: Component = Input,
 	type = 'text',
+	descriptionTone,
 	ref,
 	...props
 }: FormItemProps<string | number> &
-	Omit<Partial<React.ComponentProps<typeof Input>>, 'value' | 'onChangeText'>) {
+	Omit<Partial<React.ComponentProps<typeof Input>>, 'value' | 'onChangeText'> & {
+		/** The description's tone: `warning` for advice that does not block (a format mismatch) */
+		descriptionTone?: 'warning';
+	}) {
 	const inputRef = React.useRef<React.ComponentRef<typeof Input>>(null);
 	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
 		label,
@@ -62,7 +66,13 @@ export function FormInput({
 				value={value != null ? String(value) : ''}
 				{...props}
 			/>
-			{!!description && <FormDescription>{description}</FormDescription>}
+			{!!description && (
+				<FormDescription
+					className={descriptionTone === 'warning' ? 'text-warning-text' : undefined}
+				>
+					{description}
+				</FormDescription>
+			)}
 			<FormMessage />
 		</FormItem>
 	);

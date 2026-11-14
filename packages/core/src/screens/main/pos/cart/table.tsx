@@ -187,6 +187,7 @@ export function CartTable({
 	// Qty · Item · Total fit; four columns truncate their labels at the larger scale steps.
 	// The same goes for a narrow cart column beside the products (a tablet standing up, or the
 	// split dragged over): the column's own width decides, not the window's.
+	// Picking units for a split by item folds it too: the picker is wide and the unit price shows under the name.
 	const [narrow, setNarrow] = React.useState(false);
 	const isPhone = useIsPhone() || narrow;
 	const uiColumns = useDocField(uiSettings, (value) => value.columns);
@@ -267,7 +268,10 @@ export function CartTable({
 	const columns = React.useMemo((): ColumnDef<CartTableLine, unknown, CartTableFeatures>[] => {
 		return uiColumns
 			.filter(
-				(column) => column.show && column.key !== 'actions' && !(isPhone && column.key === 'price')
+				(column) =>
+					column.show &&
+					column.key !== 'actions' &&
+					!((isPhone || picking) && column.key === 'price')
 			)
 			.map((col) => {
 				return {

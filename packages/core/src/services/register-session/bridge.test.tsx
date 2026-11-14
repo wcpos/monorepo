@@ -281,3 +281,22 @@ it('coalesces mid-cycle invalidations without overlapping or overwriting the lat
 	expect(snapshot).toBe(2);
 	expect(refresh).toHaveBeenCalledTimes(2);
 });
+
+// F46: closeSession and startCounting send this request (use-register-session.test.tsx).
+it('sends a close within a second of its request, not at the next minute tick', async () => {
+	render(<RegisterSessionBridge />);
+	await waitFor(() => expect(drain).toHaveBeenCalledTimes(1));
+	await act(async () => {
+		await jest.advanceTimersByTimeAsync(60_000);
+	});
+	expect(drain).toHaveBeenCalledTimes(2);
+	await act(async () => {
+		await jest.advanceTimersByTimeAsync(1_000);
+	});
+	expect(drain).toHaveBeenCalledTimes(2);
+	await act(async () => {
+		mockRefreshRequests.next({ storeDB, registerId: 'register' });
+		await jest.advanceTimersByTimeAsync(1_000);
+	});
+	expect(drain).toHaveBeenCalledTimes(3);
+});

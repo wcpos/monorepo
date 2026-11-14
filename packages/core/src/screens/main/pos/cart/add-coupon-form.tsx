@@ -11,6 +11,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useT } from '../../../../contexts/translations';
 import { CouponForm, couponFormSchema } from '../../components/coupon/coupon-form';
+import { couponFormErrors } from '../../components/coupon/coupon-schema';
 import { useCouponRecord } from '../../coupons/commands/use-coupon-record';
 import { usePanelSide } from '../contexts/overlay-side';
 import { useAddCoupon } from '../hooks/use-add-coupon';
@@ -28,7 +29,10 @@ function AddCouponFormBody({ onClose }: { onClose: () => void }) {
 	const { addCoupon } = useAddCoupon();
 	const [loading, setLoading] = React.useState(false);
 	const form = useForm<z.infer<typeof couponFormSchema>>({
-		resolver: zodResolver(couponFormSchema as never) as never,
+		resolver: zodResolver(
+			couponFormSchema as never,
+			{ error: couponFormErrors(t) } as never
+		) as never,
 		defaultValues: { discount_type: 'percent' },
 	});
 	const handleSave = async (data: z.infer<typeof couponFormSchema>) => {

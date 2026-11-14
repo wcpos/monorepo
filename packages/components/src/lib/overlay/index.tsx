@@ -407,9 +407,12 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			// subscriber first.
 			const owner = {};
 			keyOwners.push(owner);
+			let handled: Event | null = null;
+			let timer: ReturnType<typeof setTimeout> | undefined;
 			const onKey = (event: KeyboardEvent) => {
 				if (keyOwners[keyOwners.length - 1] !== owner) return;
 				if (event.key === 'Escape') {
+					handled = event;
 					onDismissRef.current?.();
 					return;
 				}
@@ -431,9 +434,26 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				}
 			};
 			document.addEventListener('keydown', onKey);
+			// RN-web's TextInput stops every keydown, so the listener above never hears Escape
+			// struck in a sheet's search field. Catch it on the way down instead, and defer, so the
+			// field's own handlers and the bubble path still go first: a key the bubble path took
+			// is not taken twice, and a field that prevents Escape keeps its sheet open.
+			const onEscapeInField = (event: KeyboardEvent) => {
+				if (event.key !== 'Escape' || keyOwners[keyOwners.length - 1] !== owner || !node) return;
+				const target = event.target;
+				if (!(target instanceof Element) || !node.contains(target) || !target.matches(TEXT_FIELD)) {
+					return;
+				}
+				timer = setTimeout(() => {
+					if (handled !== event && !event.defaultPrevented) onDismissRef.current?.();
+				}, 0);
+			};
+			document.addEventListener('keydown', onEscapeInField, true);
 			return () => {
 				keyOwners.splice(keyOwners.indexOf(owner), 1);
 				document.removeEventListener('keydown', onKey);
+				document.removeEventListener('keydown', onEscapeInField, true);
+				clearTimeout(timer);
 			};
 		}
 		const back = BackHandler.addEventListener('hardwareBackPress', () => {

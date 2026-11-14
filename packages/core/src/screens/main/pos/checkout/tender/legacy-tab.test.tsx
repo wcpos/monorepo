@@ -12,6 +12,8 @@ jest.mock('../../../../../contexts/translations', () => ({
 jest.mock('@wcpos/query', () => ({
 	useRecordField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
+// The real hook reads the store's currency through app state, which this suite does not mount.
+jest.mock('../components/title', () => ({ useAmountToPay: () => '$45.00' }));
 const refetch = jest.fn();
 const MOCK_CHECKOUT_SESSION = {
 	handleStockRejection: jest.fn(),
@@ -132,6 +134,14 @@ it('a press into a frame that then stalls clears on Retry, so the reloaded frame
 	fireEvent.click(view.getByTestId('checkout-payment-form-retry'));
 	report('ready');
 	expect(button.disabled).toBe(false);
+});
+
+// Revert: the legacy button reads "Process Payment" with no amount.
+it('the legacy button reads Charge with the amount to pay', () => {
+	const view = render(<LegacyTab order={makeOrder()} flow={flow} />);
+	const text = view.getByTestId('checkout-legacy-process-payment').textContent;
+	expect(text).toContain('Charge');
+	expect(text).toContain('$45.00');
 });
 
 it('a press on a ready frame posts wcpos-process-payment once and holds the button', () => {

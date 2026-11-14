@@ -50,6 +50,7 @@ export function ClosureList({
 	footer,
 	showEmpty = true,
 	partial = false,
+	unknown = false,
 	filter: controlledFilter,
 	onFilterChange,
 }: {
@@ -67,6 +68,8 @@ export function ClosureList({
 	showEmpty?: boolean;
 	/** More pages of the period remain unloaded (the strip says so). */
 	partial?: boolean;
+	/** The closures read is unavailable (offline): counts are unknown, not zero. */
+	unknown?: boolean;
 	/** The All / Open / Closed filter, owned by the room when it must share it (the export). */
 	filter?: ClosureFilter;
 	onFilterChange?: (filter: ClosureFilter) => void;
@@ -139,9 +142,11 @@ export function ClosureList({
 						</TabsTrigger>
 					</TabsList>
 				</Tabs>
-				<Text className="text-muted-foreground">
-					{t('reports.n_sessions', { count: rows.length + sessions.length })}
-				</Text>
+				{!unknown && (
+					<Text className="text-muted-foreground">
+						{t('reports.n_sessions', { count: rows.length + sessions.length })}
+					</Text>
+				)}
 			</View>
 			{!phone && (
 				<View testID="closures-head" className="flex-row items-center gap-3 px-4 py-2">
@@ -305,6 +310,7 @@ export function ClosureList({
 				blind={blind}
 				storeId={storeId}
 				partial={partial}
+				unknown={unknown}
 			/>
 			{card}
 		</>
