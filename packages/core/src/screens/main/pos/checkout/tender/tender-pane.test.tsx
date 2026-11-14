@@ -1267,8 +1267,10 @@ describe('split V1: the pane builds each payment', () => {
 		expect(text('checkout-plus-amount')).toBe('+ 0');
 		fireEvent.click(screen.getByTestId('checkout-quick-10.00'));
 		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'quick-tender', minor: 1000 });
+		expect(text('checkout-quick-exact')).toBe('Exact 500');
+		// F44: Exact offers the picked share; with + amount armed its tap writes the amount (0).
 		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
-		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 18250 });
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 0 });
 	});
 
 	it('on a phone, Pick items puts the lines in the keypad’s place, and Back to keypad restores it', () => {
