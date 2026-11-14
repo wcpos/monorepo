@@ -107,7 +107,14 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	// Records its content container style, the one layout prop the checkout sets per body.
+	DialogBody: ({
+		children,
+		contentContainerStyle,
+	}: {
+		children?: React.ReactNode;
+		contentContainerStyle?: unknown;
+	}) => <div data-content-style={JSON.stringify(contentContainerStyle)}>{children}</div>,
 }));
 jest.mock('@wcpos/components/tabs', () => ({
 	Tabs: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -338,6 +345,26 @@ describe('TenderCheckout', () => {
 		mockStage = 'receipt';
 		render(<TenderCheckout order={order} />);
 		expect(mockUseFinishSale).toHaveBeenCalledWith(order.uuid, 'modal');
+	});
+
+	it('bounds the dialog body to the dialog only for the tender pane', () => {
+		const bodyStyle = () =>
+			JSON.parse(
+				document.querySelector('[data-content-style]')!.getAttribute('data-content-style')!
+			);
+		const pane = render(<TenderCheckout order={order} />);
+		expect(bodyStyle()).toEqual({ height: '100%' });
+		pane.unmount();
+		for (const overrides of [
+			{ unansweredCommand: true },
+			{ hasLiveLeg: true, state: { ...initialTenderState, view: 'cancel' as const } },
+			{ state: { ...initialTenderState, tab: 'legacy' as const } },
+		]) {
+			mockFlow = makeFlow(overrides);
+			const other = render(<TenderCheckout order={order} />);
+			expect(bodyStyle()).toEqual({ flexGrow: 1 });
+			other.unmount();
+		}
 	});
 
 	it('shows the ledger pane beside the tenders on a wide screen', () => {

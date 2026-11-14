@@ -1443,6 +1443,7 @@ const mockLayouts: Record<
 	(event: { nativeEvent: { layout: { height?: number; y?: number } } }) => void
 > = {};
 const mockContentStyles: Record<string, unknown> = {};
+const mockContentSizes: Record<string, (width: number, height: number) => void> = {};
 jest.mock('react-native', () => {
 	const native = jest.requireActual('react-native');
 	function Box({
@@ -1450,6 +1451,7 @@ jest.mock('react-native', () => {
 		testID,
 		className,
 		onLayout,
+		onContentSizeChange,
 		contentContainerStyle,
 		horizontal,
 		contentContainerClassName,
@@ -1457,6 +1459,7 @@ jest.mock('react-native', () => {
 		testID?: string;
 		className?: string;
 		onLayout?: (typeof mockLayouts)[string];
+		onContentSizeChange?: (typeof mockContentSizes)[string];
 		contentContainerStyle?: unknown;
 		horizontal?: boolean;
 		contentContainerClassName?: string;
@@ -1465,6 +1468,10 @@ jest.mock('react-native', () => {
 		React.useLayoutEffect(() => {
 			if (testID && onLayout) mockLayouts[testID] = onLayout;
 		}, [testID, onLayout]);
+		// And its content size callback, the same way.
+		React.useLayoutEffect(() => {
+			if (testID && onContentSizeChange) mockContentSizes[testID] = onContentSizeChange;
+		}, [testID, onContentSizeChange]);
 		// And the content container's committed style (the pane's fit).
 		React.useLayoutEffect(() => {
 			if (testID && contentContainerStyle) mockContentStyles[testID] = contentContainerStyle;
@@ -1485,7 +1492,8 @@ jest.mock('react-native', () => {
 it('shrinks the shared keypad under a short measured pane and restores tile fit', () => {
 	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
 	act(() => {
-		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
 		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 400 } } });
 	});
 	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
@@ -1498,7 +1506,8 @@ it('shrinks the shared keypad under a short measured pane and restores tile fit'
 it('the shrunk pane floors its content at the fit and never fixes its height, so overflow scrolls', () => {
 	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
 	act(() => {
-		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
 		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 400 } } });
 	});
 	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
@@ -1519,7 +1528,8 @@ it('the commit bar sits outside the keypad scroll, so it never scrolls off', () 
 it('the keypad keeps tile keys while the scroll fits them, the bar no longer counted', () => {
 	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
 	act(() => {
-		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
 		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 480 } } });
 	});
 	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
@@ -1531,11 +1541,27 @@ it('the keypad keeps tile keys while the scroll fits them, the bar no longer cou
 it('the shrunk scroll floors its content at the control-height fit', () => {
 	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
 	act(() => {
-		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
 		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 300 } } });
 	});
 	const style = mockContentStyles['checkout-keypad-pane'] as Record<string, unknown>;
 	expect(style.minHeight).toBe(400);
+});
+
+it('a row added above the keypad shrinks it with no keypad layout event (web)', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	act(() => {
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
+		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 604 } } });
+	});
+	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
+	// head 371 + 24 + 256 = 651 > 604
+	act(() => mockContentSizes['checkout-keypad-pane'](0, 651));
+	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
+	const style = mockContentStyles['checkout-keypad-pane'] as Record<string, unknown>;
+	expect(style.minHeight).toBe(604);
 });
 
 // Fractional widths plus a gap must not wrap five methods into four columns.
