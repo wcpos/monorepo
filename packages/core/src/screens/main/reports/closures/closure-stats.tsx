@@ -92,7 +92,7 @@ export function ClosureStats({
 		? t('reports.stat_counts', { count: rows.length })
 		: t('reports.stat_nothing_closed');
 	// Literal labels: the i18n ratchet refuses a computed key, and the catalogue needs each string.
-	const cells = {
+	const cells: Record<string, [label: string, value: string | number, note: string]> = {
 		discrepancy: [
 			t('reports.stat_discrepancy'),
 			result.minor ? varianceAmount(result.minor, 4, format) : '—',
@@ -121,8 +121,9 @@ export function ClosureStats({
 			countNote,
 		],
 	};
+	// Offline every figure is unknown, not zero: a dash by rule, whatever rows and sessions hold.
 	// An empty note, not none, keeps the cells the same height.
-	if (unknown) cells.sessions = [cells.sessions[0], '—', ''];
+	if (unknown) for (const id in cells) cells[id] = [cells[id][0], '—', ''];
 	return (
 		<View className={cn('border-border flex-row border-b pb-3', phone && 'flex-wrap')}>
 			{Object.entries(cells).map(([id, [label, value, note]], index) => (
@@ -141,7 +142,7 @@ export function ClosureStats({
 						<AmountFigure
 							testID="closure-stat-discrepancy"
 							size="headline"
-							tone={partial || result.tone === 'muted' ? 'default' : result.tone}
+							tone={unknown || partial || result.tone === 'muted' ? 'default' : result.tone}
 						>
 							{value}
 						</AmountFigure>
