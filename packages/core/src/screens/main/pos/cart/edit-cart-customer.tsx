@@ -14,6 +14,7 @@ import {
 	PropertyRow,
 	PropertyVerb,
 } from '@wcpos/components/property-row';
+import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useRecordField } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
@@ -266,6 +267,11 @@ function EditCartCustomerFields() {
 				</VStack>
 			</DialogBody>
 			<DialogFooter
+				aside={
+					<Text variant="help" testID="cart-address-autosaves">
+						{t('pos_cart.changes_save_to_order')}
+					</Text>
+				}
 				close
 				secondary={
 					customerID != null &&

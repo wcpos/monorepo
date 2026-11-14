@@ -153,9 +153,13 @@ export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 				const type = (row?.type ?? 'eu_vat') as TaxIdType;
 				const value = row?.value ?? '';
 				const showFormatWarning = value.length > 0 && !isValidTaxIdFormat(type, value);
-				const inputs = (
+				const example = TAX_ID_PLACEHOLDERS[type];
+				const formatWarning = example
+					? t('tax_id.invalid_format_example', { type: labels[type] ?? type, example })
+					: t('tax_id.invalid_format');
+				const typeAndCountry = (
 					<>
-						<View className="w-40 p-2">
+						<View className="min-w-0 flex-1 p-2">
 							<FormField
 								control={control}
 								name={`${name}.${index}.type`}
@@ -170,22 +174,6 @@ export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 								)}
 							/>
 						</View>
-						{/* The ID keeps 160: when Type, ID and Country do not fit, it wraps to its own line. */}
-						<VStack className="min-w-40 flex-1 p-2">
-							<FormField
-								control={control}
-								name={`${name}.${index}.value`}
-								render={({ field: rhf }) => (
-									<FormInput
-										label={t('tax_id.value_label')}
-										placeholder={TAX_ID_PLACEHOLDERS[type]}
-										{...rhf}
-										value={rhf.value ?? ''}
-										description={showFormatWarning ? t('tax_id.invalid_format') : undefined}
-									/>
-								)}
-							/>
-						</VStack>
 						<View className="w-24 p-2">
 							<FormField
 								control={control}
@@ -220,7 +208,26 @@ export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 							</PropertyVerb>
 						}
 					>
-						<HStack className="flex-wrap items-start gap-0">{inputs}</HStack>
+						<VStack className="gap-0">
+							<HStack className="items-start gap-0">{typeAndCountry}</HStack>
+							{/* The ID has a full line so the whole number shows. */}
+							<View className="p-2">
+								<FormField
+									control={control}
+									name={`${name}.${index}.value`}
+									render={({ field: rhf }) => (
+										<FormInput
+											label={t('tax_id.value_label')}
+											placeholder={example}
+											{...rhf}
+											value={rhf.value ?? ''}
+											description={showFormatWarning ? formatWarning : undefined}
+											descriptionTone="warning"
+										/>
+									)}
+								/>
+							</View>
+						</VStack>
 					</PropertyRow>
 				);
 			})}
