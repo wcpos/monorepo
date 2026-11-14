@@ -17,6 +17,30 @@ jest.mock('@wcpos/utils/logger', () => ({
 jest.resetModules();
 
 describe('isAuthenticatedStoreApiResponse', () => {
+	it('rejects public wcpos/v2 probe routes that answer without a valid credential', () => {
+		const storeUrl = 'https://stores.example/current-store';
+
+		for (const route of ['echo', 'ping', 'site', 'auth/test']) {
+			for (const responseUrl of [
+				`${storeUrl}/wp-json/wcpos/v2/${route}`,
+				`${storeUrl}/wp-json/wcpos/v2/${route}/`,
+				`${storeUrl}/wp-json/wcpos/v2/${route}?authorization=x`,
+				`${storeUrl}/?rest_route=/wcpos/v2/${route}`,
+			]) {
+				expect(isAuthenticatedStoreApiResponse(responseUrl, storeUrl, true)).toBe(false);
+			}
+		}
+
+		for (const route of ['cashier/2', 'products']) {
+			for (const responseUrl of [
+				`${storeUrl}/wp-json/wcpos/v2/${route}`,
+				`${storeUrl}/?rest_route=/wcpos/v2/${route}`,
+			]) {
+				expect(isAuthenticatedStoreApiResponse(responseUrl, storeUrl, true)).toBe(true);
+			}
+		}
+	});
+
 	it('accepts only successful WCPOS API responses from the configured store', () => {
 		const storeUrl = 'https://stores.example/current-store';
 

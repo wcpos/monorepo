@@ -154,7 +154,8 @@ describe('#1548 compound tax sequencing on a couponed line', () => {
 			expect.objectContaining({ id: 7, total: '0.441176' }),
 			expect.objectContaining({ id: 10, total: '3.676471' }),
 		]);
-		expect(replay.lineItems[0].total).toBe('18.382353');
+		// set_item_discount_amounts decomposes the inclusive discount with WC_Tax::round at 6dp per rate.
+		expect(replay.lineItems[0].total).toBe('18.382354');
 		expect(totals.tax_lines).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ rate_id: 10, tax_total: '3.676471' }),

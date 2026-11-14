@@ -3,30 +3,27 @@ import { expect } from '@playwright/test';
 import { navigateToPage, authenticatedTest as test } from './fixtures';
 
 /**
- * Helper to open the settings area via the user menu.
+ * Helper to open the settings area from the rail (the POS has no title bar).
  */
 async function openSettings(page: import('@playwright/test').Page) {
-	await page.getByTestId('user-menu-trigger').click();
-	await page.getByTestId('settings-menu-item').click();
+	await navigateToPage(page, 'settings');
 	await expect(page.getByTestId('screen-settings-general')).toBeVisible({
 		timeout: 10_000,
 	});
 }
 
 test.describe('Settings Area', () => {
-	test('should open settings and show pages', async ({ posPage: page }) => {
+	test('settings navigation and General form', async ({ posPage: page }) => {
 		await openSettings(page);
 		await expect(page.getByTestId('settings-nav-general')).toBeVisible({
 			timeout: 10_000,
 		});
 		await expect(page.getByTestId('settings-nav-tax')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-printing')).toBeVisible();
+		await expect(page.getByTestId('settings-nav-card-readers')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-barcode-scanning')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-theme')).toBeVisible();
-	});
 
-	test('should show General settings page', async ({ posPage: page }) => {
-		await openSettings(page);
 		// General settings has form inputs (store name, language, currency, etc.)
 		const settingsPage = page.getByTestId('screen-settings-general');
 		await expect(settingsPage.locator('input').first()).toBeVisible({
@@ -76,6 +73,59 @@ test.describe('Settings Area', () => {
 			timeout: 10_000,
 		});
 	});
+
+	/**
+	 * roadmap#398 S2: after a write the form's reactive `values` re-bind echoes a change for every
+	 * normalised field (Language, Number of decimals). Marking those echoes moved Saved off the
+	 * edited row (#2343 `savedKeys`, #2349). Sampled every 50 ms from the keystroke until the mark
+	 * clears, so a second mark that shows for a moment is still caught.
+	 */
+	test('should show Saved beside the edited store name only, then clear it', async ({
+		posPage: page,
+	}) => {
+		await openSettings(page);
+		const name = page.getByTestId('settings-general-name');
+		await expect(name).toBeVisible({ timeout: 10_000 });
+		const original = await name.inputValue();
+		const marks = page.locator('[data-testid^="saved-"]');
+		const nameMark = page.getByTestId('saved-name');
+		const seen = new Set<string>();
+
+		try {
+			// Typed, not filled: `fill` dispatches one synthetic input that the re-bind reverts.
+			await name.click();
+			await name.press('End');
+			await name.pressSequentially('x', { delay: 50 });
+			await expect
+				.poll(
+					async () => {
+						const ids = await marks.evaluateAll((els) =>
+							els.map((el) => (el as HTMLElement).dataset.testid ?? '')
+						);
+						ids.forEach((id) => seen.add(id));
+						return seen.has('saved-name') && ids.length === 0;
+					},
+					// Debounced write, then the 1200 ms hold and its fade.
+					{ timeout: 4_000, intervals: [50] }
+				)
+				.toBe(true);
+			expect([...seen]).toEqual(['saved-name']);
+		} finally {
+			if ((await name.inputValue()) !== original) {
+				await name.click();
+				await name.press('End');
+				await name.press('Backspace');
+				await expect(name).toHaveValue(original);
+				// Let the debounced restore write land before the page goes; never fail the test here.
+				await expect(nameMark)
+					.toBeVisible({ timeout: 5_000 })
+					.catch(() => {});
+				await expect(nameMark)
+					.toBeHidden({ timeout: 5_000 })
+					.catch(() => {});
+			}
+		}
+	});
 });
 
 test.describe('Language Settings', () => {
@@ -85,14 +135,14 @@ test.describe('Language Settings', () => {
 	 */
 	const SWITCH_TARGETS = [
 		{
-			optionTestID: 'language-option-de_DE',
+			optionTestID: 'language-select-option-de_DE',
 			cdnCode: '/translations/js/de_DE/',
 			// `settings.store_name` in the published de_DE bundle — the label the
 			// General settings form must re-render into (#40).
 			storeNameLabel: 'Geschäftsname',
 		},
 		{
-			optionTestID: 'language-option-fr_FR',
+			optionTestID: 'language-select-option-fr_FR',
 			cdnCode: '/translations/js/fr_FR/',
 			storeNameLabel: 'Nom du magasin',
 		},
@@ -103,12 +153,12 @@ test.describe('Language Settings', () => {
 	 * Uses testIDs so it works regardless of the current UI language.
 	 */
 	async function selectLanguage(page: import('@playwright/test').Page, optionTestID: string) {
-		await page.getByTestId('language-select-trigger').click();
-		const combobox = page.getByTestId('language-combobox-content');
+		await page.getByTestId('language-select').click();
+		const combobox = page.getByTestId('language-select-content');
 		await expect(combobox).toBeVisible({ timeout: 10_000 });
 		await page
-			.getByTestId('language-search-input')
-			.fill(optionTestID.replace('language-option-', ''));
+			.getByTestId('combobox-search')
+			.fill(optionTestID.replace('language-select-option-', ''));
 		const option = combobox.getByTestId(optionTestID);
 		await expect(option).toBeVisible({ timeout: 10_000 });
 		await option.click();
@@ -152,25 +202,18 @@ test.describe('Language Settings', () => {
 	test('should have a language set in settings', async ({ posPage: page }) => {
 		await openSettings(page);
 
-		const trigger = page.getByTestId('language-select-trigger');
+		const trigger = page.getByTestId('language-select');
 		await expect(trigger).toBeVisible({ timeout: 10_000 });
 		await expect(trigger).toContainText(/\S/);
 		await trigger.click();
-		const combobox = page.getByTestId('language-combobox-content');
+		const combobox = page.getByTestId('language-select-content');
 		await expect(combobox).toBeVisible({ timeout: 10_000 });
 		await page
-			.getByTestId('language-search-input')
-			.fill(SWITCH_TARGETS[0].optionTestID.replace('language-option-', ''));
+			.getByTestId('combobox-search')
+			.fill(SWITCH_TARGETS[0].optionTestID.replace('language-select-option-', ''));
 		await expect(combobox.getByTestId(SWITCH_TARGETS[0].optionTestID)).toBeVisible({
 			timeout: 10_000,
 		});
-	});
-
-	test('should change language and load translations from CDN', async ({ posPage: page }) => {
-		await openSettings(page);
-
-		const { response } = await switchToDifferentLanguage(page);
-		expect(response.ok()).toBeTruthy();
 	});
 
 	/**
@@ -205,11 +248,7 @@ test.describe('Language Settings', () => {
 		});
 
 		// Reopen settings and verify the new language stuck (testID-anchored)
-		await page.locator('[data-testid="user-menu-trigger"]:visible').click();
-		await expect(page.getByTestId('settings-menu-item')).toBeVisible({
-			timeout: 15_000,
-		});
-		await page.getByTestId('settings-menu-item').click();
+		await navigateToPage(page, 'settings');
 		await expect(page.getByTestId('screen-settings-general')).toBeVisible({
 			timeout: 15_000,
 		});

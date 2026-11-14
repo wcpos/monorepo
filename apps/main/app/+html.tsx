@@ -26,7 +26,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
 				<script
 					dangerouslySetInnerHTML={{
 						__html: `
-					window.opfsWorker = "/opfs.worker.js";
+					window.opfsWorker = "/sqlite.worker.js";
 				`,
 					}}
 				/>

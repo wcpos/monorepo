@@ -1,3 +1,4 @@
+import { SQLITE_POOL_DIRECTORY } from './adapters/storage/sqlite-pool';
 import { measureCacheStorage } from './measure-cache-storage';
 
 import type { StorageFootprint, StorageFootprintEntry } from './measure-storage-types';
@@ -19,6 +20,8 @@ async function measureDirectory(handle: OpfsDirectoryHandle): Promise<number> {
 	let bytes = 0;
 	for await (const child of handle.values()) {
 		if (child.kind === 'file') {
+			// sqlite-worker-probe.mjs pins Chromium getFile() while SAHPool holds
+			// sync handles open. Safari's behavior under those handles is unverified.
 			bytes += (await child.getFile()).size;
 		} else {
 			bytes += await measureDirectory(child);
@@ -28,8 +31,8 @@ async function measureDirectory(handle: OpfsDirectoryHandle): Promise<number> {
 }
 
 /**
- * Web: enumerate the OPFS root's `rxdb-` collection directories (the worker
- * storage writes one per (database, collection, version)), alongside the
+ * Web: measure the opaque SQLite pool as one root and retired `rxdb-`
+ * collection directories as legacy bytes, alongside the
  * device-quota estimate retained as browser accounting context.
  */
 export async function measureAppStorage(): Promise<StorageFootprint | null> {
@@ -52,11 +55,19 @@ export async function measureAppStorage(): Promise<StorageFootprint | null> {
 			storage as unknown as { getDirectory(): Promise<OpfsDirectoryHandle> }
 		).getDirectory()) as OpfsDirectoryHandle;
 		for await (const [name, handle] of root.entries()) {
-			if (!name.startsWith(RXDB_DIRECTORY_PREFIX) || handle.kind !== 'directory') continue;
+			if (
+				handle.kind !== 'directory' ||
+				(name !== SQLITE_POOL_DIRECTORY && !name.startsWith(RXDB_DIRECTORY_PREFIX))
+			)
+				continue;
 			// Failures isolate per entry: one unreadable directory must not hide
 			// every other database's footprint.
 			try {
-				entries.push({ name, bytes: await measureDirectory(handle) });
+				entries.push({
+					name,
+					bytes: await measureDirectory(handle),
+					...(name === SQLITE_POOL_DIRECTORY ? { root: 'sqlite' as const } : { legacy: true }),
+				});
 			} catch {
 				// Skipped entry — the classifier simply never sees it.
 			}

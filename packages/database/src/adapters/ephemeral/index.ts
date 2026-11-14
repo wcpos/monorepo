@@ -1,11 +1,10 @@
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
-import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
 export const storage = getRxStorageMemory();
 
-export const devStorage = wrappedValidateZSchemaStorage({
-	storage,
-});
+export const devStorage = __DEV__
+	? require('rxdb/plugins/validate-z-schema').wrappedValidateZSchemaStorage({ storage })
+	: null;
 
 export const ephemeralStorageConfig = {
 	storage: __DEV__ ? devStorage : storage,

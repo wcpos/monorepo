@@ -1,9 +1,11 @@
-import { isLegacyAppDatabaseName } from './database-names';
+import { isLegacyAppDatabaseName, isLegacyUserDatabaseName } from './database-names';
 
 export interface PurgeLegacyDBResult {
 	success: boolean;
 	message: string;
 	databasesDeleted: number;
+	/** A retired user database was among the deleted entries: its device-local settings are gone. */
+	legacyUserDatabaseFound: boolean;
 }
 
 const RXDB_DIRECTORY_PREFIX = 'rxdb-';
@@ -33,12 +35,12 @@ const deleteLegacyIndexedDbDatabases = async () => {
 	);
 
 	await Promise.all(deletePromises);
-	return legacyDatabases.length;
+	return legacyDatabases.map((db) => db.name ?? '');
 };
 
 const deleteLegacyOpfsDatabases = async () => {
 	if (!navigator.storage?.getDirectory) {
-		return 0;
+		return [];
 	}
 
 	const root = await navigator.storage.getDirectory();
@@ -51,7 +53,7 @@ const deleteLegacyOpfsDatabases = async () => {
 	}
 
 	await Promise.all(entriesToDelete.map((name) => root.removeEntry(name, { recursive: true })));
-	return entriesToDelete.length;
+	return entriesToDelete.map((name) => fromOpfsSafeName(name.slice(RXDB_DIRECTORY_PREFIX.length)));
 };
 
 export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
@@ -59,7 +61,8 @@ export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
 		deleteLegacyIndexedDbDatabases(),
 		deleteLegacyOpfsDatabases(),
 	]);
-	const databasesDeleted = deletedIndexedDbDatabases + deletedOpfsDatabases;
+	const deletedNames = [...deletedIndexedDbDatabases, ...deletedOpfsDatabases];
+	const databasesDeleted = deletedNames.length;
 	const message =
 		databasesDeleted > 0
 			? `Successfully purged ${databasesDeleted} legacy database entries`
@@ -69,5 +72,6 @@ export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
 		success: true,
 		message,
 		databasesDeleted,
+		legacyUserDatabaseFound: deletedNames.some(isLegacyUserDatabaseName),
 	};
 };

@@ -32,8 +32,10 @@ export function fitPageSize(input: {
 	height: number;
 	/** Tile columns from the UI settings; may be absent until that document resolves. */
 	gridColumns: number | undefined;
+	/** What a grid row adds to its square tile; the legacy tile's text block by default. */
+	tileExtraPx?: number;
 }): number {
-	const { viewMode, width, height, gridColumns } = input;
+	const { viewMode, width, height, gridColumns, tileExtraPx = TILE_TEXT_BLOCK_PX } = input;
 	if (width <= 0 || height <= 0) return POS_PRODUCTS_MIN_PAGE_SIZE;
 	if (viewMode === 'grid' && !(Number.isFinite(gridColumns) && (gridColumns as number) >= 1)) {
 		return POS_PRODUCTS_MIN_PAGE_SIZE;
@@ -42,7 +44,7 @@ export function fitPageSize(input: {
 	const size =
 		viewMode === 'grid'
 			? (gridColumns as number) *
-				(Math.ceil(height / (width / (gridColumns as number) + TILE_TEXT_BLOCK_PX)) + 1)
+				(Math.ceil(height / (width / (gridColumns as number) + tileExtraPx)) + 1)
 			: Math.ceil(height / TABLE_ROW_PX) + 2;
 
 	return Math.min(

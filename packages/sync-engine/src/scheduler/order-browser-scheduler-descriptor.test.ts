@@ -7,12 +7,52 @@ import {
 	ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS,
 	orderBrowserPredecessorWindow,
 	orderBrowserQueryKey,
+	orderBrowseWindowFields,
+	orderBrowseWindowQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
 } from './order-browser-scheduler-descriptor';
 
 import type { OrderBrowseDimensions } from '../require-plane';
 
 describe('orderBrowserQueryKey', () => {
+	it('round-trips a ranged modified_after window through descriptor fields', () => {
+		const queryKey = orderBrowserQueryKey({
+			afterSeconds: 100,
+			beforeSeconds: 200,
+			modifiedAfterSeconds: 100,
+			limit: 'all',
+		});
+		expect(queryKey).toBe(
+			'orders:browser:status=all:after=100:before=200:modified_after=100:search=:limit=all'
+		);
+		const decision = parseOrderBrowserSchedulerDescriptor(queryKey);
+		expect(decision?.descriptor?.modifiedAfterSeconds).toBe(100);
+		expect(orderBrowseWindowQueryKey(orderBrowseWindowFields(decision!.descriptor!))).toBe(
+			queryKey
+		);
+	});
+
+	it.each<OrderBrowseDimensions>([
+		{ afterSeconds: 100, beforeSeconds: 200, limit: 25 },
+		{ beforeSeconds: 200, limit: 'all' },
+		{ afterSeconds: 100, limit: 'all' },
+	])('rejects modifiedAfterSeconds without a ranged limit=all window: %j', (dimensions) => {
+		expect(() => orderBrowserQueryKey({ ...dimensions, modifiedAfterSeconds: 100 })).toThrow(
+			new TypeError("orders browse modifiedAfterSeconds requires limit 'all' and both date bounds")
+		);
+	});
+
+	it.each([
+		'orders:browser:status=all:before=200:modified_after=100:search=:limit=25',
+		'orders:browser:status=all:after=100:before=200:modified_after=100:search=:limit=25',
+		'orders:browser:status=all:before=200:modified_after=100:search=:limit=all',
+		'orders:browser:status=all:after=100:modified_after=100:search=:limit=all',
+	])('skips modified_after without a ranged limit=all window: %s', (queryKey) => {
+		expect(parseOrderBrowserSchedulerDescriptor(queryKey)).toEqual({
+			skipReason: 'modified_after requires a ranged limit=all window',
+		});
+	});
+
 	const fixtures: {
 		dims: OrderBrowseDimensions;
 		queryKey: string;
@@ -553,5 +593,55 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 		expect(
 			parseOrderBrowserSchedulerDescriptor('products:browser:status=processing:search=:limit=50')
 		).toBeNull();
+	});
+});
+
+describe('register browse dimension', () => {
+	const ids = ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
+	it('keeps register windows distinct and round-trips alongside free text', () => {
+		const keys = ids.map((registerId) =>
+			orderBrowserQueryKey({ registerId, search: 'note:register=other' })
+		);
+		expect(keys[0]).not.toBe(keys[1]);
+		keys.forEach((key, index) => {
+			expect(key).toContain(`:register=${ids[index]}:search=`);
+			expect(parseOrderBrowserSchedulerDescriptor(key)).toMatchObject({
+				descriptor: { registerId: ids[index], search: 'note:register=other' },
+			});
+		});
+	});
+	it('still parses keys without a register', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=all:cashier=7:search=:limit=10')
+		).toMatchObject({ descriptor: { cashierId: 7 } });
+	});
+});
+
+describe('payment method browse dimension', () => {
+	it('keeps gateways distinct and round-trips beside free text', () => {
+		const keys = ['pos_cash', 'stripe', 'MyGateway'].map((paymentMethod) =>
+			orderBrowserQueryKey({
+				paymentMethod,
+				store: '12',
+				afterSeconds: 1,
+				search: 'note:payment_method=other',
+			})
+		);
+		expect(new Set(keys).size).toBe(3);
+		keys.forEach((key, index) => {
+			const paymentMethod = ['pos_cash', 'stripe', 'MyGateway'][index];
+			expect(key).toContain(`:store=12:payment_method=${paymentMethod}:after=1:`);
+			expect(parseOrderBrowserSchedulerDescriptor(key)).toMatchObject({
+				descriptor: { paymentMethod, search: 'note:payment_method=other' },
+			});
+		});
+	});
+	it('still parses keys without a payment method', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=all:search=:limit=10')
+		).toMatchObject({ descriptor: { status: 'all' } });
+	});
+	it.each(['pos:cash', '', 'x'.repeat(65)])('rejects an unrepresentable id %s', (paymentMethod) => {
+		expect(() => orderBrowserQueryKey({ paymentMethod })).toThrow(TypeError);
 	});
 });

@@ -26,6 +26,9 @@ on:
 
 permissions:
   contents: write
+  # gh pr view on scheduled and dispatched runs; without it every lookup fails,
+  # every orphan reads UNKNOWN and the nightly sweep retains everything.
+  pull-requests: read
 
 concurrency:
   group: cleanup-e2e-screenshots

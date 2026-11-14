@@ -15,6 +15,7 @@ jest.mock('@wcpos/components/icon-button', () => ({
 		<button data-testid={testID} onClick={onPress} />
 	),
 }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('observable-hooks', () => ({ useSubscription: jest.fn() }));
 
 function Harness() {

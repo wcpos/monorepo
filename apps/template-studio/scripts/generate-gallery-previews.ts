@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 import type { ReceiptData } from '@wcpos/printer/encoder';
+import { loadBarcodeLibrary } from '@wcpos/receipt-renderer';
 
 import { createRandomReceipt } from '../src/randomizer';
 import { renderStudioTemplate } from '../src/studio-core';
@@ -88,6 +89,7 @@ img{max-width:100%}
 }
 
 async function main() {
+	await loadBarcodeLibrary();
 	const fixture: ReceiptFixture = buildGalleryFixture();
 	const templates = await listBundledTemplates({
 		templatesDir: pathToFileURL(galleryTemplatesDir),

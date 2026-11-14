@@ -3,18 +3,78 @@ import * as React from 'react';
 import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
 
+import { cacheTranslations, type TranslationsState, type UserDatabase } from '@wcpos/query/user-db';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { RxDBBackend } from './rxdb-backend';
+import { RxDBBackend, type RxDBBackendOptions } from './rxdb-backend';
+import translationVersion from './translation-version.json';
 import en from './locales/en/core.json';
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
 
 const translationLogger = getLogger(['wcpos', 'translations']);
 
+// The wcpos/translations ref to load. update-translations.yml writes the release's CalVer tag
+// into translation-version.json. `next` is the dev lane's moving branch ref (refreshed by jsDelivr
+// within about 12 hours), so its content changes under the same name and must be re-fetched.
+const ROLLING_REF = 'next';
+const { version } = translationVersion;
+
+type I18nInstance = ReturnType<typeof createInstance>;
+// One instance per translations state (one per user database), created outside React.
+const instances = new WeakMap<object, I18nInstance>();
+
+function instanceFor(
+	translationsState: TranslationsState,
+	locale: string,
+	userDB: UserDatabase
+): I18nInstance {
+	const existing = instances.get(translationsState);
+	if (existing) return existing;
+	const instance = createInstance();
+	instances.set(translationsState, instance);
+	instance
+		.use(initReactI18next)
+		.use(RxDBBackend)
+		.init({
+			lng: locale,
+			fallbackLng: 'en',
+			load: 'currentOnly',
+			partialBundledLanguages: true,
+			ns: ['core'],
+			defaultNS: 'core',
+			resources: {
+				en: { core: en },
+			},
+			keySeparator: false,
+			nsSeparator: false,
+			interpolation: {
+				escapeValue: false,
+				prefix: '{',
+				suffix: '}',
+			},
+			backend: {
+				version,
+				rolling: version === ROLLING_REF,
+				cache: {
+					get: (key) => translationsState.get(key),
+					set: (key, catalogue, cached) =>
+						void cacheTranslations(userDB, key, catalogue, { cached }),
+				},
+			} satisfies RxDBBackendOptions,
+		})
+		.catch((error) =>
+			translationLogger.error('Failed to initialize translations', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { error },
+			})
+		);
+	return instance;
+}
+
 export function TranslationProvider({ children }: { children: React.ReactNode }) {
-	const { translationsState } = useAppState();
+	const { translationsState, userDB } = useAppState();
 	const { locale } = useLocale();
 
 	/**
@@ -39,41 +99,15 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 	 * — see `first-load-locale.test.tsx`. `translationsState` is created once per
 	 * user database (hydration step 1) before this provider mounts, so capturing
 	 * it here is stable for the provider's lifetime.
+	 *
+	 * Held outside React, keyed by that state, on purpose: this provider mounts inside
+	 * the boot's Suspense boundary, and until the first commit every retry discards the
+	 * uncommitted tree and re-runs a `useState` initialiser. A consumer that suspends
+	 * on an instance still initialising then made the boundary retry with a NEW
+	 * instance — hundreds of instances a second, each reading the catalogue, and a
+	 * splash that never ended (seen on `next` after the SDK 58 upgrade, 2026-09-28).
 	 */
-	const [i18nInstance] = React.useState(() => {
-		const instance = createInstance();
-		instance
-			.use(initReactI18next)
-			.use(RxDBBackend)
-			.init({
-				lng: locale,
-				fallbackLng: 'en',
-				load: 'currentOnly',
-				partialBundledLanguages: true,
-				ns: ['core'],
-				defaultNS: 'core',
-				resources: {
-					en: { core: en },
-				},
-				keySeparator: false,
-				nsSeparator: false,
-				interpolation: {
-					escapeValue: false,
-					prefix: '{',
-					suffix: '}',
-				},
-				backend: {
-					translationsState,
-				},
-			})
-			.catch((error) =>
-				translationLogger.error('Failed to initialize translations', {
-					code: ERROR_CODES.UNEXPECTED_ERROR,
-					context: { error },
-				})
-			);
-		return instance;
-	});
+	const i18nInstance = instanceFor(translationsState, locale, userDB);
 	const requestedLocale = React.useRef(locale);
 
 	/**

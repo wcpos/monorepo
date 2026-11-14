@@ -1,0 +1,36 @@
+/** @jest-environment jsdom */
+import { renderHook, waitFor } from '@testing-library/react';
+
+import { useRegisterNames } from './use-register-names';
+
+const mockGet = jest.fn();
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+// One stable client, as in the app: a fresh object per render would re-run the directory
+// effect on the re-render a failed read now publishes.
+const mockHttp = { get: (...args: unknown[]) => mockGet(...args) };
+jest.mock('../../screens/main/hooks/use-rest-http-client', () => ({
+	useRestHttpClient: () => mockHttp,
+}));
+jest.mock('@wcpos/query/register-session', () => ({
+	...jest.requireActual('@wcpos/query/register-session'),
+	getRegisterSnapshot: () => null,
+	getBoundRegisterId: (_siteUuid: string, _storeId?: number) => null,
+	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) => null,
+	bindRegister: async () => undefined,
+	unbindRegister: async () => undefined,
+}));
+jest.mock('../../contexts/app-state', () => ({
+	useStoreSession: () => ({ userDB: {}, site: { uuid: 'failure-site' }, store: { id: 1 } }),
+}));
+
+it('a failed directory request leaves the names empty and lets the next reader retry', async () => {
+	mockGet.mockRejectedValueOnce(new Error('offline'));
+	const hook = renderHook(() => useRegisterNames());
+	await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+	expect(hook.result.current).toEqual({});
+	mockGet.mockResolvedValueOnce({ data: [{ id: 'a', name: 'Back' }] });
+	const again = renderHook(() => useRegisterNames());
+	await waitFor(() => expect(again.result.current).toEqual({ a: 'Back' }));
+});

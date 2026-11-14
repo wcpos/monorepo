@@ -6,8 +6,11 @@ export const orderSchema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: { type: 'string', maxLength: 64 },
 		// Promoted filter/sort columns (duplicated out of payload, payload bytes unchanged) so RxDB
 		// Mango .where()/sort can touch them. Indexed string fields require maxLength + required.
+		posUserId: { type: 'string', maxLength: 64 },
+		posStoreId: { type: 'string', maxLength: 64 },
 		number: { type: 'string', maxLength: 24 },
 		dateCreatedGmt: { type: 'string', maxLength: 32 },
 		status: { type: 'string', maxLength: 24 },
@@ -20,6 +23,9 @@ export const orderSchema = {
 	required: [
 		'uuid',
 		'remoteId',
+		'remoteKey',
+		'posUserId',
+		'posStoreId',
 		'number',
 		'dateCreatedGmt',
 		'status',
@@ -30,5 +36,11 @@ export const orderSchema = {
 		'local',
 	],
 	// The axes a POS order list sorts/filters by, as single + compound indexes.
-	indexes: ['dateCreatedGmt', ['status', 'dateCreatedGmt']],
+	indexes: [
+		'remoteKey',
+		'dateCreatedGmt',
+		['status', 'dateCreatedGmt'],
+		['posUserId', 'posStoreId', 'dateCreatedGmt'],
+		['posUserId', 'posStoreId', 'status', 'dateCreatedGmt'],
+	],
 } as const;

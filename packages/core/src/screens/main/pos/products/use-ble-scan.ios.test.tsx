@@ -34,10 +34,13 @@ let mockBleState = 'PoweredOn';
 let mockStateListener: ((state: string) => void) | undefined;
 let scanListener: ScanListener | undefined;
 let monitorListener: MonitorListener | undefined;
-let mockCollection: {
-	find: () => { exec: () => Promise<Record<string, unknown>[]> };
-	upsert: (row: Record<string, unknown>) => Promise<void>;
+const mockCollection = {
+	find: () => ({ exec: async () => mockProfiles.map((profile) => ({ toJSON: () => profile })) }),
+	upsert: async (row: Record<string, unknown>) => {
+		mockUpsert(row);
+	},
 };
+let mockStoreDB = { collections: { scanner_profiles: mockCollection } };
 
 jest.mock('react-native', () => ({
 	NativeModules: { BlePlx: {} },
@@ -67,13 +70,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ store: {} }),
-}));
-
-jest.mock('../../hooks/use-collection', () => ({
-	useCollection: () => ({
-		collection: mockCollection,
-	}),
+	useAppState: () => ({ store: {}, storeDB: mockStoreDB }),
 }));
 
 interface FakeDevice {
@@ -161,12 +158,7 @@ describe('useBleScan (iOS)', () => {
 		mockStateListener = undefined;
 		scanListener = undefined;
 		monitorListener = undefined;
-		mockCollection = {
-			find: () => ({ exec: async () => mockProfiles }),
-			upsert: async (row: Record<string, unknown>) => {
-				mockUpsert(row);
-			},
-		};
+		mockStoreDB = { collections: { scanner_profiles: { ...mockCollection } } };
 		mockOnStateChange.mockImplementation(
 			(listener: (state: string) => void, emitCurrentState: boolean) => {
 				mockStateListener = listener;
@@ -282,7 +274,7 @@ describe('useBleScan (iOS)', () => {
 		expect(mockStopDeviceScan).toHaveBeenCalled();
 	});
 
-	it('restarts saved-profile reconnect when the profile collection changes', async () => {
+	it('restarts saved-profile reconnect when the store database changes', async () => {
 		mockProfiles = [
 			{
 				deviceKey: scannerDeviceKey({
@@ -312,12 +304,7 @@ describe('useBleScan (iOS)', () => {
 				serviceUuid: FFF0_SERVICE,
 			},
 		];
-		mockCollection = {
-			find: () => ({ exec: async () => mockProfiles }),
-			upsert: async (row: Record<string, unknown>) => {
-				mockUpsert(row);
-			},
-		};
+		mockStoreDB = { collections: { scanner_profiles: { ...mockCollection } } };
 		rerender();
 
 		await waitFor(() => expect(mockConnectToDevice).toHaveBeenCalledWith('second-peripheral'));

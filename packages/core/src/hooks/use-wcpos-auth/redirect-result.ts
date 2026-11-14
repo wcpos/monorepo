@@ -47,6 +47,8 @@ interface PendingRedirectResult {
 
 let captured = false;
 let pending: PendingRedirectResult | null = null;
+/** Whether a cashier entry has taken this page load's redirect return (`takeRedirectReturn`). */
+let returnTaken = false;
 
 /**
  * Save the return location, initiating site/consumer, and CSRF state before
@@ -136,6 +138,7 @@ export function captureRedirectResult(): void {
 			result = {
 				type: 'error',
 				error: 'Authentication did not originate from this app session - rejected for security',
+				reported: true,
 			};
 		} else if (returnedState !== savedCsrf) {
 			oauthLogger.error('State parameter mismatch - possible CSRF attack', {
@@ -148,6 +151,7 @@ export function captureRedirectResult(): void {
 			result = {
 				type: 'error',
 				error: 'State parameter mismatch - authentication rejected for security',
+				reported: true,
 			};
 		}
 	}
@@ -160,6 +164,15 @@ export function captureRedirectResult(): void {
 	window.history.replaceState({}, document.title, cleanUrl);
 
 	pending = { loginUrl: saved?.loginUrl ?? null, claimKey: saved?.claimKey ?? null, result };
+}
+
+/**
+ * The popup posted its URL to the opener, which owns the login: this page
+ * never parses, validates, strips or claims the URL.
+ */
+export function markRedirectHandedToOpener(): void {
+	captured = true;
+	pending = null;
 }
 
 /**
@@ -203,9 +216,33 @@ export function peekRedirectLoginUrl(): string | null {
 }
 
 /**
+ * Lets a consumer that lost its site state on reload (the demo button)
+ * recognise its own pending result without consuming it.
+ */
+export function peekRedirectClaim(): { loginUrl: string; claimKey: string | null } | null {
+	captureRedirectResult();
+	if (!pending || pending.loginUrl === null) return null;
+	return { loginUrl: pending.loginUrl, claimKey: pending.claimKey };
+}
+
+/**
+ * One-shot: the first caller for the initiating site takes the redirect return, and every later
+ * caller gets `false`. The cashier entry calls it to reopen its sheet so the Add user consumer
+ * mounts to claim the result; on a phone-width POS two entries are mounted (the Products and Cart
+ * tabs' bars), and only one sheet may open. The pending result itself stays for its claimant.
+ */
+export function takeRedirectReturn(loginUrl: string | null | undefined): boolean {
+	captureRedirectResult();
+	if (returnTaken || !loginUrl || pending?.loginUrl !== loginUrl) return false;
+	returnTaken = true;
+	return true;
+}
+
+/**
  * Test-only: reset module state between tests.
  */
 export function __resetRedirectResultForTesting(): void {
 	captured = false;
 	pending = null;
+	returnTaken = false;
 }

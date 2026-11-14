@@ -40,16 +40,78 @@ export const SENTRY_DSN =
 
 type SentryEventLike = {
 	message?: string;
-	exception?: { values?: { value?: string }[] };
+	exception?: { values?: { type?: string; value?: string }[] };
 	request?: { url?: string };
 	breadcrumbs?: { data?: Record<string, unknown> }[];
 	extra?: Record<string, unknown>;
 	contexts?: Record<string, unknown>;
 };
 
+export function describeBareException<T extends SentryEventLike>(
+	event: T,
+	hint?: { originalException?: unknown }
+): T {
+	try {
+		const err = hint?.originalException;
+		const bare = event.exception?.values?.some(
+			({ value }) => !value || value === 'No error message'
+		);
+		if (err === undefined || !bare) return event;
+		const fields = err as { name?: unknown; code?: unknown; stack?: unknown } | null;
+		const thrown: Record<string, unknown> = { keys: [], hasStack: false };
+		// Every string leaves through the scrubber: a `code` or key can carry a token, and a web
+		// stack names the merchant's origin on every frame.
+		const text = (value: unknown, max: number) => scrubComponentStack(String(value)).slice(0, max);
+		const readers: Record<string, () => unknown> = {
+			typeof: () => typeof err,
+			// Symbol.toStringTag is user-settable, so the tag is a string like any other.
+			tag: () => text(Object.prototype.toString.call(err), 100),
+			constructor: () => (fields?.constructor?.name ? text(fields.constructor.name, 100) : null),
+			name: () => (typeof fields?.name === 'string' ? text(fields.name, 100) : null),
+			code: () =>
+				typeof fields?.code === 'number'
+					? fields.code
+					: typeof fields?.code === 'string'
+						? text(fields.code, 100)
+						: null,
+			keys: () =>
+				err !== null && typeof err === 'object'
+					? Object.keys(err)
+							.slice(0, 20)
+							.map((key) => text(key, 60))
+					: [],
+			hasStack: () => typeof fields?.stack === 'string' && fields.stack.length > 0,
+			stackHead: () => (thrown.hasStack ? text(fields?.stack, 500) : null),
+			string: () => text(err, 200),
+		};
+		for (const [key, read] of Object.entries(readers)) {
+			try {
+				thrown[key] = read();
+			} catch {
+				thrown[key] = thrown[key] ?? null;
+			}
+		}
+		event.contexts = { ...event.contexts, thrown };
+	} catch {
+		// A diagnostic must never hide the event it was meant to explain.
+	}
+	return event;
+}
+
+export function prepareEvent<T extends SentryEventLike>(
+	event: T,
+	hint?: { originalException?: unknown }
+): T {
+	return scrubEvent(describeBareException(event, hint));
+}
+
 function stripOrigin(url: string): string {
 	try {
 		const parsedUrl = new URL(url);
+		// Log text like `write: orders/…` parses with a `write:` scheme; only web URLs carry an origin.
+		if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+			return redactSensitiveText(url);
+		}
 		return redactSensitiveText(`${parsedUrl.pathname}${parsedUrl.search}`);
 	} catch {
 		return redactSensitiveText(url);
@@ -77,6 +139,11 @@ export function scrubEvent<T extends SentryEventLike>(event: T): T {
 		event.message = redactSensitiveText(event.message);
 	}
 	for (const exception of event.exception?.values ?? []) {
+		// Sentry copies Error.name into `type`, so a credential smuggled through a custom
+		// error name needs the same scrub as the message.
+		if (typeof exception.type === 'string') {
+			exception.type = redactSensitiveText(exception.type);
+		}
 		if (typeof exception.value === 'string') {
 			exception.value = redactSensitiveText(exception.value);
 		}
@@ -158,7 +225,8 @@ export function renderErrorTemplate(message: string): string {
  * share an issue; an HTTP failure (the client stamps `context.endpoint`) adds
  * method + endpoint template so a 503 on `/products` and one on `/orders` are
  * two issues, whatever the code. A push rejection (the engine stamps
- * `context.type: 'push.error'` with the server's `reason`) adds collection +
+ * `context.type: 'push.rejected'` — formerly the `push.error` before it — with
+ * the server's `reason`) adds collection +
  * status + reason: `registration-error-email-exists` on a customer create and
  * `woocommerce_rest_invalid_coupon` on an order update are different bugs, and
  * one Sentry issue for both (2HT) hid six of them behind whichever came first.
@@ -181,7 +249,7 @@ function fingerprintFor(message: string, code: string, context: unknown) {
 		const method = typeof fields.method === 'string' ? fields.method : '';
 		return [code, method, messageTemplate(endpoint)];
 	}
-	if (fields.type === 'push.error') {
+	if (fields.type === 'push.error' || fields.type === 'push.rejected') {
 		const part = (value: unknown) => (value === undefined || value === null ? '' : String(value));
 		return [code, part(fields.collection), part(fields.status), part(fields.reason)];
 	}

@@ -41,14 +41,14 @@ function getIpcRenderer(): NovuIpcRenderer | null {
 			? undefined
 			: (window as unknown as { ipcRenderer?: NovuIpcRenderer }).ipcRenderer;
 	if (!ipc && !warnedMissingBridge) {
-		novuLogger.warn('Novu: Electron ipcRenderer is not available');
+		novuLogger.debug('Novu: Electron ipcRenderer is not available');
 		warnedMissingBridge = true;
 	}
 	return ipc ?? null;
 }
 
 function logBridgeError(action: string, error: unknown): void {
-	novuLogger.error(`Novu: Failed to ${action}`, {
+	novuLogger.debug(`Novu: Failed to ${action}`, {
 		code: ERROR_CODES.UNEXPECTED_ERROR,
 		context: { error: getErrorMessage(error) },
 	});
@@ -114,7 +114,6 @@ export const markAllAsRead = (): Promise<boolean> => invokeNovu({ type: 'markAll
 export const markAsSeen = (notificationId: string): Promise<boolean> =>
 	invokeNovu({ type: 'markAsSeen', notificationId }, false);
 export const markAllAsSeen = (): Promise<boolean> => invokeNovu({ type: 'markAllAsSeen' }, false);
-export const getUnreadCount = (): Promise<number> => invokeNovu({ type: 'getUnreadCount' }, 0);
 function isNewNotification(notificationId: string | undefined): boolean {
 	if (!notificationId || processedNotificationIds.has(notificationId)) return false;
 	processedNotificationIds.add(notificationId);

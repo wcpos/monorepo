@@ -1,14 +1,14 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 import { Slot } from '@rn-primitives/slot';
 
 import { Platform } from '@wcpos/utils/platform';
 
+import { FieldBox } from '../field-box';
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 import { getDisplayLabel, isSelectedIn, toggleMultiValue } from '../lib/multi-select';
@@ -16,11 +16,16 @@ import {
 	getNativeListHeight,
 	NATIVE_LIST_MAX_HEIGHT,
 	NATIVE_POPOVER_MAX_HEIGHT,
+	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
+import { AnchoredOverlay } from '../lib/overlay';
 import { cn } from '../lib/utils';
+import { MenuRow } from '../menu-row';
+import { POPOVER_ANCHOR } from '../popover/anchor';
+import { useIsPhone } from '../lib/device';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
-import { Text, TextClassContext } from '../text';
+import { Text } from '../text';
 import { Icon } from '../icon';
 
 import type {
@@ -97,7 +102,7 @@ function Combobox<T = undefined>({
 function ComboboxTrigger({ className, disabled, ...props }: PopoverPrimitive.TriggerProps) {
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(disabled && 'web:cursor-not-allowed opacity-50', className)}
+			className={cn(disabled && 'web:cursor-not-allowed opacity-45', className)}
 			disabled={disabled}
 			{...props}
 		/>
@@ -109,9 +114,11 @@ function ComboboxValue({
 	placeholder,
 	className,
 	maxDisplayLength = 24,
+	tone,
 	...props
 }: ComboboxValueProps) {
 	const { multiple, value, decodeLabels } = useComboboxRootContext();
+	const { open } = PopoverPrimitive.useRootContext();
 	const Component = asChild ? Slot : Text;
 
 	const displayText = React.useMemo(() => {
@@ -127,42 +134,35 @@ function ComboboxValue({
 		: (value as Option<any> | undefined)?.value !== undefined;
 
 	return (
-		<View
-			className={cn(
-				'border-border bg-card web:ring-offset-background h-10 w-full flex-row items-center rounded-md border px-2',
-				className
-			)}
+		<FieldBox
+			state={open ? 'open' : (tone ?? 'rest')}
+			empty={!hasValue}
+			className={cn('w-full px-3', className)}
 		>
 			<View className="flex-1">
-				<TextClassContext.Provider
-					value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
-				>
-					{/* Same decode as ComboboxItemText, off the same `decodeLabels` switch:
-					    the label shown once chosen is the label that was listed, and a term
-					    or product name arrives from WooCommerce HTML-encoded. Decoding only
-					    in the list made one widget read "Men's" open and "Men&#039;s" closed.
-					    Only on the Text path — `asChild` hands these props to a caller's
-					    component that need not understand `decodeHtml`. */}
-					<Component {...props} {...(asChild ? {} : { decodeHtml: decodeLabels })}>
-						{displayText}
-					</Component>
-				</TextClassContext.Provider>
+				{/* Same decode as ComboboxItemText, off the same `decodeLabels` switch:
+				    the label shown once chosen is the label that was listed, and a term
+				    or product name arrives from WooCommerce HTML-encoded. Decoding only
+				    in the list made one widget read "Men's" open and "Men&#039;s" closed.
+				    Only on the Text path — `asChild` hands these props to a caller's
+				    component that need not understand `decodeHtml`. */}
+				<Component {...props} {...(asChild ? {} : { decodeHtml: decodeLabels })}>
+					{displayText}
+				</Component>
 			</View>
-			<Icon name="chevronDown" />
-		</View>
+			<Icon name="chevronDown" className="text-muted-foreground" />
+		</FieldBox>
 	);
 }
 
 function ComboboxContent({
-	className,
-	align = 'center',
-	sideOffset = 4,
-	portalHost,
 	children,
 	style,
 	...props
-}: PopoverPrimitive.ContentProps & { portalHost?: string }) {
+}: PopoverPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const context = useComboboxRootContext();
+	const { open, onOpenChange } = PopoverPrimitive.useRootContext();
+	const sheet = usePhoneSheetMetrics();
 	const isNative = Platform.OS !== 'web';
 	const contentStyle = React.useMemo(() => {
 		if (!isNative) return style;
@@ -176,36 +176,21 @@ function ComboboxContent({
 	useArrowKeyNavigation();
 
 	return (
-		<PopoverPrimitive.Portal hostName={portalHost}>
-			<PopoverPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={FadeIn.duration(200)}
-					exiting={FadeOut}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
-					<TextClassContext.Provider value="text-popover-foreground">
-						<PopoverPrimitive.Content
-							align={align}
-							sideOffset={sideOffset}
-							style={contentStyle}
-							className={cn(
-								'border-border bg-popover web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md',
-								className
-							)}
-							{...props}
-						>
-							<ComboboxRootContext.Provider value={context}>
-								{children}
-							</ComboboxRootContext.Provider>
-							{/* <Arrow className={cn('fill-white')} /> */}
-						</PopoverPrimitive.Content>
-					</TextClassContext.Provider>
-				</Animated.View>
-			</PopoverPrimitive.Overlay>
-		</PopoverPrimitive.Portal>
+		<AnchoredOverlay
+			anchor={POPOVER_ANCHOR}
+			open={open}
+			onOpenChange={onOpenChange}
+			size="web:cursor-auto web:outline-none max-h-75 w-80"
+			content={{
+				...props,
+				style: contentStyle,
+				children: (
+					<ComboboxRootContext.Provider value={context}>{children}</ComboboxRootContext.Provider>
+				),
+			}}
+			// The shell pads the safe area; the sheet adds only its own inset.
+			sheetStyle={[{ maxHeight: sheet.maxHeight }, style]}
+		/>
 	);
 }
 
@@ -272,6 +257,8 @@ function ComboboxList({
 	...restVirtualizedListProps
 }: ComboboxListProps<Option>) {
 	const { filterValue } = useComboboxRootContext();
+	const isPhone = useIsPhone();
+	const sheet = usePhoneSheetMetrics();
 	const isNative = Platform.OS !== 'web';
 	const isAndroid = Platform.OS === 'android';
 
@@ -287,12 +274,13 @@ function ComboboxList({
 		const itemCountForHeight =
 			filteredData.length === 0 && ListEmptyComponent ? 1 : filteredData.length;
 		if (itemCountForHeight === 0) return null;
-		const listHeight = getNativeListHeight(itemCountForHeight, estimatedItemSize);
+		const maxHeight = isPhone ? sheet.listMaxHeight : NATIVE_LIST_MAX_HEIGHT;
+		const listHeight = getNativeListHeight(itemCountForHeight, estimatedItemSize, maxHeight);
 		return (
 			<View
 				style={{
 					height: listHeight,
-					maxHeight: NATIVE_LIST_MAX_HEIGHT,
+					maxHeight,
 				}}
 			>
 				<VirtualizedListPrimitive.Root className="flex-1">
@@ -323,10 +311,8 @@ function ComboboxList({
 
 function ComboboxEmpty({ children, className, ...props }: ComboboxEmptyProps) {
 	return (
-		<View className={cn('prx-2 py-1.5', className)} {...props}>
-			<Text className="web:group-focus:text-accent-foreground text-popover-foreground text-sm">
-				{children}
-			</Text>
+		<View className={cn('px-2 py-1.5', className)} {...props}>
+			<Text className="text-foreground text-base">{children}</Text>
 		</View>
 	);
 }
@@ -349,25 +335,16 @@ function ComboboxItem({ value, label, item, className, children, ...props }: Com
 
 	return (
 		<VirtualizedListPrimitive.Item>
-			<Pressable
-				onPress={handlePress}
-				role="option"
-				aria-selected={selected}
-				className={cn(
-					'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex w-full flex-row items-center rounded-sm px-2 py-1.5',
-					multiple && 'pl-8',
-					props.disabled && 'web:pointer-events-none opacity-50',
-					className
-				)}
+			<MenuRow
 				{...props}
+				role="option"
+				choice={multiple}
+				selected={selected}
+				onPress={handlePress}
+				className={className}
 			>
-				{multiple && (
-					<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-						{selected && <Icon name="check" className="text-popover-foreground" />}
-					</View>
-				)}
 				{children}
-			</Pressable>
+			</MenuRow>
 		</VirtualizedListPrimitive.Item>
 	);
 }
@@ -378,10 +355,7 @@ function ComboboxItemText({ className, ...props }: ComboboxItemTextProps) {
 
 	return (
 		<Text
-			className={cn(
-				'web:group-focus:text-accent-foreground text-popover-foreground text-sm',
-				className
-			)}
+			className={cn('text-foreground text-base', className)}
 			decodeHtml={decodeLabels}
 			{...props}
 		>

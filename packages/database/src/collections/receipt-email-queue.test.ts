@@ -7,7 +7,7 @@ describe('receipt_email_queue collection', () => {
 		expect(storeCollections.receipt_email_queue.schema).toBe(receiptEmailQueueLiteral);
 	});
 
-	it('ships as an unreleased v0 with no migration — 1.10 gets the schema fresh', () => {
+	it('starts at version 0 without migrations', () => {
 		expect(receiptEmailQueueLiteral.version).toBe(0);
 		expect(storeCollections.receipt_email_queue.migrationStrategies).toBeUndefined();
 	});

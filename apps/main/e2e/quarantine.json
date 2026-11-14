@@ -1,0 +1,116 @@
+{
+	"issue": "https://github.com/wcpos/monorepo/issues/2284",
+	"entries": [
+		{
+			"project": "free-authenticated",
+			"file": "pos-variations.spec.ts",
+			"title": "POS Variations › should render the variation image the server sent",
+			"group": "G2"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-variations.spec.ts",
+			"title": "POS Variations › should render the variation image the server sent",
+			"group": "G2"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-cart.spec.ts",
+			"title": "POS Cart › should add a product to the cart and show checkout button",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "pos-cart.spec.ts",
+			"title": "POS Cart › should absorb twenty rapid adds and paint the exact quantity",
+			"group": "G7"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-cart.spec.ts",
+			"title": "POS Cart › should add a product to the cart and show checkout button",
+			"group": "G7"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "pos-cart.spec.ts",
+			"title": "POS Cart › should absorb twenty rapid adds and paint the exact quantity",
+			"group": "G7"
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-heap.spec.ts",
+			"title": "committed searches neither retain per keystroke nor block the main thread",
+			"group": "G7"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-heap.spec.ts",
+			"title": "committed searches neither retain per keystroke nor block the main thread",
+			"group": "G7"
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "server-created-visibility.spec.ts",
+			"title": "a product created on the server reaches the products grid without a search",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "server-created-visibility.spec.ts",
+			"title": "an order created on the server reaches the orders grid without a search",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "server-created-visibility.spec.ts",
+			"title": "a customer created on the server reaches the customers grid without a search",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "free-authenticated",
+			"file": "update-required.spec.ts",
+			"title": "the gate refusal renders the blocking update screen and sync goes quiet",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "update-required.spec.ts",
+			"title": "the gate refusal renders the blocking update screen and sync goes quiet",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-latency.spec.ts",
+			"title": "a single-word search meets the latency budgets on a slow host",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-latency.spec.ts",
+			"title": "a single-word search meets the latency budgets on a slow host",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "free-authenticated",
+			"file": "search-walk.spec.ts",
+			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
+			"group": "G8",
+			"trunkOnly": true
+		},
+		{
+			"project": "pro-authenticated",
+			"file": "search-walk.spec.ts",
+			"title": "Product search walk politeness › a search with more server hits than the window never repeats a request and stops after release",
+			"group": "G8",
+			"trunkOnly": true
+		}
+	]
+}

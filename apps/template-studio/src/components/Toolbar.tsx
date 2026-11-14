@@ -1,13 +1,16 @@
 interface ToolbarProps {
 	zoom: number;
 	onZoomChange: (zoom: number) => void;
+	/** Display previews scale themselves; hide the receipt zoom. */
+	zoomHidden?: boolean;
 }
 
 const ZOOM_STEP = 10;
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 200;
 
-export function Toolbar({ zoom, onZoomChange }: ToolbarProps) {
+/** Renders the Studio brand and receipt-preview zoom controls. */
+export function Toolbar({ zoom, onZoomChange, zoomHidden = false }: ToolbarProps) {
 	return (
 		<header className="studio-toolbar" role="toolbar" aria-label="Canvas controls">
 			<div className="brand">
@@ -15,7 +18,7 @@ export function Toolbar({ zoom, onZoomChange }: ToolbarProps) {
 				<span>Template Studio</span>
 			</div>
 			<div className="toolbar-spacer" />
-			<div className="zoom-control" aria-label="Zoom">
+			<div className="zoom-control" aria-label="Zoom" hidden={zoomHidden}>
 				<button
 					type="button"
 					aria-label="Zoom out"

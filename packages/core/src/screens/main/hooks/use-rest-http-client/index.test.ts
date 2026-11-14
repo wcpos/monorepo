@@ -7,7 +7,11 @@ import { renderHook } from '@testing-library/react';
 
 import { clearUpdateRequired, currentUpdateRequired } from '@wcpos/utils/update-required-gate';
 
-import { useRestHttpClient } from './index';
+import { extractValidJSON, useRestHttpClient } from './index';
+import { useHostCapabilities } from '../../mini-apps/capabilities/host';
+
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 
 const { useHttpClient: useSharedHttpClient } = jest.requireActual<
 	typeof import('@wcpos/hooks/use-http-client/use-http-client')
@@ -16,10 +20,12 @@ const { http: sharedHttp } = jest.requireMock('@wcpos/hooks/use-http-client/http
 	http: { request: jest.Mock };
 };
 
+jest.mock('@wcpos/utils/get-instance-id', () => ({ getInstanceId: jest.fn() }));
 jest.mock('@wcpos/hooks/use-http-client/http', () => ({
 	http: { request: jest.fn(), isCancel: () => false },
 }));
 jest.mock('@wcpos/hooks/use-http-client/request-queue', () => ({
+	isDroppedRequestError: () => false,
 	scheduleRequest: (request: () => Promise<unknown>) => request(),
 }));
 jest.mock('@wcpos/hooks/use-http-client/request-state-manager', () => ({
@@ -45,10 +51,16 @@ const mockSite = {
 	use_jwt_as_param: false,
 	use_rest_route_param: false,
 	use_protocol_headers: false,
+	use_instance_header: undefined as boolean | undefined,
 	wcpos_version: '',
 	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2',
 	wp_api_url: 'https://example.com/wp-json/',
 };
+
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	credentialsTokenOwner: (credentials: unknown) => credentials,
+}));
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	requestStateManager: {
@@ -95,8 +107,10 @@ function latestRequest(): Record<string, unknown> {
 
 describe('useRestHttpClient methods', () => {
 	beforeEach(() => {
+		jest.restoreAllMocks();
 		jest.clearAllMocks();
 		clearUpdateRequired(mockSite.wp_api_url);
+		mockSite.use_instance_header = undefined;
 		mockSite.use_jwt_as_param = false;
 		mockSite.use_rest_route_param = false;
 		mockSite.use_protocol_headers = false;
@@ -105,17 +119,45 @@ describe('useRestHttpClient methods', () => {
 		mockSite.wp_api_url = 'https://example.com/wp-json/';
 	});
 
+	it.each([
+		['till-123', true],
+		['till-123', undefined],
+		[undefined, true],
+	] as const)('adds the available instance id to default headers: %s', async (installId, flag) => {
+		jest.replaceProperty(jest.requireActual('@wcpos/utils/app-info').AppInfo, 'platform', 'web');
+		mockSite.use_instance_header = flag;
+		jest.requireMock('@wcpos/utils/get-instance-id').getInstanceId.mockReturnValue(installId);
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+		await result.current.get('/42', {
+			headers: { 'X-WCPOS-Instance': 'forged', 'x-Wcpos-Instance': 'also-forged' },
+		});
+		expect(latestRequest().headers).toEqual(
+			installId && flag ? { 'X-WCPOS-Instance': installId } : {}
+		);
+	});
+
+	it('keeps the host identity on mini-app proxy calls', async () => {
+		mockSite.use_instance_header = true;
+		jest.requireMock('@wcpos/utils/get-instance-id').getInstanceId.mockResolvedValue('host');
+		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		await result.current['http.proxy']({
+			path: '/wcpos/v1/orders',
+			headers: { 'x-Wcpos-Instance': 'forged' },
+		});
+		expect(latestRequest().headers).toEqual({ 'X-WCPOS-Instance': 'host' });
+	});
+
 	it('wires Axios update-required refusals to the current site gate', () => {
 		renderHook(() => useRestHttpClient('orders'));
 
 		const onUpdateRequired = mockUseHttpClient.mock.calls.at(-1)?.[1];
 		expect(onUpdateRequired).toEqual(expect.any(Function));
 		if (!onUpdateRequired) throw new Error('update-required callback was not registered');
-		onUpdateRequired({ minProtocol: 2, pluginVersion: '1.11.0', status: 426 });
+		onUpdateRequired({ minProtocol: 2, pluginVersion: '2.0.0', status: 426 });
 
 		expect(currentUpdateRequired(mockSite.wp_api_url)).toEqual({
 			minProtocol: 2,
-			pluginVersion: '1.11.0',
+			pluginVersion: '2.0.0',
 			status: 426,
 		});
 	});
@@ -338,4 +380,70 @@ describe('useRestHttpClient methods', () => {
 			expect(response.headers).not.toHaveProperty('x-wp-totalpages');
 		}
 	);
+
+	it('reads the store body out of a response with stray text before it', async () => {
+		mockRequest.mockResolvedValueOnce({ data: '[400] stray\n' + paymentBody });
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		const response = await result.current.post('/42/payments', {});
+
+		expect(response.data).toEqual(JSON.parse(paymentBody));
+	});
+});
+
+const paymentBody =
+	'{"payment":{"id":7,"status":"recorded"},"order":{"id":42,"status":"pending","line_items":[{"id":1}]}}';
+// POS-30P: a Xero integration echoed its exception before WCPOS's JSON.
+const xeroPrefix =
+	'Exception when calling AccountingApi->emailInvoice: [400] Client error: `POST https://api.xero.com/...` resulted in a `400 Bad Request`\n';
+
+describe('extractValidJSON', () => {
+	it.each([
+		['a stray prefix with [400]', xeroPrefix + paymentBody],
+		[
+			'a stray prefix with {foo}',
+			'Notice: Undefined index {foo} in /x.php on line 3\n' + paymentBody,
+		],
+		['trailing junk', paymentBody + '\n<!-- cached 0.2s -->'],
+		['trailing junk with brackets', paymentBody + '\n[debug] done'],
+		['a [400] prefix and [debug] trailing junk', xeroPrefix + paymentBody + '\n[debug] done'],
+	])('reads the store body out of %s', (_name, response) => {
+		expect(extractValidJSON(response)).toEqual(JSON.parse(paymentBody));
+	});
+
+	it.each([paymentBody, '[{"id":1},{"id":2}]'])('parses clean JSON unchanged: %s', (response) => {
+		expect(extractValidJSON(response)).toEqual(JSON.parse(response));
+	});
+
+	it.each(['<html>Fatal error</html>', 'error {oops'])('returns null for %p', (response) => {
+		expect(extractValidJSON(response)).toBeNull();
+	});
+
+	it.each([
+		['a {} footer', paymentBody + '\n{}'],
+		['a [200] footer', paymentBody + '\n[200]'],
+		['a [400] prefix and a JSON footer', xeroPrefix + paymentBody + '\n{"cache":true}'],
+		['small valid JSON in the stray text', 'debug {"a":1} then\n' + paymentBody],
+	])('prefers the store body over %s', (_name, response) => {
+		expect(extractValidJSON(response)).toEqual(JSON.parse(paymentBody));
+	});
+
+	const noteBody = '{"payment":{"id":7,"note":"see [1) and {x"},"order":{"id":42}}';
+	it.each([noteBody, xeroPrefix + noteBody])(
+		'ignores unbalanced brackets inside a JSON string: %#',
+		(response) => {
+			expect(extractValidJSON(response)).toEqual(JSON.parse(noteBody));
+		}
+	);
+
+	it('parses at most once per opening bracket on a bracket-heavy page', () => {
+		const html = '<html><style>' + '.c{color:red}'.repeat(1000) + '</style></html>';
+		const parse = jest.spyOn(JSON, 'parse');
+		try {
+			expect(extractValidJSON(html)).toBeNull();
+			expect(parse.mock.calls.length).toBeLessThanOrEqual(html.split(/[{[]/).length - 1 + 1);
+		} finally {
+			parse.mockRestore();
+		}
+	});
 });

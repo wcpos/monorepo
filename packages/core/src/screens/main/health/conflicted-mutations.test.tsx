@@ -24,6 +24,32 @@ type PressProps = Kids & {
 	onPress?: () => void;
 };
 
+// The row's destructive action lives in a ⋮ menu; render the menu flat so the item is reachable.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuContent: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => children,
+	DropdownMenuItem: ({
+		children,
+		onPress,
+		testID,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+		disabled?: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ testID }: { testID?: string }) => <button data-testid={testID} />,
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/alert-dialog', () => {
 	function Passthrough({ children }: Kids) {
 		return <>{children}</>;
@@ -34,17 +60,9 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialog: ({ children, open }: Kids & { open?: boolean }) => (open ? <>{children}</> : null),
 		AlertDialogContent: Passthrough,
 		AlertDialogDescription: Passthrough,
-		AlertDialogFooter: Passthrough,
+		AlertDialogFooter: jest.requireActual('../../../../jest/footer.test-utils').AlertDialogFooter,
 		AlertDialogHeader: Passthrough,
 		AlertDialogTitle: Passthrough,
-		AlertDialogCancel: ({ children, testID }: PressProps) => (
-			<button data-testid={testID}>{children}</button>
-		),
-		AlertDialogAction: ({ children, testID, disabled, onPress }: PressProps) => (
-			<button data-testid={testID} disabled={disabled} onClick={onPress}>
-				{children}
-			</button>
-		),
 	};
 });
 jest.mock('@wcpos/components/button', () => ({
@@ -61,15 +79,30 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
 }));
+// Badge reads the real TextClassContext, which this file's Text mock does not provide.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: Kids) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (a: unknown) => mockToast(a) },
 }));
-jest.mock('./components', () => ({
-	Callout: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
-	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
+let mockIsPro = true;
+let mockCaps: Record<string, boolean> = {
+	canEditProducts: true,
+	canEditVariations: true,
+	canEditCustomers: true,
+	canEditCoupons: true,
+};
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ caps: mockCaps }),
 }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush }),
@@ -283,10 +316,30 @@ describe('ConflictedMutationsPanel', () => {
 
 		await waitFor(() =>
 			expect(mockToast).toHaveBeenCalledWith(
-				expect.objectContaining({ type: 'error', text2: 'storage fault' })
+				expect.objectContaining({
+					type: 'error',
+					text2: 'Try again. If it keeps failing, reload WCPOS.',
+				})
 			)
 		);
 		expect(getByTestId('db-conflicted-row-m-1')).toBeTruthy();
+	});
+
+	it('says another window is resolving it (info, no row) when the claim is held elsewhere', async () => {
+		rows = [row()];
+		mockResolveConflict.mockRejectedValueOnce(
+			new Error('resolveConflict: another window is resolving "m-1" right now — try again')
+		);
+		const { getByTestId } = render(<ConflictedMutationsPanel />);
+
+		fireEvent.click(getByTestId('db-conflicted-resend-m-1'));
+
+		await waitFor(() =>
+			expect(mockToast).toHaveBeenCalledWith({
+				type: 'info',
+				text1: 'Another window is resolving this change right now.',
+			})
+		);
 	});
 
 	it('Open record routes to the collection edit surface', () => {

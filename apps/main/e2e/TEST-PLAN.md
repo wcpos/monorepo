@@ -17,6 +17,26 @@ Selector policy: select app UI via stable testIDs with `getByTestId('some-id')`.
 text and named role selectors; structural role locators without a name are allowed (see
 repo `CLAUDE.md`).
 
+## Dev-store setup: PR preview logins
+
+PR runs serve the app from an EAS Hosting preview origin, `https://wcpos--<id>.expo.app`.
+Since woocommerce-pos #2259 (2026-10-14), the POS login page sends tokens only to
+three kinds of origin: the site's own, `https://wcpos.expo.app` and loopback hosts.
+So a fresh login from a preview fails in global-setup with "Missing or invalid
+redirect_uri parameter."
+
+The dev stores allow those preview origins through the plugin's
+`woocommerce_pos_auth_redirect_origin_allowed` filter. The filter sits at the end of the
+must-use plugin `wp-content/mu-plugins/wcpos-cors.php` and reuses that file's CORS
+allow-list test, so an origin allowed for CORS is also allowed as a login redirect.
+It was added 2026-10-15, and its backups on the server end `pre-auth-redirect-origin-2026-10-15`.
+It was proven by #2555's Deploy run 38732563222 (attempt 3), whose shards logged a fresh
+dev-pro login from `https://wcpos--8u9p7r2uyf.expo.app`.
+
+- A new dev store that runs PR E2E needs the same filter.
+- Removing the filter brings the global-setup failure back.
+- Never widen it on a production or customer store.
+
 ## Current Coverage
 
 ### auth.spec.ts (unauthenticated, free + pro) — 8 tests
@@ -110,7 +130,7 @@ Products Page (pro only):
 - [x] Variation actions menu with Edit/Sync/Delete
 - [x] Collapse expanded variable product
 - [x] Inline edit stock quantity: server accepts, row + REST read-back updated, stock status flips to instock (#1088)
-- [x] Inline edit stock quantity: forced 403 push rejection shows red snackbar and auto-reverts the cell (#1088, #1082)
+- [x] Inline edit stock quantity: forced 403 push rejection shows the SYNC202 revert snackbar and auto-reverts the cell (#1088, #1082)
 
 Products Page (free only):
 
@@ -143,6 +163,20 @@ POS Cart — Add Items Menu (the cart "+" dropdown):
 - [x] Add shipping via the dropdown menu
 - [x] Add miscellaneous product via the dropdown menu
 - [x] Close the add-item dialog (Escape) without adding
+
+### phone-touch.spec.ts (authenticated, free only) — 1 test
+
+Phone touch (412x915, `hasTouch`, `isMobile`, `locator.tap`; roadmap#505):
+
+- [x] A tap opens the cart's add menu and it stays open (the tap's own click on the sheet's
+      scrim, mounted under the finger, does not dismiss it); Add Discount opens the dialog; a tap
+      on a coupon in the picker sheet over that dialog picks it and the dialog stays open; a tap
+      on the picker's scrim closes it
+
+### terminal-keyboard.spec.ts (authenticated, free + pro) — 1 test
+
+- [x] At 1280x800, a keyboard (visual viewport 470) keeps the columns and the open Add Discount
+      dialog; a real resize to 1280x470 still goes to the phone layout (roadmap#505)
 
 ### pos-money-oracle.spec.ts (authenticated, free + pro) — 6 tests
 
@@ -183,6 +217,8 @@ POS Checkout:
 
 Real payment against the live store (**writes**, see "Live-store write discipline" below):
 
+- [x] Prints after checkout with the receipt hidden (show off, print on, cash sale: the hidden
+      `wcpos-print-frame` is printed exactly once, no receipt on screen, the cart is empty)
 - [x] Completes a real payment and reads the order back from the store REST API: order
       exists and carries this run's label, `date_paid` is set and the status is not a
       failure state, line-item count and quantities match the cart, line-item
@@ -229,11 +265,15 @@ via the toggle if needed):
       (src read from the live payload, then asserted on that variation's row — #1577)
 - [x] Adding the same variation twice increments quantity to 2
 
-### pos-coupon-apply.spec.ts — coupon application parity (pro + writer gated) — 1 test
+### pos-coupon-apply.spec.ts — coupon application parity — 2 tests
 
 - [x] Create-and-find percent probe coupon → apply via cart UI → save → coupon_lines,
       discount/total/cart_tax parity, rate-set equality; banner-absence parked on
-      woocommerce-pos#1548 (see Money-oracle doctrine)
+      woocommerce-pos#1548 (see Money-oracle doctrine) (pro + writer gated)
+- [x] Old session (#3243, free + pro): `page.clock` jumps 16 min so coverage compaction
+      removes the boot-only taxRates lane, then a fixed quick discount → the persisted
+      `discount_total` is non-zero and the Pay button shows the discounted total. Fails on
+      the provider without the per-generation rates latch; passes without the jump.
 
 ### coupons.spec.ts — Coupons drawer page — 6 tests
 
@@ -288,6 +328,7 @@ Orders Page (pro only):
 - [x] Search orders
 - [x] Filter pills visible
 - [x] Order actions menu opens (skips when no orders exist)
+- [x] Reopen at 412x915 lands on the `(tabs)` navigator (`pos-tabs-navigator`), not the `(columns)` fallback, with the reopened order's cart tab selected (#2374)
 
 Orders Page (free only):
 

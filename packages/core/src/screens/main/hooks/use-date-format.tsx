@@ -1,6 +1,9 @@
 import * as React from 'react';
 
-import { differenceInHours, formatDistance, isToday, isValid } from 'date-fns';
+import { differenceInHours } from 'date-fns/differenceInHours';
+import { formatDistance } from 'date-fns/formatDistance';
+import { isToday } from 'date-fns/isToday';
+import { isValid } from 'date-fns/isValid';
 import { useFocusEffect } from 'expo-router';
 import { useObservableRef, useSubscription } from 'observable-hooks';
 import { filter, switchMap } from 'rxjs/operators';

@@ -5,45 +5,54 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { BrandSearch } from './brand-select';
-import { CategorySearch } from './category-select';
-import { TagSearch } from './tag-select';
+import { CollectionSearch } from './collection-search';
 
+// The search-select handle as a reader sees it (one snapshot, driven with `set`).
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => import('@wcpos/query').QueryHandle;
+};
 const setSearch = jest.fn();
 const mockUseSearchSelect = jest.fn((collection: string) => ({
-	resource: {
-		value: {
+	handle: fakeQueryHandle({
+		result: {
 			hits: [
 				{
 					id: `${collection}-uuid`,
 					record: {
 						uuid: `${collection}-uuid`,
 						remoteId: '42',
+						remoteKey: '42',
 						payload: { id: 42, name: `${collection} name` },
 					},
 				},
 			],
 		},
-	},
+	}),
 	search: '',
 	setSearch,
 	limit: 50,
 	extendLimit: jest.fn(),
 }));
 
-jest.mock('../../../../query', () => ({
-	useSearchSelect: (collection: string) => mockUseSearchSelect(collection),
-	useGuardedExtension: jest.requireActual<
-		typeof import('../../../../query/use-guarded-extend-limit')
-	>('../../../../query/use-guarded-extend-limit').useGuardedExtension,
-}));
+jest.mock('../../../../query', () => {
+	// The real readers: the lists draw the handle the way the screens do.
+	const handles = jest.requireActual<typeof import('@wcpos/query/query-state')>(
+		'@wcpos/query/query-state'
+	);
+	return {
+		useSearchSelect: (collection: string) => mockUseSearchSelect(collection),
+		useDrawnHandle: handles.useDrawnHandle,
+		useQuerySnapshot: handles.useQuerySnapshot,
+		useGuardedExtension: jest.requireActual<
+			typeof import('../../../../query/use-guarded-extend-limit')
+		>('../../../../query/use-guarded-extend-limit').useGuardedExtension,
+	};
+});
 jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},
-}));
-jest.mock('observable-hooks', () => ({
-	useObservableSuspense: (resource: { value: unknown }) => resource.value,
 }));
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: { children: React.ReactNode }) => children,
@@ -89,25 +98,24 @@ jest.mock('@wcpos/core/contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-describe('product filter search selects', () => {
+describe('CollectionSearch', () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it.each([
-		['category', CategorySearch],
-		['tag', TagSearch],
-		['brand', BrandSearch],
-	] as const)('binds %s search through useSearchSelect', (collection, Search) => {
-		render(<Search />);
+	it.each(['tag', 'brand'] as const)(
+		'binds the %s search through useSearchSelect',
+		(collection) => {
+			render(<CollectionSearch collection={collection} />);
 
-		expect(mockUseSearchSelect).toHaveBeenCalledWith(collection);
-		fireEvent.change(screen.getByRole('textbox'), { target: { value: 'summer' } });
-		expect(setSearch).toHaveBeenCalledWith('summer');
-	});
+			expect(mockUseSearchSelect).toHaveBeenCalledWith(collection);
+			fireEvent.change(screen.getByRole('textbox'), { target: { value: 'summer' } });
+			expect(setSearch).toHaveBeenCalledWith('summer');
+		}
+	);
 
-	it('builds a category option value and label from the engine record payload', () => {
-		render(<CategorySearch />);
+	it("builds an option's value and label from the engine record payload", () => {
+		render(<CollectionSearch collection="tag" />);
 
 		expect(screen.getByTestId('search-option').getAttribute('data-value')).toBe('42');
-		expect(screen.getByTestId('search-option').getAttribute('data-label')).toBe('category name');
+		expect(screen.getByTestId('search-option').getAttribute('data-label')).toBe('tag name');
 	});
 });

@@ -1,0 +1,14 @@
+# Commands ledger
+
+Decisions this directory lives under, one line each, appended never rewritten. Ruling:
+wcpos/roadmap#428 (2026-10-13); spec `docs/specs/2026-10-13-commands-primitive-spec.md`.
+
+1. R1: a command is a registry record `{ id, label, run, when? }` in a static typed registry with a closed dotted id list (`COMMAND_IDS`); an id outside it is a type error and a runtime throw. A command never writes a collection; the orders-write scanner's roots gain `packages/core/src/extensions/`.
+2. R1: duplicate ids warn and replace outside production and throw in production, the action and slot registries' rule (Fast Refresh and tests re-evaluate registering modules).
+3. R2: availability is a pure `when(ctx)` read at raise time; no published state per command in v1. A refusal writes an `info` row `command.refused`, a failure a `warn` row `command.failed`, a run a `debug` row `command.run`.
+4. R3: `run` receives the command context, the action context plus `navigate`, `cart` and `focus`; every verb is a promise that may reject. The v1 verb list is only what the default hotkey map needs.
+5. Spec amendment (2026-10-13, before PR 1): the Pay and void paths are not extracted. The buttons, the search input and the discount menu register their own handlers as surfaces while mounted, and the verbs invoke them, because the Pay handler reads the cart conditions context that exists only inside the cart column. A detach removes only its own entry; the newest mounted registration wins.
+6. R5: 2.0 on `next`, two PRs. PR 1 is this primitive with the eight commands registered and no key bound; `pos.help.open` writes a `debug` row until PR 2 brings the hotkeys module and the help sheet. R4 (Alt chords, `preventDefault`, active inside inputs) is the hotkeys module's.
+7. PR 1b (2026-10-13): the void path moves out of `VoidButton` into `useVoidOrder` (`pos/hooks/use-void-order.ts`), unchanged; the cart column registers the `void` surface while mounted and closes the order sheet before a void, as the sheet's button does. The button presses the same hook and registers nothing. `pos.cart.void` keeps `hasSurface('void')`, now true whenever the cart column is.
+8. PR 2 (2026-10-13): `pos.help.open` runs `focus('help')`, a surface the hotkeys module registers for its help sheet. The cart commands need the cart shown, not just the column mounted: the column registers a `cart` surface only while it shows the cart (`useRegisterSurface` gains `enabled`), and `inCart` is route `cart` and `hasSurface('cart')`, so no key voids or switches an order behind the register picker, the Open register card, the count or the loading rows.
+9. PR 2: the labels in `commands.ts` are written through a marker `t()` that returns its key, so the string extractor sends them to translators; the help sheet translates `label` at render time.

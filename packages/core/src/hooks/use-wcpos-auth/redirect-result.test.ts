@@ -1,18 +1,26 @@
 /**
  * @jest-environment node
  */
+import { getLogger } from '@wcpos/utils/logger';
+
 import {
 	__resetRedirectResultForTesting,
 	captureRedirectResult,
 	claimRedirectResult,
+	markRedirectHandedToOpener,
+	peekRedirectClaim,
 	peekRedirectLoginUrl,
 	saveRedirectState,
+	takeRedirectReturn,
 } from './redirect-result';
 
 // Mock expo-auth-session (ESM) pulled in transitively via ./utils
 jest.mock('expo-auth-session', () => ({
 	makeRedirectUri: jest.fn(() => 'wcpos://callback'),
 }));
+
+// The jest logger mock hands every category the same logger.
+const oauthLogger = getLogger(['wcpos', 'auth', 'oauth']) as unknown as { error: jest.Mock };
 
 const LOGIN_URL = 'https://example.com/wcpos-login';
 const OTHER_LOGIN_URL = 'https://other.com/wcpos-login';
@@ -130,10 +138,31 @@ describe('redirect-result', () => {
 
 	it('rejects a CSRF state mismatch with an error result for the consumer', () => {
 		simulateRedirectReturn({ csrf: 'b'.repeat(64) });
+		oauthLogger.error.mockClear();
 
 		const result = claimRedirectResult(LOGIN_URL);
 		expect(result?.type).toBe('error');
 		expect(result?.error).toMatch(/State parameter mismatch/);
+		expect(oauthLogger.error).toHaveBeenCalledWith(
+			'State parameter mismatch - possible CSRF attack',
+			expect.objectContaining({
+				context: expect.objectContaining({ savedStatePrefix: 'bbbbbbbb' }),
+			})
+		);
+	});
+
+	it('does not capture a return the popup handed to its opener', () => {
+		// maybeCompleteAuthSession posted the URL to the opener, which owns the
+		// login; this page holds a matching saved state but must not process it.
+		simulateRedirectReturn();
+		oauthLogger.error.mockClear();
+
+		markRedirectHandedToOpener();
+
+		expect(claimRedirectResult(LOGIN_URL)).toBeNull();
+		expect(peekRedirectLoginUrl()).toBeNull();
+		expect(replaceState).not.toHaveBeenCalled();
+		expect(oauthLogger.error).not.toHaveBeenCalled();
 	});
 
 	it('rejects tokens that arrive without a saved state (login-CSRF guard)', () => {
@@ -174,6 +203,24 @@ describe('redirect-result', () => {
 		expect(peekRedirectLoginUrl()).toBe(LOGIN_URL);
 		expect(claimRedirectResult(LOGIN_URL)?.type).toBe('success');
 		expect(peekRedirectLoginUrl()).toBeNull();
+	});
+
+	it('takeRedirectReturn hands the return to the first taker for its site only, and leaves the result', () => {
+		simulateRedirectReturn();
+
+		expect(takeRedirectReturn(OTHER_LOGIN_URL)).toBe(false);
+		expect(takeRedirectReturn(LOGIN_URL)).toBe(true);
+		expect(takeRedirectReturn(LOGIN_URL)).toBe(false);
+		expect(claimRedirectResult(LOGIN_URL)?.type).toBe('success');
+	});
+
+	it('peekRedirectClaim reveals the initiating site and claimKey without consuming', () => {
+		simulateRedirectReturn({ claimKey: 'add-user' });
+
+		expect(peekRedirectClaim()).toEqual({ loginUrl: LOGIN_URL, claimKey: 'add-user' });
+		expect(peekRedirectClaim()).toEqual({ loginUrl: LOGIN_URL, claimKey: 'add-user' });
+		expect(claimRedirectResult(LOGIN_URL, 'add-user')?.type).toBe('success');
+		expect(peekRedirectClaim()).toBeNull();
 	});
 
 	it('delivers a server error response to the initiating site', () => {

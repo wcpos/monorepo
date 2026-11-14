@@ -120,7 +120,7 @@ async function readStatus(connection: BleConnection): Promise<PrinterStatus | nu
  */
 function toPrinterError(cause: unknown): Error {
 	const message = cause instanceof Error ? cause.message : String(cause);
-	printerLogger.warn('BLE native printer operation failed', { context: { cause: message } });
+	printerLogger.debug('BLE native printer operation failed', { context: { cause: message } });
 	return new Error(UNAVAILABLE_PATTERN.test(message) ? BLUETOOTH_UNAVAILABLE : NOT_RESPONDING);
 }
 

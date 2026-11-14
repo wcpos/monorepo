@@ -6,6 +6,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { UsbPrintersSection } from './usb-printers-section';
 
+jest.mock('@wcpos/components/form', () => ({ SavedMark: () => null }));
 jest.mock('../../../../../../contexts/translations', () => ({
 	useT: () =>
 		jest

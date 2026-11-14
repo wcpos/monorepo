@@ -1,16 +1,9 @@
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
-
-import type { QueryStateActions } from '../../../../query';
-
-const labelMap: Record<string, string> = {
-	percent: 'coupons.percent_short',
-	fixed_cart: 'coupons.fixed_cart_short',
-	fixed_product: 'coupons.fixed_product_short',
-};
+import { discountTypeLabel } from '../discount-type-label';
 
 export function DiscountType({
 	row,
@@ -19,21 +12,15 @@ export function DiscountType({
 	const discountType =
 		useRecordField(row.original.record, ({ payload }) => payload.discount_type) ?? 'percent';
 	const t = useT();
-	const actions = (
-		table.options.meta as {
-			actions?: Pick<QueryStateActions<'coupons'>, 'setFilter'>;
-		}
-	)?.actions;
+	const actions = table.options.meta?.actions;
 
-	const label = labelMap[discountType] ? t(labelMap[discountType]) : discountType;
+	const label = discountTypeLabel(discountType, t);
 
 	return (
-		<ButtonPill
-			variant="ghost-primary"
-			size="xs"
+		<Chip
+			size="sm"
+			label={label}
 			onPress={() => actions?.setFilter('discount_type', discountType)}
-		>
-			<ButtonText numberOfLines={1}>{label}</ButtonText>
-		</ButtonPill>
+		/>
 	);
 }

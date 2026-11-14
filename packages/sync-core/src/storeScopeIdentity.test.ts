@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	canonicalSiteKey,
+	containsDrainableScopeDatabaseName,
+	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
+	DRAINABLE_SCOPE_DATABASE_GENERATION,
 	isScopeDatabaseName,
+	SCOPE_DATABASE_GENERATION,
 	scopeDatabaseName,
 	scopeKeyFor,
 	type StoreScopeIdentity,
@@ -75,9 +79,9 @@ describe('scopeKeyFor', () => {
 });
 
 describe('scopeDatabaseName', () => {
-	it('defaults to the v4 scope generation for the bare-id renames', () => {
+	it('defaults to the v7 scope generation (protocol 3, ADR 0040)', () => {
 		const name = scopeDatabaseName(identity);
-		expect(name).toBe(`pos_v4_${scopeKeyFor(identity)}`);
+		expect(name).toBe(`pos_v7_${scopeKeyFor(identity)}`);
 	});
 
 	it('bumps the generation prefix for storage-format migrations', () => {
@@ -86,7 +90,7 @@ describe('scopeDatabaseName', () => {
 
 	it('appends a namespace suffix for test isolation', () => {
 		expect(scopeDatabaseName(identity, { namespace: 'run7' })).toBe(
-			`pos_v4_${scopeKeyFor(identity)}_run7`
+			`pos_v7_${scopeKeyFor(identity)}_run7`
 		);
 	});
 
@@ -125,5 +129,54 @@ describe('containsScopeDatabaseName', () => {
 	it('does not match unrelated names', () => {
 		expect(containsScopeDatabaseName('unrelated-shop-data')).toBe(false);
 		expect(containsScopeDatabaseName('positive_vibes')).toBe(false);
+	});
+});
+
+describe('containsLegacyScopeDatabaseName', () => {
+	it('classes every generation below the current one as legacy, by containment', () => {
+		for (const generation of [3, 4]) {
+			const db = scopeDatabaseName(identity, { generation });
+			expect(containsLegacyScopeDatabaseName(db)).toBe(true);
+			expect(containsLegacyScopeDatabaseName(`rxdb-${db}--0--orders`)).toBe(true);
+		}
+	});
+
+	it('never classes the current or a future generation as legacy', () => {
+		expect(containsLegacyScopeDatabaseName(scopeDatabaseName(identity))).toBe(false);
+		expect(containsLegacyScopeDatabaseName(scopeDatabaseName(identity, { generation: 9 }))).toBe(
+			false
+		);
+		expect(containsLegacyScopeDatabaseName('unrelated-shop-data')).toBe(false);
+	});
+});
+
+describe('DRAINABLE_SCOPE_DATABASE_GENERATION', () => {
+	it('is exactly the generation before the current one (v6 while v7 is current)', () => {
+		expect(DRAINABLE_SCOPE_DATABASE_GENERATION).toBe(SCOPE_DATABASE_GENERATION - 1);
+		expect(scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })).toBe(
+			`pos_v6_${scopeKeyFor(identity)}`
+		);
+		expect(
+			containsLegacyScopeDatabaseName(
+				scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION })
+			)
+		).toBe(true);
+	});
+});
+
+describe('containsDrainableScopeDatabaseName', () => {
+	it('matches the drainable generation by containment, and nothing else', () => {
+		const drainable = scopeDatabaseName(identity, {
+			generation: DRAINABLE_SCOPE_DATABASE_GENERATION,
+		});
+		expect(containsDrainableScopeDatabaseName(drainable)).toBe(true);
+		expect(containsDrainableScopeDatabaseName(`rxdb-${drainable}--0--orders`)).toBe(true);
+		expect(containsDrainableScopeDatabaseName(scopeDatabaseName(identity))).toBe(false);
+		expect(
+			containsDrainableScopeDatabaseName(
+				scopeDatabaseName(identity, { generation: DRAINABLE_SCOPE_DATABASE_GENERATION - 1 })
+			)
+		).toBe(false);
+		expect(containsDrainableScopeDatabaseName('unrelated-shop-data')).toBe(false);
 	});
 });

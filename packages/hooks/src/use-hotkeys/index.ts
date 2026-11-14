@@ -1,8 +1,8 @@
 import type { KeyboardEvent } from 'react';
-import type { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
+import type { TextInputKeyPressEvent } from 'react-native';
 export { useHotkeys, useHotkeysContext, useRecordHotkeys } from 'react-hotkeys-hook';
 
-export type RNKeyboardEvent = KeyboardEvent | NativeSyntheticEvent<TextInputKeyPressEventData>;
+export type RNKeyboardEvent = KeyboardEvent | TextInputKeyPressEvent;
 
 /**
  * Helpers

@@ -15,7 +15,7 @@ import type { WirePullDocument } from './customPullAdapter';
  * inline per test:
  *  - an append-only sync-index journal: rows are served `sequence > cursor ORDER BY sequence ASC
  *    LIMIT limit+1` (class-sync-index.php:285-292) — sequence is the sole cursor in the indexed
- *    path, and `hasMore` is the limit+1 probe (class-rest-controller.php:106-109).
+ *    path, and `complete` negates the limit+1 probe (class-rest-controller.php:106-109).
  *  - the response checkpoint starts at the REQUEST cursor and only advances per row actually
  *    emitted or permanently skipped (:116-125, :207) — `{updatedAtGmt, orderId, revision,
  *    sequence}` in exactly that key order.
@@ -24,7 +24,7 @@ import type { WirePullDocument } from './customPullAdapter';
  *  - the F6 delete channel: a deleted row reaches `deletes` (wooOrderIds) only when the client
  *    opted in via `include_deletes` (strict boolean, :97/:155-161); the checkpoint always
  *    advances past it.
- *  - F8 journal epoch + head siblings of the checkpoint (:210-224); `resetJournal` models a new
+ *  - F8 journal epoch + head inside the checkpoint (:210-224); `resetJournal` models a new
  *    sequence generation (fresh install / restore) for resync tests.
  *  - sparse fieldsets (`order_fields`, :173-175 + :244-257): requested fields are kept, and BOTH
  *    identity carriers ALWAYS survive the filter (RestControllerTest.php:345-367) — the
@@ -408,10 +408,13 @@ export function createFakePullServer(options: FakePullServerOptions = {}): FakeP
 		return {
 			documents: [],
 			deletes: [],
-			checkpoint,
-			hasMore,
-			epoch,
-			head: options.raiseHeadToCursor ? Math.max(headSequence(), echoedSequence) : headSequence(),
+			checkpoint: {
+				...checkpoint,
+				epoch,
+				head: options.raiseHeadToCursor ? Math.max(headSequence(), echoedSequence) : headSequence(),
+				horizon: 0,
+			},
+			complete: !hasMore,
 			metrics: metricsSnapshot(request, 0),
 		};
 	};
@@ -520,14 +523,12 @@ export function createFakePullServer(options: FakePullServerOptions = {}): FakeP
 		}
 
 		// Envelope key order exactly as assembled by the PHP (:216-231): documents, deletes,
-		// checkpoint, hasMore, epoch, head — then metrics appended.
+		// checkpoint (including journal metadata), complete — then metrics appended.
 		return {
 			documents,
 			deletes,
-			checkpoint: responseCheckpoint,
-			hasMore,
-			epoch,
-			head: headSequence(),
+			checkpoint: { ...responseCheckpoint, epoch, head: headSequence(), horizon: 0 },
+			complete: !hasMore,
 			metrics: metricsSnapshot(request, documents.length),
 		};
 	};
@@ -604,7 +605,7 @@ export function createFakePullServer(options: FakePullServerOptions = {}): FakeP
 				sequence,
 				wooOrderId,
 				modifiedGmt: removeOptions.modifiedGmt ?? defaultModifiedGmt(sequence),
-				revision: 'deleted', // the index writes the literal 'deleted' for tombstone rows
+				revision: '', // tombstone rows have no content revision
 				deleted: true,
 			});
 		},

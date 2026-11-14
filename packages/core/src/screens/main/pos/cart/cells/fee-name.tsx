@@ -5,28 +5,24 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
+import { EditableField } from '@wcpos/components/editable-field';
 
 import { formatMetaDataValue } from '../../../components/format-meta-data-value';
-import { EditCartItemButton } from './edit-cart-item-button';
-import { EditFeeLine } from './edit-fee-line';
-import { useT } from '../../../../../contexts/translations';
-import { EditableField } from '../../../components/editable-field';
-import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
+import { useCartTableReadOnly } from './read-only';
 
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type FeeLine = import('@wcpos/query').OrderFeeLine;
 interface Props {
 	uuid: string;
 	item: FeeLine;
 	type: 'line_items';
 }
 
-/**
- *
- */
+/** The v2 cart's fee name: the old cell without the edit icon (the strip's Edit owns it). */
 export function FeeName({ row }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
-	const { updateFeeLine } = useUpdateFeeLine();
-	const t = useT();
+	const { updateCartLine } = useUpdateCartLine();
+	const readOnly = useCartTableReadOnly();
 
 	/**
 	 * filter out the private meta data
@@ -47,33 +43,38 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 	 */
 	return (
 		<VStack className="w-full">
-			<HStack className="gap-0">
-				<View className="flex-1">
+			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
+			<View className="w-full">
+				{readOnly ? (
+					<Text className="py-1.5" numberOfLines={2} decodeHtml>
+						{item.name ?? ''}
+					</Text>
+				) : (
 					<EditableField
+						variant="ghost"
+						bold={false}
+						numberOfLines={2}
 						value={item.name ?? undefined}
-						onChangeText={(name) => updateFeeLine(uuid, { name })}
+						onChangeText={(name) => updateCartLine('fee_lines', uuid, { name })}
 					/>
-				</View>
-				<EditCartItemButton title={t('common.edit_2', { name: item.name })}>
-					<EditFeeLine uuid={uuid} item={item} />
-				</EditCartItemButton>
-			</HStack>
+				)}
+			</View>
 
 			{metaData.length > 0 && (
-				<View className="grid grid-cols-2 gap-1 p-2">
-					{metaData.map((meta) => {
-						return (
-							<React.Fragment key={meta.id || meta.key}>
-								{/* Same meta the line-item cell decodes next door — a fee's meta is
-								    no less server-supplied than a product's. */}
-								<Text className="text-sm" decodeHtml>{`${meta.key}:`}</Text>
-								<Text className="text-sm" decodeHtml>
-									{formatMetaDataValue(meta.value)}
-								</Text>
-							</React.Fragment>
-						);
-					})}
-				</View>
+				<VStack space="xs">
+					{metaData.map((meta) => (
+						// The product cell's meta layout: a key and a value on one wrapping line, not the
+						// old cell's CSS grid (a v2 file carries no Uniwind allowlist entry).
+						<HStack key={meta.id || meta.key} className="flex-wrap gap-0">
+							{/* Same meta the line-item cell decodes next door — a fee's meta is
+							    no less server-supplied than a product's. */}
+							<Text variant="help" decodeHtml>{`${meta.key}: `}</Text>
+							<Text className="text-xs" decodeHtml>
+								{formatMetaDataValue(meta.value)}
+							</Text>
+						</HStack>
+					))}
+				</VStack>
 			)}
 		</VStack>
 	);

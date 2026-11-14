@@ -3,19 +3,19 @@
  */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { AddCustomerScreen } from './add';
 
-type SubmitCustomer = (data: Record<string, unknown>) => Promise<void>;
-
 const mockCreate = jest.fn();
+const mockUseMutationProps = jest.fn();
 const mockFormat = jest.fn(() => 'Ada Lovelace');
 const mockLoggerSuccess = jest.fn();
 const mockLoggerError = jest.fn();
 const mockRouterBack = jest.fn();
-let mockSubmitCustomer: SubmitCustomer | undefined;
 
+// The form's error band is a Notice, which loads ESM uniwind and expo-linking.
+jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('@hookform/resolvers/zod', () => ({
 	zodResolver: () => undefined,
 }));
@@ -25,19 +25,14 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('react-hook-form', () => ({
-	useForm: () => ({}),
+	useForm: () => ({
+		handleSubmit: (submit: (data: Record<string, unknown>) => Promise<void>) => () =>
+			submit({ first_name: 'Ada', email: 'ada@example.com', billing: {} }),
+	}),
 }));
 
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-
-jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	ModalTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
 jest.mock('@wcpos/components/text', () => ({
@@ -57,15 +52,22 @@ jest.mock('../../../contexts/translations', () => ({
 }));
 
 jest.mock('../components/customer/customer-form', () => ({
-	CustomerForm: ({ onSubmit }: { onSubmit: SubmitCustomer }) => {
-		mockSubmitCustomer = onSubmit;
-		return null;
+	...jest.requireActual('../components/customer/customer-form'),
+	CustomerForm: ({ footer }: { footer: import('@wcpos/components/dialog').DialogFooterProps }) => {
+		const { DialogFooter } = jest.requireActual('../../../../jest/footer.test-utils');
+		return <DialogFooter {...footer} />;
 	},
-	customerFormSchema: {},
 }));
 
 jest.mock('../hooks/mutations/use-mutation', () => ({
-	useMutation: () => ({ create: mockCreate }),
+	useMutation: (props: unknown) => {
+		mockUseMutationProps(props);
+		return { create: mockCreate };
+	},
+}));
+
+jest.mock('../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: jest.fn() }),
 }));
 
 jest.mock('../hooks/use-customer-name-format', () => ({
@@ -74,7 +76,6 @@ jest.mock('../hooks/use-customer-name-format', () => ({
 
 beforeEach(() => {
 	jest.clearAllMocks();
-	mockSubmitCustomer = undefined;
 });
 
 it('formats the newly created customer from the raw record payload', async () => {
@@ -87,13 +88,22 @@ it('formats the newly created customer from the raw record payload', async () =>
 	});
 
 	render(<AddCustomerScreen />);
-	expect(mockSubmitCustomer).toBeDefined();
 
 	await act(async () => {
-		await mockSubmitCustomer?.({ first_name: 'Ada' });
+		fireEvent.click(screen.getByTestId('customer-form-add'));
 	});
 
+	expect(mockCreate).toHaveBeenCalledWith({
+		data: expect.objectContaining({
+			first_name: 'Ada',
+			billing: expect.objectContaining({ first_name: 'Ada' }),
+		}),
+	});
 	expect(mockFormat).toHaveBeenCalledWith(payload);
+	// The screen toasts "Saved {name}" itself, so the hook's generic toast stays off.
+	expect(mockUseMutationProps).toHaveBeenCalledWith(
+		expect.objectContaining({ collectionName: 'customers', showSuccessToast: false })
+	);
 	expect(mockLoggerSuccess).toHaveBeenCalledWith('common.saved', {
 		showToast: true,
 		context: {
@@ -104,3 +114,29 @@ it('formats the newly created customer from the raw record payload', async () =>
 	expect(toJSON).not.toHaveBeenCalled();
 	expect(mockRouterBack).toHaveBeenCalledTimes(1);
 });
+
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: React.PropsWithChildren<{ onPress: () => void; testID: string }>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
+
+// Keep the billing helper real while excluding platform-only field controls.
+jest.mock('@wcpos/components/collapsible', () => ({}));
+jest.mock('@wcpos/components/form', () => ({}));
+jest.mock('../components/country-state-select/country-combobox', () => ({}));
+jest.mock('../components/country-state-select/state-forminput', () => ({}));
+jest.mock('../components/meta-data-form', () => ({ metaDataSchema: {} }));
+jest.mock('../components/customer/tax-ids-form', () => ({
+	useNewTaxIdRow: () => () => ({ type: 'eu_vat', value: '', country: '' }),
+	taxIdsFormSchema: {},
+}));
+// The form's address rows read the store country; its app-state chain loads ESM uuid.
+jest.mock('../hooks/use-base-tax-location', () => ({ useBaseTaxLocation: () => ({}) }));

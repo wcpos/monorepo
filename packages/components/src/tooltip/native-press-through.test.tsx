@@ -49,6 +49,9 @@ jest.mock('@rn-primitives/slot', () => ({
 jest.mock('../text', () => ({
 	TextClassContext: React.createContext(''),
 }));
+jest.mock('../lib/overlay', () => ({
+	OVERLAY_MOTION: { anchored: { enter: '', exit: '', entering: {}, exiting: {} } },
+}));
 jest.mock('../lib/utils', () => ({
 	cn: (...parts: unknown[]) => parts.filter(Boolean).join(' '),
 }));

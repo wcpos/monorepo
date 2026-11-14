@@ -5,11 +5,13 @@ import { IconButton } from '@wcpos/components/icon-button';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useAddProduct } from '../../hooks/use-add-product';
+import { useT } from '../../../../../contexts/translations';
 
 /**
  *
  */
 export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> }, 'actions'>) {
+	const t = useT();
 	const { addProduct } = useAddProduct();
 
 	/**
@@ -18,9 +20,9 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> 
 	return (
 		<IconButton
 			testID="add-to-cart-button"
-			name="circlePlus"
-			variant="success"
-			size="4xl"
+			name="plus"
+			variant="ok"
+			accessibilityLabel={t('common.add_to_cart')}
 			onPress={() => addProduct(row.original.record)}
 		/>
 	);

@@ -1,22 +1,23 @@
 import * as React from 'react';
 
-import axios, { AxiosHeaders, type RawAxiosHeaders } from 'axios';
+import axios, { AxiosHeaders, isAxiosError, type RawAxiosHeaders } from 'axios';
 import set from 'lodash/set';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getDatabaseEpoch, getLogger, mapExceptionToCode } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	buildClientHeaders,
 	buildRequestPreamble,
 	type RequestPreambleContext,
 } from '@wcpos/utils/request-preamble';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
+import { currentUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { http } from './http';
 import { mapToInternalCode, parseWpError } from './parse-wp-error';
-import { scheduleRequest } from './request-queue';
-import { requestStateManager } from './request-state-manager';
+import { isDroppedRequestError, scheduleRequest } from './request-queue';
+import { PREFLIGHT_BLOCK, requestStateManager } from './request-state-manager';
 
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
@@ -25,13 +26,30 @@ import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 // `protocolHeaders` (a per-site verdict relayed by callers that have a site in
 // scope — this interceptor does not, so the flag rides the request config) and
 // `quietErrors` (failure is routine and non-fatal for this request — e.g.
-// decorative image fetches — so log it as a warning instead of an error;
-// the error itself still throws and is enriched identically).
+// decorative image fetches; every failure row here is debug now, so the flag
+// only marks that row `quiet`, and the error still throws enriched identically) and
+// `failureCode` (the registered code a failure of THIS request means when
+// the server sends no WordPress error body). The status table below the
+// parser is written for REST routes — it reads a 404 as "the WCPOS store
+// route is unavailable" — so a request outside the REST namespace, such as
+// an image under /wp-content/uploads/, must name its own meaning or a missing
+// file is logged as AUTH311 and the merchant is told to check REST is not
+// blocked. A WordPress error body still outranks it: that is the server's
+// own account of the failure.
+declare module 'axios' {
+	export interface AxiosRequestConfig {
+		wcposHeaders?: boolean;
+		protocolHeaders?: boolean;
+		quietErrors?: boolean;
+		failureCode?: ErrorCode;
+	}
+}
 export type WcposRequestConfig = AxiosRequestConfig & {
 	wcposPreamble?: Omit<RequestPreambleContext, 'client'>;
 	wcposHeaders?: boolean;
 	protocolHeaders?: boolean;
 	quietErrors?: boolean;
+	failureCode?: ErrorCode;
 	/**
 	 * Marks a request that carries no credentials, so the process-wide `authFailed`
 	 * latch does not block it. Set it only when the request genuinely sends no token —
@@ -159,6 +177,15 @@ const processErrorHandlers = async (
 				httpLogger.debug(`Error handler ${handler.name} substituted a CanceledError`, {
 					context: { handlerName: handler.name, status: error.response?.status },
 				});
+			} else if (axios.isAxiosError(handlerError) || (handlerError as any)?.isPreFlightBlocked) {
+				// The retry the handler made failed in transport (network, 5xx, a preflight
+				// block): that request's own failure path reports it. Forensic here.
+				httpLogger.debug(`Error handler ${handler.name} threw a request error`, {
+					context: {
+						error: handlerError instanceof Error ? handlerError.message : String(handlerError),
+						originalStatus: error.response?.status,
+					},
+				});
 			} else {
 				httpLogger.error(`Error handler ${handler.name} threw an error`, {
 					code: 'CLIENT999',
@@ -231,98 +258,124 @@ type UpdateRequiredHandler = (details: UpdateRequiredDetails & { status: number 
  */
 export const useHttpClient = (
 	errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HANDLERS,
-	onUpdateRequired?: UpdateRequiredHandler
+	onUpdateRequired?: UpdateRequiredHandler,
+	/** The site's wp_api_url, whose update-required latch refuses requests locally. */
+	updateRequiredSite?: string
 ) => {
 	// const defaultErrorHandler = useHttpErrorHandler();
 
 	/**
 	 * Make the actual HTTP request
 	 */
-	const makeRequest = React.useCallback(async (config: WcposRequestConfig) => {
-		// Pre-flight check: ensure request can proceed based on global state.
-		// `unauthenticated: true` marks a request that sends no credentials, so the
-		// process-wide authFailed latch does not apply to it (see CanProceedOptions).
-		const canProceed = requestStateManager.checkCanProceed({
-			authenticated: config.unauthenticated !== true,
-		}) as any;
-		if (!canProceed.ok) {
-			// Create error with additional context
-			const error = new Error(canProceed.reason || 'Request blocked') as any;
-			error.blockCode = canProceed.blockCode;
-			error.isPreFlightBlocked = true;
-			error.isSleeping = canProceed.isSleeping || false;
+	const makeRequest = React.useCallback(
+		async (config: WcposRequestConfig) => {
+			// Pre-flight check: ensure request can proceed based on global state.
+			// `unauthenticated: true` marks a request that sends no credentials, so the
+			// process-wide authFailed latch does not apply to it (see CanProceedOptions).
+			const canProceed = requestStateManager.checkCanProceed({
+				authenticated: config.unauthenticated !== true,
+			}) as any;
+			if (!canProceed.ok) {
+				// Create error with additional context
+				const error = new Error(canProceed.reason || 'Request blocked') as any;
+				error.blockCode = canProceed.blockCode;
+				error.isPreFlightBlocked = true;
+				error.isSleeping = canProceed.isSleeping || false;
 
-			// Only log if not sleeping - sleeping is expected behavior
-			if (!canProceed.isSleeping) {
-				httpLogger.debug('Request blocked by pre-flight check', {
+				// Only log if not sleeping - sleeping is expected behavior
+				if (!canProceed.isSleeping) {
+					httpLogger.debug('Request blocked by pre-flight check', {
+						context: {
+							blockCode: canProceed.blockCode,
+							reason: canProceed.reason,
+							url: config.url,
+							method: config.method,
+						},
+					});
+				}
+				throw error;
+			}
+
+			const checkUpdateRequired = () => {
+				const state = updateRequiredSite ? currentUpdateRequired(updateRequiredSite) : null;
+				if (state) {
+					throw Object.assign(
+						new Error('Request refused locally: the store requires a newer app'),
+						{
+							blockCode: PREFLIGHT_BLOCK.UPDATE_REQUIRED,
+							isPreFlightBlocked: true,
+							isSleeping: false,
+							wpCode: ERROR_CODES.APP_UPDATE_REQUIRED,
+							wpStatus: state.status,
+						}
+					);
+				}
+			};
+			checkUpdateRequired();
+
+			const databaseEpoch = getDatabaseEpoch();
+
+			// Only credentialed requests depend on an in-flight token refresh.
+			if (config.unauthenticated !== true && requestStateManager.isTokenRefreshing()) {
+				httpLogger.debug('Token refresh in progress, waiting before making request', {
 					context: {
-						blockCode: canProceed.blockCode,
-						reason: canProceed.reason,
+						url: config.url,
+						method: config.method,
+					},
+				});
+				await requestStateManager.awaitTokenRefresh();
+				checkUpdateRequired();
+				httpLogger.debug('Token refresh completed, proceeding with request', {
+					context: {
 						url: config.url,
 						method: config.method,
 					},
 				});
 			}
-			throw error;
-		}
 
-		const databaseEpoch = getDatabaseEpoch();
-
-		// Only credentialed requests depend on an in-flight token refresh.
-		if (config.unauthenticated !== true && requestStateManager.isTokenRefreshing()) {
-			httpLogger.debug('Token refresh in progress, waiting before making request', {
-				context: {
-					url: config.url,
-					method: config.method,
-				},
-			});
-			await requestStateManager.awaitTokenRefresh();
-			httpLogger.debug('Token refresh completed, proceeding with request', {
-				context: {
-					url: config.url,
-					method: config.method,
-				},
-			});
-		}
-
-		const processedConfig = { ...config };
-		if (processedConfig.timeout === undefined) {
-			processedConfig.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
-		}
-
-		if (processedConfig.method?.toLowerCase() === 'head') {
-			set(processedConfig, 'decompress', false);
-			if (processedConfig.params instanceof URLSearchParams) {
-				processedConfig.params = new URLSearchParams(processedConfig.params);
-				processedConfig.params.set('_method', 'HEAD');
-			} else {
-				processedConfig.params = { ...processedConfig.params, _method: 'HEAD' };
+			const processedConfig = { ...config };
+			if (processedConfig.timeout === undefined) {
+				processedConfig.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
 			}
-		}
 
-		if (process.env.NODE_ENV === 'development') {
-			if (processedConfig.params instanceof URLSearchParams) {
-				processedConfig.params = new URLSearchParams(processedConfig.params);
-				processedConfig.params.set('XDEBUG_SESSION', 'start');
-			} else {
-				processedConfig.params = { ...processedConfig.params, XDEBUG_SESSION: 'start' };
+			if (processedConfig.method?.toLowerCase() === 'head') {
+				set(processedConfig, 'decompress', false);
+				if (processedConfig.params instanceof URLSearchParams) {
+					processedConfig.params = new URLSearchParams(processedConfig.params);
+					processedConfig.params.set('_method', 'HEAD');
+				} else {
+					processedConfig.params = { ...processedConfig.params, _method: 'HEAD' };
+				}
 			}
-		}
 
-		const dispatchConfig = applyPreambleToAxiosConfig(processedConfig);
+			if (process.env.NODE_ENV === 'development') {
+				if (processedConfig.params instanceof URLSearchParams) {
+					processedConfig.params = new URLSearchParams(processedConfig.params);
+					processedConfig.params.set('XDEBUG_SESSION', 'start');
+				} else {
+					processedConfig.params = { ...processedConfig.params, XDEBUG_SESSION: 'start' };
+				}
+			}
 
-		const method = (processedConfig.method ?? 'GET').toUpperCase();
-		const endpoint = processedConfig.url
-			? new URL(processedConfig.url, 'http://localhost').pathname
-			: 'unknown';
-		const response = await scheduleRequest(() => http.request(dispatchConfig));
-		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
-			httpLogger.info('HTTP request completed', {
-				context: { method, endpoint, status: response.status },
-			});
-		}
-		return response;
-	}, []);
+			const dispatchConfig = applyPreambleToAxiosConfig(processedConfig);
+
+			const method = (processedConfig.method ?? 'GET').toUpperCase();
+			const endpoint = processedConfig.url
+				? new URL(processedConfig.url, 'http://localhost').pathname
+				: 'unknown';
+			const response = await scheduleRequest(async () => {
+				checkUpdateRequired();
+				return http.request(dispatchConfig);
+			}, `${method} ${endpoint}`);
+			if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
+				httpLogger.info('HTTP request completed', {
+					context: { method, endpoint, status: response.status },
+				});
+			}
+			return response;
+		},
+		[updateRequiredSite]
+	);
 
 	/**
 	 * Main request function with error handling
@@ -375,17 +428,39 @@ export const useHttpClient = (
 				const wpError = axiosError.response?.data
 					? parseWpError(axiosError.response.data, axiosError.message)
 					: undefined;
-				const mappedException = axiosError.response ? undefined : mapExceptionToCode(error);
+				// A transport failure with no reply (offline, DNS, timeout, reset) is the
+				// store being unreachable, not "an unexpected error, report it".
+				const unreachable = !axiosError.response && isAxiosError(error);
+				const mappedException =
+					axiosError.response || unreachable ? undefined : mapExceptionToCode(error);
+				// A transport failure the exception mapper could not name (CLIENT999) is
+				// as generic as the status table, so the request's own code wins there too.
+				// So does "unreachable": a request outside the REST namespace (an image on
+				// another host) knows better what its failure means.
+				const isGenericFallback =
+					mappedException === undefined || mappedException.code === ERROR_CODES.UNEXPECTED_ERROR;
+				const fallbackCode = axiosError.response
+					? mapToInternalCode(null, axiosError.response.status)
+					: unreachable
+						? ERROR_CODES.SYNC_UNREACHABLE
+						: mappedException?.code;
 				const errorCode =
 					wpError?.code ??
-					(axiosError.response
-						? mapToInternalCode(null, axiosError.response.status)
-						: mappedException?.code);
+					(isGenericFallback ? (reqConfig.failureCode ?? fallbackCode) : fallbackCode);
+				const codeFallback =
+					mappedException?.code === ERROR_CODES.UNEXPECTED_ERROR &&
+					errorCode === ERROR_CODES.UNEXPECTED_ERROR;
 				if (errorCode === ERROR_CODES.APP_UPDATE_REQUIRED && axiosError.response) {
 					const details = parseUpdateRequiredBody(axiosError.response.data);
 					if (details) onUpdateRequired?.({ ...details, status: axiosError.response.status });
 				}
-				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
+				// A request the queue dropped is already reported once per burst as
+				// CLIENT131 by the queue; a row per request here would bury it in CLIENT999s.
+				if (
+					!(error as any).isPreFlightBlocked &&
+					!isDroppedRequestError(error) &&
+					databaseEpoch === getDatabaseEpoch()
+				) {
 					const method = (reqConfig.method ?? 'GET').toUpperCase();
 					const endpoint = reqConfig.url
 						? new URL(reqConfig.url, 'http://localhost').pathname
@@ -395,21 +470,19 @@ export const useHttpClient = (
 						method,
 						endpoint,
 						status: axiosError.response?.status ?? 0,
-						...(mappedException?.code === 'CLIENT999' && { codeFallback: true }),
+						...(codeFallback && { codeFallback: true }),
 						...(wpError?.serverCode && { serverCode: wpError.serverCode }),
 						...(wpError?.triage && { triage: true }),
 					};
-					if (reqConfig.quietErrors) {
-						httpLogger.warn(`HTTP request failed: ${method} ${endpoint}`, {
-							code: errorCode ?? 'CLIENT999',
-							context: failureContext,
-						});
-					} else {
-						httpLogger.error(`HTTP request failed: ${method} ${endpoint}`, {
-							code: errorCode ?? 'CLIENT999',
-							context: failureContext,
-						});
-					}
+					// Forensic only. The transport cannot see how the operation ends — a
+					// queued email, a receipt built from local data and an image placeholder
+					// all recover — so the caller owns the one merchant-visible row and
+					// toast (LEVELS.md: producers that cannot see the ending must not guess).
+					httpLogger.debug(`HTTP request failed: ${method} ${endpoint}`, {
+						code: errorCode ?? ERROR_CODES.UNEXPECTED_ERROR,
+						context: { ...failureContext, ...(reqConfig.quietErrors && { quiet: true }) },
+						terminal: { outcome: 'failed' },
+					});
 				}
 
 				// Enrich error with WordPress/WooCommerce error details before throwing

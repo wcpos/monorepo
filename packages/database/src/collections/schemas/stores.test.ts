@@ -28,7 +28,7 @@ it('the validator itself is wired up — a bad schema path would make every case
 describe('stores schema — shipping_tax_class', () => {
 	/**
 	 * The regression. Tax classes are user-definable in WooCommerce, and
-	 * TaxClassSelect builds its options from the server's tax-class list, so a
+	 * useTaxClassOptions builds its options from the server's tax-class list, so a
 	 * merchant who adds "luxury" can select it for shipping. The schema used to
 	 * enum only WooCommerce's four built-in classes and rejected it.
 	 */
@@ -62,6 +62,25 @@ describe('stores schema — tracking_consent', () => {
 	});
 
 	it('accepts a document without tracking consent', () => {
+		expect(() => validateStore({ localID: 'a' })).not.toThrow();
+	});
+});
+
+describe('stores schema — display', () => {
+	it('accepts the server advertisement', () => {
+		expect(() =>
+			validateStore({
+				localID: 'a',
+				display: { contract: 1, signaling: '/wcpos/v2/display' },
+			})
+		).not.toThrow();
+	});
+
+	it('rejects a malformed advertisement', () => {
+		expect(() => validateStore({ localID: 'a', display: { contract: '1' } })).toThrow();
+	});
+
+	it('accepts a document without a display advertisement', () => {
 		expect(() => validateStore({ localID: 'a' })).not.toThrow();
 	});
 });

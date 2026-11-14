@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 const premiumRoot = dirname(createRequire(import.meta.url).resolve('rxdb-premium/package.json'));
-// Like flexsearch-export-history: only Dependabot's declared missing premium dist skips.
+// Only Dependabot's declared missing premium dist skips.
 const premium = existsSync(join(premiumRoot, 'dist/esm/plugins/shared/index.js'));
 // Run via test:scripts on PRs regardless of the affected-package unit-test selection.
 // Vitest imports the real TS app factories without source slicing or a second recipe.

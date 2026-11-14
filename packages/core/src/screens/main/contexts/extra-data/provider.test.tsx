@@ -30,16 +30,25 @@ function createDeferred<T>() {
 }
 
 let mockEngine = createMockEngine();
-let mockGet: jest.Mock<Promise<MockResponse>, [string]> = jest.fn(async (_url: string) => ({
-	status: 200,
-	data: [],
-}));
+let mockGet: jest.Mock<Promise<MockResponse>, [string, { quietErrors?: boolean }?]> = jest.fn(
+	async (_url: string) => ({
+		status: 200,
+		data: [],
+	})
+);
 let mockHttp = { get: mockGet };
 let mockExtraDataSet = jest.fn();
 let mockExtraDataValues: Record<string, unknown> = {};
 let mockExtraData = {
 	get: (key: string) => mockExtraDataValues[key],
 	set: mockExtraDataSet,
+};
+const mockStoreDB = {
+	states: {
+		get data_v2() {
+			return mockExtraData;
+		},
+	},
 };
 const mockUseRestHttpClient = jest.fn(() => mockHttp);
 
@@ -55,6 +64,7 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
 		extraData: mockExtraData,
+		storeDB: mockStoreDB,
 	});
 	return { useAppState, useStoreSession: useAppState };
 });
@@ -76,23 +86,26 @@ beforeEach(() => {
 });
 
 describe('ExtraDataProvider API services', () => {
-	it('fetches each resource on a cold start', () => {
+	it('fetches each resource on a cold start', async () => {
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
 
-		expect(mockUseRestHttpClient).toHaveBeenCalledTimes(1);
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
-		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
+		expect(mockGet).toHaveBeenCalledTimes(4);
 	});
 
-	it('fetches nothing on a warm start for unrelated engine events', () => {
+	it('revalidates payment-method capability on a warm start', async () => {
 		mockExtraDataValues = {
 			taxClasses: [{ slug: 'standard' }],
 			shippingMethods: [{ id: 'flat_rate' }],
 			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
 
 		emit(mockEngine, {
 			type: 'lane-finish',
@@ -100,18 +113,22 @@ describe('ExtraDataProvider API services', () => {
 			status: 'ran',
 		});
 
-		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
 	});
 
-	it('treats cached empty arrays as loaded on a warm start', () => {
+	it('revalidates a cached empty payment-method envelope on a warm start', async () => {
 		mockExtraDataValues = {
 			taxClasses: [],
 			shippingMethods: [],
 			orderStatuses: [],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
 
-		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
 	});
 
 	it('consumes rejected resource requests', async () => {
@@ -125,20 +142,59 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockExtraDataSet).not.toHaveBeenCalled();
 	});
 
-	it('refetches all resources when the engine reports changed config', () => {
+	it('keeps the cached payment methods when the store cannot be reached', async () => {
 		mockExtraDataValues = {
 			taxClasses: [{ slug: 'standard' }],
 			shippingMethods: [{ id: 'flat_rate' }],
 			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
+		};
+		// No `response`: the request never reached a server. An offline till has to
+		// keep the tender checkout it was already working with.
+		mockGet.mockRejectedValue(new Error('network unavailable'));
+
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
+
+		expect(mockExtraDataSet).not.toHaveBeenCalled();
+	});
+
+	it('drops the cached payment methods when the store no longer serves the route', async () => {
+		mockExtraDataValues = {
+			taxClasses: [{ slug: 'standard' }],
+			shippingMethods: [{ id: 'flat_rate' }],
+			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
+		};
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('rest_no_route'), { response: { status: 404 } })
+		);
+
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
+
+		expect(mockExtraDataSet).toHaveBeenCalledTimes(1);
+		expect(mockExtraDataSet).toHaveBeenCalledWith('paymentMethods', expect.any(Function));
+		expect(mockExtraDataSet.mock.calls[0][1]()).toBeNull();
+	});
+
+	it('refetches all resources when the engine reports changed config', async () => {
+		mockExtraDataValues = {
+			taxClasses: [{ slug: 'standard' }],
+			shippingMethods: [{ id: 'flat_rate' }],
+			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
 		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
+		await act(async () => Promise.resolve());
 
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
-		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
+		expect(mockGet).toHaveBeenCalledTimes(5);
 	});
 
 	it('rebinds the event bridge to current store dependencies', async () => {
@@ -146,6 +202,7 @@ describe('ExtraDataProvider API services', () => {
 			taxClasses: [{ slug: 'standard' }],
 			shippingMethods: [{ id: 'flat_rate' }],
 			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		const previousEngine = mockEngine;
 		const previousGet = mockGet;
@@ -162,21 +219,21 @@ describe('ExtraDataProvider API services', () => {
 			get: (key: string) => mockExtraDataValues[key],
 			set: mockExtraDataSet,
 		};
-		rerender(<ExtraDataProvider>content</ExtraDataProvider>);
+		act(() => rerender(<ExtraDataProvider>content</ExtraDataProvider>));
 
 		emit(previousEngine, {
 			type: 'config-changed',
 			collections: ['tax_rates'],
 		});
-		expect(previousGet).not.toHaveBeenCalled();
-		expect(mockGet).not.toHaveBeenCalled();
+		expect(previousGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledTimes(1);
 
 		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
-		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockGet).toHaveBeenCalledTimes(5);
 		await act(async () => {
 			await Promise.resolve();
 		});
-		expect(mockExtraDataSet).toHaveBeenCalledTimes(3);
+		expect(mockExtraDataSet).toHaveBeenCalledTimes(4);
 	});
 
 	it('ignores responses superseded by a newer config refresh', async () => {
@@ -192,6 +249,7 @@ describe('ExtraDataProvider API services', () => {
 		mockExtraDataValues = {
 			shippingMethods: [{ id: 'flat_rate' }],
 			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		mockGet.mockImplementation((url: string) => {
 			if (url !== '/taxes/classes') return Promise.resolve({ status: 200, data: [] });

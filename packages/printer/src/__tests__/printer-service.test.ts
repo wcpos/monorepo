@@ -4,6 +4,7 @@ import { sampleReceiptData } from '../encoder/__tests__/fixtures';
 import { isVerboseDiagnostics, printerLogger } from '../logger';
 import { PrinterService } from '../printer-service';
 import { PRINT_JOB_SLOW_MS } from '../transport/print-timeouts';
+import { stubImageDecodingAsUnavailable } from './stub-image-decoding';
 
 import type { PrinterProfile, PrinterTransport } from '../types';
 
@@ -49,7 +50,13 @@ vi.mock('../encoder/encode-receipt', () => ({
 	encodeReceipt: encodeReceiptMock,
 }));
 
-vi.mock('../encoder/thermal-print', () => ({
+stubImageDecodingAsUnavailable();
+
+// Partial mock: only the receipt-template entry points are stubbed. The diagnostic path
+// and `maxDotsForColumns` stay real, so the test-print cases below assert against bytes
+// the encoder actually produced rather than against a stub.
+vi.mock('../encoder/thermal-print', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../encoder/thermal-print')>()),
 	buildThermalTemplateMarkupJob: buildThermalTemplateMarkupJobMock,
 	encodeThermalTemplateForPrint: encodeThermalTemplateForPrintMock,
 }));
@@ -84,6 +91,24 @@ vi.mock('../transport/star-native-adapter', () => ({
 		printRaw = starNativePrintRawMock;
 		printHtml = vi.fn().mockResolvedValue(undefined);
 		disconnect = vi.fn().mockResolvedValue(undefined);
+	},
+}));
+
+const { networkBeginJobMock, networkCtorMock } = vi.hoisted(() => ({
+	networkBeginJobMock: vi.fn(),
+	networkCtorMock: vi.fn(),
+}));
+
+vi.mock('../transport/network-adapter', () => ({
+	NetworkAdapter: class {
+		constructor(...args: [host: string, port?: number, vendor?: string]) {
+			networkCtorMock(...args);
+		}
+
+		name = 'network-test';
+		beginJob = networkBeginJobMock;
+		printRaw = vi.fn().mockResolvedValue(undefined);
+		printHtml = vi.fn().mockResolvedValue(undefined);
 	},
 }));
 
@@ -313,6 +338,26 @@ describe('PrinterService', () => {
 			expect.objectContaining({ template: expect.stringContaining('Printer Diagnostic') })
 		);
 		expect(transport.printRaw).not.toHaveBeenCalled();
+	});
+
+	it('routes the test print through asset preparation, like a real receipt', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		await service.testPrint({ ...networkProfile(), codePage: 'cp858' });
+
+		// `imageMode`/`barcodeMode` are set only by the asset-preparation path. Encoding the
+		// diagnostic directly — what this used to do — leaves them undefined and the logo
+		// never reaches the paper. The code page was dropped by that path too.
+		const [job] = vi.mocked(transport.printMarkup!).mock.calls[0];
+		expect(job.options).toEqual(
+			expect.objectContaining({
+				imageMode: 'raster',
+				barcodeMode: 'image',
+				codePage: 'cp858',
+			})
+		);
 	});
 
 	it('forwards decimals to encodeReceipt for default thermal printing', async () => {
@@ -996,5 +1041,20 @@ describe('PrinterService', () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it('tells a reused transport that a new job has begun, so per-job state never leaks', async () => {
+		networkBeginJobMock.mockClear();
+		networkCtorMock.mockClear();
+		const service = new PrinterService();
+		const profile = networkProfile({ id: 'reused-network', port: 9100 });
+
+		await service.printRaw(new Uint8Array([1]), profile);
+		await service.printRaw(new Uint8Array([2]), profile);
+		await service.printRaw(new Uint8Array([3]), profile);
+
+		// One transport lives across the profile's jobs, so it has to hear where each job starts.
+		expect(networkCtorMock).toHaveBeenCalledTimes(1);
+		expect(networkBeginJobMock).toHaveBeenCalledTimes(3);
 	});
 });

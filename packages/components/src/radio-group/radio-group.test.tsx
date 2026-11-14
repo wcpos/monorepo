@@ -31,6 +31,38 @@ jest.mock('@rn-primitives/radio-group', () => ({
 }));
 
 describe('RadioGroupOption', () => {
+	it('selects the option when its trailing slot is pressed, and not when already selected', () => {
+		const onValueChange = jest.fn();
+
+		const { rerender } = render(
+			<RadioGroup value="default" onValueChange={onValueChange}>
+				<RadioGroupOption
+					value="comfortable"
+					label="Comfortable"
+					testID="comfortable-radio"
+					right={<span>preview</span>}
+				/>
+			</RadioGroup>
+		);
+
+		fireEvent.click(screen.getByTestId('comfortable-radio-right'));
+		expect(onValueChange).toHaveBeenCalledWith('comfortable');
+
+		rerender(
+			<RadioGroup value="comfortable" onValueChange={onValueChange}>
+				<RadioGroupOption
+					value="comfortable"
+					label="Comfortable"
+					testID="comfortable-radio"
+					right={<span>preview</span>}
+				/>
+			</RadioGroup>
+		);
+		onValueChange.mockClear();
+		fireEvent.click(screen.getByTestId('comfortable-radio-right'));
+		expect(onValueChange).not.toHaveBeenCalled();
+	});
+
 	it('does not emit onValueChange when pressing the already-selected option label', () => {
 		const onValueChange = jest.fn();
 
@@ -59,6 +91,15 @@ describe('RadioGroupOption', () => {
 			</RadioGroup>
 		);
 
+		const radio = screen.getByRole('button');
+		const label = screen.getByText('Comfortable');
+		const description = screen.getByText('More relaxed spacing');
+
+		expect(radio).toHaveAttribute('aria-labelledby');
+		expect(label).toHaveAttribute('id', radio.getAttribute('aria-labelledby'));
+		expect(radio).toHaveAttribute('aria-describedby');
+		expect(description).toHaveAttribute('id', radio.getAttribute('aria-describedby'));
+
 		fireEvent.click(screen.getByText('Comfortable'));
 
 		expect(onValueChange).toHaveBeenCalledTimes(1);
@@ -84,26 +125,5 @@ describe('RadioGroupOption', () => {
 		);
 
 		expect(() => fireEvent.click(screen.getByText('Comfortable'))).not.toThrow();
-	});
-
-	it('links the option description to the radio item', () => {
-		render(
-			<RadioGroup value="default">
-				<RadioGroupOption
-					value="comfortable"
-					label="Comfortable"
-					description="More relaxed spacing"
-				/>
-			</RadioGroup>
-		);
-
-		const radio = screen.getByRole('button');
-		const label = screen.getByText('Comfortable');
-		const description = screen.getByText('More relaxed spacing');
-
-		expect(radio).toHaveAttribute('aria-labelledby');
-		expect(label).toHaveAttribute('id', radio.getAttribute('aria-labelledby'));
-		expect(radio).toHaveAttribute('aria-describedby');
-		expect(description).toHaveAttribute('id', radio.getAttribute('aria-describedby'));
 	});
 });

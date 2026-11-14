@@ -3,7 +3,7 @@ jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ warn: jest.fn() }),
+	getLogger: () => ({ warn: jest.fn(), debug: jest.fn() }),
 }));
 
 // eslint-disable-next-line import/first -- jest.mock() must be registered before this import

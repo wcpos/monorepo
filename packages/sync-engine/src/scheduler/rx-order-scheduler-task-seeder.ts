@@ -57,6 +57,7 @@ export type SeedOrderSchedulerTasksInput = {
 };
 
 export type SeedTargetedOrderSchedulerTaskInput = {
+	wakeFailed?: boolean;
 	remoteIds: RemoteId[];
 	priority?: number;
 	batchSize?: number;
@@ -71,9 +72,12 @@ export type SeedOrderFilterSchedulerTaskInput = {
 	limit: number;
 	customerId?: number;
 	cashierId?: number;
+	registerId?: string;
+	paymentMethod?: string;
 	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
+	modifiedAfterSeconds?: number;
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
 	complete?: boolean;
@@ -141,9 +145,12 @@ function orderFilterWindow(input: SeedOrderFilterSchedulerTaskInput): {
 		limit: input.complete ? 'all' : input.limit,
 		customerId: input.customerId,
 		cashierId: input.cashierId,
+		registerId: input.registerId,
+		paymentMethod: input.paymentMethod,
 		store: input.store,
 		afterSeconds: input.afterSeconds,
 		beforeSeconds: input.beforeSeconds,
+		modifiedAfterSeconds: input.modifiedAfterSeconds,
 		orderby: input.orderby,
 		order: input.order,
 	};
@@ -185,6 +192,7 @@ export async function seedTargetedOrderSchedulerTask(
 	input: SeedTargetedOrderSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	return seedTargetedLane(ORDER_TARGETED_LANE, {
+		wakeFailed: input.wakeFailed,
 		remoteIds: input.remoteIds,
 		priority: input.priority,
 		batchSize: input.batchSize,

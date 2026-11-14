@@ -10,8 +10,10 @@ export {
 	type SerialLineDecoderOptions,
 } from './serial-line-decoder';
 export { decodeHidPosReport, type HidPosDecodeOptions, type HidPosResult } from './hid-pos-decoder';
+export { dedupeScans, SCAN_DEDUP_WINDOW_MS } from './scan-dedup';
 export {
 	createScanSession,
+	DEFAULT_COOLDOWN_MS,
 	hasValidRetailCheckDigit,
 	normalizeRetailCode,
 	type ScanSession,

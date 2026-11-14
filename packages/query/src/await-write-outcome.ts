@@ -7,19 +7,138 @@ export class WriteOutcomeError extends Error {
 	eventType: 'write-rejected' | 'write-conflict';
 	status?: number;
 	reason?: string;
+	/** The server's own (already localized) sentence; `reason` is the machine code. */
+	serverMessage?: string;
+	/** The server's error `data`, whole: a refusal may name what it refused (ADR 0040). */
+	data?: Record<string, unknown>;
 
 	constructor(
 		eventType: WriteOutcomeError['eventType'],
 		mutationId: string,
 		status?: number,
-		reason?: string
+		reason?: string,
+		serverMessage?: string,
+		data?: Record<string, unknown>
 	) {
-		super(`${eventType} for mutation "${mutationId}"`);
+		// The server's sentence rides the message too, so every caller's logged `error` says why.
+		super(`${eventType} for mutation "${mutationId}"${serverMessage ? `: ${serverMessage}` : ''}`);
 		this.name = 'WriteOutcomeError';
 		this.eventType = eventType;
 		this.status = status;
 		this.reason = reason;
+		this.serverMessage = serverMessage;
+		this.data = data;
 	}
+}
+
+/**
+ * No terminal outcome arrived in time. `diagnostics` is the engine's push state at that moment:
+ * timeouts where no push request went out at all (Sentry CHECKOUT101) carried nothing to say why.
+ */
+export class WriteOutcomeTimeoutError extends Error {
+	diagnostics: Record<string, unknown>;
+
+	constructor(mutationId: string, diagnostics: Record<string, unknown>) {
+		super(`Timed out waiting for mutation "${mutationId}"`);
+		this.name = 'WriteOutcomeTimeoutError';
+		this.diagnostics = diagnostics;
+	}
+}
+
+function pushStateSnapshot(engine: Pick<RxdbSyncEngine, 'status'>): Record<string, unknown> {
+	// A diagnostic must never replace the timeout verdict it annotates.
+	try {
+		const status = engine.status();
+		const drain = status.lanes['write-drain'];
+		return {
+			connectivity: status.connectivity,
+			authRequired: status.authRequired,
+			writeSessionHeld: status.writeSessionHeld,
+			gatedBy: status.gatedBy,
+			queueDepth: status.queueDepth,
+			writeDrainLastTickAtMs: drain.lastTick?.atMs ?? null,
+			writeDrainLastTickStatus: drain.lastTick?.status ?? null,
+			writeDrainLastError: drain.lastError,
+			writeDrainNextDueAtMs: drain.nextDueAtMs ?? null,
+		};
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Follow one mutation to its terminal event. A same-record coalesce replaces a
+ * pending row under a fresh id and announces it as `write-superseded`; the
+ * subscription re-binds to `replacedBy` (with its own replay, in case that one
+ * has already settled) so the caller keeps waiting on the write that will
+ * actually land instead of an id nothing will ever name again.
+ */
+function subscribeTerminal(
+	engine: Pick<RxdbSyncEngine, 'events'>,
+	mutationId: string,
+	resolve: (outcome: AwaitedWriteOutcome) => void,
+	reject: (error: unknown) => void,
+	// A `write-deferred` is not terminal: the row is held (a 401 waits for re-auth).
+	// Only the clocked waiter settles on it, so the hook is opt-in.
+	onDeferred?: (event: { status?: number; reason?: string }) => void
+) {
+	const subscriptions: (() => void)[] = [];
+	let boundId = mutationId;
+	const follow = (id: string) => {
+		boundId = id;
+		subscriptions.push(
+			engine.events(
+				(event) => {
+					if (!('mutationId' in event) || event.mutationId !== boundId) return;
+					if (event.type === 'write-superseded') {
+						follow(event.replacedBy);
+						return;
+					}
+					if (event.type === 'write-deferred') {
+						onDeferred?.(event);
+						return;
+					}
+					if (!TERMINAL_WRITE_EVENT_TYPES.has(event.type)) return;
+					switch (event.type) {
+						case 'write-acknowledged':
+						case 'write-ack-rematerialized':
+							resolve('success');
+							break;
+						case 'write-annihilated':
+							resolve('success-local');
+							break;
+						case 'write-conflict':
+						case 'write-rejected': {
+							const detail = event as {
+								status?: number;
+								reason?: string;
+								serverMessage?: string;
+								data?: Record<string, unknown>;
+							};
+							reject(
+								new WriteOutcomeError(
+									event.type,
+									boundId,
+									detail.status,
+									detail.reason,
+									detail.serverMessage,
+									detail.data
+								)
+							);
+							break;
+						}
+					}
+				},
+				{ replayWriteOutcomeFor: id }
+			)
+		);
+	};
+	follow(mutationId);
+	// A superseded subscription stays registered but inert (it filters on the
+	// current id); every one is released together when the caller settles.
+	return () => {
+		for (const unsubscribe of subscriptions) unsubscribe();
+	};
 }
 
 export class WriteDeferredError extends Error {
@@ -34,6 +153,22 @@ export class WriteDeferredError extends Error {
 	}
 }
 
+/**
+ * The sign-in hold, stated once for every waiter that settles on it: the store refused this
+ * row's push for the SESSION (a 401 deferral), or the host's auth latch is already set. The row
+ * stays queued and only a sign-in moves it (the session-hold banner tells the cashier); its
+ * later verdict still arrives on the same mutation id.
+ */
+function signInHold(
+	mutationId: string,
+	evidence: { deferral?: { status?: number; reason?: string }; authRequired?: boolean }
+): WriteDeferredError | null {
+	if (evidence.authRequired) return new WriteDeferredError(mutationId, 401, 'auth-required');
+	if (evidence.deferral?.status === 401)
+		return new WriteDeferredError(mutationId, 401, evidence.deferral.reason);
+	return null;
+}
+
 export function awaitWriteOutcome(
 	engine: Pick<RxdbSyncEngine, 'events' | 'status' | 'sync'>,
 	mutationId: string,
@@ -45,7 +180,7 @@ export function awaitWriteOutcome(
 		let settled = false;
 		let unsubscribe: (() => void) | undefined;
 		const timeout = setTimeout(() => {
-			finish(() => reject(new Error(`Timed out waiting for mutation "${mutationId}"`)));
+			finish(() => reject(new WriteOutcomeTimeoutError(mutationId, pushStateSnapshot(engine))));
 		}, timeoutMs);
 
 		const finish = (settle: () => void) => {
@@ -56,40 +191,15 @@ export function awaitWriteOutcome(
 			settle();
 		};
 
-		unsubscribe = engine.events(
-			(event) => {
-				if (
-					// The engine is the producer of this set, so it is imported, not mirrored.
-					(!TERMINAL_WRITE_EVENT_TYPES.has(event.type) && event.type !== 'write-deferred') ||
-					!('mutationId' in event) ||
-					event.mutationId !== mutationId
-				) {
-					return;
-				}
-
-				switch (event.type) {
-					case 'write-deferred':
-						if (event.status === 401) {
-							finish(() => reject(new WriteDeferredError(mutationId, event.status, event.reason)));
-						}
-						break;
-					case 'write-acknowledged':
-					case 'write-ack-rematerialized':
-						finish(() => resolve('success'));
-						break;
-					case 'write-annihilated':
-						finish(() => resolve('success-local'));
-						break;
-					case 'write-conflict':
-					case 'write-rejected':
-						finish(() => {
-							const detail = event as { status?: number; reason?: string };
-							reject(new WriteOutcomeError(event.type, mutationId, detail.status, detail.reason));
-						});
-						break;
-				}
-			},
-			{ replayWriteOutcomeFor: mutationId }
+		unsubscribe = subscribeTerminal(
+			engine,
+			mutationId,
+			(value) => finish(() => resolve(value)),
+			(error) => finish(() => reject(error)),
+			(deferral) => {
+				const held = signInHold(mutationId, { deferral });
+				if (held) finish(() => reject(held));
+			}
 		);
 		// The replay fires synchronously inside events(), so `settled` may already
 		// be true here — this is what releases the subscription in that case.
@@ -101,11 +211,87 @@ export function awaitWriteOutcome(
 		// A standing auth hold is the 401 verdict known up front. A retry enqueued behind
 		// a held row is FIFO-blocked in the backoff window, where no drain reports it, so
 		// without this it would wait out the clock to learn what the engine already knows.
-		if (engine.status().authRequired) {
-			finish(() => reject(new WriteDeferredError(mutationId, 401, 'auth-required')));
+		const held = signInHold(mutationId, { authRequired: engine.status().authRequired });
+		if (held) {
+			finish(() => reject(held));
 			return;
 		}
 
 		void engine.sync('write-drain').catch((error) => finish(() => reject(error)));
+	});
+}
+
+export type WriteSettlement = AwaitedWriteOutcome | 'queued-offline';
+
+/** No clock or drain kick: only terminal write events, including replay. */
+export function awaitTerminalWriteOutcome(
+	engine: Pick<RxdbSyncEngine, 'events'>,
+	mutationId: string
+): Promise<AwaitedWriteOutcome> {
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		let unsubscribe: (() => void) | undefined;
+		const finish = (settle: () => void) => {
+			if (settled) return;
+			settled = true;
+			unsubscribe?.();
+			settle();
+		};
+		unsubscribe = subscribeTerminal(
+			engine,
+			mutationId,
+			(value) => finish(() => resolve(value)),
+			(error) => finish(() => reject(error))
+		);
+		if (settled) unsubscribe();
+	});
+}
+
+/**
+ * No clock: terminal replay, an offline drain report, or offline engine status settles.
+ * `releaseOnSignInHold`: a sign-in hold rejects with WriteDeferredError, for a caller whose
+ * wait holds the cashier. Checkout's save keeps waiting through it: its pane stays `saving`
+ * and lands when the cashier signs in (559511b990).
+ */
+export function awaitWriteSettlement(
+	engine: Pick<RxdbSyncEngine, 'events' | 'sync' | 'statusChanges'>,
+	mutationId: string,
+	{ releaseOnSignInHold = false }: { releaseOnSignInHold?: boolean } = {}
+): Promise<WriteSettlement> {
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		let unsubscribe: (() => void) | undefined;
+		let unsubscribeStatus: (() => void) | undefined;
+		const finish = (settle: () => void) => {
+			if (settled) return;
+			settled = true;
+			unsubscribe?.();
+			unsubscribeStatus?.();
+			settle();
+		};
+		unsubscribe = subscribeTerminal(
+			engine,
+			mutationId,
+			(value) => finish(() => resolve(value)),
+			(error) => finish(() => reject(error)),
+			(deferral) => {
+				const held = releaseOnSignInHold && signInHold(mutationId, { deferral });
+				if (held) finish(() => reject(held));
+			}
+		);
+		if (settled) unsubscribe();
+		unsubscribeStatus = engine.statusChanges((status) => {
+			if (status.connectivity === 'offline') finish(() => resolve('queued-offline'));
+			const held = releaseOnSignInHold && signInHold(mutationId, status);
+			if (held) finish(() => reject(held));
+		});
+		if (settled) unsubscribeStatus();
+		void engine.sync('write-drain').then(
+			(report) => {
+				if (report.status === 'skipped' && report.reason === 'offline')
+					finish(() => resolve('queued-offline'));
+			},
+			(error) => finish(() => reject(error))
+		);
 	});
 }

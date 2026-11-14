@@ -8,11 +8,6 @@ describe('logger/constants', () => {
 	});
 
 	describe('getErrorCodeDocURL', () => {
-		it('should return the correct URL for an error code', () => {
-			const url = getErrorCodeDocURL('SYNC101');
-			expect(url).toBe('https://docs.wcpos.com/error-codes/SYNC101');
-		});
-
 		it('should handle different error code formats', () => {
 			expect(getErrorCodeDocURL('SYNC101')).toBe('https://docs.wcpos.com/error-codes/SYNC101');
 			expect(getErrorCodeDocURL('PAYMENT201')).toBe(

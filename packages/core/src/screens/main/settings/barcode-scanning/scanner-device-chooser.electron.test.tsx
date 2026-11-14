@@ -4,6 +4,8 @@
 import { act, fireEvent, render } from '@testing-library/react';
 
 const mockOpenExternalURL = jest.fn();
+// ListItem reads the pointer, and this suite's react-native mock has no Platform.
+jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => 'coarse' }));
 jest.mock('@wcpos/utils/open-external-url', () => ({
 	openExternalURL: (...args: unknown[]) => mockOpenExternalURL(...args),
 }));
@@ -24,6 +26,8 @@ const mockOn = jest.fn((channel: string, cb: (devices: unknown) => void) => {
 jest.mock('react-native', () => {
 	const R = require('react');
 	return {
+		// The shared rows' press haptic reads it (native only).
+		Platform: { OS: 'web' },
 		Pressable: ({ children, onPress, testID }: Record<string, unknown>) =>
 			R.createElement('button', { 'data-testid': testID, onClick: onPress }, children as never),
 		View: ({ children, testID }: Record<string, unknown>) =>
@@ -89,7 +93,7 @@ describe('ScannerDeviceChooser (electron)', () => {
 		expect(getByTestId('scanner-chooser-empty-hint')).toBeTruthy();
 		fireEvent.click(getByTestId('scanner-chooser-wizard-link'));
 		expect(mockOpenExternalURL).toHaveBeenCalledWith(
-			'https://docs.wcpos.com/hardware/scanner-setup-wizard'
+			'https://docs.wcpos.com/hardware/scanners/setup-wizard'
 		);
 	});
 

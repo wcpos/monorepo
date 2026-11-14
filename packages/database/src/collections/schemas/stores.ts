@@ -1,10 +1,13 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 15,
+	version: 1,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
 	properties: {
+		register_sessions: { type: 'boolean', default: false },
+		variance_threshold: { type: 'string', default: '' },
+		expected_close_time: { type: 'string', default: '' },
 		localID: {
 			description: 'Unique local identifier for the resource. Not a UUID.',
 			type: 'string',
@@ -118,6 +121,14 @@ export const storesLiteral = {
 			enum: ['undecided', 'allowed', 'denied'],
 			default: 'undecided',
 		},
+		display: {
+			type: 'object',
+			properties: {
+				contract: { type: 'number' },
+				signaling: { type: 'string' },
+			},
+			required: ['contract', 'signaling'],
+		},
 		default_customer_address: {
 			title: 'Default customer location',
 			type: 'string',
@@ -224,6 +235,12 @@ export const storesLiteral = {
 			type: 'boolean',
 			default: false,
 		},
+		decimal_qty: {
+			title: 'Decimal quantities',
+			description: 'Whether the store accepts decimal quantities on POS orders.',
+			type: 'boolean',
+			default: false,
+		},
 		wc_price_decimals: {
 			title: 'WC Price Decimals (server-authoritative)',
 			description:
@@ -271,7 +288,7 @@ export const storesLiteral = {
 			default: 'inherit',
 			// Deliberately unconstrained. This used to enum WooCommerce's four
 			// built-in classes, but tax classes are user-definable: a merchant can
-			// add "luxury" in WooCommerce settings, and TaxClassSelect builds its
+			// add "luxury" in WooCommerce settings, and useTaxClassOptions builds its
 			// options from the server's tax-class list, so that value is selectable
 			// here. The enum rejected it.
 			//
@@ -588,6 +605,30 @@ export const storesLiteral = {
 			type: 'string',
 			default: 'light',
 		},
+		scale: {
+			title: 'App Scale',
+			description:
+				'The density step for the app. Auto follows the window size; the three steps override it. Device-local beside the theme, never server-owned.',
+			type: 'string',
+			enum: ['auto', 'compact', 'regular', 'spacious'],
+			default: 'auto',
+		},
+		icons: {
+			title: 'App icons',
+			description:
+				'Which icon family the app draws. `auto` follows the theme (decision 45). Device-local beside the theme, never server-owned.',
+			type: 'string',
+			enum: ['auto', 'tabler', 'hugeicons', 'phosphor'],
+			default: 'auto',
+		},
+		fonts: {
+			title: 'App fonts',
+			description:
+				'Which type set the app draws. `auto` follows the theme (decision 45). Device-local beside the theme, never server-owned.',
+			type: 'string',
+			enum: ['auto', 'system', 'instrument', 'grotesk', 'fraunces', 'manrope'],
+			default: 'auto',
+		},
 		date_created_gmt: {
 			type: 'string',
 		},
@@ -646,6 +687,9 @@ export const storesLiteral = {
  * `wc_price_decimals` is derived from the server's `price_num_decimals` value at ingest.
  */
 export const SERVER_OWNED_STORE_FIELDS = [
+	'register_sessions',
+	'variance_threshold',
+	'expected_close_time',
 	'id',
 	'name',
 	'locale',
@@ -654,6 +698,7 @@ export const SERVER_OWNED_STORE_FIELDS = [
 	'default_customer',
 	'default_customer_is_cashier',
 	'tracking_consent',
+	'display',
 	'store_address',
 	'store_address_2',
 	'store_city',
@@ -672,6 +717,7 @@ export const SERVER_OWNED_STORE_FIELDS = [
 	'price_num_decimals',
 	'wc_price_decimals',
 	'prevent_overselling',
+	'decimal_qty',
 	'prices_include_tax',
 	'tax_based_on',
 	'shipping_tax_class',
@@ -714,6 +760,14 @@ export const APP_EDITABLE_STORE_FIELDS = [
 	'price_thousand_sep',
 	'price_decimal_sep',
 	'price_num_decimals',
+	// Settings > Tax: how tax is based is a per-order choice and the four display
+	// choices are the till's own (roadmap#93, ruled 2026-09-11). The calculation
+	// inputs the server ignores stay out of this list and read-only on that screen.
+	'tax_based_on',
+	'tax_display_shop',
+	'tax_display_cart',
+	'price_display_suffix',
+	'tax_total_display',
 ] as const satisfies readonly (typeof SERVER_OWNED_STORE_FIELDS)[number][];
 
 /**

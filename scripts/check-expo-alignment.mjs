@@ -21,28 +21,17 @@ import { parseImporters } from './check-dep-duplicates.mjs';
 // Map of dependency name -> reason.
 export const ALLOWED_EXPO_MISMATCHES = new Map([
 	// example: ['react-native-svg', 'pinned ahead of SDK for fix XYZ'],
-	[
-		'react-native-reanimated',
-		'4.5.5: SDK 57 prescribes 4.5.1; 4.5.3 ships reanimated#9527 (settled animations no longer ' +
-			'revert to a stale value after a JS-thread stall, #9965) — the drawer-reappears-at-open ' +
-			'class, #1691/#1797/#1802. Same 4.5 line and worklets 0.10.x peer. Drop when the SDK ' +
-			'prescribes >= 4.5.3.',
-	],
-	[
-		'@sentry/react-native',
-		'8.25.0: SDK 57 prescribes ~7.11.0; only 8.25.0 carries getsentry/sentry-react-native#6630 ' +
-			'(Expo 57 / RN 0.86 iOS: envelopes report HTTP 200 but never ingest). The 7.x line ended ' +
-			'2026-02-12. Also listed in apps/main `expo.install.exclude`. Drop when the SDK prescribes ' +
-			'>= 8.25.0.',
-	],
 ]);
 
 /**
  * Minimal semver-range check for the three specifier forms that
- * bundledNativeModules.json uses: exact `x.y.z`, tilde `~x.y.z`, caret `^x.y.z`.
+ * bundledNativeModules.json uses: exact `x.y.z` (optionally prerelease), tilde `~x.y.z`, caret `^x.y.z`.
  * Returns false for anything it cannot parse (conservative: surfaces for review).
  */
 export function satisfies(version, range) {
+	if (/^\d+\.\d+\.\d+-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/.test(range)) {
+		return version === range;
+	}
 	const parse = (v) => {
 		const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(v);
 		return match ? match.slice(1).map(Number) : null;
@@ -63,6 +52,25 @@ export function satisfies(version, range) {
 	if (wMajor > 0) return gMajor === wMajor && atLeast;
 	if (wMinor > 0) return gMajor === 0 && gMinor === wMinor && atLeast;
 	return gMajor === 0 && gMinor === 0 && gPatch === wPatch;
+}
+
+// Native modules Expo versions with the SDK but omits from
+// bundledNativeModules.json, so `expo install --check` never mentions them.
+// expo-blob@57.0.1 survived the SDK 58 bump that way and killed every Android
+// launch of the `next` dev client in expo-modules-core's module init
+// (NoSuchMethodError: ReturnTypeKt.getIndirectConverter — a 57-era core API;
+// first Android device run, 2026-09-30). They are held to the installed SDK's
+// major, the only range Expo's own list would state for them.
+export const SDK_VERSIONED_UNLISTED = ['expo-blob'];
+
+export function withUnlistedSdkPackages(bundled, expoVersion, names = SDK_VERSIONED_UNLISTED) {
+	const major = /^(\d+)\./.exec(expoVersion)?.[1];
+	if (!major) return bundled;
+	const extra = {};
+	for (const name of names) {
+		if (!(name in bundled)) extra[name] = `^${major}.0.0`;
+	}
+	return { ...bundled, ...extra };
 }
 
 /**
@@ -103,6 +111,8 @@ function main() {
 		);
 		process.exit(1);
 	}
+
+	bundled = withUnlistedSdkPackages(bundled, require('expo/package.json').version);
 
 	const lockfileText = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8');
 	const importers = parseImporters(lockfileText);

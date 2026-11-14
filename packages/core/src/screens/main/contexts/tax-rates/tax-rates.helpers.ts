@@ -12,7 +12,7 @@ import type { TaxRateData } from './provider';
 /**
  * Normalize a given postcode by removing spaces and converting it to uppercase.
  */
-function normalizePostcode(postcode: string): string {
+export function normalizePostcode(postcode: string): string {
 	return replace(postcode, /\s+/g, '').toUpperCase();
 }
 
@@ -41,7 +41,7 @@ function getMatchingPostcodes(pattern: string): string[] {
 	}
 }
 
-function postcodePatternMatches(normalizedPostcode: string, pattern: string): boolean {
+export function postcodePatternMatches(normalizedPostcode: string, pattern: string): boolean {
 	const matchingPostcodes = getMatchingPostcodes(pattern);
 	return matchingPostcodes.some((pc) =>
 		pattern.endsWith('*') ? normalizedPostcode.startsWith(pc) : pc === normalizedPostcode

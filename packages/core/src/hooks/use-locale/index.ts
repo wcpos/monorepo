@@ -55,6 +55,15 @@ const systemLanguage: Language = systemLocales?.[0]
 /**
  *
  */
+/**
+ * The language for a store's locale setting (a WordPress code such as `de_DE`), or the
+ * system language when the setting is empty or unknown.
+ */
+export function languageForStoreLocale(storeLocale?: string | null): Language {
+	if (!storeLocale) return systemLanguage;
+	return Object.values(locales).find((l) => l.locale === storeLocale) ?? systemLanguage;
+}
+
 export const useLocale = () => {
 	const { store } = useAppState();
 	const locale$ = store?.locale$;
@@ -65,16 +74,7 @@ export const useLocale = () => {
 	 */
 	const storeLocale = useObservableEagerState<string | null | undefined>(locale$ || of(null));
 
-	const language = React.useMemo(() => {
-		let lang: Language = systemLanguage;
-		if (storeLocale) {
-			const foundLang = Object.values(locales).find((l) => l.locale === storeLocale);
-			if (foundLang) {
-				lang = foundLang;
-			}
-		}
-		return lang;
-	}, [storeLocale]);
+	const language = React.useMemo(() => languageForStoreLocale(storeLocale), [storeLocale]);
 
 	return {
 		...language,

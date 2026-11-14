@@ -2,18 +2,8 @@ import * as React from 'react';
 
 import map from 'lodash/map';
 
-import {
-	Combobox,
-	ComboboxContent,
-	ComboboxEmpty,
-	ComboboxInput,
-	ComboboxItem,
-	ComboboxItemText,
-	ComboboxList,
-	type ComboboxSingleRootProps,
-	ComboboxTrigger,
-	ComboboxValue,
-} from '@wcpos/components/combobox';
+import { OptionsCombobox } from '@wcpos/components/combobox';
+import type { OptionSelectProps } from '@wcpos/components/select';
 
 import { useT } from '../../../contexts/translations';
 import { useLocale } from '../../../hooks/use-locale';
@@ -21,7 +11,7 @@ import { useLocale } from '../../../hooks/use-locale';
 /**
  *
  */
-export function LanguageSelect({ value, ...props }: ComboboxSingleRootProps) {
+export function LanguageSelect(props: Omit<OptionSelectProps, 'options' | 'placeholder'>) {
 	const { locales } = useLocale();
 	const t = useT();
 
@@ -43,40 +33,14 @@ export function LanguageSelect({ value, ...props }: ComboboxSingleRootProps) {
 		[locales]
 	);
 
-	/**
-	 *
-	 */
-	const label = React.useMemo(() => {
-		const selected = options.find((option) => option.value === value?.value);
-		return selected?.label;
-	}, [options, value]);
-
-	/**
-	 *
-	 */
 	return (
-		<Combobox value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
-			<ComboboxTrigger testID="language-select-trigger">
-				<ComboboxValue placeholder={t('common.select_language')} />
-			</ComboboxTrigger>
-			<ComboboxContent testID="language-combobox-content">
-				<ComboboxInput testID="language-search-input" placeholder={t('common.search_languages')} />
-				<ComboboxList
-					data={options}
-					renderItem={({ item }) => (
-						<ComboboxItem
-							testID={`language-option-${item.value}`}
-							value={String(item.value)}
-							label={item.label}
-							item={item}
-						>
-							<ComboboxItemText />
-						</ComboboxItem>
-					)}
-					estimatedItemSize={44}
-					ListEmptyComponent={<ComboboxEmpty>{t('common.no_language_found')}</ComboboxEmpty>}
-				/>
-			</ComboboxContent>
-		</Combobox>
+		<OptionsCombobox
+			options={options}
+			placeholder={t('common.select_language')}
+			searchPlaceholder={t('common.search_languages')}
+			emptyLabel={t('common.no_language_found')}
+			triggerTestID="language-select"
+			{...props}
+		/>
 	);
 }

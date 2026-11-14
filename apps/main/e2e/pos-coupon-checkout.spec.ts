@@ -3,19 +3,32 @@
  * The client wrote a short coupon discount such as "7.5", while the server ack padded it to
  * "7.500000", making the reconciled order appear locally dirty despite equal money.
  * That false dirty state rejected the paid snapshot and left a paid sale open in the POS.
+ *
+ * The second spec is the other composition no spec covered: coupon applied, SAVED, then removed,
+ * then paid. The till marks a synced coupon line for removal as `{ id, code: null }` — the shape
+ * WooCommerce honours for every other line collection — but WooCommerce handles coupon lines by
+ * code, so until woocommerce-pos#2153 (free 1.10.24) the plugin forwarded the marker as a codeless
+ * line and the checkout push was refused with 400 "Coupon code is required". Each side's own tests
+ * were green against its own idea of the contract; only a run through both halves sees the seam.
  */
 import { randomUUID } from 'node:crypto';
 
-import {
-	type APIRequestContext,
-	type ConsoleMessage,
-	expect,
-	request as playwrightRequest,
-} from '@playwright/test';
+import { type ConsoleMessage, expect, request as playwrightRequest } from '@playwright/test';
 
-import { getStoreUrl, getStoreVariant, listStoreIds, storeRequestOptions } from './fixtures';
 import {
-	isPushOrdersResponse,
+	closeOrderSheet,
+	ensureRegisterOpen,
+	getStoreUrl,
+	getStoreVariant,
+	listStoreIds,
+	openOrderSheet,
+	storeRequestOptions,
+} from './fixtures';
+import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
+import {
+	cartRecordUuid,
+	checkoutSurfaceLocator,
+	createPushOrdersResponseMatcher,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -35,20 +48,6 @@ import {
 	searchAndWaitForServer,
 	type SearchProbe,
 } from './search-probe';
-
-async function couponRequest(
-	request: APIRequestContext,
-	method: 'post' | 'delete',
-	storeUrl: string,
-	id: number | undefined,
-	options: Record<string, unknown>
-) {
-	const base = storeUrl.replace(/\/+$/, '');
-	const path = id === undefined ? 'coupons' : `coupons/${id}`;
-	const pretty = await request[method](`${base}/wp-json/wc/v3/${path}`, options);
-	if (pretty.status() !== 404) return pretty;
-	return request[method](`${base}/?rest_route=/wc/v3/${path}`, options);
-}
 
 type CouponProbe = { code: string; id: number; product: SearchProbe };
 
@@ -76,6 +75,7 @@ const couponTest = liveTest.extend<object, { probeCoupon: CouponProbe | null }>(
 				writer = await productWriterAuthorization(request, storeUrl);
 				if (!writer) throw new Error('Configured coupon writer did not authorize');
 				writerAuth = storeRequestOptions(writer);
+				await sweepOrphanedProbeCoupons({ request, storeUrl, authorization: writer });
 				// The bug's trigger is a coupon discount whose shortest JS string has fewer than
 				// six decimals (the client wrote "7.5", the server acked "7.500000"). A percent
 				// coupon discounts the EX-TAX price, so on a tax-inclusive store a taxable 25.00
@@ -160,6 +160,7 @@ for (const targetStoreId of storeTargets) {
 					const captureConsole = (message: ConsoleMessage) => consoleLines.push(message.text());
 					page.on('console', captureConsole);
 					try {
+						await ensureRegisterOpen(page);
 						const label = newRunLabel();
 						// The fixture's own tax-exempt product, found by its run-private token (the
 						// same search-then-add path checkout-probe uses for run-private products).
@@ -182,12 +183,13 @@ for (const targetStoreId of storeTargets) {
 						await stampRunLabel(page, label);
 						await page.getByTestId('add-cart-item-menu').click();
 						await expect(page.getByTestId('menu-add-fee')).toBeVisible({ timeout: 10_000 });
-						const menuItem = page.getByTestId('menu-add-coupon');
+						const menuItem = page.getByTestId('menu-add-discount');
 						couponTest.skip(
 							(await menuItem.count()) === 0,
-							'Pro coupon capability absent (menu-add-coupon)'
+							'Pro coupon capability absent (menu-add-discount)'
 						);
 						await menuItem.click();
+						await page.getByTestId('add-discount-kind-coupon').click();
 						await page.getByTestId('add-coupon-combobox').click();
 						const search = page.getByTestId('add-coupon-search-input');
 						await expect(search).toBeVisible({ timeout: 15_000 });
@@ -202,7 +204,10 @@ for (const targetStoreId of storeTargets) {
 						const cart = await readCartMoney(page, { discounted: true });
 						expect(Number(cart.discountTotal)).toBeGreaterThan(0);
 
-						const saved = page.waitForResponse(isPushOrdersResponse, { timeout: 90_000 });
+						const recordId = await cartRecordUuid(page);
+						const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
+							timeout: 90_000,
+						});
 						saved.catch(() => {}); // Await below still fails; avoid an orphan rejection if click fails.
 						await page.getByTestId('checkout-button').click();
 						const response = await saved;
@@ -240,7 +245,7 @@ for (const targetStoreId of storeTargets) {
 						await page.waitForURL((url) => url.pathname === `/cart/${envelope.recordId}/checkout`, {
 							timeout: 60_000,
 						});
-						await expect(page.getByTestId('checkout-dialog')).toBeVisible({ timeout: 30_000 });
+						await expect(checkoutSurfaceLocator(page)).toBeVisible({ timeout: 30_000 });
 						// UUID IDs already exist; shared-store tab counts would include other cashiers' orders.
 						const orderTab = page.getByTestId(`open-order-tab-${envelope.recordId}`);
 						await expect(orderTab).toBeAttached({ timeout: 30_000 });
@@ -255,10 +260,14 @@ for (const targetStoreId of storeTargets) {
 								line.includes('Checkout order snapshot was not applied')
 							)
 						).toEqual([]);
-						// 2. Dismiss an auto-shown receipt so hidden modal background cannot fake tab removal.
-						if (new URL(page.url()).pathname.includes('/cart/receipt/')) {
-							await page.getByTestId('receipt-close-button').click();
-						}
+						// 2. Dismiss the receipt (in-pane stage or routed modal) so a hidden modal background cannot fake tab removal.
+						const dismissReceipt = page
+							.getByTestId('receipt-new-sale')
+							.or(page.getByTestId('receipt-close-button'))
+							.filter({ visible: true })
+							.first();
+						await expect(dismissReceipt).toBeVisible({ timeout: 30_000 });
+						await dismissReceipt.click();
 						await expect(page.getByTestId('new-order-tab')).toBeVisible({ timeout: 30_000 });
 						await expect(orderTab).not.toBeVisible({ timeout: 30_000 });
 						// 3. Read the acked order with readOrder's dp=6, not a stub or another cashier's sale.
@@ -280,6 +289,190 @@ for (const targetStoreId of storeTargets) {
 							contentType: 'application/json',
 						});
 					}
+				}
+			);
+
+			couponTest(
+				'removing a coupon from a saved cart still checks out and pays',
+				async (
+					{ posPage: page, trackOrder, probeCoupon, request, storeAuthorization },
+					testInfo
+				) => {
+					couponTest.skip(getStoreVariant(testInfo) === 'free', 'coupon application is Pro-gated');
+					couponTest.skip(
+						!probeCoupon,
+						'writer credentials not configured (E2E_PRODUCT_WRITER_USER/_PASS) — cannot provision a probe coupon'
+					);
+					couponTest.slow();
+					const label = newRunLabel();
+					const product = probeCoupon!.product;
+					await ensureRegisterOpen(page);
+					await searchAndWaitForServer(
+						page,
+						page.getByTestId('search-products'),
+						'products',
+						product.token
+					);
+					const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
+					const tile = posScreen.getByTestId(`product-tile-${product.id}`);
+					const tableButton = posScreen
+						.getByTestId(product.rowTestId ?? `data-table-row-${product.id}`)
+						.getByTestId('add-to-cart-button');
+					await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
+					if (await tile.isVisible()) await tile.click();
+					else await tableButton.click();
+					await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+					await stampRunLabel(page, label);
+					await page.getByTestId('add-cart-item-menu').click();
+					await expect(page.getByTestId('menu-add-fee')).toBeVisible({ timeout: 10_000 });
+					const menuItem = page.getByTestId('menu-add-discount');
+					couponTest.skip(
+						(await menuItem.count()) === 0,
+						'Pro coupon capability absent (menu-add-discount)'
+					);
+					await menuItem.click();
+					await page.getByTestId('add-discount-kind-coupon').click();
+					await page.getByTestId('add-coupon-combobox').click();
+					const search = page.getByTestId('add-coupon-search-input');
+					await expect(search).toBeVisible({ timeout: 15_000 });
+					await search.fill(probeCoupon!.code);
+					const option = page.getByTestId(`add-coupon-option-${probeCoupon!.id}`);
+					await expect(option).toBeVisible({ timeout: 60_000 });
+					await option.click();
+					const submit = page.getByTestId('add-coupon-submit');
+					await expect(submit).toBeEnabled({ timeout: 10_000 });
+					await submit.click();
+					await expect(submit).not.toBeVisible({ timeout: 30_000 });
+					const discounted = await readCartMoney(page, { discounted: true });
+					expect(Number(discounted.discountTotal)).toBeGreaterThan(0);
+
+					// 1. Save: the coupon line comes back from the store WITH an id. That id is the
+					// precondition — a coupon removed before the first save is deleted outright and
+					// never carried the marker.
+					const recordId = await cartRecordUuid(page);
+					const saved = page.waitForResponse(createPushOrdersResponseMatcher(recordId), {
+						timeout: 90_000,
+					});
+					saved.catch(() => {});
+					// On `next` Save lives in the order sheet, not the cart (c446efb5b).
+					await openOrderSheet(page);
+					await page.getByTestId('save-to-server-button').click();
+					const saveResponse = await saved;
+					const saveEnvelope = (saveResponse.request().postDataJSON() ?? {}) as {
+						recordId?: string;
+						payload?: OrderPayload;
+					};
+					const saveAck = (await saveResponse.json().catch(() => null)) as {
+						document?: ServerOrder;
+					} | null;
+					await testInfo.attach('save-ack.json', {
+						body: JSON.stringify(saveAck, null, 2),
+						contentType: 'application/json',
+					});
+					expect(saveResponse.status(), 'couponed save must succeed').toBeLessThan(400);
+					const orderId = Number(saveAck?.document?.id);
+					expect(orderId, 'save ack must identify the created order').toBeGreaterThan(0);
+					trackOrder({ id: orderId, uuid: saveEnvelope.recordId, label });
+					const savedCoupons = (saveAck?.document?.coupon_lines ?? []) as {
+						id?: number;
+						code?: string;
+					}[];
+					expect(savedCoupons.map((coupon) => coupon.code?.toLowerCase())).toEqual([
+						probeCoupon!.code,
+					]);
+					const savedCouponLineId = Number(savedCoupons[0]?.id);
+					expect(savedCouponLineId, 'the saved coupon line must carry a server id').toBeGreaterThan(
+						0
+					);
+					// The save button re-enables when the round trip (ack adoption) completes.
+					await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+					// The sheet is modal; its scrim covers the cart's remove-coupon button.
+					await closeOrderSheet(page);
+
+					// 2. Remove the coupon from the cart and wait for the discount to settle to zero.
+					const removeButton = page.getByTestId(`remove-coupon-${probeCoupon!.code}`);
+					await expect(removeButton).toBeVisible({ timeout: 15_000 });
+					await removeButton.click();
+					await expect(removeButton).not.toBeVisible({ timeout: 15_000 });
+					await expect
+						.poll(async () => Number((await readCartMoney(page)).discountTotal), {
+							message: 'the cart must settle to no discount after the coupon is removed',
+							timeout: 30_000,
+						})
+						.toBe(0);
+
+					// 3. Checkout pushes the full document with the removal; the store must take it.
+					const checkoutRecordId = await cartRecordUuid(page);
+					const pushed = page.waitForResponse(createPushOrdersResponseMatcher(checkoutRecordId), {
+						timeout: 90_000,
+					});
+					pushed.catch(() => {});
+					await page.getByTestId('checkout-button').click();
+					const response = await pushed;
+					const envelope = (response.request().postDataJSON() ?? {}) as {
+						recordId?: string;
+						payload?: OrderPayload;
+					};
+					const sent = envelope.payload ?? {};
+					const ack = (await response.json().catch(() => null)) as {
+						document?: ServerOrder;
+					} | null;
+					await testInfo.attach('push-payload.json', {
+						body: JSON.stringify(sent, null, 2),
+						contentType: 'application/json',
+					});
+					await testInfo.attach('push-ack.json', {
+						body: JSON.stringify(ack, null, 2),
+						contentType: 'application/json',
+					});
+					expect(
+						response.status(),
+						'checkout after removing a saved coupon must succeed (woocommerce-pos#2153)'
+					).toBeLessThan(400);
+					expect(envelope.recordId).toBe(saveEnvelope.recordId);
+					const sentCoupons = (sent.coupon_lines ?? []) as { id?: number; code?: string | null }[];
+					expect(
+						sentCoupons.filter((coupon) => coupon.code != null),
+						'no live coupon code may remain in the pushed document'
+					).toEqual([]);
+					// The push carries the till's removal marker for the synced line (the shape #2153
+					// honours); a client that one day removes by omission would also pass the two
+					// assertions around this one, which are the ones that matter.
+					expect(
+						sentCoupons.map((coupon) => Number(coupon.id)),
+						'the pushed removal must name the saved coupon line'
+					).toEqual([savedCouponLineId]);
+					expect((ack?.document?.coupon_lines ?? []) as unknown[]).toEqual([]);
+
+					// 4. Pay it, then read the acked order: no coupon, no discount, paid.
+					await page.waitForURL((url) => url.pathname === `/cart/${envelope.recordId}/checkout`, {
+						timeout: 60_000,
+					});
+					await expect(checkoutSurfaceLocator(page)).toBeVisible({ timeout: 30_000 });
+					await processPayment(page);
+					// Dismiss the receipt (in-pane stage or routed modal), as the first coupon test does.
+					const dismissReceipt = page
+						.getByTestId('receipt-new-sale')
+						.or(page.getByTestId('receipt-close-button'))
+						// The in-pane stage can stay mounted under the routed dialog: take the visible one.
+						.filter({ visible: true })
+						.first();
+					await expect(dismissReceipt).toBeVisible({ timeout: 30_000 });
+					await dismissReceipt.click();
+					await expect(page.getByTestId('new-order-tab')).toBeVisible({ timeout: 30_000 });
+					const authorization = await resolveProbeAuthorization(
+						request,
+						getStoreUrl(testInfo),
+						storeAuthorization,
+						{ route: '/wcpos/v2/orders' }
+					);
+					const server = await readOrder(request, testInfo, authorization, orderId);
+					expect(Number(server.id ?? server.order_id)).toBe(orderId);
+					expect(server.customer_note).toBe(label);
+					expect((server.coupon_lines ?? []) as unknown[]).toEqual([]);
+					expect(Number(server.discount_total ?? 0)).toBe(0);
+					expect(['completed', 'processing']).toContain(server.status);
+					expect(server.date_paid).toEqual(expect.stringMatching(/\S/));
 				}
 			);
 		}

@@ -5,26 +5,36 @@ import { useRouter } from 'expo-router';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { Badge } from '@wcpos/components/badge';
 import { Button, ButtonText } from '@wcpos/components/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Notice } from '@wcpos/components/notice';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { COLLECTION_VOCABULARY, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
+import { resolveQueuedChange } from '@wcpos/query/mutations';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { collectionLabel } from './collection-label';
 import { useT } from '../../../contexts/translations';
-import { FIX_ROUTES } from './attention-panel';
-import { Callout, Pill } from './components';
+import { useRecordEditRoute } from './record-edit-route';
+import { classifyResolutionError } from './resolution-error';
 import { useManualSync } from './use-manual-sync';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 import { type UnresolvedConflict, useUnresolvedConflicts } from './use-unresolved-conflicts';
@@ -54,7 +64,8 @@ const logger = getLogger(['wcpos', 'health', 'conflicts']);
 export function ConflictedMutationsPanel() {
 	const t = useT();
 	const router = useRouter();
-	const { engine } = useQueryRuntime();
+	const editRoute = useRecordEditRoute();
+	const runtime = useQueryRuntime();
 	const { syncing, sync } = useManualSync();
 	const { rows, readError } = useUnresolvedConflicts();
 	const nowMs = useNowMs(30_000);
@@ -67,16 +78,12 @@ export function ConflictedMutationsPanel() {
 	// cashier-full-information ruling the rejected panel follows (2026-08-07).
 	if (readError) {
 		return (
-			<Callout tone="destructive" testID="db-conflicted-read-error">
-				<VStack className="gap-0.5">
-					<Text className="text-destructive text-sm font-semibold">
-						{t('health.database.conflicted.read_error_title')}
-					</Text>
-					<Text className="text-muted-foreground text-xs">
-						{t('health.database.conflicted.read_error_body')}
-					</Text>
-				</VStack>
-			</Callout>
+			<Notice
+				tone="bad"
+				testID="db-conflicted-read-error"
+				title={t('health.database.conflicted.read_error_title')}
+				description={t('health.database.conflicted.read_error_body')}
+			/>
 		);
 	}
 
@@ -89,7 +96,7 @@ export function ConflictedMutationsPanel() {
 	) => {
 		setBusyId(row.mutationId);
 		try {
-			await engine.resolveConflict(row.mutationId, resolution);
+			await resolveQueuedChange(runtime.engine, row.mutationId, resolution);
 			logger.info('conflict resolved', {
 				context: {
 					mutationId: row.mutationId,
@@ -121,6 +128,18 @@ export function ConflictedMutationsPanel() {
 				});
 				return;
 			}
+			// Clicking a change that is already resolved is not an error: say so, no row.
+			const kind = classifyResolutionError(error);
+			if (kind !== 'failed') {
+				Toast.show({
+					type: 'info',
+					text1:
+						kind === 'already-resolved'
+							? t('health.database.already_resolved')
+							: t('health.database.resolving_elsewhere'),
+				});
+				return;
+			}
 			const message = getErrorMessage(error);
 			logger.error('conflict resolution failed', {
 				code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -138,7 +157,8 @@ export function ConflictedMutationsPanel() {
 					resolution === 'discard'
 						? t('health.database.conflicted.discard_failed')
 						: t('health.database.conflicted.resend_failed'),
-				text2: message,
+				// The raw engine message (with its uuid) stays in the row, not the toast.
+				text2: t('health.database.resolution_failed_hint'),
 			});
 		} finally {
 			setBusyId(null);
@@ -147,27 +167,25 @@ export function ConflictedMutationsPanel() {
 
 	return (
 		<VStack testID="db-conflicted" className="gap-2">
-			<Callout tone="destructive" testID="db-conflicted-callout">
-				<VStack className="gap-0.5">
-					<Text className="text-destructive text-sm font-semibold">
-						{t(
-							hasUnverifiedRevision
-								? 'health.database.conflicted.needs_revision_title'
-								: 'health.database.conflicted.title',
-							{
-								count: rows.length,
-							}
-						)}
-					</Text>
-					<Text className="text-muted-foreground text-xs">
-						{t('health.database.conflicted.body')}
-					</Text>
-				</VStack>
-			</Callout>
+			<Notice
+				tone="bad"
+				testID="db-conflicted-callout"
+				title={
+					hasUnverifiedRevision
+						? t('health.database.conflicted.needs_revision_title', { count: rows.length })
+						: t('health.database.conflicted.title', { count: rows.length })
+				}
+				description={t('health.database.conflicted.body')}
+			/>
 
 			<VStack className="gap-0">
 				{rows.map((row) => {
-					const fixRoute = FIX_ROUTES[row.collectionName]?.(row.recordId);
+					const fixRoute = editRoute(row.collectionName, row.recordId);
+					// Discarding the local change loses it (or the record): that one goes in the row's ⋮
+					// menu. Taking the server's version is a second constructive choice beside Resend, so
+					// both are outline and the row has no primary.
+					const discards =
+						row.destroysRecord || row.mayDestroyRecord || row.status === 'needs-revision';
 					return (
 						<HStack
 							key={row.mutationId}
@@ -180,17 +198,15 @@ export function ConflictedMutationsPanel() {
 									{/* A held DELETE must never look like a held edit: resending it
 									    destroys the record on the server (#1093 audit, Q2). */}
 									{row.operation === 'delete' ? (
-										<Pill tone="destructive" testID={`db-conflicted-delete-${row.mutationId}`}>
+										<Badge variant="bad" testID={`db-conflicted-delete-${row.mutationId}`}>
 											{t('health.database.conflicted.delete_pill')}
-										</Pill>
+										</Badge>
 									) : null}
 								</HStack>
-								<Text className="text-muted-foreground text-xs">
-									{t(
-										row.status === 'needs-revision'
-											? 'health.database.conflicted.needs_revision_reason'
-											: 'health.database.conflicted.reason'
-									)}
+								<Text variant="help">
+									{row.status === 'needs-revision'
+										? t('health.database.conflicted.needs_revision_reason')
+										: t('health.database.conflicted.reason')}
 								</Text>
 								{row.queuedAt ? (
 									<Text className="text-muted-foreground/80 text-xs">
@@ -207,7 +223,7 @@ export function ConflictedMutationsPanel() {
 							</View>
 							<HStack className="items-center gap-2">
 								<Button
-									variant="outline"
+									variant={discards ? 'default' : 'outline'}
 									size="sm"
 									testID={`db-conflicted-resend-${row.mutationId}`}
 									disabled={busyId !== null || syncing}
@@ -219,28 +235,48 @@ export function ConflictedMutationsPanel() {
 								>
 									<ButtonText>{t('health.database.conflicted.resend')}</ButtonText>
 								</Button>
-								<Button
-									variant="ghost-destructive"
-									size="sm"
-									testID={`db-conflicted-discard-${row.mutationId}`}
-									disabled={busyId !== null || row.residentUnknown}
-									onPress={() => setDiscarding(row)}
-								>
-									<ButtonText>
-										{row.destroysRecord || row.mayDestroyRecord || row.status === 'needs-revision'
-											? t('health.database.conflicted.discard_change')
-											: t('health.database.conflicted.use_server')}
-									</ButtonText>
-								</Button>
+								{discards ? null : (
+									<Button
+										variant="outline"
+										size="sm"
+										testID={`db-conflicted-discard-${row.mutationId}`}
+										disabled={busyId !== null || row.residentUnknown}
+										onPress={() => setDiscarding(row)}
+									>
+										<ButtonText>{t('health.database.conflicted.use_server')}</ButtonText>
+									</Button>
+								)}
 								{fixRoute ? (
 									<Button
-										variant="ghost-quiet"
+										variant="ghost"
 										size="sm"
 										testID={`db-conflicted-open-${row.mutationId}`}
 										onPress={() => router.push(fixRoute)}
 									>
 										<ButtonText>{t('health.database.conflicted.open')}</ButtonText>
 									</Button>
+								) : null}
+								{discards ? (
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+											<IconButton
+												name="more"
+												testID={`db-conflicted-menu-${row.mutationId}`}
+												accessibilityLabel={t('common.actions')}
+											/>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="end">
+											<DropdownMenuItem
+												variant="destructive"
+												testID={`db-conflicted-discard-${row.mutationId}`}
+												disabled={busyId !== null || row.residentUnknown}
+												onPress={() => setDiscarding(row)}
+											>
+												<Icon name="delete" className="fill-destructive" />
+												<Text>{t('health.database.conflicted.discard_change')}</Text>
+											</DropdownMenuItem>
+										</DropdownMenuContent>
+									</DropdownMenu>
 								) : null}
 							</HStack>
 						</HStack>
@@ -267,22 +303,19 @@ export function ConflictedMutationsPanel() {
 								: null}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="db-conflicted-resend-delete-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="db-conflicted-resend-delete-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'db-conflicted-resend-delete-cancel' }}
+						confirm={{
+							label: t('health.database.conflicted.resend_delete_confirm'),
+							destructive: true,
+							testID: 'db-conflicted-resend-delete-confirm',
+							onPress: () => {
 								const row = resendingDelete;
 								setResendingDelete(null);
 								if (row) void settle(row, 'retry-with-server-base');
-							}}
-						>
-							<Text>{t('health.database.conflicted.resend_delete_confirm')}</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 
@@ -321,28 +354,23 @@ export function ConflictedMutationsPanel() {
 											: null}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel testID="db-conflicted-discard-cancel">
-							<Text>{t('common.cancel')}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="db-conflicted-discard-confirm"
-							onPress={() => {
+					<AlertDialogFooter
+						cancel={{ testID: 'db-conflicted-discard-cancel' }}
+						confirm={{
+							label: discarding?.destroysRecord
+								? t('health.database.conflicted.delete_local_confirm')
+								: discarding?.mayDestroyRecord || discarding?.status === 'needs-revision'
+									? t('health.database.conflicted.discard_change_confirm')
+									: t('health.database.conflicted.use_server_confirm'),
+							destructive: true,
+							testID: 'db-conflicted-discard-confirm',
+							onPress: () => {
 								const row = discarding;
 								setDiscarding(null);
 								if (row) void settle(row, 'discard');
-							}}
-						>
-							<Text>
-								{discarding?.destroysRecord
-									? t('health.database.conflicted.delete_local_confirm')
-									: discarding?.mayDestroyRecord || discarding?.status === 'needs-revision'
-										? t('health.database.conflicted.discard_change_confirm')
-										: t('health.database.conflicted.use_server_confirm')}
-							</Text>
-						</AlertDialogAction>
-					</AlertDialogFooter>
+							},
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</VStack>
@@ -353,9 +381,6 @@ type Translate = ReturnType<typeof useT>;
 
 /** "Products · Aether Gym Pant" — never a bare uuid when anything better exists. */
 function describeRecord(row: UnresolvedConflict, t: Translate): string {
-	const labelKey = (COLLECTION_VOCABULARY as Record<string, { labelKey?: string } | undefined>)[
-		row.collectionName
-	]?.labelKey;
-	const collection = labelKey ? t(labelKey) : row.collectionName;
+	const collection = collectionLabel(row.collectionName, t);
 	return row.label ? `${collection} · ${row.label}` : `${collection} · ${row.recordId.slice(0, 8)}`;
 }

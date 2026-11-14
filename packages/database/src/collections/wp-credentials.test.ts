@@ -77,63 +77,10 @@ describe('sanitizeWPCredentialsData', () => {
 	});
 });
 
-describe('wp_credentials migration strategy', () => {
-	it('bumps wp_credentials schema to v5 for the optional capabilities field', async () => {
+describe('wp_credentials schema', () => {
+	it('uses schema version 0 with the optional capabilities field', async () => {
 		const { wpCredentialsLiteral } = await import('./schemas/wp-credientials');
 
-		expect(wpCredentialsLiteral.version).toBe(5);
-	});
-
-	it('strips token_type while migrating legacy wp_credentials documents to schema v3', async () => {
-		const { userCollections } = await import('./index');
-		const migrateToV3 = userCollections.wp_credentials.migrationStrategies?.[3];
-
-		expect(typeof migrateToV3).toBe('function');
-		expect(
-			migrateToV3?.(
-				{
-					uuid: 'cred-1',
-					role: 'administrator',
-					token_type: 'Bearer',
-					access_token: 'access-token',
-				},
-				undefined as never
-			)
-		).toEqual({
-			uuid: 'cred-1',
-			roles: ['administrator'],
-			access_token: 'access-token',
-		});
-	});
-
-	it('strips token_type while migrating already-v3 wp_credentials documents to schema v4', async () => {
-		const { userCollections } = await import('./index');
-		const migrateToV4 = userCollections.wp_credentials.migrationStrategies?.[4];
-
-		expect(typeof migrateToV4).toBe('function');
-		expect(
-			migrateToV4?.(
-				{
-					uuid: 'cred-1',
-					roles: ['administrator'],
-					token_type: 'Bearer',
-					access_token: 'access-token',
-					unexpected_server_field: 'do-not-persist',
-				},
-				undefined as never
-			)
-		).toEqual({
-			uuid: 'cred-1',
-			roles: ['administrator'],
-			access_token: 'access-token',
-		});
-	});
-
-	it('preserves existing documents unchanged when migrating to schema v5', async () => {
-		const { userCollections } = await import('./index');
-		const migrateToV5 = userCollections.wp_credentials.migrationStrategies?.[5];
-		const document = { uuid: 'cred-1', roles: ['administrator'] };
-
-		expect(migrateToV5?.(document, undefined as never)).toBe(document);
+		expect(wpCredentialsLiteral.version).toBe(0);
 	});
 });

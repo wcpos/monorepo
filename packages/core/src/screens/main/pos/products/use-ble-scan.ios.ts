@@ -3,7 +3,11 @@ import { NativeModules, Platform } from 'react-native';
 
 import { Subject } from 'rxjs';
 
-import type { ScannerProfileDocument } from '@wcpos/database';
+import {
+	readScannerProfiles,
+	saveScannerProfile,
+	type ScannerProfile,
+} from '@wcpos/query/store-local';
 import {
 	createScanSession,
 	createSerialLineDecoder,
@@ -18,7 +22,6 @@ import { useDocField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
-import { useCollection } from '../../hooks/use-collection';
 
 import type { BleManager, Characteristic, Device, Subscription } from 'react-native-ble-plx';
 import type { UseBleScanResult } from './use-ble-scan';
@@ -27,6 +30,16 @@ const bleLogger = getLogger(['wcpos', 'barcode', 'ble']);
 
 function warn(message: string, error: unknown) {
 	bleLogger.warn(message, { context: { error: String(error) } });
+}
+
+/** Teardown noise (stop discovery, cancel a stale connection, destroy the manager). */
+function forensic(message: string, error: unknown) {
+	bleLogger.debug(message, { context: { error: String(error) } });
+}
+
+/** A saved scanner that is off or out of range at startup is routine, not a fault. */
+function routine(message: string, error: unknown) {
+	bleLogger.info(message, { context: { error: String(error) } });
 }
 
 interface BleGattFamily {
@@ -111,8 +124,7 @@ function createBleUtf8Decoder() {
 
 /** iOS vendor-GATT BLE barcode source. */
 export const useBleScan = (hub: ScanHub): UseBleScanResult => {
-	const { store } = useAppState();
-	const { collection } = useCollection('scanner_profiles');
+	const { store, storeDB } = useAppState();
 	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
 	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
@@ -232,12 +244,12 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		if (scanningRef.current) {
 			scanningRef.current = false;
 			await manager?.stopDeviceScan().catch((error) => {
-				warn('Failed to stop BLE scanner discovery', error);
+				forensic('Failed to stop BLE scanner discovery', error);
 			});
 		}
-		const monitor = monitorRef.current;
+		const monitorSubscription = monitorRef.current;
 		monitorRef.current = null;
-		monitor?.remove();
+		monitorSubscription?.remove();
 		const unregister = unregisterRef.current;
 		unregisterRef.current = null;
 		unregister?.();
@@ -246,7 +258,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		utf8DecoderRef.current.reset();
 		if (deviceId) {
 			await manager?.cancelDeviceConnection(deviceId).catch((error) => {
-				warn('Failed to cancel BLE scanner connection', error);
+				forensic('Failed to cancel BLE scanner connection', error);
 			});
 		}
 		if (mountedRef.current) {
@@ -260,18 +272,18 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 			device: Device,
 			family: BleGattFamily,
 			request: number,
-			savedProfile?: ScannerProfileDocument
+			savedProfile?: ScannerProfile
 		) => {
 			if (!mountedRef.current || request !== attachRequestRef.current) {
 				await device.cancelConnection().catch((error) => {
-					warn('Failed to cancel stale BLE scanner connection', error);
+					forensic('Failed to cancel stale BLE scanner connection', error);
 				});
 				return;
 			}
 			await teardown();
 			if (!mountedRef.current || request !== attachRequestRef.current) {
 				await device.cancelConnection().catch((error) => {
-					warn('Failed to cancel stale BLE scanner connection', error);
+					forensic('Failed to cancel stale BLE scanner connection', error);
 				});
 				return;
 			}
@@ -284,7 +296,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 				// peripheral stops advertising and would block rediscovery).
 				if (deviceIdRef.current === device.id) deviceIdRef.current = null;
 				await device.cancelConnection().catch((error) => {
-					warn('Failed to cancel stale BLE scanner connection', error);
+					forensic('Failed to cancel stale BLE scanner connection', error);
 				});
 				return;
 			}
@@ -300,10 +312,8 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 			});
 			const profiles = savedProfile
 				? [savedProfile]
-				: await collection.find({ selector: { connectionType: 'bluetooth-le' } }).exec();
-			const existing = profiles.find(
-				(profile: ScannerProfileDocument) => profile.deviceKey === deviceKey
-			);
+				: await readScannerProfiles(storeDB, ['bluetooth-le']);
+			const existing = profiles.find((profile: ScannerProfile) => profile.deviceKey === deviceKey);
 			const deviceName = device.name || device.localName || '';
 			const source = new Subject<ScanEvent>();
 			unregisterRef.current = hubRef.current.registerSource(source.asObservable());
@@ -353,7 +363,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 
 			if (!existing) {
 				try {
-					await collection.upsert({
+					await saveScannerProfile(storeDB, {
 						deviceKey,
 						name: '',
 						connectionType: 'bluetooth-le',
@@ -367,7 +377,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 				}
 			}
 		},
-		[collection, teardown]
+		[storeDB, teardown]
 	);
 
 	const connect = React.useCallback(async () => {
@@ -443,10 +453,10 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		if (!mountedRef.current || request !== attachRequestRef.current) return;
 		setAvailable(Boolean(bleModule));
 		if (!bleModule) return;
-		const profiles = await collection.find({ selector: { connectionType: 'bluetooth-le' } }).exec();
+		const profiles = await readScannerProfiles(storeDB, ['bluetooth-le']);
 		if (!mountedRef.current || request !== attachRequestRef.current) return;
 		if (profiles.length !== 1) return;
-		const profile = profiles[0] as ScannerProfileDocument;
+		const profile = profiles[0] as ScannerProfile;
 		const family = BLE_GATT_FAMILIES.find(
 			(item) => normalizeUuid(item.serviceUuid) === normalizeUuid(profile.serviceUuid ?? '')
 		);
@@ -461,7 +471,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 			const device = await manager.connectToDevice(profile.peripheralId);
 			await attachDevice(device, family, request, profile);
 		} catch (error) {
-			warn('Failed to reconnect saved BLE scanner', error);
+			routine('Failed to reconnect saved BLE scanner', error);
 			if (request === attachRequestRef.current) {
 				attachRequestRef.current += 1;
 				await teardown();
@@ -473,7 +483,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		const manager = managerRef.current;
 		managerRef.current = null;
 		await manager?.destroy().catch((error) => {
-			warn('Failed to destroy BLE manager', error);
+			forensic('Failed to destroy BLE manager', error);
 		});
 	});
 
@@ -487,10 +497,10 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		};
 	}, []);
 
-	// A replaced store supplies a new collection and requires a fresh saved-profile reconnect.
+	// A replaced store supplies a new database and requires a fresh saved-profile reconnect.
 	React.useEffect(() => {
-		void startup().catch((error) => warn('Failed to reconnect saved BLE scanner', error));
-	}, [collection]);
+		void startup().catch((error) => routine('Failed to reconnect saved BLE scanner', error));
+	}, [storeDB]);
 
 	return { available, connect, disconnect, connected, connectedDeviceKey };
 };

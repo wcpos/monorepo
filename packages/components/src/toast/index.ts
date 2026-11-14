@@ -4,9 +4,8 @@ import { toast, Toaster } from './sonner';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'toast']);
 
-// Import types from sonner-native
-// Note: ExternalToast is not exported, so we'll extract it from the toast function parameter
-type ExternalToast = Parameters<typeof toast>[1];
+// The wrappers' one options shape: sonner's `ExternalToast` plus `type` (see `sonner.tsx`).
+type ExternalToast = NonNullable<Parameters<typeof toast>[1]>;
 
 // Toast type/variant options
 type ToastType = 'success' | 'error' | 'info' | 'warning';

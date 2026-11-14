@@ -8,36 +8,50 @@ import { PortalHost } from '@wcpos/components/portal';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { useT } from '@wcpos/core/contexts/translations';
 import { registerEngineScopeSwitcher } from '@wcpos/core/contexts/app-state/engine-scope-port';
-import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
+import { useUpdateRequired } from '@wcpos/core/hooks/use-update-required';
 import { useUserValidation } from '@wcpos/core/hooks/use-user-validation';
 import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status/online-status-logger';
-import { SearchReadinessBridge } from '@wcpos/core/screens/main/components/search-readiness-bridge';
+import { SearchMetaKeysBridge } from '@wcpos/core/screens/main/components/search-meta-keys-bridge';
+import { SearchWarmupBridge } from '@wcpos/core/screens/main/components/search-warmup-bridge';
+import { MoneyOwnerHintBridge } from '@wcpos/core/screens/main/components/money-owner-hint-bridge';
 import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-changes-bridge';
 import { VariationParentBridge } from '@wcpos/core/screens/main/components/variation-parent-bridge';
+import { RegisterSessionBridge } from '@wcpos/core/services/register-session/bridge';
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
+import { SaleCompletionBridge } from '@wcpos/core/screens/main/pos/checkout/completion-journal-bridge';
+import { NewCustomerLinkBridge } from '@wcpos/core/screens/main/pos/cart/new-customer-link-bridge';
+import { TerminalPaymentsBridge } from '@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge';
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
-import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
-import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
+import { CompatGate } from '@wcpos/core/screens/main/compat-gate';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { RasterizeProvider } from '@wcpos/printer';
-import { QueryProvider, useDocField } from '@wcpos/query';
+import { QueryProvider, useDocField, useFollowedCollection } from '@wcpos/query';
+import { credentialsTokenOwner } from '@wcpos/query/user-db';
 import { setHostVisible } from '@wcpos/utils/host-visibility';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 
+import { StripeTerminalDriverRegistration } from '../../lib/payment-drivers';
 import { SyncConfigBridge } from '../../components/sync-config-bridge';
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
 import {
 	createAppSyncEngine,
 	createSessionFetcherOptions,
+	runLegacyInventory,
 	switchAppEngineScope,
 } from '../../lib/create-app-engine';
+import { recordScopeOpened, type ScopeHistoryDatabase } from '../../lib/legacy-scope-history';
+import {
+	registryScopeIdentities,
+	type ScopeRegistryDatabase,
+} from '../../lib/legacy-scope-registry';
 import {
 	getMetricsBuckets,
 	hydrateMetricsBuckets,
@@ -49,7 +63,6 @@ import {
 	startStorageTimingReporter,
 	STORAGE_TIMING_PROBE_ENABLED,
 } from '../../lib/storage-timing-report';
-import { currentUpdateRequired, subscribeUpdateRequired } from '../../lib/update-required-gate';
 
 const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
 const metricsLogger = getLogger(['wcpos', 'sync', 'host-metrics']);
@@ -60,18 +73,20 @@ const captureUserActivity = (): false => {
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: '(drawer)',
+	anchor: '(drawer)',
 };
 
 function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, site, wpCredentials, store } = useStoreSession();
+	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
 
 	React.useEffect(() => {
-		// The diagnostic timers belong to the native app lifecycle and must stop on unmount.
-		if (Platform.OS === 'web' || !STORAGE_TIMING_PROBE_ENABLED) return;
+		// The diagnostic timers belong to the app lifecycle and must stop on unmount. Every
+		// platform reports: the storage boundary is a worker on web, IPC on Electron and the
+		// JS thread on native, and the same probe puts a number on each (wayfinder #2141).
+		if (!STORAGE_TIMING_PROBE_ENABLED) return;
 		return startStorageTimingReporter();
 	}, []);
 
@@ -109,7 +124,9 @@ function AppStack() {
 		site,
 		(value) => value.use_rest_route_param
 	) as boolean;
+	const useCacheBuster = useDocField(site, (value) => value.use_cache_buster) as boolean;
 	const useProtocolHeaders = useDocField(site, (value) => value.use_protocol_headers) as boolean;
+	const useInstanceHeader = useDocField(site, (value) => value.use_instance_header) as boolean;
 	const wcposVersion = useDocField(site, (value) => value.wcpos_version) as string;
 
 	// The credentials DOCUMENT is a stable identity; the engine reads the JWT
@@ -124,14 +141,13 @@ function AppStack() {
 	React.useEffect(() => {
 		registerEngineScopeSwitcher(async (session) => {
 			if (!session.site || !session.wpCredentials) return;
-			await switchAppEngineScope(
-				session,
-				createSessionFetcherOptions(
+			await switchAppEngineScope(session, {
+				...createSessionFetcherOptions(
 					session.site.getLatest(),
-					session.wpCredentials,
+					credentialsTokenOwner(session.wpCredentials),
 					t('auth.session_renewed_automatically')
-				)
-			);
+				),
+			});
 		});
 		return () => registerEngineScopeSwitcher(null);
 	}, [t]);
@@ -148,9 +164,11 @@ function AppStack() {
 						wcpos_version: wcposVersion,
 						use_jwt_as_param: useJwtAsParam,
 						use_rest_route_param: useRestRouteParamField,
+						use_cache_buster: useCacheBuster,
 						use_protocol_headers: useProtocolHeaders,
+						use_instance_header: useInstanceHeader,
 					},
-					wpCredentials,
+					credentialsTokenOwner(wpCredentials),
 					t('auth.session_renewed_automatically')
 				),
 				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },
@@ -163,25 +181,61 @@ function AppStack() {
 			cashierID,
 			useJwtAsParam,
 			useRestRouteParamField,
+			useCacheBuster,
 			wcposVersion,
 			useProtocolHeaders,
+			useInstanceHeader,
 			wpCredentials,
 			t,
 		]
 	);
 
+	React.useEffect(() => {
+		// Every previous-generation scope database the till may hold — not only the ones it
+		// visits — keeps "Clear all local data" from stating an exact count until it reports.
+		// This scope joins the till's history first (web/Electron read it; native lists its files).
+		const scope = { site: wpApiUrl, storeId: storeID, cashierId: cashierID };
+		void runLegacyInventory(async () => {
+			const history = await recordScopeOpened(userDB as unknown as ScopeHistoryDatabase, scope);
+			const { scopes, unresolved } = await registryScopeIdentities(
+				userDB as unknown as ScopeRegistryDatabase
+			);
+			return { registry: scopes, unresolvedReferences: unresolved, history };
+		});
+	}, [userDB, wpApiUrl, storeID, cashierID]);
+
 	return (
 		<QueryProvider localDB={storeDB} engine={engine} locale={locale}>
 			<ExtraDataProvider>
 				<SyncConfigBridge />
+				{/* Under BOTH providers on purpose. The online-status provider: a REST client
+				    rendered above it reads the context default ("offline") and sets the
+				    app-wide request block — every request then fails "No internet connection"
+				    while the site is reachable (Pixel 10, 2026-10-13, found mid-sale). The
+				    query provider: the client's re-login path reads the query runtime
+				    (useSessionLoginFlow, #2629), and above the provider that throws at render
+				    on every fresh load (dev-next, 2026-10-17). */}
+				<CustomerDisplayServiceController />
 				{/* Keeps the "changes that never reached your server" count current for
 				    the root error boundary, which renders above every provider and so
 				    cannot ask the engine itself (#1098). */}
 				<UnsentChangesBridge />
+				<MoneyOwnerHintBridge />
 				{/* Receipt emails queued while offline drain from here (#165) — above the
 			    screens, because the promise made at the Send button has to be kept
 			    whether or not the receipt modal is still open. */}
 				<ReceiptEmailQueueBridge />
+				<RegisterSessionBridge />
+				{/* Terminal payment legs poll from here, not from the checkout screen, so
+				    a tab chip can say "Waiting for terminal" while another order is on
+				    screen and a finished leg reaches its receipt unattended (#154). */}
+				<StripeTerminalDriverRegistration key={`${wpApiUrl}:${storeID}:${cashierID}`} />
+				<TerminalPaymentsBridge />
+				<SaleCompletionBridge />
+				{/* A customer created from the cart offline is attached as a guest with
+				    their addresses; its Woo id is stamped onto the order whenever the
+				    create is acknowledged, which can be after a relaunch (#1523). */}
+				<NewCustomerLinkBridge />
 				{/* A variable product's price range is recomputed from its children on
 				    every read, so an acknowledged variation write leaves the parent's row
 				    stale with nothing to pull it (#1495). Here, not on the Products
@@ -189,11 +243,12 @@ function AppStack() {
 				    after the cashier has navigated away. */}
 				<VariationParentBridge />
 				{/* Search must answer from the moment the till opens: build the product
-				    and variation indexes now, not on the first keystroke, and audit that
-				    the index can find its own documents (#1733). */}
-				<SearchReadinessBridge />
+				    and variation search blobs now, not on the first keystroke (#1733). */}
+				{/* The store's filter-added meta keys reach the local fold before the blobs warm. */}
+				<SearchMetaKeysBridge />
+				<SearchWarmupBridge />
 				<UISettingsProvider>
-					<CompatGate>
+					<CompatGate site={site}>
 						<UpdateRequiredGate site={wpApiUrl}>
 							<ScanHubProvider>
 								<View
@@ -209,6 +264,14 @@ function AppStack() {
 										<Stack.Screen name="(drawer)" />
 										<Stack.Screen
 											name="(modals)/tax-rates"
+											options={{
+												presentation: 'containedTransparentModal',
+												animation: 'fade',
+												contentStyle: { backgroundColor: 'transparent' },
+											}}
+										/>
+										<Stack.Screen
+											name="(modals)/filter-bar"
 											options={{
 												presentation: 'containedTransparentModal',
 												animation: 'fade',
@@ -241,16 +304,6 @@ function AppStack() {
 }
 
 /**
- * The plugin-version compatibility gate. It lives BELOW the engine + QueryProvider
- * (inside AppStack) so that toggling it — the `wcposVersion` (useSiteInfo) and
- * `wcposVersionPass` (useAppInfo) values settle on separate async timelines and
- * transiently disagree during boot — only swaps the gated CONTENT and never
- * unmounts the engine. Previously this gate early-returned in AppLayout, above
- * AppStack, so the toggle remounted AppStack and constructed the engine twice; the
- * second construction collided on the already-open RxDatabase (multiInstance:false)
- * and its scope never became ready, leaving every binding reading an empty engine.
- */
-/**
  * The mirror of CompatGate: the server's protocol-gate refusal
  * (wcpos_update_required — this APP is older than the store's plugin
  * requires). Same placement rule: below the engine + QueryProvider, so
@@ -260,23 +313,9 @@ function AppStack() {
  * or a fresh engine construction clears the gate.
  */
 function UpdateRequiredGate({ site, children }: { site: string; children: React.ReactNode }) {
-	const state = React.useSyncExternalStore(
-		React.useCallback(
-			(onStoreChange: () => void) => subscribeUpdateRequired(site, onStoreChange),
-			[site]
-		),
-		() => currentUpdateRequired(site)
-	);
+	const state = useUpdateRequired(site);
 	if (state) {
 		return <UpdateRequired />;
-	}
-	return <>{children}</>;
-}
-
-function CompatGate({ children }: { children: React.ReactNode }) {
-	const { compatibility, site: siteVersionInfo } = useAppInfo();
-	if (siteVersionInfo?.wcposVersion && !compatibility?.wcposVersionPass) {
-		return <UpgradeRequired />;
 	}
 	return <>{children}</>;
 }
@@ -322,7 +361,7 @@ function MetricsPersistenceBridge() {
 				hydrateMetricsBuckets(state.get());
 			})
 			.catch((error: unknown) => {
-				metricsLogger.warn('Failed to hydrate host sync metrics', {
+				metricsLogger.debug('Failed to hydrate host sync metrics', {
 					context: { error: String(error) },
 				});
 			});
@@ -332,7 +371,7 @@ function MetricsPersistenceBridge() {
 				const state = await statePromise;
 				await state.set('', () => buckets);
 			} catch (error) {
-				metricsLogger.warn('Failed to persist host sync metrics', {
+				metricsLogger.debug('Failed to persist host sync metrics', {
 					context: { error: String(error) },
 				});
 			}
@@ -355,9 +394,9 @@ function MetricsPersistenceBridge() {
 }
 
 export default function AppLayout() {
-	const { site, wpCredentials } = useStoreSession();
+	const { site, wpCredentials, storeDB } = useStoreSession();
 	const wpAPIURL = useDocField(site, (value) => value.wp_api_url) as string;
-	const { collection: logCollection } = useCollection('logs');
+	const logCollection = useFollowedCollection(storeDB, 'logs');
 	useUserValidation({ site, wpUser: wpCredentials });
 
 	// The logger holds its collection outside React, so release the outgoing store on unmount.
@@ -388,4 +427,9 @@ export default function AppLayout() {
 			</RasterizeProvider>
 		</OnlineStatusProvider>
 	);
+}
+
+function CustomerDisplayServiceController(): null {
+	useCustomerDisplayService();
+	return null;
 }

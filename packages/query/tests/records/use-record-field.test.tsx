@@ -23,6 +23,7 @@ import { useDocField, useRecordField } from '../../src/records/use-record-field'
 type Shape = {
 	uuid: string;
 	remoteId: string | null;
+	remoteKey: string;
 	payload: { total?: string; note?: string; nested?: { qty: number } };
 };
 
@@ -33,6 +34,7 @@ const schema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 64 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 	},
 	required: ['uuid'],
@@ -59,6 +61,7 @@ async function insertRow(uuid = 'row-1'): Promise<RxDocument<Shape>> {
 	return collection.insert({
 		uuid,
 		remoteId: null,
+		remoteKey: '',
 		payload: { total: '10.00', note: 'first', nested: { qty: 1 } },
 	});
 }
@@ -79,7 +82,7 @@ async function writePayload(
 
 /**
  * Wrap the collection's event stream so document subscriptions are countable: every
- * `doc.$` subscription reaches `eventBulks$` exactly once (verified rxdb 17.4.0 —
+ * `doc.$` subscription reaches `eventBulks$` exactly once (verified rxdb 17.5.0 —
  * `rx-document.ts` builds the per-document stream from `collection.eventBulks$`).
  */
 function countEventStreamSubscriptions(target: RxCollection<Shape>): { count: () => number } {
@@ -98,20 +101,6 @@ function countEventStreamSubscriptions(target: RxCollection<Shape>): { count: ()
 }
 
 describe('useRecordField', () => {
-	it('delivers the current value synchronously on first render', async () => {
-		const document = await insertRow();
-		const seen: (string | undefined)[] = [];
-
-		function Probe({ record }: { record: RxDocument<Shape> }) {
-			const total = useRecordField(record, (row) => row.payload.total);
-			seen.push(total);
-			return <>{total}</>;
-		}
-
-		render(<Probe record={document} />);
-		expect(seen[0]).toBe('10.00');
-	});
-
 	it('re-renders for a selected-field change and dedupes unselected-field writes', async () => {
 		const document = await insertRow();
 		const renders = jest.fn();
@@ -123,6 +112,7 @@ describe('useRecordField', () => {
 		}
 
 		render(<Probe record={document} />);
+		expect(renders.mock.calls[0]?.[0]).toBe('10.00');
 		const after_mount = renders.mock.calls.length;
 
 		await writePayload(document, { note: 'changed' }); // unselected field
@@ -149,6 +139,53 @@ describe('useRecordField', () => {
 
 		await writePayload(document, { note: 'revision only' });
 		expect(renders.mock.calls.length).toBe(after_mount);
+	});
+
+	it('clones each document revision once, however many hooks read it', async () => {
+		// Every revision is its own doc-cache instance, and the prototype's `toJSON` is
+		// non-configurable — so give each new instance a counting own `toJSON`.
+		const toJSON = jest.fn();
+		collection.postCreate((_data, doc) => {
+			const original = doc.toJSON.bind(doc);
+			Object.defineProperty(doc, 'toJSON', {
+				value: (...args: Parameters<typeof original>) => (toJSON(), original(...args)),
+			});
+		});
+		const document = await insertRow();
+
+		function Probe({ record }: { record: RxDocument<Shape> }) {
+			const total = useRecordField(record, (row) => row.payload.total);
+			const note = useRecordField(record, (row) => row.payload.note);
+			const qty = useRecordField(record, (row) => row.payload.nested?.qty);
+			return <>{`${total}|${note}|${qty}`}</>;
+		}
+
+		const { container } = render(<Probe record={document} />);
+		expect(toJSON).toHaveBeenCalledTimes(1);
+
+		await writePayload(document, { note: 'second' });
+		expect(container.textContent).toBe('10.00|second|1');
+		expect(toJSON).toHaveBeenCalledTimes(2);
+
+		await writePayload(document, { total: '30.00' });
+		expect(container.textContent).toBe('30.00|second|1');
+		expect(toJSON).toHaveBeenCalledTimes(3);
+	});
+
+	it('renders an object-selector component exactly once at mount', async () => {
+		const document = await insertRow();
+		const renders = jest.fn();
+
+		function Probe({ record }: { record: RxDocument<Shape> }) {
+			// A fresh object every evaluation: the effect-phase subscription must hand back the
+			// render-phase reference, or the mount commits twice.
+			const slice = useRecordField(record, (row) => ({ total: row.payload.total }));
+			renders(slice);
+			return <>{slice.total}</>;
+		}
+
+		render(<Probe record={document} />);
+		expect(renders).toHaveBeenCalledTimes(1);
 	});
 
 	it('never resubscribes for re-renders with inline selectors; resubscribes on record swap', async () => {

@@ -1,0 +1,16 @@
+/*
+ * Injected by Playwright for every gallery shot (playwright.gallery.config.ts, stylePath).
+ *
+ * The Input paints its focus ring from React state that only the DOM focus and blur events
+ * set, and the CI runner delivers those events unreliably after a navigation: the same
+ * isolated cell shot with and without the ring from one run to the next, with every DOM fact
+ * (active element, :focus-visible, document focus) reading the same. The spec blurs the field
+ * before the shot; this rule sits below React so a wrapper that still wears the ring classes
+ * shows the unfocused look whatever state the events left behind. It matches only a wrapper
+ * carrying the ring, so an error border or a disabled field is untouched, and no story
+ * focuses a field on purpose.
+ */
+[data-cell-id] div.web\:ring-1:has(> input) {
+	box-shadow: none !important;
+	border-color: var(--border) !important;
+}

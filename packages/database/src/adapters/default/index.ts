@@ -1,5 +1,3 @@
-import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
-
 import { getNativeNewStorage } from '../storage';
 import {
 	STORAGE_TIMING_PROBE_ENABLED,
@@ -9,15 +7,16 @@ import { wrappedErrorHandlerStorage } from '../../plugins/wrapped-error-handler-
 
 const nativeStorage = getNativeNewStorage();
 
-// Always wrap with error handler (catches/logs raw RxDB errors before they reach UI)
+// Always wrap with error handler (catches/logs raw RxDB errors before they reach UI).
+// Deadline behaviour: ../../plugins/STORAGE-CALL-DEADLINE-POLICY.md.
 const errorHandlerStorage = wrappedErrorHandlerStorage({ storage: nativeStorage });
 export const storage = STORAGE_TIMING_PROBE_ENABLED
 	? withStorageTimingProbe(errorHandlerStorage, 'wrapped')
 	: errorHandlerStorage;
 
-const devStorage = wrappedValidateZSchemaStorage({
-	storage,
-});
+const devStorage = __DEV__
+	? require('rxdb/plugins/validate-z-schema').wrappedValidateZSchemaStorage({ storage })
+	: null;
 
 export const defaultConfig = {
 	storage: __DEV__ ? devStorage : storage,

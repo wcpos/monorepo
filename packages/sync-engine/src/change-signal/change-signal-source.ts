@@ -387,10 +387,14 @@ export function createLiveChangeSignalSource(
 			// default, which would pull/tombstone the WRONG record type with the
 			// changed record's numeric id. The cursor still advances past dropped
 			// rows via the server's echoed `since`, so they are never re-fetched.
+			// Rows whose id is not a safe integer > 0 are dropped the same way. Customer 0
+			// is WCPOS's Guest sentinel (GUEST_CUSTOMER_ID), a local pseudo-record, never a
+			// server record: there is nothing to fetch or prune for it, and one such row
+			// would otherwise fail the remote-id mint for the whole batch forever.
 			const rows: SequenceLogRow[] = [];
 			for (const row of envelope.changes) {
 				const collection = toHybridCollection(row.collection);
-				if (collection === undefined) {
+				if (collection === undefined || !Number.isSafeInteger(row.id) || row.id <= 0) {
 					continue;
 				}
 				rows.push({
@@ -425,14 +429,19 @@ export function createLiveChangeSignalSource(
 			return page;
 		},
 
-		// TIER 2 (products) — GET /integrity/scan?bucket_size=&after_id=&limit_buckets=.
+		// TIER 2 (products) — GET /integrity/scan?bucket_size=&after_id=&limit_buckets=&status=publish.
 		// `changes` ARE the HashChecksumBucket rows already (shape matches exactly);
-		// the next page's afterId is `checkpoint.after_id`.
+		// the next page's afterId is `checkpoint.after_id`. `status=publish` scopes the
+		// server's digest to the rows the products list serves (the existence reconcile
+		// asks the same); without it every draft, private or `importing` row counts,
+		// the drill-down names ids the list never returns, and the engine prunes and
+		// re-requests them on every cycle.
 		async hashChecksumScan({ bucketSize, afterId, limitBuckets }) {
 			const envelope = await getEnvelope<RawHashChecksumBucketRow>(input, '/integrity/scan', {
 				bucket_size: String(bucketSize),
 				after_id: String(afterId),
 				limit_buckets: String(limitBuckets),
+				status: 'publish',
 			});
 			const buckets: HashChecksumBucket[] = envelope.changes.map((row) => ({
 				bucket: row.bucket,
@@ -479,6 +488,7 @@ export function createLiveChangeSignalSource(
 				const envelope = await getEnvelope<RawHashDrillRow>(input, '/integrity/scan', {
 					bucket_size: String(bucketSize),
 					bucket: String(bucket),
+					status: 'publish',
 				});
 				const driftedIds: DriftedId[] = envelope.changes.map((row) => ({
 					id: row.id,

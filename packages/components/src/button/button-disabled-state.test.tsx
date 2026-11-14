@@ -102,9 +102,11 @@ describe('Button disabled state', () => {
 
 describe('IconButton disabled state', () => {
 	it('passes disabled: false (never undefined) once re-enabled', () => {
-		const { rerender } = render(<IconButton name="arrowRight" disabled />);
+		const { rerender } = render(
+			<IconButton name="arrowRight" accessibilityLabel="Next" disabled />
+		);
 		expect(lastPressableProps().disabled).toBe(true);
-		rerender(<IconButton name="arrowRight" />);
+		rerender(<IconButton name="arrowRight" accessibilityLabel="Next" />);
 		expect(lastPressableProps().disabled).toBe(false);
 	});
 });

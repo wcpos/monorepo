@@ -116,3 +116,24 @@ describe('FieldsTree', () => {
 		expect(screen.getByLabelText('order.payment_url')).toHaveValue('https://example.test/pay/123');
 	});
 });
+
+it('handles absent optional software/register objects and edits their populated paths', () => {
+	const { rerender } = render(<FieldsTree {...baseProps} data={{}} />);
+	fireEvent.click(screen.getByRole('button', { name: 'Software' }));
+	fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+	expect(screen.queryByLabelText('software.name')).not.toBeInTheDocument();
+	expect(screen.queryByLabelText('register.name')).not.toBeInTheDocument();
+	rerender(
+		<FieldsTree
+			{...baseProps}
+			data={{
+				software: { name: 'WCPOS', plugin_version: '', app_version: '', app_build: '' },
+				register: { id: '1', name: 'Counter' },
+			}}
+		/>
+	);
+	expect(screen.getByLabelText('software.name')).toHaveValue('WCPOS');
+	expect(screen.getByLabelText('register.id')).toHaveValue('1');
+	fireEvent.change(screen.getByLabelText('register.name'), { target: { value: 'Front counter' } });
+	expect(baseProps.onChangePath).toHaveBeenCalledWith(['register', 'name'], 'Front counter');
+});

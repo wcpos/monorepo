@@ -9,11 +9,13 @@ import {
 	tryAddProductBySku,
 	wcposRestRoute,
 } from './fixtures';
+import { fillKeypadField } from './keypad-field';
 import { resolveProbeAuthorization } from './probe-credential';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
 	expectOrderPaid,
+	expectPaymentBlocked,
 	expectRateSetParity,
 	liveOrderTest as liveTest,
 	newRunLabel,
@@ -64,14 +66,7 @@ async function addTestProductToCart(page: Page) {
 	} else {
 		await page.getByTestId('add-cart-item-menu').click();
 		await page.getByTestId('menu-add-misc-product').click();
-		const priceInput = page.getByTestId('misc-product-price-input');
-		await expect(priceInput).toBeVisible({ timeout: 15_000 });
-		await priceInput.click();
-		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
-		await expect(numpad).toBeVisible({ timeout: 15_000 });
-		const numpadInput = numpad.locator('input');
-		await numpadInput.fill('15');
-		await page.getByTestId('numpad-done-button').click();
+		await fillKeypadField(page, 'misc-product-price-input', '15');
 		await page.getByTestId('add-to-cart-submit').click();
 	}
 	await expect(page.getByTestId('checkout-button')).toBeVisible({
@@ -80,7 +75,7 @@ async function addTestProductToCart(page: Page) {
 }
 
 /**
- * Build an order and stop at the checkout modal.
+ * Build an order and stop at checkout (the wide pane or the phone modal).
  *
  * Only used by the two STUBBED contract tests below — with push/orders
  * intercepted, this order never reaches the server and no payment is taken, so
@@ -98,19 +93,16 @@ async function createRefundableOrder(page: Page) {
 		{ timeout: 90_000 }
 	);
 	gatewaysLoaded.catch(() => {});
-	await openCheckout(page);
-	await gatewaysLoaded;
-	await expect(page.getByTestId('process-payment-button')).toBeDisabled();
+	const { uuid, surface } = await openCheckout(page);
+	await expectPaymentBlocked(page, surface, gatewaysLoaded, 90_000);
 
-	const orderUuid = page.url().match(/\/cart\/([^/]+)\/checkout$/)?.[1];
-	expect(orderUuid).toBeTruthy();
-
-	return { orderUuid: orderUuid!, total: Number(total) };
+	return { orderUuid: uuid, total: Number(total) };
 }
 
 async function interceptRefundDependencies(page: Page) {
 	const unsupportedProviderRefundGatewayId = 'unsupported_provider_refunds';
 	let orderRevision = 0;
+	let heldDocument: Record<string, unknown> | undefined;
 	const gatewayIds = [
 		unsupportedProviderRefundGatewayId,
 		'stripe_terminal_for_woocommerce',
@@ -160,14 +152,41 @@ async function interceptRefundDependencies(page: Page) {
 			payload: Record<string, unknown>;
 		};
 		const currentRevision = `sha256:e2e-refund-${++orderRevision}`;
+		heldDocument = { ...mutation.payload, id: 999_001 };
 
 		await route.fulfill({
 			status: mutation.operation === 'create' ? 201 : 200,
 			contentType: 'application/json',
-			body: JSON.stringify({
-				document: { ...mutation.payload, id: 999_001 },
-				currentRevision,
-			}),
+			body: JSON.stringify({ document: heldDocument, currentRevision }),
+		});
+	});
+
+	// Since #3391 the window lane re-checks held orders with `GET …/orders?include=<ids>` and
+	// deletes any id the store leaves out; 999001 lives only in this stub, so the stub answers for it.
+	const includeIds = (url: URL) => (url.searchParams.get('include') ?? '').split(',');
+	const isTargetedFixtureFetch = (url: URL) =>
+		(url.pathname.endsWith('/orders') ||
+			!!url.searchParams.get('rest_route')?.endsWith('/orders')) &&
+		includeIds(url).includes('999001');
+	await page.route(isTargetedFixtureFetch, async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		const held = heldDocument ? [heldDocument] : [];
+		if (includeIds(new URL(route.request().url())).some((id) => id !== '999001')) {
+			const response = await route.fetch().catch(() => null);
+			if (!response) return;
+			const body: unknown = response.ok() ? await response.json().catch(() => null) : null;
+			if (Array.isArray(body)) {
+				// The body is rewritten, so the real length and encoding no longer describe it.
+				const { 'content-length': _len, 'content-encoding': _enc, ...headers } = response.headers();
+				const total = headers['x-wp-total'];
+				if (total) headers['x-wp-total'] = String(Number(total) + held.length);
+				return route.fulfill({ status: response.status(), headers, json: [...body, ...held] });
+			}
+		}
+		return route.fulfill({
+			status: 200,
+			headers: { 'x-wp-total': String(held.length), 'x-wp-totalpages': '1' },
+			json: held,
 		});
 	});
 }
@@ -175,12 +194,20 @@ async function interceptRefundDependencies(page: Page) {
 async function openRefundModalForNewOrder(page: Page) {
 	await interceptRefundDependencies(page);
 	const { orderUuid, total } = await createRefundableOrder(page);
+	// The reload re-pulls the (stubbed) gateway list, and the original-method destination stays
+	// disabled until it lands; on a slow queue that pull leaves well after the modal paints.
+	const gatewaysLoaded = page.waitForResponse(
+		(response) => isWcposRestRoute(response.url(), '/wcpos/v2/payment-gateways'),
+		{ timeout: 90_000 }
+	);
+	gatewaysLoaded.catch(() => {});
 	await page.goto(`/orders/refund/${orderUuid}`);
+	await gatewaysLoaded;
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
 		timeout: 30_000,
 	});
 	expect(total, 'stubbed order must have a refundable total').toBeGreaterThan(0);
-	await page.getByTestId('refund-custom-amount').fill(Math.min(total, 1).toFixed(2));
+	await fillKeypadField(page, 'refund-custom-amount', Math.min(total, 1).toFixed(2));
 }
 
 /** The refund body the POS submits — see `buildRefundPayload` in use-refund-mutation.ts. */
@@ -207,6 +234,12 @@ test.describe('POS refunds (Pro)', () => {
 	// eslint-disable-next-line no-empty-pattern -- Playwright requires object destructuring for fixtures.
 	test.beforeEach(async ({}, testInfo) => {
 		test.skip(getStoreVariant(testInfo) !== 'pro', 'Refund UI requires Pro');
+	});
+
+	test.afterEach(async ({ page }) => {
+		// A stub's real fetch still in flight when the test ends would fail the shard outside any test.
+		// `page`, not `posPage`: afterEach runs after a beforeEach skip too, and posPage would log in for nothing.
+		await page.unrouteAll({ behavior: 'ignoreErrors' });
 	});
 
 	test('submits refund_destination=cash for a non-cash order', async ({ posPage: page }) => {
@@ -295,6 +328,21 @@ test.describe('POS refunds (Pro)', () => {
 			.toBe('original_method');
 		expect(captured.refund?.api_refund).toBe(true);
 	});
+
+	test('holds the refund offline and says why on the form', async ({ posPage: page }) => {
+		await openRefundModalForNewOrder(page);
+		try {
+			// setOffline fires the browser's offline event, which moves the app offline at once.
+			await page.context().setOffline(true);
+			await expect(page.getByTestId('refund-offline-reason')).toBeVisible({ timeout: 15_000 });
+			await expect(page.getByTestId('process-refund-button')).toBeDisabled();
+
+			await page.context().setOffline(false);
+			await expect(page.getByTestId('refund-offline-reason')).toBeHidden({ timeout: 30_000 });
+		} finally {
+			await page.context().setOffline(false);
+		}
+	});
 });
 
 /**
@@ -377,9 +425,8 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			).toBeGreaterThan(Number(refundAmount));
 
 			await page.goto(`/orders/refund/${uuid}`);
-			const amountInput = page.getByTestId('refund-custom-amount');
-			await expect(amountInput).toBeVisible({ timeout: 60_000 });
-			await amountInput.fill(refundAmount);
+			await expect(page.getByTestId('refund-custom-amount')).toBeVisible({ timeout: 60_000 });
+			await fillKeypadField(page, 'refund-custom-amount', refundAmount);
 
 			const refunded = page.waitForResponse(
 				(response) =>

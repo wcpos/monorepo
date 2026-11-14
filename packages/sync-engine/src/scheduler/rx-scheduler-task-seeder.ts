@@ -1,3 +1,5 @@
+import { isOwnerFromAnotherBoot } from './scheduler-owner-id';
+
 import type { PersistedSchedulerTaskState } from './persisted-scheduler-state';
 import type { FetchTask } from './replication-policy';
 import type { RerunOrReseedOutcome } from './rx-scheduler-task-state-repository';
@@ -35,6 +37,8 @@ export type SeedPersistedSchedulerTasksInput = {
 	 * set this; everything else (bootstrap, F11, UI/query, targeted pulls) leaves it false.
 	 */
 	coalesceInFlight?: boolean;
+	/** Explicit refresh can retry failed work immediately instead of waiting for backoff. */
+	wakeFailed?: boolean;
 };
 
 export type SeedPersistedSchedulerTasksResult = {
@@ -133,10 +137,11 @@ export async function seedPersistedSchedulerTasks(
 			continue;
 		}
 
-		if (existing.status === 'completed') {
+		if (existing.status === 'completed' || (input.wakeFailed && existing.status === 'failed')) {
 			// A non-positive window disables completed-dedupe (so a same-millisecond
 			// completion is NOT treated as a duplicate); otherwise skip within the window.
 			if (
+				existing.status === 'completed' &&
 				input.completedDedupeForMs > 0 &&
 				input.nowMs - existing.updatedAtMs <= input.completedDedupeForMs
 			) {
@@ -160,7 +165,21 @@ export async function seedPersistedSchedulerTasks(
 			// behavior: an in-flight fetch already serves them, and re-seeding is not a server
 			// mutation, so it must not force a redundant re-run. (Do NOT infer this from
 			// completedDedupeForMs — bootstrap also uses a 0 window; codex review.)
+			// #3500: a claim from another boot (a killed or crashed launch, which can never release)
+			// or one whose lease has expired has no live owner, so re-queue it now instead of
+			// waiting for the scheduler-drain tick. Same-boot and unminted owners keep skippedActive.
 			if (!input.coalesceInFlight) {
+				const leaseExpired =
+					existing.claimedUntilMs !== null && existing.claimedUntilMs <= input.nowMs;
+				if (isOwnerFromAnotherBoot(existing.ownerId) || leaseExpired) {
+					const requeued = await input.repository.claim(
+						existing,
+						queuedStateFromTask(task, input.nowMs, existing.attempt)
+					);
+					if (requeued) result.requeued += 1;
+					else result.claimLost += 1;
+					continue;
+				}
 				result.skippedActive += 1;
 				continue;
 			}

@@ -3,6 +3,7 @@ import type { SyncEvent } from '@wcpos/sync-core';
 import {
 	type EngineFetcher,
 	hydrateResponse,
+	markTransportFailure,
 	type QueryTotalWooRequest,
 	type ResponseEnvelopeTransportState,
 	type SyncCollectionName,
@@ -11,8 +12,10 @@ import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
+import { INSTANCE_HEADER, sendsInstanceHeader } from '@wcpos/utils/sync-protocol';
 
 import { evaluateClockSkew } from './clock-skew';
+import { PERSISTENT_FAILURE_STREAK } from './sync-log-observer';
 import {
 	collectionFromSyncUrl,
 	getMetricsEpoch,
@@ -21,7 +24,6 @@ import {
 } from './metrics';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
-const envelopeTransportByFetcher = new WeakMap<EngineFetcher, ResponseEnvelopeTransportState>();
 // Six consecutive 429s approximates all lanes being rejected across multiple
 // ticks, beyond the automatic-backoff regime that already handles brief bursts.
 const PERSISTENT_RATE_LIMIT_THRESHOLD = 6;
@@ -53,6 +55,43 @@ function createRateLimitObserver(): (status: number) => void {
 	};
 }
 
+/**
+ * Failing requests tracked at once. Each distinct request that is CURRENTLY
+ * failing holds one entry; a few hundred covers every lane, page and search an
+ * outage can leave failing, and the oldest is dropped past it so a long outage
+ * of one-off searches cannot grow the map without bound.
+ */
+const MAX_TRACKED_FAILING_REQUESTS = 200;
+
+/**
+ * Per-fetcher streak of failed attempts at ONE logical request (method + URL,
+ * query included). The lanes retry a failed request on their next tick, so one
+ * 503 or one dropped connection is an attempt, not something to tell the
+ * merchant about; the same request failing `PERSISTENT_FAILURE_STREAK` times
+ * running is. Keyed by the full request, not the pathname: concurrent demand
+ * and background requests to `/products` with different queries are different
+ * operations, so one outage cannot count three of them as three retries, and a
+ * healthy one cannot reset another that keeps failing. Per fetcher for the
+ * same reason as the rate-limit streak above.
+ */
+function createFailureStreaks(): (key: string, failed: boolean) => number {
+	const streaks = new Map<string, number>();
+	return (key, failed) => {
+		if (!failed) {
+			streaks.delete(key);
+			return 0;
+		}
+		const streak = (streaks.get(key) ?? 0) + 1;
+		streaks.delete(key);
+		streaks.set(key, streak);
+		if (streaks.size > MAX_TRACKED_FAILING_REQUESTS) {
+			const oldest = streaks.keys().next().value;
+			if (oldest !== undefined) streaks.delete(oldest);
+		}
+		return streak;
+	};
+}
+
 export type EngineFetcherAuth = {
 	credentials: { getLatest: () => { access_token?: string } };
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
@@ -62,7 +101,9 @@ export type EngineFetcherAuth = {
 	/** These ride the same live-options ref as the auth flags: cache hits mutate it
 	 * in place, so a probe-driven transport flip reaches the cached fetcher. */
 	useRestRouteParam?: boolean;
+	useCacheBuster?: boolean;
 	useProtocolHeaders?: boolean;
+	useInstanceHeader?: boolean;
 };
 
 export type ClockSkewGate = { generation: number; evaluated: boolean };
@@ -99,6 +140,13 @@ export function createEngineFetcher(input: {
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
 	const observeResponseStatus = createRateLimitObserver();
+	// Replaced with a brand-new tracker on every scope change. A same-site store
+	// or cashier switch keeps this fetcher and only moves `scope.storeId` (a
+	// header) or replaces `auth.credentials` in place, so the fetcher sees the
+	// change as a different owner pair at the next request.
+	let failureStreak = createFailureStreaks();
+	let failureStreakCredentials: unknown = input.auth.credentials;
+	let failureStreakStoreId: unknown = input.scope?.storeId;
 	// Paths that have already answered 403 on this fetcher. A permission error is
 	// a property of the session (a cashier role without that capability), not of
 	// the tick, so it is reported at error ONCE per path and at info after that;
@@ -135,7 +183,15 @@ export function createEngineFetcher(input: {
 		) => void;
 	};
 
+	/**
+	 * Plain permalinks carry the REST route in ?rest_route= with pathname '/', so a
+	 * push is classified from the route, not the path.
+	 */
+	const isPushRoute = (parsedUrl: URL): boolean =>
+		(parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname).split('/').includes('push');
+
 	/** Execute one logical request arc, including any authentication retry. */
+	const envelopeTransport: ResponseEnvelopeTransportState = { responseHeadersReadable: true };
 	const fetcher: EngineFetcher = async (url, init) => {
 		const clockSkewGeneration = input.clockSkew.generation;
 		let tokenUsed: string | undefined;
@@ -143,6 +199,25 @@ export function createEngineFetcher(input: {
 		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
 		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
 		const isTickProbe = requestPath?.endsWith('/changes/tick') ?? false;
+		if (
+			failureStreakCredentials !== input.auth.credentials ||
+			failureStreakStoreId !== input.scope?.storeId
+		) {
+			failureStreak = createFailureStreaks();
+			failureStreakCredentials = input.auth.credentials;
+			failureStreakStoreId = input.scope?.storeId;
+		}
+		// Bound to THIS request: one still in flight at a switch settles into the
+		// outgoing scope's (now dead) tracker, never the incoming one's.
+		const requestStreak = failureStreak;
+		// One logical request, query included (see createFailureStreaks).
+		const operationKey = `${method} ${url.split('#', 1)[0]}`;
+		let isPushRequest = false;
+		try {
+			isPushRequest = isPushRoute(new URL(url));
+		} catch {
+			// An unparseable URL fails in the attempt below; it is not a push.
+		}
 
 		/**
 		 * Perform one attempt, deferring both its log row and its transport verdict
@@ -169,6 +244,7 @@ export function createEngineFetcher(input: {
 					site: {
 						use_jwt_as_param: input.auth.useJwtAsParam,
 						use_rest_route_param: input.auth.useRestRouteParam,
+						use_cache_buster: input.auth.useCacheBuster,
 						use_protocol_headers: input.auth.useProtocolHeaders,
 					},
 					accessToken: token,
@@ -179,11 +255,11 @@ export function createEngineFetcher(input: {
 				{ url, method, headers: init?.headers }
 			);
 			const { headers } = prepared;
+			if (!sendsInstanceHeader(AppInfo.platform, input.auth.useInstanceHeader)) {
+				headers.delete(INSTANCE_HEADER);
+			}
 			const parsedUrl = new URL(prepared.url);
-			// Plain permalinks carry the REST route in ?rest_route= with pathname
-			// '/', so the push exemption must classify from the route, not the path.
-			const restRoutePath = parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname;
-			const envelopeRequested = !restRoutePath.split('/').includes('push');
+			const envelopeRequested = !isPushRoute(parsedUrl);
 			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');
 			}
@@ -215,10 +291,14 @@ export function createEngineFetcher(input: {
 				// SYNC321 failure (Sentry 2HK, 1.10.6–1.10.9).
 				if (isNativeCancel && error.name !== 'AbortError') error.name = 'AbortError';
 				const aborted = (error as { name?: unknown } | null)?.name === 'AbortError';
+				// A push's failure is push.error's to report (attempt-counted); any
+				// other path alarms only once it has failed several times running.
+				// An abort is ours, so it neither counts nor resets the streak.
+				const streak = aborted ? 0 : requestStreak(operationKey, true);
 				input.emitTransport(
 					{
 						type: 'transport.request',
-						level: 'warn',
+						level: !isPushRequest && streak >= PERSISTENT_FAILURE_STREAK ? 'warn' : 'info',
 						collection: collectionFromSyncUrl(finalUrl),
 						fields: {
 							durationMs,
@@ -231,6 +311,9 @@ export function createEngineFetcher(input: {
 					},
 					!aborted
 				);
+				// The row above reports this failure; a lane failing on the same
+				// error must not report the incident a second time.
+				if (!aborted) markTransportFailure(error);
 				// The metric follows the same verdict as the row: an abort is OUR
 				// cancellation (a superseded tick, a scope switch), so it counts as a
 				// request that happened and never as a fault. Counting it turned the
@@ -262,6 +345,7 @@ export function createEngineFetcher(input: {
 							engineLogger.warn(
 								`Server clock is ${Math.abs(result.skewSeconds)}s ${result.skewSeconds > 0 ? 'ahead of' : 'behind'} the device clock`,
 								{
+									code: ERROR_CODES.CLOCK_OUT_OF_SYNC,
 									context: {
 										skewSeconds: result.skewSeconds,
 										serverDate: result.serverDate,
@@ -289,18 +373,12 @@ export function createEngineFetcher(input: {
 			// Scoped to 2xx: the server never envelopes errors or 304s, and the
 			// auth-retry path must keep un-consumed 401 bodies clone-able.
 			if (response.ok) {
-				let transportState = envelopeTransportByFetcher.get(fetcher);
-				if (!transportState) {
-					transportState = { responseHeadersReadable: true };
-					envelopeTransportByFetcher.set(fetcher, transportState);
-				}
-				const state = transportState;
 				response = await hydrateResponse(response, {
 					envelopeRequested,
-					transportState: state,
+					transportState: envelopeTransport,
 					onDiagnostic: (kind) =>
 						engineLogger.debug(`Response envelope metadata is ${kind}`, {
-							context: { responseHeadersReadable: state.responseHeadersReadable },
+							context: { responseHeadersReadable: envelopeTransport.responseHeadersReadable },
 						}),
 				});
 			}
@@ -366,15 +444,34 @@ export function createEngineFetcher(input: {
 		 *    latches tick-unsupported and falls back to sequence-log polling BY
 		 *    CONSTRUCTION (its TIER 1 poll is unconditional), so this is a designed
 		 *    self-healing downgrade, not a fault worth a warn in the merchant's log.
+		 *  - 401 → warn: it reaches here only when no refresh arc ran (no refresh
+		 *    port, or the refresh request itself), so nothing else reports it.
+		 *  - any other push failure → info, still a failed request in the metrics: the
+		 *    record-level events own every push verdict — push.error counts the
+		 *    attempts, push.rejected / auto-reverted / the conflict rows settle the
+		 *    rest. A warn here put a second coded row (a second SYNC221 action, a
+		 *    second "ask the admin") on one record's incident.
+		 *  - 429 → info, a failed request: cadence backoff absorbs bursts, and the
+		 *    rate-limit streak above writes the one HOST161 warn when it persists.
 		 *  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
 		 *    it needs attention, not a refresh loop.
-		 *  - anything else !ok → warn (will need attention if it persists).
+		 *  - non-push 409 → warn: no record event settles a pull's clash.
+		 *  - anything else !ok (5xx, other 4xx, 426, an unexpected 1xx/3xx) → info
+		 *    while it is an attempt the next tick retries, warn once the same path
+		 *    has failed PERSISTENT_FAILURE_STREAK times running. A 426 refusal
+		 *    latches the engine's update-required screen and error row on the first
+		 *    reply, so its own requests never reach the streak.
 		 */
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
 			const status = attempt.response.status;
+			const healthy = attempt.response.ok || status === 304 || (status === 404 && isTickProbe);
+			const streak = requestStreak(operationKey, !healthy);
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
+			else if (status === 401) attempt.settle('warn', extraFields);
+			else if (isPushRequest || status === 429)
+				attempt.settle('info', extraFields, { failed: true });
 			else if (status === 403) {
 				if (forbiddenPathsOwner !== input.auth.credentials) {
 					forbiddenPaths.clear();
@@ -390,7 +487,9 @@ export function createEngineFetcher(input: {
 					{ ...(repeat ? { outcome: 'forbidden-repeat' } : {}), ...extraFields },
 					{ failed: true }
 				);
-			} else attempt.settle('warn', extraFields);
+			} else if (status === 409) attempt.settle('warn', extraFields);
+			else if (streak >= PERSISTENT_FAILURE_STREAK) attempt.settle('warn', extraFields);
+			else attempt.settle('info', extraFields, { failed: true });
 		};
 
 		const first = await performAttempt();
@@ -414,17 +513,19 @@ export function createEngineFetcher(input: {
 					? currentToken
 					: await input.auth.refreshAuth({ operationId });
 		} catch (error) {
-			// The refresh itself failed hard — settle the attempt as a failure and let
-			// the refresh error propagate exactly as before.
-			first.settle('warn', { outcome: 'failed', operationId });
+			// The refresh itself failed hard — settle the attempt as a failed request
+			// and let the refresh error propagate exactly as before. Info: the refresh
+			// layer writes the verdict for it.
+			first.settle('info', { outcome: 'failed', operationId }, { failed: true });
 			throw error;
 		}
 		if (!retryToken) {
 			// No fresh token. The refresh layer logs its own verdict ('Unable to
-			// refresh session' — error when the refresh token is terminally rejected),
-			// so this row records the request-level failure without double-escalating.
-			// Leave it uncorrelated so repeated post-rejection 401s can collapse.
-			first.settle('warn', { outcome: 'failed' });
+			// refresh session' — error when the refresh token is terminally rejected,
+			// retried after a cooldown when the failure was transient), so this row
+			// is an info request record, not a second "sign in again". Leave it
+			// uncorrelated so repeated post-rejection 401s can collapse.
+			first.settle('info', { outcome: 'failed' }, { failed: true });
 			return first.response;
 		}
 
@@ -446,11 +547,19 @@ export function createEngineFetcher(input: {
 			// automatically' info row the refresh layer writes.
 			first.settle('debug', { outcome: 'recovered', operationId });
 			retry.settle('debug', { operationId });
+			// A healthy answer ends this request's failure streak, refreshed or not.
+			requestStreak(operationKey, false);
 		} else if (retryStatus === 401) {
 			// Still unauthorized after a refresh — bounded-refresh exhaustion; NOW
 			// something is actually wrong and the user will need to re-authenticate.
+			// onAuthExhausted writes that verdict (error + toast, once per token), so
+			// the request row stays info; without a handler it is the only signal.
 			first.settle('debug', { outcome: 'failed', operationId });
-			retry.settle('error', { operationId });
+			retry.settle(
+				input.auth.onAuthExhausted ? 'info' : 'error',
+				{ operationId },
+				{ failed: true }
+			);
 			input.auth.onAuthExhausted?.(tokenUsed ?? null);
 		} else {
 			// The 401 was cured but the retry hit a different failure — classify that
@@ -466,7 +575,7 @@ export function createEngineFetcher(input: {
 
 export async function fetchWooQueryTotal(
 	input: { request: QueryTotalWooRequest; signal?: AbortSignal },
-	fetcher: EngineFetcher,
+	request: EngineFetcher,
 	wpJsonRoot: string
 ): Promise<number | null> {
 	if (!isSyncCollectionName(input.request.endpoint)) return null;
@@ -478,25 +587,12 @@ export async function fetchWooQueryTotal(
 	}
 	url.searchParams.set('page', '1');
 	url.searchParams.set('per_page', '1');
-	const rawResponse = await fetcher(
+	// The handed request already hydrates the envelope (the engine transport, and
+	// createEngineFetcher beneath it), so the total header is readable here.
+	const response = await request(
 		url.toString(),
 		input.signal !== undefined ? { signal: input.signal } : undefined
 	);
-	let transportState = envelopeTransportByFetcher.get(fetcher);
-	if (!transportState) {
-		transportState = { responseHeadersReadable: true };
-		envelopeTransportByFetcher.set(fetcher, transportState);
-	}
-	const response = await hydrateResponse(rawResponse, {
-		envelopeRequested: true,
-		transportState,
-		onDiagnostic: (kind) =>
-			engineLogger.debug(`Response envelope metadata is ${kind}`, {
-				context: {
-					responseHeadersReadable: transportState.responseHeadersReadable,
-				},
-			}),
-	});
 	if (!response.ok) {
 		throw new Error(`Query total request failed: ${response.status}`);
 	}

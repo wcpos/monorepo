@@ -41,7 +41,7 @@ describe('fakePullServer envelope byte-shape (pinned against the PHP emit)', () 
 		const body = await response.text();
 
 		// The full envelope, byte for byte, in the PHP's assembly order:
-		// documents/deletes/checkpoint/hasMore/epoch/head (class-rest-controller.php:216-224) then
+		// documents/deletes/checkpoint/complete (class-rest-controller.php:216-224) then
 		// metrics (:226-231); document shape from :195-206; checkpoint keys from :179-184; metrics
 		// snapshot shape from class-metrics.php:35-47 + the :226-231 extras.
 		expect(body).toBe(
@@ -75,10 +75,11 @@ describe('fakePullServer envelope byte-shape (pinned against the PHP emit)', () 
 					orderId: 999,
 					revision: 'sha256:r1',
 					sequence: 42,
+					epoch: 'epoch-xyz',
+					head: 42,
+					horizon: 0,
 				},
-				hasMore: false,
-				epoch: 'epoch-xyz',
-				head: 42,
+				complete: true,
 				metrics: {
 					duration_ms: 7,
 					memory_peak_bytes: 2097152,
@@ -112,13 +113,16 @@ describe('fakePullServer envelope byte-shape (pinned against the PHP emit)', () 
 			orderId: 10,
 			revision: '',
 			sequence: 10,
+			epoch: 'fake-epoch-1',
+			head: 0,
+			horizon: 0,
 		});
-		expect(envelope.hasMore).toBe(false);
+		expect(envelope.complete).toBe(true);
 	});
 });
 
 describe('fakePullServer journal semantics (pinned against pull_orders + Sync_Index)', () => {
-	it('pages by sequence with the limit+1 hasMore probe, like rows_after_sequence', async () => {
+	it('pages by sequence with the limit+1 completion probe, like rows_after_sequence', async () => {
 		// class-sync-index.php:285-292 (WHERE sequence > cursor ORDER BY sequence ASC LIMIT limit+1)
 		// + the probe/slice at class-rest-controller.php:106-109.
 		const server = createFakePullServer();
@@ -127,7 +131,7 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 
 		const first = await (await server.fetch(pullUrl({ ...ZERO_CURSOR, limit: '1' }))).json();
 		expect(first.documents.map((d: { payload: { id: number } }) => d.payload.id)).toEqual([1]);
-		expect(first.hasMore).toBe(true);
+		expect(first.complete).toBe(false);
 		expect(first.checkpoint.sequence).toBe(1);
 
 		const second = await (
@@ -136,7 +140,7 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 			)
 		).json();
 		expect(second.documents.map((d: { payload: { id: number } }) => d.payload.id)).toEqual([2]);
-		expect(second.hasMore).toBe(false);
+		expect(second.complete).toBe(true);
 		expect(second.checkpoint.sequence).toBe(2);
 	});
 
@@ -152,6 +156,7 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 		expect(envelope.deletes).toEqual([]);
 		expect(envelope.checkpoint.sequence).toBe(42);
 		expect(envelope.checkpoint.orderId).toBe(999);
+		expect(envelope.checkpoint.revision).toBe('');
 	});
 
 	it('emits an F6 tombstone for a deleted order when include_deletes is set', async () => {
@@ -299,18 +304,18 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 	});
 
 	it('surfaces the F8 journal epoch and head, and resetJournal starts a new generation', async () => {
-		// RestControllerTest.php:37-61 (epoch + head siblings of the checkpoint).
+		// RestControllerTest.php:37-61 (epoch + head inside the checkpoint).
 		const server = createFakePullServer({ epoch: 'epoch-A' });
 		server.seed({ uuid: UUID, wooOrderId: 1, sequence: 512 });
 
 		const before = await (await server.fetch(pullUrl(ZERO_CURSOR))).json();
-		expect(before.epoch).toBe('epoch-A');
-		expect(before.head).toBe(512);
+		expect(before.checkpoint.epoch).toBe('epoch-A');
+		expect(before.checkpoint.head).toBe(512);
 
 		server.resetJournal('epoch-B');
 		const after = await (await server.fetch(pullUrl(ZERO_CURSOR))).json();
-		expect(after.epoch).toBe('epoch-B');
-		expect(after.head).toBe(0);
+		expect(after.checkpoint.epoch).toBe('epoch-B');
+		expect(after.checkpoint.head).toBe(0);
 		expect(after.documents).toEqual([]);
 	});
 
@@ -518,7 +523,7 @@ describe('fakePullServer fault injection', () => {
 		).rejects.toThrow('Custom pull failed: 500');
 	});
 
-	it('stall echoes the request cursor with hasMore=true in a fully contract-shaped envelope', async () => {
+	it('stall echoes the request cursor with complete=false in a fully contract-shaped envelope', async () => {
 		const server = createFakePullServer();
 		server.script(() => ({ kind: 'stall' }));
 
@@ -539,21 +544,22 @@ describe('fakePullServer fault injection', () => {
 			orderId: 7,
 			revision: '',
 			sequence: 7,
+			epoch: 'fake-epoch-1',
+			head: 7,
+			horizon: 0,
 		});
-		expect(envelope.hasMore).toBe(true);
+		expect(envelope.complete).toBe(false);
 		expect(Object.keys(envelope)).toEqual([
 			'documents',
 			'deletes',
 			'checkpoint',
-			'hasMore',
-			'epoch',
-			'head',
+			'complete',
 			'metrics',
 		]);
 	});
 
 	it('stall keeps head at or above the echoed cursor — a stalling server is not a reset one', async () => {
-		// Unlike `empty`, a stall claims to still be serving the client's generation (hasMore=true), so
+		// Unlike `empty`, a stall claims to still be serving the client's generation (complete=false), so
 		// head < cursor would trip the F8 resync every other page and mask the stall the fault exists to
 		// provoke. This is the one place the fake deliberately raises `head`.
 		const server = createFakePullServer();
@@ -563,10 +569,10 @@ describe('fakePullServer fault injection', () => {
 			await server.fetch(pullUrl({ ...ZERO_CURSOR, sequence: '512' }))
 		).json();
 
-		expect(envelope.head).toBe(512);
+		expect(envelope.checkpoint.head).toBe(512);
 	});
 
-	it('empty serves a valid empty page with hasMore=false', async () => {
+	it('empty serves a valid empty page with complete=true', async () => {
 		const server = createFakePullServer();
 		server.seed({ uuid: UUID, wooOrderId: 1 }); // present, but the fault wins
 		server.script(() => ({ kind: 'empty' }));
@@ -574,7 +580,7 @@ describe('fakePullServer fault injection', () => {
 		const envelope = await (await server.fetch(pullUrl(ZERO_CURSOR))).json();
 
 		expect(envelope.documents).toEqual([]);
-		expect(envelope.hasMore).toBe(false);
+		expect(envelope.complete).toBe(true);
 	});
 
 	it('empty reports the REAL journal head, which after a reset sits below a stale client cursor', async () => {
@@ -590,7 +596,7 @@ describe('fakePullServer fault injection', () => {
 		).json();
 
 		expect(envelope.checkpoint.sequence).toBe(512); // the cursor is still echoed
-		expect(envelope.head).toBe(0); // …but the journal really is empty
+		expect(envelope.checkpoint.head).toBe(0); // …but the journal really is empty
 	});
 
 	it('an empty page below the cursor drives the client through the F8 cursorPastHead resync', async () => {

@@ -67,7 +67,7 @@ describe('ReceiptPreviewViewport', () => {
 		});
 	});
 
-	it('auto-fits to the measured content size when the container resizes', () => {
+	it('fills the width with the measured content when the container resizes; the height scrolls', () => {
 		const originalResizeObserver = window.ResizeObserver;
 		let resizeCallback: ResizeObserverCallback | undefined;
 
@@ -91,8 +91,56 @@ describe('ReceiptPreviewViewport', () => {
 				resizeCallback?.([], {} as ResizeObserver);
 			});
 
-			// 800×2000 content fits the 400×600 available area at 30% (2000 × 0.3 = 600).
-			expect(screen.getByTestId('receipt-preview-zoom-value')).toHaveTextContent('30%');
+			// 800-wide content fills the 400 available width at 50%; the 2000 height (600 at
+			// 30% once fitted both ways) no longer holds the page back.
+			expect(screen.getByTestId('receipt-preview-zoom-value')).toHaveTextContent('50%');
+		} finally {
+			window.ResizeObserver = originalResizeObserver;
+		}
+	});
+
+	it('fills the width past 100% for narrow paper, up to the last step, and steps from a fit that is no step', () => {
+		const originalResizeObserver = window.ResizeObserver;
+		let resizeCallback: ResizeObserverCallback | undefined;
+
+		window.ResizeObserver = class ResizeObserver {
+			constructor(callback: ResizeObserverCallback) {
+				resizeCallback = callback;
+			}
+			observe = jest.fn();
+			unobserve = jest.fn();
+			disconnect = jest.fn();
+		};
+
+		try {
+			const thermal = renderViewport('80mm');
+			let container = screen.getByTestId('receipt-preview');
+			// 302-wide paper in 676 available width would be 223%: the control's last step wins.
+			Object.defineProperty(container, 'clientWidth', { configurable: true, value: 700 });
+			act(() => resizeCallback?.([], {} as ResizeObserver));
+			expect(screen.getByTestId('receipt-preview-zoom-value')).toHaveTextContent('200%');
+			expect(screen.getByRole('button', { name: 'Zoom in' })).toBeDisabled();
+			thermal.unmount();
+
+			renderViewport('a4');
+			container = screen.getByTestId('receipt-preview');
+			// 794-wide paper in 476 available width: 59%, a whole percent, not a step.
+			Object.defineProperty(container, 'clientWidth', { configurable: true, value: 500 });
+			act(() => resizeCallback?.([], {} as ResizeObserver));
+			const value = screen.getByTestId('receipt-preview-zoom-value');
+			expect(value).toHaveTextContent('59%');
+			expect(screen.getByTestId('receipt-preview-canvas-frame')).toHaveStyle({
+				width: `${PAPER_DIMENSIONS.a4.width * 0.59}px`,
+			});
+			fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+			expect(value).toHaveTextContent('60%');
+			fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+			fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+			expect(value).toHaveTextContent('40%');
+			// A picked zoom holds through the next resize.
+			Object.defineProperty(container, 'clientWidth', { configurable: true, value: 900 });
+			act(() => resizeCallback?.([], {} as ResizeObserver));
+			expect(value).toHaveTextContent('40%');
 		} finally {
 			window.ResizeObserver = originalResizeObserver;
 		}

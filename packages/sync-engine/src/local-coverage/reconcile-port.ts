@@ -6,6 +6,7 @@ import {
 	wooIdOf,
 } from '@wcpos/sync-core';
 
+import { findAllUncached } from '../collections/find-all-uncached';
 import { forEachYielding } from '../event-loop-yield';
 import { EngineOrderRepository } from '../write-path/engine-order-repository';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
@@ -30,6 +31,15 @@ import type { RxDatabase } from 'rxdb';
 const DIRTY_SCAN_CHUNK_SIZE = 1_000;
 const SCAN_BUCKETS_PER_PAGE = 50;
 const UNSIGNED_DECIMAL = /^(?:0|[1-9]\d*)$/;
+
+/**
+ * The plugin's Digest_Index sends '' for a side with no rows in a bucket. With a zero count that
+ * is the XOR of nothing, which `xor64([])` spells '0'; with a non-zero count it is malformed.
+ */
+function bucketDigest(digest: unknown, count: number): string | null {
+	if (digest === '' && count === 0) return '0';
+	return typeof digest === 'string' && UNSIGNED_DECIMAL.test(digest) ? digest : null;
+}
 
 function parseScanPage(
 	body: unknown,
@@ -73,20 +83,21 @@ function parseScanPage(
 			(row['stored_count'] as number) < 0 ||
 			!Number.isSafeInteger(row['current_count']) ||
 			(row['current_count'] as number) < 0 ||
-			typeof row['stored_digest'] !== 'string' ||
-			!UNSIGNED_DECIMAL.test(row['stored_digest']) ||
-			typeof row['current_digest'] !== 'string' ||
-			!UNSIGNED_DECIMAL.test(row['current_digest']) ||
 			typeof row['match'] !== 'boolean'
 		) {
 			return invalid();
 		}
+		const storedCount = row['stored_count'] as number;
+		const currentCount = row['current_count'] as number;
+		const storedDigest = bucketDigest(row['stored_digest'], storedCount);
+		const currentDigest = bucketDigest(row['current_digest'], currentCount);
+		if (storedDigest === null || currentDigest === null) return invalid();
 		return {
 			bucket: row['bucket'] as number,
-			storedCount: row['stored_count'] as number,
-			currentCount: row['current_count'] as number,
-			storedDigest: row['stored_digest'],
-			currentDigest: row['current_digest'],
+			storedCount,
+			currentCount,
+			storedDigest,
+			currentDigest,
 			match: row['match'],
 		};
 	});
@@ -151,7 +162,7 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 		const dirtyWooIds = async (): Promise<Set<number>> => {
 			const ids = new Set<number>();
 			for (const name of sourceCollections) {
-				const docs = await db.collections[name].find().exec();
+				const docs = await findAllUncached(db.collections[name]);
 				// Chunked so the per-document `toJSON()` cost — the main-thread half of this scan,
 				// measured at ~24 ms per 50k products — cannot hold the loop in one span (#949).
 				await forEachYielding(docs, DIRTY_SCAN_CHUNK_SIZE, (doc) => {

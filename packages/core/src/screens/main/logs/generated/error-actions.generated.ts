@@ -22,6 +22,10 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.SYNC141');
 		case 'SYNC201':
 			return t('health.logs.error_action.SYNC201');
+		case 'SYNC202':
+			return t('health.logs.error_action.SYNC202');
+		case 'SYNC203':
+			return t('health.logs.error_action.SYNC203');
 		case 'SYNC211':
 			return t('health.logs.error_action.SYNC211');
 		case 'SYNC301':
@@ -54,12 +58,30 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CHECKOUT301');
 		case 'PAYMENT101':
 			return t('health.logs.error_action.PAYMENT101');
+		case 'PAYMENT111':
+			return t('health.logs.error_action.PAYMENT111');
+		case 'PAYMENT113':
+			return t('health.logs.error_action.PAYMENT113');
+		case 'PAYMENT121':
+			return t('health.logs.error_action.PAYMENT121');
 		case 'PAYMENT201':
 			return t('health.logs.error_action.PAYMENT201');
+		case 'PAYMENT211':
+			return t('health.logs.error_action.PAYMENT211');
+		case 'PAYMENT212':
+			return t('health.logs.error_action.PAYMENT212');
+		case 'PAYMENT213':
+			return t('health.logs.error_action.PAYMENT213');
+		case 'PAYMENT221':
+			return t('health.logs.error_action.PAYMENT221');
 		case 'PAYMENT301':
 			return t('health.logs.error_action.PAYMENT301');
+		case 'PAYMENT311':
+			return t('health.logs.error_action.PAYMENT311');
 		case 'PAYMENT401':
 			return t('health.logs.error_action.PAYMENT401');
+		case 'PAYMENT501':
+			return t('health.logs.error_action.PAYMENT501');
 		case 'PRINT101':
 			return t('health.logs.error_action.PRINT101');
 		case 'PRINT201':
@@ -96,6 +118,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.AUTH999');
 		case 'CHECKOUT999':
 			return t('health.logs.error_action.CHECKOUT999');
+		case 'PAYMENT511':
+			return t('health.logs.error_action.PAYMENT511');
 		case 'PAYMENT999':
 			return t('health.logs.error_action.PAYMENT999');
 		case 'PRINT999':
@@ -110,6 +134,10 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.SYNC411');
 		case 'SYNC221':
 			return t('health.logs.error_action.SYNC221');
+		case 'SYNC222':
+			return t('health.logs.error_action.SYNC222');
+		case 'SYNC231':
+			return t('health.logs.error_action.SYNC231');
 		case 'CHECKOUT401':
 			return t('health.logs.error_action.CHECKOUT401');
 		case 'PRODUCT411':
@@ -126,6 +154,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.AUTH321');
 		case 'AUTH331':
 			return t('health.logs.error_action.AUTH331');
+		case 'AUTH341':
+			return t('health.logs.error_action.AUTH341');
 		case 'AUTH411':
 			return t('health.logs.error_action.AUTH411');
 		case 'AUTH421':
@@ -156,6 +186,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.SYNC171');
 		case 'SYNC181':
 			return t('health.logs.error_action.SYNC181');
+		case 'SYNC191':
+			return t('health.logs.error_action.SYNC191');
 		case 'CHECKOUT111':
 			return t('health.logs.error_action.CHECKOUT111');
 		case 'PRODUCT321':
@@ -178,10 +210,34 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CHECKOUT411');
 		case 'CHECKOUT421':
 			return t('health.logs.error_action.CHECKOUT421');
+		case 'DISPLAY101':
+			return t('health.logs.error_action.DISPLAY101');
+		case 'REGISTER101':
+			return t('health.logs.error_action.REGISTER101');
+		case 'REGISTER111':
+			return t('health.logs.error_action.REGISTER111');
+		case 'REGISTER201':
+			return t('health.logs.error_action.REGISTER201');
+		case 'REGISTER211':
+			return t('health.logs.error_action.REGISTER211');
+		case 'REGISTER212':
+			return t('health.logs.error_action.REGISTER212');
+		case 'REGISTER221':
+			return t('health.logs.error_action.REGISTER221');
+		case 'REGISTER231':
+			return t('health.logs.error_action.REGISTER231');
+		case 'REGISTER301':
+			return t('health.logs.error_action.REGISTER301');
 		case 'CLIENT151':
 			return t('health.logs.error_action.CLIENT151');
+		case 'CLIENT181':
+			return t('health.logs.error_action.CLIENT181');
+		case 'CLIENT171':
+			return t('health.logs.error_action.CLIENT171');
 		case 'AUTH131':
 			return t('health.logs.error_action.AUTH131');
+		case 'CLIENT161':
+			return t('health.logs.error_action.CLIENT161');
 		default: {
 			const exhaustive: never = code;
 			return exhaustive;

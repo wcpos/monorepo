@@ -1,0 +1,50 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { screen } from '@testing-library/react';
+
+import * as VirtualizedList from '@wcpos/components/virtualized-list';
+
+import { renderTable, reset } from '../components/data-table/test-fixture';
+import { DataTableRow } from '../components/data-table/rows';
+import { DayHeading, groupOrders, isDay, type OrderHit, type OrderListItem } from './day-heading';
+
+import type { Row } from '../../../table-types';
+import type { DataTableFeatures } from '../components/data-table';
+
+beforeEach(reset);
+it('renders actual day headings alongside stable order rows without counting headings as hits', () => {
+	const hits = [
+		{
+			id: 'hit-1',
+			record: { uuid: 'uuid-1', payload: { date_created_gmt: '2026-09-17T01:00:00' } },
+		},
+	] as OrderHit[];
+	const data = groupOrders(hits, 'date_created_gmt', 'America/New_York', () => 'Today');
+	renderTable({
+		tableConfig: { data },
+		renderItem: ({ item }: { item: Row<OrderListItem, DataTableFeatures> }) => (
+			<VirtualizedList.Item>
+				{isDay(item.original) ? <DayHeading {...item.original} /> : <DataTableRow item={item} />}
+			</VirtualizedList.Item>
+		),
+	});
+	expect(screen.getByTestId('orders-day-heading-2026-09-16').textContent).toBe('Today');
+	expect(screen.getByTestId('data-table-row-uuid-1')).toBeTruthy();
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+});
+
+it('is a band on the list, never a row of it', () => {
+	// react-native-web compiles `className` away; read the element the component asks for.
+	const element = DayHeading({
+		id: 'day-2026-09-16',
+		type: 'day',
+		day: '2026-09-16',
+		label: 'Today',
+	});
+	const classes = (element.props.className as string).split(' ');
+	expect(classes).toContain('h-band');
+	expect(classes).not.toContain('min-h-row');
+});
+
+jest.mock('../../../contexts/app-state', () => ({}));

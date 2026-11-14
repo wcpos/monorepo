@@ -46,3 +46,8 @@ playwright-report/
 test-results/
 blob-report/
 test-results.json
+
+# Gallery export (baselines stay tracked beside the spec)
+gallery-build/
+# Each gallery test's shot list, unioned by gallery/check-orphans.mjs
+gallery/.shots/

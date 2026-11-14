@@ -48,13 +48,13 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({
-		currentOrderRecord: {
+	useCurrentOrderActions: () => ({
+		getCurrentOrderRecord: () => ({
 			uuid: 'order-uuid',
 			payload: { id: 17, number: '17' },
 			// The percent basis is read from here — an explicit input to the engine now.
 			getLatest: () => ({ payload: { id: 17, line_items: mockLineItems } }),
-		},
+		}),
 	}),
 }));
 
@@ -76,7 +76,7 @@ jest.mock('./use-cart-config', () => {
 		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
-	return { useCartConfig: () => config };
+	return { useCartConfig: () => config, useCartConfigReader: () => () => config };
 });
 
 // Real implementation, wrapped so one case can make it throw.

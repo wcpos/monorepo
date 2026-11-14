@@ -1,11 +1,14 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { type UseFormReturn, useWatch } from 'react-hook-form';
 
+import { EmptyState } from '@wcpos/components/empty-state';
+import { HStack } from '@wcpos/components/hstack';
+import { SavedMark } from '@wcpos/components/form';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { ListItem } from '@wcpos/components/list-item';
 import { resolveNativePrinterColumns, usePrinterDiscovery } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -20,14 +23,17 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 
 	return (
 		<VStack className="gap-2">
-			<Text className="text-sm font-medium">{t('settings.usb_printer')}</Text>
+			<HStack className="justify-between">
+				<Text variant="subheading">{t('settings.usb_printer')}</Text>
+				<SavedMark name="address" label={t('settings.saved')} />
+			</HStack>
 			{devices.length === 0 && (
-				<Text className="text-muted-foreground text-xs">{t('settings.no_devices_found')}</Text>
+				<EmptyState kind="empty" size="inline" title={t('settings.no_devices_found')} />
 			)}
 			{devices.map((device) => {
 				const selected = device.address === selectedAddress;
 				return (
-					<Pressable
+					<ListItem
 						key={device.id}
 						testID={`add-printer-usb-device-${device.id}`}
 						onPress={async () => {
@@ -53,20 +59,15 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 								}
 							}
 						}}
-						className={`flex-row items-center gap-2 rounded-md border p-2 ${
-							selected ? 'border-primary bg-primary/5' : 'border-border'
-						}`}
+						selected={selected}
+						role="radio"
+						aria-checked={selected}
 					>
-						<View
-							className={`h-4 w-4 rounded-full border-2 ${
-								selected ? 'border-primary bg-primary' : 'border-border'
-							}`}
-						/>
 						<VStack>
 							<Text className="text-sm">{device.name}</Text>
-							<Text className="text-muted-foreground text-xs">{device.address}</Text>
+							<Text variant="help">{device.address}</Text>
 						</VStack>
-					</Pressable>
+					</ListItem>
 				);
 			})}
 			<Button

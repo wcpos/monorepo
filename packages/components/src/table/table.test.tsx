@@ -1,0 +1,96 @@
+import { readFileSync } from 'node:fs';
+
+import * as React from 'react';
+
+import { render } from '@testing-library/react';
+
+import { TextClassContext } from '../text/context';
+import { PressableTableRow, TableCell, TableHead, TableRow } from './index';
+
+jest.mock('react-native', () => ({
+	View: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
+}));
+jest.mock('@rn-primitives/table', () => ({
+	Row: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
+	Head: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
+	Cell: (props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />,
+}));
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'div' }));
+jest.mock('./pulse-row', () => ({ PulseTableRow: () => null }));
+jest.mock('uniwind', () => ({ useCSSVariable: () => ['white', 'gray'] }));
+jest.mock('../text', () => ({}));
+
+function Label() {
+	return <span className={React.useContext(TextClassContext)}>Item</span>;
+}
+
+it('renders hairline rows without stripes or inline background paint', () => {
+	const { getAllByRole } = render(
+		<>
+			<TableRow index={1} />
+			<PressableTableRow index={1} />
+		</>
+	);
+	const [staticRow, pressableRow] = getAllByRole('row');
+	for (const row of [staticRow, pressableRow]) {
+		expect(row).toHaveClass('min-h-row', 'border-b');
+		expect(row.style.backgroundColor).toBe('');
+		expect(row).not.toHaveClass('bg-muted/40');
+	}
+	// Only the pressable row lifts under the pointer; a header or plain row wraps TableHead
+	// in the static one and must not look interactive (Codex review on #2213).
+	expect(pressableRow).toHaveClass('web:hover:bg-accent');
+	expect(staticRow).not.toHaveClass('web:hover:bg-accent');
+});
+
+it('renders an unfilled uppercase head and padded column cell', () => {
+	const { container } = render(
+		<>
+			<TableHead>
+				<Label />
+			</TableHead>
+			<TableCell />
+		</>
+	);
+	const [head, cell] = Array.from(container.children);
+	expect(head).not.toHaveClass('bg-table-header');
+	// One header recipe for every table (decision 9): medium weight, not semibold.
+	expect(head.firstElementChild).toHaveClass(
+		'text-muted-foreground',
+		'text-xs',
+		'font-ui',
+		'tracking-wide',
+		'uppercase'
+	);
+	expect(head.firstElementChild).not.toHaveClass('font-semibold');
+	expect(cell).toHaveClass('flex-col', 'px-3', 'py-1.5');
+});
+
+it('retires the alternating row alias in both implementations', () => {
+	for (const file of ['index.tsx', 'pulse-row.tsx']) {
+		expect(readFileSync(`${__dirname}/${file}`, 'utf8')).not.toContain(
+			['table-row', 'alt'].join('-')
+		);
+	}
+});
+
+it('draws the current-row mark as ListRow does: bar and wash, room kept, or none', () => {
+	const { getAllByRole } = render(
+		<>
+			<TableRow selected />
+			<TableRow selected={false} />
+			<TableRow />
+			<PressableTableRow selected />
+		</>
+	);
+	const [on, off, plain, pressable] = getAllByRole('row');
+	for (const row of [on, pressable]) {
+		expect(row).toHaveClass('border-l-2', 'border-l-primary', 'bg-muted');
+		expect(row).toHaveAttribute('aria-selected', 'true');
+	}
+	expect(off).toHaveClass('border-l-2', 'border-l-transparent');
+	expect(off).not.toHaveClass('bg-muted');
+	expect(off).toHaveAttribute('aria-selected', 'false');
+	expect(plain).not.toHaveClass('border-l-2');
+	expect(plain).not.toHaveAttribute('aria-selected');
+});

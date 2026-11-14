@@ -1,14 +1,13 @@
 import * as React from 'react';
 
-import { useT } from '@wcpos/core/contexts/translations';
-import { SettingsPage, TaxSettings } from '@wcpos/core/screens/main/settings';
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
+
+const Screen = lazyRest((m) => m.TaxSettingsPage);
 
 export default function TaxSettingsPage() {
-	const t = useT();
-
 	return (
-		<SettingsPage title={t('settings.tax')} testID="screen-settings-tax">
-			<TaxSettings />
-		</SettingsPage>
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
 	);
 }

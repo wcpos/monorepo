@@ -10,6 +10,11 @@ export interface UserCapabilities {
 	canEditCustomers: boolean;
 	canCreateCustomers: boolean;
 	canDeleteCustomers: boolean;
+	/**
+	 * Accept a card provider's Tap to Pay terms on behalf of the business. Apple requires an
+	 * administrator (`manage_woocommerce`) and this one FAILS CLOSED: unknown capabilities mean no.
+	 */
+	canAcceptReaderTerms: boolean;
 }
 
 export interface DerivedUserCapabilities {
@@ -48,6 +53,7 @@ export function deriveUserCapabilities(
 			canEditCustomers: has('edit_users'),
 			canCreateCustomers: has('create_customers') || has('promote_users'),
 			canDeleteCustomers: has('delete_users'),
+			canAcceptReaderTerms: known && granted.has('manage_woocommerce'),
 		},
 	};
 }

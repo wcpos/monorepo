@@ -17,6 +17,11 @@ import { StorageBlockedError } from '../../hooks/use-storage-health';
 
 const mockPost = jest.fn();
 const mockEngineRequire = jest.fn();
+const mockUseRegisterSession = jest.fn();
+
+beforeEach(() => {
+	mockUseRegisterSession.mockReturnValue({ registerId: null, session: null });
+});
 
 const makeOrder = (id: number | undefined) => {
 	const order = {
@@ -36,13 +41,23 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 	}),
 }));
 
+jest.mock('../../../../services/register-session/use-register-status', () => ({
+	useRegisterStatus: () => mockUseRegisterSession(),
+}));
+
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 }));
 
+const mockRefundError = jest.fn();
+const mockRefundWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-	getLogger: () => ({ error: jest.fn(), warn: jest.fn() }),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockRefundError(...args),
+		warn: (...args: unknown[]) => mockRefundWarn(...args),
+		debug: jest.fn(),
+	}),
 }));
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -117,7 +132,85 @@ describe('useRefundMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockPost.mockResolvedValue({ data: { refund_id: 123 } });
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire
+			.mockReset()
+			.mockImplementation(() => ({ ready: Promise.resolve(), release: jest.fn() }));
+	});
+
+	// Removing the till stamp loses refund attribution; emitting empty metadata changes the fallback.
+	it.each([
+		{
+			name: 'bound register and open session',
+			registerId: 'register-2',
+			session: { id: 'session-2', status: 'open' },
+			metaData: [
+				{ key: '_wcpos_register', value: 'register-2' },
+				{ key: '_wcpos_session', value: 'session-2' },
+			],
+		},
+		{
+			name: 'bound register and counting session',
+			registerId: 'register-2',
+			session: { id: 'session-2', status: 'counting' },
+			metaData: [
+				{ key: '_wcpos_register', value: 'register-2' },
+				{ key: '_wcpos_session', value: 'session-2' },
+			],
+		},
+		{
+			name: 'no register or session',
+			registerId: null,
+			session: null,
+			metaData: undefined,
+		},
+		{
+			name: 'bound register without a session',
+			registerId: 'register-2',
+			session: null,
+			metaData: [{ key: '_wcpos_register', value: 'register-2' }],
+		},
+		{
+			name: 'empty register and session ids',
+			registerId: '',
+			session: { id: '', status: 'open' },
+			metaData: undefined,
+		},
+		{
+			name: 'session without a register',
+			registerId: null,
+			session: { id: 'session-2', status: 'open' },
+			metaData: [{ key: '_wcpos_session', value: 'session-2' }],
+		},
+		{
+			name: 'closed session awaiting recovery',
+			registerId: 'register-2',
+			session: { id: 'session-2', status: 'closed' },
+			metaData: [{ key: '_wcpos_register', value: 'register-2' }],
+		},
+	])('posts only known current till metadata: $name', async ({ registerId, session, metaData }) => {
+		mockUseRegisterSession.mockReturnValue({ registerId, session });
+		const { result } = renderHook(() => useRefundMutation());
+
+		await act(async () => {
+			await result.current({
+				order: makeOrder(77) as never,
+				amount: '10.00',
+				reason: 'Counter refund',
+				lineItems: [],
+				refundDestination: 'cash',
+			});
+		});
+
+		expect(mockPost).toHaveBeenCalledTimes(1);
+		const payload = mockPost.mock.calls[0][1];
+		expect(payload).toEqual({
+			amount: '10.00',
+			reason: 'Counter refund',
+			refund_destination: 'cash',
+			api_refund: false,
+			...(metaData ? { meta_data: metaData } : {}),
+		});
+		if (!metaData) expect(payload).not.toHaveProperty('meta_data');
 	});
 
 	it('posts the stable refund payload with an idempotency header and refreshes the order', async () => {
@@ -156,6 +249,99 @@ describe('useRefundMutation', () => {
 			forceRefresh: true,
 		});
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
+	});
+
+	// Revert the by-parent declaration/await: a successful refund resolves before its record exists.
+	it.each([false, true])(
+		'awaits the refund record after the parent refresh, rejection %s',
+		async (rejectRefresh) => {
+			let resolveParent!: () => void;
+			let resolveRefund!: () => void;
+			let rejectRefund!: (error: Error) => void;
+			const parentReady = new Promise<void>((resolve) => {
+				resolveParent = resolve;
+			});
+			const refundReady = new Promise<void>((resolve, reject) => {
+				resolveRefund = resolve;
+				rejectRefund = reject;
+			});
+			const releaseParent = jest.fn();
+			const releaseRefund = jest.fn();
+			mockEngineRequire
+				.mockReturnValueOnce({ ready: parentReady, release: releaseParent })
+				.mockReturnValueOnce({ ready: refundReady, release: releaseRefund });
+			const { result } = renderHook(() => useRefundMutation());
+			let finished = false;
+			const mutation = result
+				.current({
+					order: makeOrder(77) as never,
+					amount: '10.00',
+					reason: 'Counter refund',
+					lineItems: [],
+					refundDestination: 'cash',
+				})
+				.then((response) => {
+					finished = true;
+					return response;
+				});
+			await act(async () => {});
+			expect(mockEngineRequire).toHaveBeenCalledTimes(1);
+			await act(async () => resolveParent());
+			expect(mockEngineRequire).toHaveBeenNthCalledWith(2, {
+				id: 'refund:record-refresh:77',
+				kind: 'refunds-by-parent',
+				collection: 'refunds',
+				parentRemoteId: '77',
+				forceRefresh: true,
+			});
+			expect(releaseParent).toHaveBeenCalledTimes(1);
+			expect(finished).toBe(false);
+			await act(async () => {
+				if (rejectRefresh) rejectRefund(new Error('refund_refresh_failed'));
+				else resolveRefund();
+				await expect(mutation).resolves.toEqual({ refund_id: 123 });
+			});
+			expect(releaseRefund).toHaveBeenCalledTimes(1);
+			expect(mockPost).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	// Revert the released-result retry: the mutation finishes before the second fetch.
+	it('redeclares a released refund refresh and waits for the fetched record', async () => {
+		let finish!: (value: { action: string }) => void;
+		const fetched = new Promise((resolve) => {
+			finish = resolve;
+		});
+		const release = jest.fn();
+		mockEngineRequire
+			.mockReturnValueOnce({ ready: Promise.resolve(), release: jest.fn() })
+			.mockReturnValueOnce({ ready: Promise.resolve({ action: 'released' }), release })
+			.mockReturnValueOnce({ ready: fetched, release });
+		const { result } = renderHook(() => useRefundMutation());
+		let finished = false;
+		const mutation = result
+			.current({
+				order: makeOrder(77) as never,
+				amount: '10.00',
+				reason: '',
+				lineItems: [],
+				refundDestination: 'cash',
+			})
+			.then((response) => {
+				finished = true;
+				return response;
+			});
+		await act(async () => {});
+		expect(mockEngineRequire).toHaveBeenCalledTimes(3);
+		expect(mockEngineRequire.mock.calls[2]).toEqual(mockEngineRequire.mock.calls[1]);
+		expect(finished).toBe(false);
+		expect(release).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			finish({ action: 'fetched' });
+			await expect(mutation).resolves.toEqual({ refund_id: 123 });
+		});
+		expect(release).toHaveBeenCalledTimes(2);
+		expect(mockPost).toHaveBeenCalledTimes(1);
 	});
 
 	it('resolves when engine.require itself throws synchronously — the refund already succeeded', async () => {
@@ -214,6 +400,9 @@ describe('useRefundMutation', () => {
 
 		expect(mockPost).toHaveBeenCalledTimes(1);
 		expect(release).toHaveBeenCalledTimes(1);
+		// The refund succeeded: an amber row would invite the double-refund retry.
+		expect(mockRefundWarn).not.toHaveBeenCalled();
+		expect(mockRefundError).not.toHaveBeenCalled();
 	});
 
 	it('fails fast when attempting to refund an order without a persisted id', async () => {

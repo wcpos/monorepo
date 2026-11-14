@@ -7,17 +7,17 @@
 		"dev:main": "turbo dev --filter=\"{./apps/main}...\"",
 		"dev:electron-renderer": "ELECTRON=true EXPO_NO_METRO_LAZY=true BROWSER=none pnpm --filter @wcpos/main dev --web --port 8088 --clear",
 		"build": "turbo build",
-		"build:opfs-worker": "node scripts/build-opfs-worker.mjs",
+		"build:sqlite-worker": "node scripts/build-sqlite-worker.mjs",
 		"generate:error-codes": "node scripts/generate-error-codes.mjs",
 		"generate:event-labels": "node scripts/generate-event-labels.mjs",
 		"report:unused-error-codes": "node scripts/report-unused-error-codes.mjs",
 		"build:main": "turbo build --filter=\"...{./apps/main}\"",
 		"test": "turbo run test --filter='{./packages/*}' --filter='{./apps/main}'",
 		"test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
-		"test:scripts": "pnpm --filter @wcpos/virtual-printer test && pnpm --filter @wcpos/eslint-config test && node --test scripts/*.test.mjs && node scripts/check-dep-duplicates.mjs && node scripts/check-expo-alignment.mjs && node scripts/check-android-aar-compile-sdk.mjs && node scripts/check-event-labels.mjs && node scripts/check-sync-event-types.mjs && node scripts/check-ci-test-matrix.mjs && node scripts/check-test-removal.mjs && node scripts/check-workspace-tasks.mjs && node scripts/check-react-compiler-smells.mjs",
-		"lint": "turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
-		"lint:fix": "turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
-		"typecheck": "turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
+		"test:scripts": "pnpm --filter @wcpos/virtual-printer test && pnpm --filter @wcpos/eslint-config test && node --test scripts/*.test.mjs && node scripts/check-dep-duplicates.mjs && node scripts/check-expo-alignment.mjs && node scripts/check-android-aar-compile-sdk.mjs && node scripts/check-event-labels.mjs && node scripts/check-sync-event-types.mjs && node scripts/check-ci-test-matrix.mjs && node scripts/check-test-removal.mjs && node scripts/check-workspace-tasks.mjs && node scripts/check-react-compiler-smells.mjs && node scripts/check-docs-links.mjs",
+		"lint": "NODE_OPTIONS=--max-old-space-size=6144 turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
+		"lint:fix": "NODE_OPTIONS=--max-old-space-size=6144 turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
+		"typecheck": "NODE_OPTIONS=--max-old-space-size=6144 turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
 		"main:expo": "pnpm --filter @wcpos/main exec expo",
 		"clean": "node scripts/clean-node-modules",
 		"main": "pnpm --filter @wcpos/main",
@@ -33,7 +33,7 @@
 		"expo:install": "pnpm --filter main exec expo install",
 		"extract:translations": "node scripts/extract-js-strings.js",
 		"translations:check": "node scripts/extract-js-strings.js --check",
-		"postinstall": "node scripts/patch-rxdb-premium-resurrection-leak.mjs && node scripts/patch-rxdb-premium-task-queue-containment.mjs && node scripts/patch-rxdb-premium-changelog-replay-safety.mjs && node scripts/patch-rxdb-premium-cleanup-compaction-batch.mjs && node scripts/patch-rxdb-premium-changes-file-salvage.mjs && node scripts/patch-rxdb-premium-changelog-identity.mjs && node scripts/patch-rxdb-premium-flexsearch-churn.mjs",
+		"postinstall": "node scripts/patch-rxdb-premium-sqlite-query-translation.mjs && node scripts/patch-rxdb-premium-open-write-count.mjs",
 		"prepare": "git config core.hooksPath .githooks",
 		"virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
 		"virtual-printer:secure": "pnpm --filter @wcpos/virtual-printer start -- --scenario secure-printing",
@@ -41,22 +41,25 @@
 	},
 	"packageManager": "pnpm@11.1.1",
 	"lint-staged": {
-		"!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
+		"!(*.worker).{js,jsx,ts,tsx}": "node --max-old-space-size=6144 node_modules/eslint/bin/eslint.js --fix"
 	},
 	"devDependencies": {
-		"@vitest/coverage-v8": "4.1.10",
+		"@sqlite.org/sqlite-wasm": "3.53.4-build1",
+		"@vitest/coverage-v8": "5.1.0",
 		"esbuild": "0.28.2",
 		"eslint": "^9.39.5",
-		"expo": "~57.0.13",
-		"glob": "^13.0.6",
-		"lint-staged": "^17.3.0",
+		"expo": "~58.0.23",
+		"glob": "^14.0.4",
+		"jsdom": "^31.0.0",
+		"lint-staged": "^17.6.0",
 		"prettier-plugin-tailwindcss": "^0.8.1",
-		"rxdb": "17.4.0",
-		"rxdb-premium": "17.4.0",
-		"yaml": "2.9.0"
+		"rxdb": "17.6.0",
+		"rxdb-premium": "17.6.0",
+		"serve": "14.2.7",
+		"yaml": "2.9.1"
 	},
 	"dependencies": {
-		"turbo": "^2.10.11",
+		"turbo": "^2.11.10",
 		"typescript": "^5.9.3"
 	}
 }

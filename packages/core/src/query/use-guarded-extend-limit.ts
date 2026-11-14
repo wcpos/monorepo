@@ -1,15 +1,8 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
-
 import { useQueryState } from './query-state-store';
 
-import type { QueryBinding } from './query-bindings';
-
 const selectLimit = (state: { limit: number }): number => state.limit;
-const NOT_PENDING$ = of(false);
-const UNKNOWN_EXHAUSTED$ = of(null as boolean | null);
 
 export type PagingVerdict = 'pending' | 'extend' | 'end';
 
@@ -47,19 +40,16 @@ export function getPagingVerdict({
 	return 'end';
 }
 
+/** The engine's opinion as a reader of a query-handle snapshot already holds it. */
+export type EngineOpinion = { pending: boolean; exhausted: boolean | null };
+
+/** {@link getPagingVerdict} under the store's limit, for a reader holding the snapshot's opinion. */
 export function usePagingVerdict(
 	hitCount: number,
-	binding?: Pick<QueryBinding, 'pending$' | 'exhausted$'>
-): { verdict: PagingVerdict; limit: number; pending: boolean; exhausted: boolean | null } {
+	{ pending, exhausted }: EngineOpinion
+): { verdict: PagingVerdict; limit: number } {
 	const limit = useQueryState(selectLimit);
-	const pending = useObservableState(binding?.pending$ ?? NOT_PENDING$, false);
-	const exhausted = useObservableState(binding?.exhausted$ ?? UNKNOWN_EXHAUSTED$, null);
-	return {
-		verdict: getPagingVerdict({ hitCount, limit, pending, exhausted }),
-		limit,
-		pending,
-		exhausted,
-	};
+	return { verdict: getPagingVerdict({ hitCount, limit, pending, exhausted }), limit };
 }
 
 /**
@@ -95,21 +85,18 @@ export function useGuardedExtension(
 }
 
 /**
- * The store-backed binding of {@link useGuardedExtension} — the grids' end-reached handler.
+ * The store-backed {@link useGuardedExtension} — the grids' end-reached handler, for a reader that
+ * holds the query-handle snapshot's `pending` and `exhausted`.
  *
  * The handler's identity is what the virtualizers key their end-reached subscription on (a new
  * handler re-runs the "am I at the end?" check), so it must change only when an input changes:
- * the engine opinion is read as two primitives, never rebuilt as an object per render.
+ * the engine opinion is passed on as two primitives, never rebuilt as an object per render.
  */
 export function useGuardedExtendLimit(
 	extendLimit: () => void,
 	resultCount: number,
-	binding?: Pick<QueryBinding, 'pending$' | 'exhausted$'>
+	{ pending, exhausted }: EngineOpinion
 ): () => void {
-	const { limit, pending, exhausted } = usePagingVerdict(resultCount, binding);
-	const engine = React.useMemo(
-		() => (binding ? { pending, exhausted } : undefined),
-		[binding, exhausted, pending]
-	);
-	return useGuardedExtension(extendLimit, resultCount, limit, engine);
+	const limit = useQueryState(selectLimit);
+	return useGuardedExtension(extendLimit, resultCount, limit, { pending, exhausted });
 }

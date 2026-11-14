@@ -1,0 +1,1287 @@
+{
+  "environment": {
+    "browser": "webkit",
+    "browserVersion": "26.5",
+    "os": "darwin 25.6.0 arm64",
+    "cpu": "Apple M4 Pro",
+    "node": "v24.14.0",
+    "versions": {
+      "rxdb": "17.4.0",
+      "rxdb-premium": "17.4.0",
+      "esbuild": "0.28.2",
+      "@sqlite.org/sqlite-wasm": "3.53.4-build1"
+    },
+    "measuredAt": "2026-09-18T09:20:20.648Z"
+  },
+  "bundleBytes": {
+    "bench.js": 85275,
+    "opfs.worker.js": 123743,
+    "worker-sqlite.js": 723460,
+    "worker-indexeddb.js": 215324,
+    "sqlite3.wasm": 868907
+  },
+  "equality": "All warmups and samples matched across indexeddb-premium (SHA-256 of canonical revision-independent content).",
+  "results": [
+    {
+      "scale": "small",
+      "engine": "indexeddb-premium",
+      "cells": [
+        {
+          "name": "products-grid-asShipped",
+          "samples": [
+            {
+              "ms": 37,
+              "rows": 1557
+            },
+            {
+              "ms": 36,
+              "rows": 1557
+            },
+            {
+              "ms": 34,
+              "rows": 1557
+            },
+            {
+              "ms": 34,
+              "rows": 1557
+            },
+            {
+              "ms": 32,
+              "rows": 1557
+            },
+            {
+              "ms": 40,
+              "rows": 1557
+            },
+            {
+              "ms": 31,
+              "rows": 1557
+            }
+          ],
+          "p50": 34,
+          "p95": 40,
+          "max": 40
+        },
+        {
+          "name": "products-grid-pushed-10",
+          "samples": [
+            {
+              "ms": 5,
+              "rows": 10
+            },
+            {
+              "ms": 5,
+              "rows": 10
+            },
+            {
+              "ms": 4,
+              "rows": 10
+            },
+            {
+              "ms": 4,
+              "rows": 10
+            },
+            {
+              "ms": 4,
+              "rows": 10
+            },
+            {
+              "ms": 4,
+              "rows": 10
+            },
+            {
+              "ms": 6,
+              "rows": 10
+            }
+          ],
+          "p50": 4,
+          "p95": 6,
+          "max": 6
+        },
+        {
+          "name": "products-grid-pushed-50",
+          "samples": [
+            {
+              "ms": 5,
+              "rows": 50
+            },
+            {
+              "ms": 5,
+              "rows": 50
+            },
+            {
+              "ms": 5,
+              "rows": 50
+            },
+            {
+              "ms": 5,
+              "rows": 50
+            },
+            {
+              "ms": 4,
+              "rows": 50
+            },
+            {
+              "ms": 4,
+              "rows": 50
+            },
+            {
+              "ms": 4,
+              "rows": 50
+            }
+          ],
+          "p50": 5,
+          "p95": 5,
+          "max": 5
+        },
+        {
+          "name": "products-catalogue-blob",
+          "samples": [
+            {
+              "ms": 37,
+              "rows": 2000
+            },
+            {
+              "ms": 34,
+              "rows": 2000
+            },
+            {
+              "ms": 33,
+              "rows": 2000
+            },
+            {
+              "ms": 33,
+              "rows": 2000
+            },
+            {
+              "ms": 35,
+              "rows": 2000
+            },
+            {
+              "ms": 34,
+              "rows": 2000
+            },
+            {
+              "ms": 34,
+              "rows": 2000
+            }
+          ],
+          "p50": 34,
+          "p95": 37,
+          "max": 37
+        },
+        {
+          "name": "products-findByIds-10",
+          "samples": [
+            {
+              "ms": 1,
+              "rows": 10
+            },
+            {
+              "ms": 0,
+              "rows": 10
+            },
+            {
+              "ms": 0,
+              "rows": 10
+            },
+            {
+              "ms": 1,
+              "rows": 10
+            },
+            {
+              "ms": 0,
+              "rows": 10
+            },
+            {
+              "ms": 1,
+              "rows": 10
+            },
+            {
+              "ms": 1,
+              "rows": 10
+            }
+          ],
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        {
+          "name": "products-findByIds-50",
+          "samples": [
+            {
+              "ms": 2,
+              "rows": 50
+            },
+            {
+              "ms": 2,
+              "rows": 50
+            },
+            {
+              "ms": 2,
+              "rows": 50
+            },
+            {
+              "ms": 1,
+              "rows": 50
+            },
+            {
+              "ms": 1,
+              "rows": 50
+            },
+            {
+              "ms": 1,
+              "rows": 50
+            },
+            {
+              "ms": 2,
+              "rows": 50
+            }
+          ],
+          "p50": 2,
+          "p95": 2,
+          "max": 2
+        },
+        {
+          "name": "products-remoteId-in-find",
+          "samples": [
+            {
+              "ms": 26,
+              "rows": 100
+            },
+            {
+              "ms": 28,
+              "rows": 100
+            },
+            {
+              "ms": 25,
+              "rows": 100
+            },
+            {
+              "ms": 27,
+              "rows": 100
+            },
+            {
+              "ms": 27,
+              "rows": 100
+            },
+            {
+              "ms": 25,
+              "rows": 100
+            },
+            {
+              "ms": 25,
+              "rows": 100
+            }
+          ],
+          "p50": 26,
+          "p95": 28,
+          "max": 28
+        },
+        {
+          "name": "products-remoteId-in-count",
+          "samples": [
+            {
+              "ms": 25
+            },
+            {
+              "ms": 26
+            },
+            {
+              "ms": 27
+            },
+            {
+              "ms": 25
+            },
+            {
+              "ms": 27
+            },
+            {
+              "ms": 24
+            },
+            {
+              "ms": 24
+            }
+          ],
+          "p50": 25,
+          "p95": 27,
+          "max": 27
+        },
+        {
+          "name": "seed-products",
+          "samples": [
+            {
+              "ms": 138
+            },
+            {
+              "ms": 133
+            },
+            {
+              "ms": 138
+            }
+          ],
+          "p50": 138,
+          "p95": 138,
+          "max": 138
+        },
+        {
+          "name": "orders-default-find-10",
+          "samples": [
+            {
+              "ms": 24,
+              "rows": 10
+            },
+            {
+              "ms": 24,
+              "rows": 10
+            },
+            {
+              "ms": 23,
+              "rows": 10
+            },
+            {
+              "ms": 26,
+              "rows": 10
+            },
+            {
+              "ms": 25,
+              "rows": 10
+            },
+            {
+              "ms": 25,
+              "rows": 10
+            },
+            {
+              "ms": 24,
+              "rows": 10
+            }
+          ],
+          "p50": 24,
+          "p95": 26,
+          "max": 26
+        },
+        {
+          "name": "orders-default-find-50",
+          "samples": [
+            {
+              "ms": 26,
+              "rows": 50
+            },
+            {
+              "ms": 25,
+              "rows": 50
+            },
+            {
+              "ms": 26,
+              "rows": 50
+            },
+            {
+              "ms": 25,
+              "rows": 50
+            },
+            {
+              "ms": 25,
+              "rows": 50
+            },
+            {
+              "ms": 25,
+              "rows": 50
+            },
+            {
+              "ms": 24,
+              "rows": 50
+            }
+          ],
+          "p50": 25,
+          "p95": 26,
+          "max": 26
+        },
+        {
+          "name": "orders-default-count",
+          "samples": [
+            {
+              "ms": 24
+            },
+            {
+              "ms": 24
+            },
+            {
+              "ms": 24
+            },
+            {
+              "ms": 25
+            },
+            {
+              "ms": 23
+            },
+            {
+              "ms": 25
+            },
+            {
+              "ms": 24
+            }
+          ],
+          "p50": 24,
+          "p95": 25,
+          "max": 25
+        },
+        {
+          "name": "orders-open-status",
+          "samples": [
+            {
+              "ms": 37,
+              "rows": 1200
+            },
+            {
+              "ms": 36,
+              "rows": 1200
+            },
+            {
+              "ms": 33,
+              "rows": 1200
+            },
+            {
+              "ms": 35,
+              "rows": 1200
+            },
+            {
+              "ms": 37,
+              "rows": 1200
+            },
+            {
+              "ms": 36,
+              "rows": 1200
+            },
+            {
+              "ms": 35,
+              "rows": 1200
+            }
+          ],
+          "p50": 36,
+          "p95": 37,
+          "max": 37
+        },
+        {
+          "name": "order-line-add",
+          "samples": [
+            {
+              "ms": 2
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            }
+          ],
+          "p50": 1,
+          "p95": 1,
+          "max": 2
+        },
+        {
+          "name": "order-create",
+          "samples": [
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            }
+          ],
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        }
+      ],
+      "seedBytes": {
+        "products": 2000,
+        "orders": 2758.653
+      }
+    },
+    {
+      "scale": "large",
+      "engine": "indexeddb-premium",
+      "cells": [
+        {
+          "name": "products-grid-asShipped",
+          "samples": [
+            {
+              "ms": 339,
+              "rows": 15337
+            },
+            {
+              "ms": 335,
+              "rows": 15337
+            },
+            {
+              "ms": 348,
+              "rows": 15337
+            },
+            {
+              "ms": 333,
+              "rows": 15337
+            },
+            {
+              "ms": 347,
+              "rows": 15337
+            },
+            {
+              "ms": 315,
+              "rows": 15337
+            },
+            {
+              "ms": 324,
+              "rows": 15337
+            }
+          ],
+          "p50": 335,
+          "p95": 348,
+          "max": 348
+        },
+        {
+          "name": "products-grid-pushed-10",
+          "samples": [
+            {
+              "ms": 3,
+              "rows": 10
+            },
+            {
+              "ms": 3,
+              "rows": 10
+            },
+            {
+              "ms": 4,
+              "rows": 10
+            },
+            {
+              "ms": 4,
+              "rows": 10
+            },
+            {
+              "ms": 3,
+              "rows": 10
+            },
+            {
+              "ms": 4,
+              "rows": 10
+            },
+            {
+              "ms": 3,
+              "rows": 10
+            }
+          ],
+          "p50": 3,
+          "p95": 4,
+          "max": 4
+        },
+        {
+          "name": "products-grid-pushed-50",
+          "samples": [
+            {
+              "ms": 4,
+              "rows": 50
+            },
+            {
+              "ms": 4,
+              "rows": 50
+            },
+            {
+              "ms": 4,
+              "rows": 50
+            },
+            {
+              "ms": 4,
+              "rows": 50
+            },
+            {
+              "ms": 3,
+              "rows": 50
+            },
+            {
+              "ms": 3,
+              "rows": 50
+            },
+            {
+              "ms": 3,
+              "rows": 50
+            }
+          ],
+          "p50": 4,
+          "p95": 4,
+          "max": 4
+        },
+        {
+          "name": "products-catalogue-blob",
+          "samples": [
+            {
+              "ms": 347,
+              "rows": 20000
+            },
+            {
+              "ms": 353,
+              "rows": 20000
+            },
+            {
+              "ms": 356,
+              "rows": 20000
+            },
+            {
+              "ms": 351,
+              "rows": 20000
+            },
+            {
+              "ms": 376,
+              "rows": 20000
+            },
+            {
+              "ms": 343,
+              "rows": 20000
+            },
+            {
+              "ms": 329,
+              "rows": 20000
+            }
+          ],
+          "p50": 351,
+          "p95": 376,
+          "max": 376
+        },
+        {
+          "name": "products-findByIds-10",
+          "samples": [
+            {
+              "ms": 1,
+              "rows": 10
+            },
+            {
+              "ms": 0,
+              "rows": 10
+            },
+            {
+              "ms": 1,
+              "rows": 10
+            },
+            {
+              "ms": 1,
+              "rows": 10
+            },
+            {
+              "ms": 0,
+              "rows": 10
+            },
+            {
+              "ms": 1,
+              "rows": 10
+            },
+            {
+              "ms": 0,
+              "rows": 10
+            }
+          ],
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        {
+          "name": "products-findByIds-50",
+          "samples": [
+            {
+              "ms": 1,
+              "rows": 50
+            },
+            {
+              "ms": 1,
+              "rows": 50
+            },
+            {
+              "ms": 1,
+              "rows": 50
+            },
+            {
+              "ms": 2,
+              "rows": 50
+            },
+            {
+              "ms": 2,
+              "rows": 50
+            },
+            {
+              "ms": 2,
+              "rows": 50
+            },
+            {
+              "ms": 1,
+              "rows": 50
+            }
+          ],
+          "p50": 1,
+          "p95": 2,
+          "max": 2
+        },
+        {
+          "name": "products-remoteId-in-find",
+          "samples": [
+            {
+              "ms": 233,
+              "rows": 100
+            },
+            {
+              "ms": 235,
+              "rows": 100
+            },
+            {
+              "ms": 230,
+              "rows": 100
+            },
+            {
+              "ms": 234,
+              "rows": 100
+            },
+            {
+              "ms": 231,
+              "rows": 100
+            },
+            {
+              "ms": 231,
+              "rows": 100
+            },
+            {
+              "ms": 237,
+              "rows": 100
+            }
+          ],
+          "p50": 233,
+          "p95": 237,
+          "max": 237
+        },
+        {
+          "name": "products-remoteId-in-count",
+          "samples": [
+            {
+              "ms": 232
+            },
+            {
+              "ms": 235
+            },
+            {
+              "ms": 241
+            },
+            {
+              "ms": 246
+            },
+            {
+              "ms": 245
+            },
+            {
+              "ms": 243
+            },
+            {
+              "ms": 240
+            }
+          ],
+          "p50": 241,
+          "p95": 246,
+          "max": 246
+        },
+        {
+          "name": "seed-products",
+          "samples": [
+            {
+              "ms": 2762
+            },
+            {
+              "ms": 3008
+            },
+            {
+              "ms": 2899
+            }
+          ],
+          "p50": 2899,
+          "p95": 3008,
+          "max": 3008
+        },
+        {
+          "name": "orders-default-find-10",
+          "samples": [
+            {
+              "ms": 270,
+              "rows": 10
+            },
+            {
+              "ms": 260,
+              "rows": 10
+            },
+            {
+              "ms": 261,
+              "rows": 10
+            },
+            {
+              "ms": 241,
+              "rows": 10
+            },
+            {
+              "ms": 239,
+              "rows": 10
+            },
+            {
+              "ms": 244,
+              "rows": 10
+            },
+            {
+              "ms": 257,
+              "rows": 10
+            }
+          ],
+          "p50": 257,
+          "p95": 270,
+          "max": 270
+        },
+        {
+          "name": "orders-default-find-50",
+          "samples": [
+            {
+              "ms": 238,
+              "rows": 50
+            },
+            {
+              "ms": 237,
+              "rows": 50
+            },
+            {
+              "ms": 238,
+              "rows": 50
+            },
+            {
+              "ms": 239,
+              "rows": 50
+            },
+            {
+              "ms": 236,
+              "rows": 50
+            },
+            {
+              "ms": 239,
+              "rows": 50
+            },
+            {
+              "ms": 240,
+              "rows": 50
+            }
+          ],
+          "p50": 238,
+          "p95": 240,
+          "max": 240
+        },
+        {
+          "name": "orders-default-count",
+          "samples": [
+            {
+              "ms": 248
+            },
+            {
+              "ms": 257
+            },
+            {
+              "ms": 256
+            },
+            {
+              "ms": 252
+            },
+            {
+              "ms": 239
+            },
+            {
+              "ms": 235
+            },
+            {
+              "ms": 242
+            }
+          ],
+          "p50": 248,
+          "p95": 257,
+          "max": 257
+        },
+        {
+          "name": "orders-open-status",
+          "samples": [
+            {
+              "ms": 410,
+              "rows": 12000
+            },
+            {
+              "ms": 396,
+              "rows": 12000
+            },
+            {
+              "ms": 392,
+              "rows": 12000
+            },
+            {
+              "ms": 412,
+              "rows": 12000
+            },
+            {
+              "ms": 380,
+              "rows": 12000
+            },
+            {
+              "ms": 405,
+              "rows": 12000
+            },
+            {
+              "ms": 384,
+              "rows": 12000
+            }
+          ],
+          "p50": 396,
+          "p95": 412,
+          "max": 412
+        },
+        {
+          "name": "order-line-add",
+          "samples": [
+            {
+              "ms": 3
+            },
+            {
+              "ms": 2
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 2
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 2
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 2
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 2
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 2
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 2
+            },
+            {
+              "ms": 2
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 2
+            }
+          ],
+          "p50": 1,
+          "p95": 2,
+          "max": 3
+        },
+        {
+          "name": "order-create",
+          "samples": [
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 1
+            },
+            {
+              "ms": 0
+            },
+            {
+              "ms": 0
+            }
+          ],
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        {
+          "name": "cold-open-first-read",
+          "samples": [
+            {
+              "ms": 11,
+              "rows": 1,
+              "fetched": [
+                {
+                  "file": "worker-indexeddb.js",
+                  "bytes": 215324
+                }
+              ]
+            },
+            {
+              "ms": 10,
+              "rows": 1,
+              "fetched": [
+                {
+                  "file": "worker-indexeddb.js",
+                  "bytes": 215324
+                }
+              ]
+            },
+            {
+              "ms": 11,
+              "rows": 1,
+              "fetched": [
+                {
+                  "file": "worker-indexeddb.js",
+                  "bytes": 215324
+                }
+              ]
+            }
+          ],
+          "p50": 11,
+          "p95": 11,
+          "max": 11
+        }
+      ],
+      "seedBytes": {
+        "products": 2000,
+        "orders": 2714.56025
+      },
+      "storageUsage": 272602598
+    }
+  ]
+}

@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 import { expect, test } from './test';
 import {
 	findVariableProduct,
@@ -20,9 +23,15 @@ import {
 	productProbeFailureAction,
 	productWriterAuthorization,
 	productWriterCredentialsDecision,
+	publishedWriterAuthorization,
+	renewProductWriterIfExpiring,
 	searchAndWaitForServer,
+	storeLoginAuthorization,
 	sweepOrphanedProductProbes,
+	WRITER_ACCESS_TOKEN_TTL_MS,
+	type WriterAuthorization,
 } from './search-probe';
+import { createWriterAuthFile, writeWriterAuthFile } from './writer-login-holder';
 
 import type { APIRequestContext } from '@playwright/test';
 import type { StoreAuthorization } from './probe-credential';
@@ -441,8 +450,8 @@ test.describe('search-probe pure logic', () => {
 
 		try {
 			await Promise.all([
-				productWriterAuthorization(request as never, 'https://example.test'),
-				productWriterAuthorization(request as never, 'https://example.test'),
+				storeLoginAuthorization(request as never, 'https://example.test', 'writer', 'secret'),
+				storeLoginAuthorization(request as never, 'https://example.test', 'writer', 'secret'),
 			]);
 			expect(states).toHaveLength(2);
 			expect(new Set(states).size).toBe(2);
@@ -451,6 +460,171 @@ test.describe('search-probe pure logic', () => {
 			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
 			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
 			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+		}
+	});
+
+	test("uses the holder's writer authorization without logging in when the store accepts it", async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		const file = createWriterAuthFile();
+		const authorization: WriterAuthorization = {
+			transport: 'query',
+			value: 'run-token',
+			expiresAt: Date.now() + WRITER_ACCESS_TOKEN_TTL_MS,
+		};
+		writeWriterAuthFile(file, { 'https://example.test': authorization });
+		const logins: string[] = [];
+		const reads: { url: string; params?: Record<string, string> }[] = [];
+		const request = {
+			get: async (url: string, options?: { params?: Record<string, string> }) => {
+				if (url.includes('/wcpos-auth/')) logins.push(url);
+				else reads.push({ url, params: options?.params });
+				return response(200, []);
+			},
+		};
+		try {
+			expect(
+				await productWriterAuthorization(request as never, 'https://example.test/', { file })
+			).toEqual(authorization);
+			expect(logins).toHaveLength(0);
+			expect(reads).toEqual([
+				{
+					url: 'https://example.test/wp-json/wc/v3/products',
+					params: { authorization: 'run-token', per_page: '1' },
+				},
+			]);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+			fs.rmSync(path.dirname(file), { recursive: true, force: true });
+		}
+	});
+
+	test('publishedWriterAuthorization ignores malformed or foreign hand-overs', () => {
+		const file = createWriterAuthFile();
+		try {
+			expect(publishedWriterAuthorization('https://example.test', undefined)).toBeNull();
+			expect(publishedWriterAuthorization('https://example.test', file)).toBeNull();
+			const expiresAt = Date.now() + WRITER_ACCESS_TOKEN_TTL_MS;
+			for (const handover of [
+				'not json',
+				JSON.stringify({
+					'https://other.test': { transport: 'query', value: 'run-token', expiresAt },
+				}),
+				JSON.stringify({
+					'https://example.test': { transport: 'cookie', value: 'run-token', expiresAt },
+				}),
+				JSON.stringify({ 'https://example.test': { transport: 'query', value: '', expiresAt } }),
+				JSON.stringify({ 'https://example.test': { transport: 'query', value: 'run-token' } }),
+			]) {
+				fs.writeFileSync(file, handover);
+				expect(publishedWriterAuthorization('https://example.test', file)).toBeNull();
+			}
+			const first: WriterAuthorization = { transport: 'query', value: 'first-token', expiresAt };
+			const second: WriterAuthorization = {
+				transport: 'header',
+				value: 'Bearer second-token',
+				expiresAt,
+			};
+			writeWriterAuthFile(file, { 'https://example.test': first, 'https://other.test': second });
+			expect(publishedWriterAuthorization('https://example.test/', file)).toEqual(first);
+			expect(publishedWriterAuthorization('https://other.test', file)).toEqual(second);
+		} finally {
+			fs.rmSync(path.dirname(file), { recursive: true, force: true });
+		}
+	});
+
+	test('a writer login carries an expiry thirty minutes from its start', async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		const request = {
+			get: async (url: string) => ({
+				...response(200, {}),
+				text: async () =>
+					url.includes('/wcpos-auth/')
+						? '<input name="_wpnonce" value="nonce"><input name="auth_session" value="session">'
+						: '',
+			}),
+			post: async () => ({
+				status: () => 302,
+				headers: () => ({ location: 'https://localhost/cb?access_token=token' }),
+			}),
+		};
+		try {
+			const before = Date.now();
+			const authorization = await storeLoginAuthorization(
+				request as never,
+				'https://example.test',
+				'writer',
+				'secret'
+			);
+			const after = Date.now();
+			expect(authorization.expiresAt).toBeGreaterThanOrEqual(before + WRITER_ACCESS_TOKEN_TTL_MS);
+			expect(authorization.expiresAt).toBeLessThanOrEqual(after + WRITER_ACCESS_TOKEN_TTL_MS);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+		}
+	});
+
+	test('renewProductWriterIfExpiring renews an expiring credential in place from the holder and leaves a fresh one alone', async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		const file = createWriterAuthFile();
+		const held: WriterAuthorization = {
+			transport: 'query',
+			value: 'holder-token',
+			expiresAt: Date.now() + WRITER_ACCESS_TOKEN_TTL_MS,
+		};
+		writeWriterAuthFile(file, { 'https://example.test': held });
+		const requests: string[] = [];
+		const request = {
+			get: async (url: string) => {
+				requests.push(url);
+				return response(200, []);
+			},
+		};
+		try {
+			const writer: WriterAuthorization = {
+				transport: 'query',
+				value: 'old-token',
+				expiresAt: Date.now() + 60_000,
+			};
+			const heldWriter = writer;
+			await expect(
+				renewProductWriterIfExpiring(request as never, 'https://example.test', writer, { file })
+			).resolves.toBe(true);
+			expect(requests.filter((url) => url.includes('/wcpos-auth/'))).toEqual([]);
+			expect(writer).toBe(heldWriter);
+			expect(heldWriter).toEqual(held);
+			const fresh: WriterAuthorization = {
+				transport: 'query',
+				value: 'fresh-token',
+				expiresAt: Date.now() + WRITER_ACCESS_TOKEN_TTL_MS,
+			};
+			const unchanged = { ...fresh };
+			const requestCount = requests.length;
+			await expect(
+				renewProductWriterIfExpiring(request as never, 'https://example.test', fresh, { file })
+			).resolves.toBe(false);
+			expect(requests).toHaveLength(requestCount);
+			expect(fresh).toEqual(unchanged);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+			fs.rmSync(path.dirname(file), { recursive: true, force: true });
 		}
 	});
 
@@ -493,11 +667,13 @@ test.describe('search-probe pure logic', () => {
 		};
 
 		try {
-			const authorization = await productWriterAuthorization(
+			const authorization = await storeLoginAuthorization(
 				request as never,
-				'https://example.test'
+				'https://example.test',
+				'writer',
+				'secret'
 			);
-			expect(authorization).toEqual({ transport: 'query', value: 'token' });
+			expect(authorization).toMatchObject({ transport: 'query', value: 'token' });
 			expect(productReads).toEqual([
 				{ header: 'Bearer token', param: null },
 				{ header: null, param: 'Bearer token' },
@@ -540,8 +716,8 @@ test.describe('search-probe pure logic', () => {
 
 		try {
 			await expect(
-				productWriterAuthorization(request as never, 'https://example.test')
-			).resolves.toEqual({ transport: 'query', value: 'Bearer token' });
+				storeLoginAuthorization(request as never, 'https://example.test', 'writer', 'secret')
+			).resolves.toMatchObject({ transport: 'query', value: 'Bearer token' });
 		} finally {
 			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
 			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
@@ -621,8 +797,8 @@ test.describe('search-probe pure logic', () => {
 
 		try {
 			await expect(
-				productWriterAuthorization(request as never, 'https://example.test')
-			).resolves.toEqual({ transport: 'query', value: 'Bearer token' });
+				storeLoginAuthorization(request as never, 'https://example.test', 'writer', 'secret')
+			).resolves.toMatchObject({ transport: 'query', value: 'Bearer token' });
 			expect(attempts).toEqual(['header:Bearer token', 'query:Bearer token']);
 		} finally {
 			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;

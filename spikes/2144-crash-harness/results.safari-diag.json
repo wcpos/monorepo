@@ -1,0 +1,250 @@
+{
+  "environment": {
+    "browser": "safari",
+    "browserVersion": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15",
+    "os": "MacIntel",
+    "cpu": "unknown (8 logical CPUs)",
+    "node": null,
+    "versions": {
+      "rxdb": "17.4.0",
+      "rxdb-premium": "17.4.0",
+      "esbuild": "0.28.2",
+      "playwright": "1.62.1",
+      "@sqlite.org/sqlite-wasm": "3.53.4-build1"
+    },
+    "measuredAt": "2026-09-18T15:41:27.198Z"
+  },
+  "steps": [
+    {
+      "name": "w1.install+open",
+      "ok": true,
+      "ms": 141.71999999999997
+    },
+    {
+      "name": "w1.write",
+      "ok": true,
+      "ms": 3.300000000000068,
+      "value": {
+        "mainWrites": 0
+      }
+    },
+    {
+      "name": "w1.read",
+      "ok": true,
+      "ms": 1.67999999999995,
+      "value": {
+        "docs": 3,
+        "integrity": [
+          "ok"
+        ]
+      }
+    },
+    {
+      "name": "w1.files",
+      "ok": true,
+      "ms": 0.17999999999994998,
+      "value": [
+        "/crash-8c6de15f-a28f-4fc3-b827-e51be53c014f",
+        "/crash-8c6de15f-a28f-4fc3-b827-e51be53c014f-wal"
+      ]
+    },
+    {
+      "name": "w1.close-db",
+      "ok": true,
+      "ms": 1.259999999999991
+    },
+    {
+      "name": "w1.reopen-same-worker",
+      "ok": true,
+      "ms": 1.6399999999999864,
+      "value": {
+        "journalMode": "WAL",
+        "cacheSize": -16384,
+        "journalSizeLimit": -1
+      }
+    },
+    {
+      "name": "w1.read-again",
+      "ok": true,
+      "ms": 0.8399999999999181,
+      "value": {
+        "docs": 3,
+        "integrity": [
+          "ok"
+        ]
+      }
+    },
+    {
+      "name": "w1.close-db-again",
+      "ok": true,
+      "ms": 0.38000000000010914
+    },
+    {
+      "name": "w2.after-0ms.install+open",
+      "ok": true,
+      "ms": 45.88000000000011,
+      "value": {
+        "reacquireMs": 5.880000000000003,
+        "leftBehind": {
+          "files": [
+            "/crash-8c6de15f-a28f-4fc3-b827-e51be53c014f"
+          ]
+        },
+        "journalMode": "WAL",
+        "cacheSize": -16384,
+        "journalSizeLimit": -1
+      }
+    },
+    {
+      "name": "w2.after-0ms.read",
+      "ok": true,
+      "ms": 2.439999999999941,
+      "value": {
+        "docs": 3,
+        "integrity": [
+          "ok"
+        ]
+      }
+    },
+    {
+      "name": "w2.after-0ms.close-db",
+      "ok": true,
+      "ms": 447.9200000000001
+    },
+    {
+      "name": "w2.after-3000ms.install+open",
+      "ok": true,
+      "ms": 40.35999999999967,
+      "value": {
+        "reacquireMs": 4.079999999999998,
+        "leftBehind": {
+          "files": [
+            "/crash-8c6de15f-a28f-4fc3-b827-e51be53c014f"
+          ]
+        },
+        "journalMode": "WAL",
+        "cacheSize": -16384,
+        "journalSizeLimit": -1
+      }
+    },
+    {
+      "name": "w2.after-3000ms.read",
+      "ok": true,
+      "ms": 2.800000000000182,
+      "value": {
+        "docs": 3,
+        "integrity": [
+          "ok"
+        ]
+      }
+    },
+    {
+      "name": "w2.after-3000ms.close-db",
+      "ok": true,
+      "ms": 0.6199999999998909
+    },
+    {
+      "name": "w3.install",
+      "ok": true,
+      "ms": 34.88000000000011
+    },
+    {
+      "name": "w3.open-a",
+      "ok": true,
+      "ms": 7.480000000000473,
+      "value": {
+        "journalMode": "WAL",
+        "cacheSize": -16384,
+        "journalSizeLimit": -1
+      }
+    },
+    {
+      "name": "w3.write-a",
+      "ok": true,
+      "ms": 1.6199999999998909,
+      "value": {
+        "mainWrites": 0
+      }
+    },
+    {
+      "name": "w3.close-db",
+      "ok": true,
+      "ms": 0.6799999999993815
+    },
+    {
+      "name": "w3.unlink-a",
+      "ok": true,
+      "ms": 0.14000000000032742,
+      "value": true
+    },
+    {
+      "name": "w3.files",
+      "ok": true,
+      "ms": 0.06000000000040018,
+      "value": []
+    },
+    {
+      "name": "w3.open-b",
+      "ok": true,
+      "ms": 3.639999999999418,
+      "value": {
+        "journalMode": "WAL",
+        "cacheSize": -16384,
+        "journalSizeLimit": -1
+      }
+    },
+    {
+      "name": "w3.write-b",
+      "ok": true,
+      "ms": 0.8400000000001455,
+      "value": {
+        "mainWrites": 0
+      }
+    },
+    {
+      "name": "w3.read-b",
+      "ok": true,
+      "ms": 0.6199999999998909,
+      "value": {
+        "docs": 1,
+        "integrity": [
+          "ok"
+        ]
+      }
+    },
+    {
+      "name": "w3.close-db-2",
+      "ok": true,
+      "ms": 0.5
+    },
+    {
+      "name": "w4.delete-mode.install+open",
+      "ok": true,
+      "ms": 42.840000000000146
+    },
+    {
+      "name": "w4.delete-mode.write",
+      "ok": true,
+      "ms": 2.4200000000000728,
+      "value": {
+        "mainWrites": 0
+      }
+    },
+    {
+      "name": "w4.delete-mode.read",
+      "ok": true,
+      "ms": 1.3999999999996362,
+      "value": {
+        "docs": 3,
+        "integrity": [
+          "ok"
+        ]
+      }
+    },
+    {
+      "name": "w4.close-db",
+      "ok": true,
+      "ms": 0.5799999999999272
+    }
+  ]
+}

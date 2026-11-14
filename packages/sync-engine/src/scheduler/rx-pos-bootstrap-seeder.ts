@@ -22,6 +22,7 @@
 
 import { REFERENCE_COLLECTIONS, type ReferenceCollection } from '@wcpos/sync-core';
 
+import { refundHistoryQueryKey } from './refund-lane-descriptor';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
 	defaultReferenceLaneDescriptor,
@@ -97,6 +98,7 @@ export const REFERENCE_LANE_CONFIGS: Record<
 
 export function laneKeyFor(collection: SyncCollectionName): string | null {
 	if (collection === 'taxRates') return TAX_RATES_QUERY_KEY;
+	if (collection === 'refunds') return refundHistoryQueryKey();
 	return REFERENCE_LANE_CONFIGS[collection as ReferenceCollection]?.config.queryKey ?? null;
 }
 

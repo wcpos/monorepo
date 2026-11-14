@@ -62,8 +62,14 @@ module.exports.CategoryLogger = CategoryLogger;
 module.exports.getErrorMessage = (error) =>
 	error instanceof Error ? error.message : String(error);
 module.exports.setToast = jest.fn();
-module.exports.markErrorReported = jest.fn();
-module.exports.isErrorReported = jest.fn(() => false);
+// Stateful like the real WeakSet, so a lower layer's mark suppresses a caller's report.
+const mockReportedErrors = new WeakSet();
+module.exports.markErrorReported = jest.fn((error) => {
+	if (error !== null && typeof error === 'object') mockReportedErrors.add(error);
+});
+module.exports.isErrorReported = jest.fn(
+	(error) => error !== null && typeof error === 'object' && mockReportedErrors.has(error)
+);
 module.exports.setDatabase = jest.fn();
 module.exports.log = mockLogger;
 

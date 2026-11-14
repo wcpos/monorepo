@@ -1,6 +1,23 @@
-import { deadLetterToStuckRecord, mergeStuckRecords } from './use-dead-letter-attention';
+/** @jest-environment jsdom */
+import { act, renderHook } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
+
+import type { QueueRow } from '@wcpos/sync-engine';
+
+import {
+	deadLetterToStuckRecord,
+	mergeStuckRecords,
+	useDeadLetterStuckRecords,
+} from './use-dead-letter-attention';
 
 import type { StuckRecord } from '../logs/logs-logic';
+const mockRows = new BehaviorSubject<QueueRow[]>([]);
+const mockEngine = {};
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: mockEngine }),
+	REJECTED_QUEUE_STATUSES: ['rejected'],
+	observeQueueRows: () => mockRows.asObservable(),
+}));
 
 const deadLetter = {
 	mutationId: 'dead-1',
@@ -91,4 +108,26 @@ describe('dead-letter attention (durable, survives restart)', () => {
 		// The durable row wins on overlap: it is the one still true tomorrow.
 		expect(merged[0].reason).toBe('rest_invalid_param · Invalid parameter(s): billing');
 	});
+});
+
+it('deduplicates the live feed by record with the newest refusal first', () => {
+	mockRows.next([
+		{ ...deadLetter, rejectedAt: '2026-08-06T16:01:01.000Z' },
+		{
+			...deadLetter,
+			mutationId: 'other',
+			recordId: 'other',
+			rejectedAt: '2026-08-06T16:01:02.000Z',
+		},
+		{ ...deadLetter, mutationId: 'newest', rejectedAt: '2026-08-06T16:01:03.000Z' },
+	]);
+	const { result, unmount } = renderHook(() => useDeadLetterStuckRecords());
+	expect(result.current.map(({ recordId, lastSeen }) => [recordId, lastSeen])).toEqual([
+		[deadLetter.recordId, Date.parse('2026-08-06T16:01:03.000Z')],
+		['other', Date.parse('2026-08-06T16:01:02.000Z')],
+	]);
+	act(() => mockRows.next([]));
+	expect(result.current).toEqual([]);
+	unmount();
+	expect(mockRows.observed).toBe(false);
 });

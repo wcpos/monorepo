@@ -28,12 +28,9 @@ Current local skills:
 
 ## Local Rules
 
-The consolidated local project rules live in `.claude/rules/project.mdc` and cover:
+Before touching any screen, component or stylesheet, read `CODING_STANDARDS.md` § Design — the owner's UI design rules (touch targets, one number one action, grid not wrap, state not explanation, motion, tokens, copy, definition of done). A UI PR that breaks one of them states the reason in its body. `.claude/rules/design.mdc` is the pointer that loads for UI files.
 
-- React, TypeScript, and logging conventions.
-- Uniwind/Tailwind styling and theming conventions.
-- Language-agnostic E2E locator requirements.
-- WCPOS naming requirements.
+Coding standards — React/TypeScript/logging conventions, styling and theming, translations, E2E selectors and store-agnostic specs, WCPOS naming, the design rules — live in `CODING_STANDARDS.md`; `/code-review` enforces them on the diff. `.claude/rules/project.mdc` keeps only the facts an implementer needs while coding (logging API, platform file resolution, theming quirks, translation source).
 
 ## Review guidelines
 
@@ -51,3 +48,14 @@ Respect documented author intent and check for companion PRs.
   repos.
 - When author intent is unclear, ask a question rather than request a
   change.
+
+<!-- BEGIN:turborepo-agent-rules -->
+
+# This is NOT the Turborepo you know
+
+Turborepo configuration, task behavior, and CLI commands can vary between installed versions and may differ from your training data. Resolve the `turbo` package from this file's directory or relevant workspace; in monorepos, it may not be visible from the repository root. For example, run `node -p "require.resolve('turbo/package.json')"` from a workspace that depends on `turbo`.
+
+Read `docs/README.md` inside that installed package first, then read the relevant pages from its `docs/` directory before changing Turborepo configuration or commands. Heed deprecation notices. These bundled docs match the installed package version and are available without network access.
+
+This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
+<!-- END:turborepo-agent-rules -->

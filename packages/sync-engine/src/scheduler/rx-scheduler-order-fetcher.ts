@@ -2,6 +2,7 @@ import {
 	checkpointInstantMs,
 	type CustomPullCheckpointStore,
 	type CustomPullRepository,
+	mintRemoteId,
 	normalizeCheckpoint,
 	type OrderDocument,
 	orderDocumentId,
@@ -32,11 +33,12 @@ import {
 	parseOrderBrowserSchedulerDescriptor,
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
-import { assertReturnedRequestedIds, chunk, httpGet } from './rx-scheduler-collection-fetcher';
+import { chunk, httpGet } from './rx-scheduler-collection-fetcher';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
+import type { OrderIngestionContext } from '../write-path/engine-order-repository';
 import type { IncomingOrderSettlement } from '../write-path/order-pull-guard';
 import type { RangedLaneResumeState } from './persisted-coverage-schema';
 import type {
@@ -69,7 +71,7 @@ const RANGED_COMPLETE_MAX_RECORDS = ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS;
  * resumed without either skipping records or looping, so the walk fails loudly instead — see
  * the throw in fetchBrowserOrderQuery.
  */
-const RANGED_RESUME_MAX_EXCLUDED_IDS = 500;
+export const RANGED_RESUME_MAX_EXCLUDED_IDS = 500;
 
 export type OrdersSchedulerCoverageRepository = BrowseWindowLaneEvictionRepository & {
 	recordQueryResult(input: BuildCoverageDocumentsFromQueryResultInput): Promise<void>;
@@ -117,6 +119,10 @@ export type OrdersSchedulerFetcherInput = {
 		 * implementation — always provides it, so there is no wiring line to forget.
 		 */
 		upsertManifestRows?(rows: readonly ExistenceManifestDocument[]): Promise<void>;
+		upsertMany(
+			documents: OrderDocument[],
+			context?: OrderIngestionContext
+		): Promise<readonly OrderDocument[] | void>;
 	};
 	checkpointStore: CustomPullCheckpointStore;
 	fetcher?: Fetcher;
@@ -175,10 +181,13 @@ function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => numb
 		search: decision.descriptor.search,
 		customerId: decision.descriptor.customerId,
 		cashierId: decision.descriptor.cashierId,
+		registerId: decision.descriptor.registerId,
+		paymentMethod: decision.descriptor.paymentMethod,
 		store: decision.descriptor.store,
 		...(limit !== undefined ? { limit } : {}),
 		afterSeconds: decision.descriptor.afterSeconds,
 		beforeSeconds: decision.descriptor.beforeSeconds,
+		modifiedAfterSeconds: decision.descriptor.modifiedAfterSeconds,
 		orderby: decision.descriptor.orderby,
 		order: decision.descriptor.order,
 		complete: decision.descriptor.complete,
@@ -202,10 +211,20 @@ function payloadMetaValue(payload: WooOrderPayload, key: string): string | undef
 	return undefined;
 }
 
+function payloadMetaValues(payload: WooOrderPayload, key: string): string[] {
+	const metaData = (payload as { meta_data?: unknown }).meta_data;
+	if (!Array.isArray(metaData)) return [];
+	return metaData.flatMap((entry) =>
+		entry?.key === key && entry.value !== undefined && entry.value !== null
+			? [String(entry.value)]
+			: []
+	);
+}
+
 /**
  * Whether a returned order actually carries the POS dimensions the descriptor asked for.
  *
- * `pos_cashier`, `pos_store` and `created_via` are WCPOS proxy params
+ * `pos_cashier`, `pos_register`, `pos_store`, `payment_method` and `created_via` are WCPOS proxy params
  * (wcpos/woocommerce-pos#1432), NOT wc/v3 core params: a store still running an older
  * plugin ignores them silently and answers with the unfiltered superset. Recording that
  * superset as a COMPLETE lane would make the grid's projected total — which is the lane's
@@ -218,7 +237,7 @@ function payloadMetaValue(payload: WooOrderPayload, key: string): string | undef
  */
 function honorsRequestedDimensions(
 	payload: WooOrderPayload,
-	descriptor: { cashierId?: number; store?: string }
+	descriptor: { cashierId?: number; registerId?: string; store?: string; paymentMethod?: string }
 ): boolean {
 	if (
 		descriptor.cashierId !== undefined &&
@@ -226,6 +245,19 @@ function honorsRequestedDimensions(
 	) {
 		return false;
 	}
+	if (
+		descriptor.registerId !== undefined &&
+		payloadMetaValue(payload, POS_META_KEYS.register)?.toLowerCase() !==
+			descriptor.registerId.toLowerCase()
+	) {
+		return false;
+	}
+	if (
+		descriptor.paymentMethod !== undefined &&
+		payload.payment_method !== descriptor.paymentMethod &&
+		!payloadMetaValues(payload, POS_META_KEYS.paymentMethod).includes(descriptor.paymentMethod)
+	)
+		return false;
 	if (descriptor.store !== undefined) {
 		const matched = /^\d+$/.test(descriptor.store)
 			? payloadMetaValue(payload, POS_META_KEYS.store) === descriptor.store
@@ -413,6 +445,15 @@ export async function applyOrderSnapshot(
 	await recordOrderManifestRows(input, [materialized], applied);
 	return applied.length === 0 ? 'protected' : 'applied';
 }
+/**
+ * When a pull's request goes out, read BEFORE the fetch: the repository keeps a resident adopted
+ * whole after it (see `upsertMany`). The adoption's clock, not the drain's `nowMs` seam, which a
+ * drain may freeze at its start or a harness may fake: the two must be one clock to compare.
+ */
+function pullRequestedAt(): number {
+	return Date.now();
+}
+
 function coverageNowMs(input: OrdersSchedulerFetcherInput): number {
 	return input.nowMs?.() ?? Date.now();
 }
@@ -504,7 +545,7 @@ async function hasFullBaselineMarker(
  * requirement-bridge.ts — get it wrong and the cursor drifts by the store's UTC offset, which
  * on a resume silently skips (or re-downloads) hours of orders.
  */
-function orderCreatedAtSeconds(payload: WooOrderPayload): number | null {
+function orderCreatedAtSeconds(payload: { date_created_gmt?: unknown }): number | null {
 	const raw = (payload as { date_created_gmt?: unknown }).date_created_gmt;
 	if (typeof raw !== 'string' || raw === '') return null;
 	const milliseconds = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}Z`);
@@ -512,7 +553,7 @@ function orderCreatedAtSeconds(payload: WooOrderPayload): number | null {
 	return Math.floor(milliseconds / 1_000);
 }
 
-function payloadWooId(payload: WooOrderPayload): number | null {
+function payloadWooId(payload: { id?: number }): number | null {
 	const id = Number((payload as { id?: unknown }).id);
 	return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
@@ -524,7 +565,9 @@ function payloadWooId(payload: WooOrderPayload): number | null {
  * and still counted as covered, they simply do not participate in the boundary. `null` means
  * the whole page was unusable, which leaves nowhere to resume from.
  */
-function pageBoundary(payloads: WooOrderPayload[]): { seconds: number; wooIds: number[] } | null {
+export function pageBoundary(
+	payloads: { id?: number; date_created_gmt?: unknown }[]
+): { seconds: number; wooIds: number[] } | null {
 	let seconds: number | null = null;
 	let wooIds: number[] = [];
 	for (const payload of payloads) {
@@ -760,6 +803,7 @@ async function fetchBrowserOrderQuery(
 	// the lane went stale would restore exactly the never-converging re-download this fixes.
 	const previousResume = descriptor.complete ? await readRangedResumeState(input, task) : null;
 	let remainingTotal: number | null = null;
+	let firstRequestOfPhase = true;
 	// The cursor narrows the descriptor's own upper bound; it never widens it.
 	let cursorBeforeSeconds =
 		previousResume === null
@@ -795,15 +839,31 @@ async function fetchBrowserOrderQuery(
 		//    writes no lane document, so `readBrowseWindowContinuation` has nothing to
 		//    resume from. Its work is still bounded by the window the cashier asked for.
 		if (resumable && requestCount >= BROWSE_WINDOW_MAX_PAGES_PER_DRAIN) break;
+		// Exclusive after=A covers created > A; before=A+1 covers created <= A without overlap or gaps.
+		const paidEarlierPhase =
+			descriptor.complete &&
+			descriptor.modifiedAfterSeconds !== undefined &&
+			descriptor.afterSeconds !== undefined &&
+			cursorBeforeSeconds !== undefined &&
+			cursorBeforeSeconds <= descriptor.afterSeconds + 1;
 		const query = new URLSearchParams();
 		if (descriptor.status) query.set('status', descriptor.status);
 		if (descriptor.search) query.set('search', descriptor.search);
 		if (descriptor.customerId !== undefined) query.set('customer', String(descriptor.customerId));
 		if (descriptor.cashierId !== undefined) query.set('pos_cashier', String(descriptor.cashierId));
+		if (descriptor.registerId !== undefined) query.set('pos_register', descriptor.registerId);
+		if (descriptor.paymentMethod !== undefined)
+			query.set('payment_method', descriptor.paymentMethod);
 		if (descriptor.store !== undefined) {
 			query.set(/^\d+$/.test(descriptor.store) ? 'pos_store' : 'created_via', descriptor.store);
 		}
-		if (descriptor.afterSeconds !== undefined)
+		if (paidEarlierPhase && descriptor.modifiedAfterSeconds !== undefined)
+			// Woo's modified_after is exclusive; A − 1 keeps an order paid (so modified) exactly at A.
+			query.set(
+				'modified_after',
+				new Date((descriptor.modifiedAfterSeconds - 1) * 1_000).toISOString()
+			);
+		else if (descriptor.afterSeconds !== undefined)
 			query.set('after', new Date(descriptor.afterSeconds * 1_000).toISOString());
 		if (cursorBeforeSeconds !== undefined)
 			query.set('before', new Date(cursorBeforeSeconds * 1_000).toISOString());
@@ -835,6 +895,7 @@ async function fetchBrowserOrderQuery(
 		query.set('order', descriptor.complete ? 'desc' : (descriptor.order ?? 'desc'));
 
 		const url = `${input.baseUrl}/orders?${query.toString()}`;
+		const requestedAt = pullRequestedAt();
 		const response = await httpGet(input, url, context);
 		if (!response.ok) {
 			throw new Error(`Woo REST browser order query request failed: ${response.status}`);
@@ -842,7 +903,7 @@ async function fetchBrowserOrderQuery(
 
 		const totalPagesHeader = response.headers.get('X-WP-TotalPages');
 		const totalPages = Number(totalPagesHeader);
-		if (requestCount === 0) {
+		if (firstRequestOfPhase) {
 			// `X-WP-Total` for THIS pass's (already narrowed) window is the uncovered remainder;
 			// added to what earlier passes covered it gives the range total the progress line needs.
 			// A MISSING header must stay `null`, not become 0 — `Number(null)` is 0, and a zero
@@ -850,7 +911,10 @@ async function fetchBrowserOrderQuery(
 			const totalHeader = response.headers.get('X-WP-Total');
 			const total = Number(totalHeader);
 			remainingTotal =
-				totalHeader !== null && Number.isSafeInteger(total) && total >= 0 ? total : null;
+				totalHeader !== null && Number.isSafeInteger(total) && total >= 0
+					? documentCount + total
+					: null;
+			firstRequestOfPhase = false;
 		}
 		const rawPayloads = (await response.json()) as WooOrderPayload[];
 		// Rows of the resume page the covered prefix already holds — dropped before they
@@ -911,7 +975,9 @@ async function fetchBrowserOrderQuery(
 		const applicable = await retireSettledHoldsThenFilter(input, documents);
 		// The repository's storage guard may skip further documents (a dirty resident outside the
 		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
-		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;
+		const applied =
+			(await input.repository.upsertMany(applicable, { source: 'pull', requestedAt })) ??
+			applicable;
 		await recordOrderManifestRows(input, materialized, applied);
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
@@ -956,6 +1022,17 @@ async function fetchBrowserOrderQuery(
 			payloads.length <= remaining &&
 			!(descriptor.complete && documentCount >= RANGED_COMPLETE_MAX_RECORDS)
 		) {
+			if (
+				!paidEarlierPhase &&
+				descriptor.modifiedAfterSeconds !== undefined &&
+				descriptor.afterSeconds !== undefined
+			) {
+				// Switch from exclusive after=A to before=A+1: created <= A fills the gap without overlap.
+				cursorBeforeSeconds = descriptor.afterSeconds + 1;
+				cursorExcludeWooIds = [];
+				firstRequestOfPhase = true;
+				continue;
+			}
 			exhausted = true;
 			break;
 		}
@@ -1059,6 +1136,7 @@ async function fetchTargetedOrders(
 	let documentCount = 0;
 	let requestCount = 0;
 	const fetchedDocumentIds: string[] = [];
+	const appliedRecordIds: string[] = [];
 
 	for (const idsBatch of chunk(ids, batchSize)) {
 		// No `dp` — see the monetary-precision note above fetchBrowserOrderQuery (#946).
@@ -1068,17 +1146,27 @@ async function fetchTargetedOrders(
 		query.set('orderby', 'include');
 
 		const url = `${input.baseUrl}/orders?${query.toString()}`;
+		const requestedAt = pullRequestedAt();
 		const response = await httpGet(input, url, context);
 		if (!response.ok) {
 			throw new Error(`Woo REST targeted order request failed: ${response.status}`);
 		}
 
 		const payloads = (await response.json()) as WooOrderPayload[];
-		assertReturnedRequestedIds(
-			{ restLabel: 'order', payloadWooId: (payload: WooOrderPayload) => Number(payload.id) },
-			idsBatch,
-			payloads
-		);
+		// An id Woo omits from `include` is an order the store no longer has: the proxy forwards
+		// `include` untouched, orders carry no POS visibility rule, and the request names no
+		// `status`, so Woo answers with every live status and leaves out a trashed or deleted order.
+		// Removal is the F6 delete channel's own guarded call: a resident with local work (dirty or
+		// a pending mutation) is kept, so a cart the cashier is still building never goes with it.
+		const returnedIds = new Set(payloads.map((payload) => Number(payload.id)));
+		const missingWooIds = idsBatch.filter((id) => !returnedIds.has(id));
+		if (missingWooIds.length > 0) {
+			const missingRemoteIds = missingWooIds.map((id) => mintRemoteId(id, 'order delete id'));
+			await input.repository.removeDeletedOrders?.(
+				missingRemoteIds,
+				await input.pendingMutationOrderIds?.()
+			);
+		}
 		const materialized = payloads.map((payload) => materializedOrderFromWooPayload(payload));
 		const documents = materialized.map(({ storedDocument }) => storedDocument);
 		// Offline-first: re-read the pending set per batch (not once up front) so a
@@ -1087,8 +1175,11 @@ async function fetchTargetedOrders(
 		const applicable = await retireSettledHoldsThenFilter(input, documents);
 		// The repository's storage guard may skip further documents (a dirty resident outside the
 		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
-		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;
+		const applied =
+			(await input.repository.upsertMany(applicable, { source: 'pull', requestedAt })) ??
+			applicable;
 		await recordOrderManifestRows(input, materialized, applied);
+		appliedRecordIds.push(...applied.map((document) => String(document.remoteId)));
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -1101,6 +1192,7 @@ async function fetchTargetedOrders(
 		documentCount,
 		requestCount,
 		completed: true,
+		appliedRecordIds,
 	};
 }
 
@@ -1190,9 +1282,11 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 		// Explicit delegation (never an object spread — the repository is a class instance whose
 		// methods live on the prototype): capture the applied subset per upsert for the row filter.
 		const base = input.repository;
+		const requestedAt = pullRequestedAt();
 		const capturingRepository: CustomPullRepository = {
 			upsertMany: async (documents) => {
-				const applied = (await base.upsertMany(documents)) ?? documents;
+				const applied =
+					(await base.upsertMany(documents, { source: 'pull', requestedAt })) ?? documents;
 				for (const document of applied) repositoryAppliedUuids.add(document.uuid);
 			},
 			removeDeletedOrders: base.removeDeletedOrders?.bind(base),

@@ -1,109 +1,35 @@
 import * as React from 'react';
 
-import { useRouter } from 'expo-router';
-
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
-import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useSaleContext } from '../hooks/use-sale-context';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
-import { useCurrentOrderActions } from '../../contexts/current-order';
-import { useUISettings } from '../../../contexts/ui-settings';
+import { useAccessTokenRefresher } from '../../../../../hooks/use-access-token-refresher';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
-import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
+import { judgeGatewaySnapshot } from '../pay-page/gateway-snapshot';
+import { type PayPageMessage, readPayPageMessage } from '../pay-page/pay-page-message';
+import { usePayFrame } from '../pay-page/use-pay-frame';
+import { usePayPagePreparation } from '../pay-page/use-pay-page-preparation';
+import { useServerTruthPoll } from '../pay-page/use-server-truth-poll';
+import { useSettleGatewaySnapshot } from '../pay-page/use-settle-gateway-snapshot';
 
-// Upper bound on the post-payment local refresh. The cart and receipt are
-// already routed by then; this only decides how long a queued-but-stalled
-// require may hold its handle before it is released. 10 s covers a slow store
-// round-trip without keeping a handle open across a whole cashier shift.
-const ORDER_REFRESH_TIMEOUT_MS = 10_000;
-
-// A pre-hardening store or an async gateway can report "not paid yet" while the
-// provider's confirmation is still in flight. Re-read server truth on a short
-// cadence — a webhook round-trip is seconds — but stop after a bound: past it the
-// cart legitimately stays open for the cashier to decide, and the background
-// order lanes (plus the Orders grid's per-order Sync) remain the long-tail net.
-// Without the re-poll, a one-shot "still unpaid" answer left the paid order
-// stuck as an open cart once the webhook landed a minute later.
-const ASYNC_PAYMENT_POLL_INTERVAL_MS = 3_000;
-const ASYNC_PAYMENT_POLL_WINDOW_MS = 120_000;
-
-// How long the checkout waits for the store's order-pay document before it
-// treats the navigation as stalled and reloads the frame once.
-//
-// The document is one WordPress page. A healthy store serves it in about a
-// second; a starved CI simulator was measured at 8 s from dialog to enabled
-// (run 33750030091, iOS phone) and, at the very worst, 71 s to the first
-// WebView commit (run 33319523590). The stall this guards against is a
-// different animal: WebKit never sends the request at all — the pay page
-// reached the store five minutes after the tap (run 33758920470, iOS phone)
-// or never (run 33750030091, iPad), and WebKit's own 60 s request timeout
-// cannot fire for a request that never left the process. Without a way out
-// the cashier is left with the spinner #1024 was meant to end. 90 s sits past
-// every real load ever measured and well short of the stall. A reload
-// restarts the navigation WebKit dropped; a second stall is reported as a
-// failure with a Retry rather than hidden behind more waiting.
-export const PAYMENT_FRAME_LOAD_TIMEOUT_MS = 90_000;
+import type { PaymentFrameStatus } from '../pay-page/use-pay-frame-gate';
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
-type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
 
-/**
- * Statuses that mean the payment has NOT happened — the client mirror of the store's
- * received-page emission gate (`! $order->needs_payment()` plus the parked POS statuses):
- * `pending`/`failed` are still payable, `cancelled` means it is never coming, and the POS
- * statuses are open carts. Everything else counts as paid. A BLOCKLIST, not an allowlist of
- * processing/completed: a cheque or BACS gateway configured through POS settings lands on
- * `on-hold`, and a gateway configured to land on a custom status did so deliberately —
- * refusing those would strand a genuinely completed sale as an open cart.
- */
-const UNPAID_ORDER_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
-
-function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
-	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return false;
-	const candidate = payload as Record<string, unknown>;
-	const prototype = Object.getPrototypeOf(payload);
-	return (
-		(prototype === Object.prototype || prototype === null) &&
-		typeof candidate.id === 'number' &&
-		Number.isFinite(candidate.id) &&
-		candidate.id > 0 &&
-		typeof candidate.status === 'string' &&
-		candidate.status.trim() !== '' &&
-		Array.isArray(candidate.meta_data) &&
-		candidate.meta_data.some(
-			(meta) =>
-				meta !== null &&
-				typeof meta === 'object' &&
-				(meta as Record<string, unknown>).key === '_woocommerce_pos_uuid' &&
-				isRecordUuid((meta as Record<string, unknown>).value)
-		)
-	);
-}
-/**
- * Whether the store's payment document is in a position to receive
- * `wcpos-process-payment`.
- *
- * - `loading` — no document yet, or the frame is navigating to a new one.
- * - `ready` — a document finished loading in the frame.
- * - `stalled` — the FIRST document never arrived: its load timed out (after the
- *   one silent reload) or errored. Nothing has been posted into it, so a retry
- *   that navigates to the pay page again is safe, and the checkout offers one.
- * - `failed` — a LATER navigation (the gateway's redirect, the post-payment hop)
- *   errored, so no load event is coming. Distinct from `loading` because a gate
- *   with no failure state leaves the button disabled behind a spinner forever,
- *   which is the very stall this gate exists to stop — and distinct from
- *   `stalled` because a retry here would put the pay page back under a sale
- *   that may already be paid; the fallback poll owns that outcome.
- */
-export type PaymentFrameStatus = 'loading' | 'ready' | 'stalled' | 'failed';
+/** The catalog before it loads, and the prop default: no gateway has a stored status. */
+const NO_SETTLED_ORDER_STATUSES: Record<string, string | null> = {};
 
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: EngineRecord<'orders'>;
+	/** `stage` when hosted in the wide checkout pane, where no checkout route exists to replace. */
+	receiptHost?: 'modal' | 'stage';
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 	/** Reports frame readiness to the checkout footer, which gates on it. */
 	setFrameStatus: (status: PaymentFrameStatus) => void;
@@ -114,46 +40,61 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
 	 * silently — the cashier asked for it and is watching.
 	 */
 	retryToken?: number;
+	/**
+	 * The order status the merchant configured EACH gateway to settle a POS sale
+	 * to (`settled_order_status` from the gateway catalog), keyed by gateway id;
+	 * null for a gateway with nothing stored. Empty until the catalog has loaded,
+	 * and on a store that predates the field. See isSettledOrderStatus.
+	 *
+	 * The whole catalog, not the opened gateway's entry: the pay page inside the
+	 * frame lists every POS gateway, so the order can come back settled through a
+	 * different one. A status is only honoured for the gateway it was stored for —
+	 * the stored status of one must not close a sale taken through another.
+	 */
+	settledOrderStatuses?: Record<string, string | null>;
 }
 
 /**
- *
+ * The legacy pay page: composition of its preparation, frame and settle step, the
+ * server-truth poll, and the session-expiry wiring over the frame.
  */
 export function PaymentWebview({
 	order,
+	receiptHost = 'modal',
 	setLoading,
 	setFrameStatus,
 	onStockRejection,
 	retryToken = 0,
+	settledOrderStatuses = NO_SETTLED_ORDER_STATUSES,
 	...props
 }: PaymentWebviewProps) {
-	const router = useRouter();
+	const ctx = useSaleContext();
 	const orderData = useRecordField(order, (record) => record.payload);
-	const paymentURL = orderData.links?.payment?.[0]?.href;
+	// Read through a ref, not the closure: the fallback poll re-arms itself with
+	// the closure of the render it started in, and the gateway catalog can still
+	// be loading at that moment. A later tick must see the catalog that arrived.
+	const settledRef = React.useRef(settledOrderStatuses);
+	React.useEffect(() => {
+		settledRef.current = settledOrderStatuses;
+	});
+	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
 	const jwt = useDocField(wpCredentials, (value) => value.access_token);
-	const { stockAdjustment } = useStockAdjustment();
-	const { setCurrentOrderID } = useCurrentOrderActions();
-	const { uiSettings } = useUISettings('pos-cart');
+	const refreshAccessToken = useAccessTokenRefresher();
 	const t = useT();
-	const runtime = useQueryRuntime();
 	const http = useRestHttpClient();
-	const paymentReceivedRef = React.useRef(false);
-	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-	const loadCountRef = React.useRef(0);
-	// The load watchdog's bookkeeping. `autoReloads` counts the one silent
-	// reload; `navigationStarts` re-arms the watchdog on a load-start event;
-	// `frameSettledRef` is set by the load or error event that ends a navigation,
-	// so a timer that fires after one is a no-op. The frame's key derives from
-	// the retry token and the reload count: a remount is a fresh navigation on
-	// both platforms (the web iframe has no reload API) and drops whatever
-	// WebKit was, or was not, doing with the old one.
-	const [autoReloads, setAutoReloads] = React.useState(0);
-	const [navigationStarts, setNavigationStarts] = React.useState(0);
-	const frameSettledRef = React.useRef(false);
-	const frameKey = `${retryToken}:${autoReloads}`;
+	// Set on unmount so a session refresh still awaiting a response cannot remount the
+	// frame, or start the poll, after checkout closed.
+	const unmountedRef = React.useRef(false);
+	// Ref-backed so a message arriving before the next render still sees the real count.
+	const sessionReloadsRef = React.useRef(0);
+	const sessionRefreshInFlight = React.useRef(false);
+	// No further refresh may be attempted (the refresh token itself was rejected, or the cap
+	// was reached); a transient failure (network, 5xx, cooldown) leaves it clear so a later
+	// message may retry. The frame's own expiry is `usePayFrame`'s `expire`.
+	const sessionRefreshRefused = React.useRef(false);
 
 	// Create a logger with order context
 	const orderLogger = React.useMemo(
@@ -164,10 +105,25 @@ export function PaymentWebview({
 			}),
 		[order.uuid, orderNumber]
 	);
+	const { isSettled, settle } = useSettleGatewaySnapshot(order, receiptHost, orderLogger);
 
-	/**
-	 *
-	 */
+	// The "reopen the payment" warning is shown once per mount, whatever follows.
+	const reopenWarned = React.useRef(false);
+	const warnReopen = React.useCallback(() => {
+		if (reopenWarned.current) return;
+		reopenWarned.current = true;
+		orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
+	}, [orderLogger, t]);
+
+	const { prepared, paymentURL } = usePayPagePreparation({
+		order,
+		ctx,
+		rawPaymentURL,
+		retryToken,
+		settledRef,
+		logger: orderLogger,
+	});
+
 	const paymentURLWithToken = React.useMemo(() => {
 		if (!paymentURL) return '';
 		// Append the JWT token as a query parameter to the payment URL
@@ -176,430 +132,168 @@ export function PaymentWebview({
 		return url.toString();
 	}, [paymentURL, jwt]);
 
-	/**
-	 * Best-effort local catch-up after a payment: pull the paid order so the
-	 * cart/receipt reflect the server's status. Bounded, because a require's
-	 * `ready` is not guaranteed to settle (a queued plane, dirty-row protection)
-	 * and nothing that the cashier is waiting on may depend on it — see
-	 * handlePaymentReceived.
-	 */
-	const refreshOrder = React.useCallback(async () => {
-		if (!orderId) {
-			throw new Error('payment_refresh_requires_persisted_order');
-		}
-		const handle = runtime.engine.require({
-			id: `checkout:order-refresh:${orderId}`,
-			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-			forceRefresh: true,
-		});
-		let timer: ReturnType<typeof setTimeout> | undefined;
+	React.useEffect(() => {
+		// A new token (this refresh or a background one) allows a refresh again.
+		sessionRefreshRefused.current = false;
+	}, [paymentURLWithToken]);
+
+	// Pin the frame's message origin to the store: on web the shared WebView then drops
+	// `message` events from any other window or origin (Pro posts with '*', which is the
+	// sender's target; the receiver still sees the store's origin).
+	const frameOrigin = React.useMemo(() => {
 		try {
-			await Promise.race([
-				handle.ready,
-				new Promise<void>((resolve) => {
-					timer = setTimeout(resolve, ORDER_REFRESH_TIMEOUT_MS);
-				}),
-			]);
+			return paymentURLWithToken ? new URL(paymentURLWithToken).origin : undefined;
+		} catch {
+			return undefined;
+		}
+	}, [paymentURLWithToken]);
+
+	const { poll, pollAfterGrace, stop } = useServerTruthPoll({
+		http,
+		order,
+		orderId,
+		settledRef,
+		dp: ctx.dp,
+		settle,
+		isSettled,
+		setLoading,
+		logger: orderLogger,
+	});
+	// A later document loaded: check server truth in case the gateway never posts a message.
+	const frame = usePayFrame({
+		src: paymentURLWithToken,
+		retryToken,
+		prepared,
+		report: setFrameStatus,
+		onLaterDocument: pollAfterGrace,
+		logger: orderLogger,
+	});
+
+	const handleSessionExpired = async (messageOrderId: number) => {
+		if (messageOrderId !== orderId) {
+			orderLogger.debug('Ignoring session expiry for another order');
+			return;
+		}
+		if (sessionRefreshInFlight.current || sessionRefreshRefused.current) return;
+		if (sessionReloadsRef.current >= 2) {
+			// The reloaded frame expired again: close the gate so nothing submits to it.
+			sessionRefreshRefused.current = true;
+			frame.expire();
+			warnReopen();
+			return;
+		}
+		sessionRefreshInFlight.current = true;
+		frame.hold();
+		try {
+			const token = await refreshAccessToken();
+			if (unmountedRef.current) return;
+			if (token) {
+				sessionReloadsRef.current += 1;
+				frame.remount();
+				// The remount resets the load count, so its first load never arms the poll.
+				// Still detect a payment that settled during the refresh.
+				poll();
+			} else {
+				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
+				frame.expire();
+				warnReopen();
+			}
 		} finally {
-			if (timer) clearTimeout(timer);
-			handle.release();
+			sessionRefreshInFlight.current = false;
+			frame.release();
+			setLoading(false);
 		}
-	}, [runtime, orderId]);
-	const adoptSnapshot = React.useCallback(
-		(snapshot: OrderSnapshot | Record<string, unknown>, warnOnOutcome: boolean) => {
-			const refresh = () => {
-				void refreshOrder().catch((err) => {
-					if (!warnOnOutcome) return;
-					orderLogger.warn('Post-payment order refresh did not complete', {
-						context: { error: getErrorMessage(err) },
-					});
-				});
-			};
-			void runtime.engine.adoptOrderSnapshot(snapshot).then((outcome) => {
-				if (outcome === 'applied') return;
-				if (warnOnOutcome) {
-					orderLogger.warn('Checkout order snapshot was not applied', {
-						context: { outcome },
-					});
-				}
-				refresh();
-			}, refresh);
-		},
-		[runtime, refreshOrder, orderLogger]
-	);
-	/**
-	 * Read server truth once; with `pollUntilMs`, keep re-reading on the async cadence
-	 * until the order is paid or the bound passes. Every not-yet-paid outcome — server
-	 * unchanged, an unpaid transition, a transient request failure — re-arms; only a
-	 * completed sale (here or via postMessage) settles it.
-	 */
-	const pollServerTruth = React.useCallback(
-		async (pollUntilMs?: number): Promise<void> => {
-			if (paymentReceivedRef.current) return;
-			const localStatus = order.getLatest().payload.status;
-			if (!localStatus || localStatus !== 'pos-open') return;
-			let settled = false;
-			try {
-				orderLogger.debug('No postMessage received, checking server order status', {
-					context: { orderId },
-				});
-				// The decision reads SERVER truth directly (the sync surface's
-				// include-read) — an engine require's `ready` can settle without
-				// applying a newer revision to THIS document (skip-coalesced
-				// resident tasks, dirty-row protection), so it cannot prove
-				// payment state. The snapshot adoption below is the local write;
-				// the engine refresh inside it is catch-up only.
-				const response = await http.get('orders', {
-					params: { include: orderId, per_page: 1 },
-				});
-				const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
-				if (!serverOrder || paymentReceivedRef.current) return;
-				const serverStatus = serverOrder.status as string;
-				if (serverStatus === localStatus) return;
-				// A status change is not a payment: an unpaid transition leaves everything in
-				// place (the finally releases the spinner) so the cashier can retry from the
-				// cart they still have.
-				if (UNPAID_ORDER_STATUSES.includes(serverStatus)) {
-					orderLogger.debug('Server order status changed but is not paid; leaving the cart open', {
-						context: { serverStatus, source: 'fallback-refresh' },
-					});
-					return;
-				}
-				paymentReceivedRef.current = true;
-				settled = true;
-				setCurrentOrderID('');
-				adoptSnapshot(serverOrder, false);
-				const reducedStockItems = (
-					(serverOrder.line_items as Record<string, unknown>[]) || []
-				).filter((item) =>
-					(item.meta_data as { key: string }[] | undefined)?.some(
-						(meta) => meta.key === '_reduced_stock'
-					)
-				);
-				stockAdjustment(reducedStockItems);
-				orderLogger.success(
-					t('pos_checkout.payment_completed_for_order', {
-						orderNumber: (serverOrder.number as string) || orderNumber,
-					}),
-					{
-						showToast: true,
-						context: {
-							total: serverOrder.total,
-							paymentMethod: serverOrder.payment_method,
-							paymentMethodTitle: serverOrder.payment_method_title,
-							status: serverStatus,
-							source: 'fallback-refresh',
-						},
-					}
-				);
-				if (uiSettings.autoShowReceipt) {
-					router.replace({
-						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-						params: { orderId: order.uuid },
-					});
-				} else {
-					router.replace({ pathname: '/cart' });
-				}
-			} catch (err) {
-				// Best-effort safety net only. Order completion is authoritatively
-				// delivered via the postMessage path, so a failed or premature poll
-				// (order not queryable yet or a transient sync error) is
-				// expected and must NOT be surfaced as a payment-gateway failure —
-				// doing so produced spurious PY02001 errors on successful checkouts.
-				orderLogger.debug('Fallback order status refresh did not complete', {
-					context: {
-						error: getErrorMessage(err),
-						source: 'fallback-refresh',
-					},
-				});
-			} finally {
-				setLoading(false);
-				if (
-					!settled &&
-					!paymentReceivedRef.current &&
-					pollUntilMs !== undefined &&
-					Date.now() < pollUntilMs
-				) {
-					if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-					fallbackTimerRef.current = setTimeout(
-						() => void pollServerTruth(pollUntilMs),
-						ASYNC_PAYMENT_POLL_INTERVAL_MS
-					);
-				}
-			}
-		},
-		[
-			http,
-			order,
-			orderId,
-			orderNumber,
-			stockAdjustment,
-			uiSettings.autoShowReceipt,
-			router,
-			adoptSnapshot,
-			setLoading,
-			setCurrentOrderID,
-			orderLogger,
-			t,
-		]
-	);
-	/**
-	 *
-	 */
-	const handlePaymentReceived = React.useCallback(
-		async (event: MessageEvent) => {
-			if (event?.data?.action === 'wcpos-payment-received') {
-				const payload = event.data.payload;
-				if (!isOrderSnapshot(payload)) {
-					orderLogger.warn('Payment received with an invalid order snapshot', {
-						context: { orderId },
-					});
-					setLoading(false);
-					void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
-					return;
-				}
-				// A pre-hardening store's received page emits whenever the CONFIGURED
-				// gateway status is not pos-open — for an async gateway that can be
-				// before the provider confirms, with the order still unpaid. Don't
-				// complete on the message's say-so: leave the poll armed and let
-				// server truth decide.
-				if (UNPAID_ORDER_STATUSES.includes(payload.status)) {
-					orderLogger.warn(
-						'Payment received but the order is not paid; deferring to server truth',
-						{ context: { orderId, status: payload.status } }
-					);
-					setLoading(false);
-					void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS);
-					return;
-				}
-				try {
-					paymentReceivedRef.current = true;
-					if (fallbackTimerRef.current) {
-						clearTimeout(fallbackTimerRef.current);
-						fallbackTimerRef.current = null;
-					}
-					// get line_items with "_reduced_stock" meta
-					const reducedStockItems = (
-						(payload.line_items as Record<string, unknown>[]) || []
-					).filter((item: Record<string, unknown>) =>
-						(item.meta_data as { key: string }[])?.some(
-							(meta: { key: string }) => meta.key === '_reduced_stock'
-						)
-					);
-					stockAdjustment(reducedStockItems);
-					orderLogger.success(
-						t('pos_checkout.payment_completed_for_order', {
-							orderNumber: payload.number || orderNumber,
-						}),
-						{
-							showToast: true,
-							context: {
-								total: payload.total,
-								paymentMethod: payload.payment_method,
-								paymentMethodTitle: payload.payment_method_title,
-								transactionId: payload.transaction_id,
-								status: payload.status,
-							},
-						}
-					);
-					setCurrentOrderID('');
-					// Route FIRST; the local refresh is catch-up, never a gate. Awaiting it
-					// here left cashiers on a spinning "Process payment" after a paid sale:
-					// orders #117902 and #118391 (2026-08-29, local + CI iOS) both logged
-					// "payment completed", the server had them paid, and the receipt never
-					// opened — the require's `ready` never settled, so neither did this
-					// handler, and the fallback poll was already disarmed by
-					// `paymentReceivedRef`. The fallback path below has always routed
-					// without waiting; the success path now does the same.
-					if (uiSettings.autoShowReceipt) {
-						router.replace({
-							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-							params: { orderId: order.uuid },
-						});
-					} else {
-						router.replace({
-							pathname: '/cart',
-						});
-					}
-					adoptSnapshot(payload, true);
-				} catch (err) {
-					const errorMessage = err instanceof Error ? err.message : 'Payment processing error';
-					orderLogger.error(errorMessage, {
-						showToast: true,
-						code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
-						context: {
-							error: getErrorMessage(err),
-						},
-					});
-				} finally {
-					setLoading(false);
-				}
-			}
-		},
-		[
-			orderNumber,
-			orderId,
-			router,
-			order,
-			stockAdjustment,
-			uiSettings.autoShowReceipt,
-			setLoading,
-			setCurrentOrderID,
-			orderLogger,
-			t,
-			adoptSnapshot,
-			pollServerTruth,
-		]
-	);
+	};
 
-	/**
-	 * When the webview loads, schedule a fallback refresh in case the payment
-	 * gateway doesn't send a postMessage.
-	 *
-	 * The first load is the initial order-pay page, where a payment cannot have
-	 * completed yet — there is nothing to reconcile. We only poll on later
-	 * navigations (e.g. the post-payment redirect to the received page) where a
-	 * missed postMessage is actually possible. Polling on the initial load only
-	 * fires a request that races ahead of the payment and can never observe a
-	 * completed sale.
-	 */
-	const onWebViewLoaded = React.useCallback(
-		(_event: unknown) => {
-			// The store's order-pay template registers its `wcpos-process-payment`
-			// listener in a synchronous <head> script, so the frame's load event is
-			// strictly after that listener exists. It is the strongest readiness
-			// signal either platform exposes — the template sends no ready message —
-			// so the checkout footer gates on it (#1024).
-			setFrameStatus('ready');
-			frameSettledRef.current = true;
-
-			loadCountRef.current += 1;
-			if (loadCountRef.current < 2) {
-				return;
-			}
-
-			if (fallbackTimerRef.current) {
-				clearTimeout(fallbackTimerRef.current);
-			}
-
-			fallbackTimerRef.current = setTimeout(
-				() => void pollServerTruth(Date.now() + ASYNC_PAYMENT_POLL_WINDOW_MS),
-				1000
-			);
-		},
-		[setFrameStatus, pollServerTruth]
-	);
-
-	/**
-	 * Navigating away — a gateway redirect, the post-payment hop — puts a document
-	 * under the frame that has no `wcpos-process-payment` listener until it, too,
-	 * has loaded. Re-gate so a second press cannot post into it.
-	 *
-	 * Native only: the web WebView renders an <iframe>, which exposes no
-	 * navigation-start event for a cross-origin document. Passing the prop there
-	 * is inert. That residual web gap is one of the reasons a store-side ack is
-	 * the real fix rather than this gate.
-	 */
-	const onWebViewLoadStart = React.useCallback(() => {
-		setFrameStatus('loading');
-		// Only the first document is watched. Later navigations are the gateway's
-		// (a redirect, the post-payment hop); a stalled one is the fallback poll's
-		// business, and a remount there would put the pay page back under a sale
-		// that may already be paid.
-		if (loadCountRef.current === 0) {
-			frameSettledRef.current = false;
-			setNavigationStarts((n) => n + 1);
+	const handleReceived = async (
+		message: Extract<PayPageMessage, { kind: 'received' | 'received-unreadable' }>
+	) => {
+		// The fallback poll may have settled this sale first; a late message
+		// for the same order must not route and toast a second time.
+		if (isSettled()) return;
+		// Both deferrals below arm the server-truth poll, which completes the sale:
+		// lifecycle, not an amber row on a sale that finishes normally.
+		if (message.kind === 'received-unreadable') {
+			orderLogger.info('Payment received with an invalid order snapshot', {
+				context: { orderId },
+			});
+			setLoading(false);
+			poll();
+			return;
 		}
-	}, [setFrameStatus]);
-
-	/**
-	 * A load that errors produces no load event, so the gate has to be told or it
-	 * stays shut forever. Native surfaces this reliably; on web an <iframe> only
-	 * fires `error` for a hard failure (a 404 *page* still loads), which is one
-	 * more reason the honest readiness signal has to come from the store.
-	 */
-	const onWebViewError = React.useCallback(
-		(event: unknown) => {
-			setFrameStatus(loadCountRef.current === 0 ? 'stalled' : 'failed');
-			frameSettledRef.current = true;
-			const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)
-				?.nativeEvent;
-			orderLogger.warn('Payment form failed to load in the checkout frame', {
+		// A pre-hardening store's received page emits whenever the CONFIGURED
+		// gateway status is not pos-open — for an async gateway that can be
+		// before the provider confirms, with the order still unpaid. Don't
+		// complete on the message's say-so: leave the poll armed and let
+		// server truth decide. The exception is the status the merchant
+		// configured this gateway to settle on — reaching it IS the sale
+		// finishing, whatever WooCommerce calls it.
+		const judged = judgeGatewaySnapshot(message.snapshot, settledRef.current, ctx.dp);
+		if (!judged.complete) {
+			orderLogger.info('Payment received but the order is not paid; deferring to server truth', {
 				context: {
-					description: nativeEvent?.description,
-					code: nativeEvent?.code,
+					orderId,
+					status: message.snapshot.status,
+					settledOrderStatus: judged.storedStatus,
 				},
 			});
-		},
-		[orderLogger, setFrameStatus]
-	);
+			setLoading(false);
+			poll();
+			return;
+		}
+		stop();
+		try {
+			await settle(judged, 'pay-page-message');
+		} finally {
+			setLoading(false);
+		}
+	};
 
-	/**
-	 * A new payment URL swaps the document under the frame, so the gate closes
-	 * until the replacement reports its own load. The unmount cleanup means a
-	 * remounted frame (mode change, stock rejection cleared) never starts open.
-	 *
-	 * The load counter resets with it: the fallback poll deliberately skips the
-	 * *first* load because a payment cannot have completed yet, and a re-hosted
-	 * document is a first load, not a post-payment navigation.
-	 *
-	 * `useLayoutEffect`, not `useEffect`: the new `src` is committed to the DOM in
-	 * the same commit, and a passive effect would leave the gate reporting `ready`
-	 * against the replacement document until after paint — a window in which a
-	 * press posts into a document that is still loading. This closes it before the
-	 * cashier can see, let alone touch, the frame.
-	 */
-	React.useLayoutEffect(() => {
-		loadCountRef.current = 0;
-		frameSettledRef.current = false;
-		setFrameStatus('loading');
-		return () => setFrameStatus('loading');
-	}, [paymentURLWithToken, frameKey, setFrameStatus]);
-
-	/**
-	 * The load watchdog. Runs for every navigation of the first document (a new
-	 * URL, a remount, a load-start event); the load or error event that ends the
-	 * navigation settles it, so a timer that fires afterwards does nothing.
-	 * Firing unsettled means neither event arrived: the navigation stalled
-	 * before it reached the network, the case WebKit's own timeout never sees.
-	 * The silent reload is spent by the cashier's Retry — the attempt they asked
-	 * for either loads or is reported.
-	 */
-	React.useEffect(() => {
-		// No link, no frame, no navigation to watch: the banner already says so.
-		if (!paymentURLWithToken) return;
-		const timer = setTimeout(() => {
-			if (frameSettledRef.current) return;
-			if (autoReloads === 0 && retryToken === 0) {
-				orderLogger.warn('Payment form did not load in time; reloading it once', {
-					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },
-				});
-				setAutoReloads(1);
+	const onMessage = (event: { nativeEvent: { data: unknown } }) => {
+		const message = readPayPageMessage(event?.nativeEvent?.data);
+		switch (message.kind) {
+			case 'session-expired':
+				void handleSessionExpired(message.orderId);
 				return;
-			}
-			orderLogger.warn('Payment form did not load after a reload; waiting for the cashier', {
-				context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS, retryToken },
-			});
-			setFrameStatus('stalled');
-		}, PAYMENT_FRAME_LOAD_TIMEOUT_MS);
-		return () => clearTimeout(timer);
-	}, [
-		paymentURLWithToken,
-		frameKey,
-		navigationStarts,
-		autoReloads,
-		retryToken,
-		orderLogger,
-		setFrameStatus,
-	]);
+			case 'blocked':
+			case 'refused':
+				if (onStockRejection(message.payload)) {
+					setLoading(false);
+					return;
+				}
+				setLoading(false);
+				// The gateway refused (a decline, a missing field): no money moved and
+				// the cart is safe to retry. Its own sentence is the toast title — the
+				// generic PAYMENT999 "confirm whether the payment went through" was
+				// wrong for a sale that plainly did not go through.
+				orderLogger.warn('Payment was not completed by the gateway', {
+					showToast: true,
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					toast: { title: message.message ?? t('pos_checkout.payment_not_completed') },
+					context: {
+						gatewayMessage: message.message,
+						payloadData: message.payload.data,
+						action: message.action,
+					},
+				});
+				return;
+			case 'received':
+			case 'received-unreadable':
+				void handleReceived(message);
+				return;
+			case 'ignored':
+				return;
+			default:
+				return message satisfies never;
+		}
+	};
 
-	React.useEffect(() => {
+	// A layout effect: its cleanup runs in the commit that removes the frame, so a
+	// refresh answer arriving before the passive cleanups flush already sees the flag.
+	React.useLayoutEffect(() => {
+		unmountedRef.current = false;
 		return () => {
-			if (fallbackTimerRef.current) {
-				clearTimeout(fallbackTimerRef.current);
-			}
+			unmountedRef.current = true;
 		};
 	}, []);
 
@@ -607,33 +301,14 @@ export function PaymentWebview({
 	// mounting leaves the boundary in its fallback, and re-keying a child inside
 	// a fallback mounts nothing. A retry has to reset both.
 	return (
-		<ErrorBoundary key={frameKey}>
+		<ErrorBoundary key={frame.key}>
 			{paymentURL ? (
 				<WebView
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
-					onLoad={onWebViewLoaded}
-					onLoadStart={onWebViewLoadStart}
-					onError={onWebViewError}
-					onMessage={(event) => {
-						const data = event?.nativeEvent?.data as Record<string, unknown> | undefined;
-						const payload = data?.payload as Record<string, unknown> | undefined;
-						if (data?.action !== 'wcpos-payment-received' && payload?.data) {
-							if (onStockRejection(payload)) {
-								setLoading(false);
-								return;
-							}
-							orderLogger.error((payload?.message as string) || 'Payment error', {
-								showToast: true,
-								code: ERROR_CODES.PAYMENT_UNEXPECTED,
-								context: {
-									payloadData: payload?.data,
-								},
-							});
-						} else {
-							void handlePaymentReceived({ data } as unknown as MessageEvent);
-						}
-					}}
+					targetOrigin={frameOrigin}
+					{...frame.handlers}
+					onMessage={onMessage}
 					className="h-full flex-1"
 				/>
 			) : null}

@@ -137,6 +137,48 @@ describe('pushRecordMutation', () => {
 		expect(body.payload).toBeUndefined(); // a delete carries no payload
 	});
 
+	it('deletes: refuses a 2xx whose body is not JSON (a host challenge page) as no-document', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ operation: 'delete' }),
+				resolveEndpoint,
+				fetcher: async () =>
+					new Response('<html><body>Checking your browser</body></html>', {
+						status: 202,
+						headers: { 'Content-Type': 'text/html' },
+					}),
+				observe: (e) => events.push(e),
+			})
+		).rejects.toMatchObject({ name: 'RecordPushError', status: 202, reason: 'no-document' });
+		expect(events.filter((e) => e.type === 'push.error')).toHaveLength(1);
+		expect(events.find((e) => e.type === 'push.error')).toMatchObject({
+			level: 'error',
+			fields: { status: 202, reason: 'no-document' },
+		});
+		expect(events.some((e) => e.type === 'push.outcome')).toBe(false);
+	});
+
+	it('deletes: refuses a 2xx JSON array as no-document', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ operation: 'delete' }),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(200, []),
+			})
+		).rejects.toMatchObject({ reason: 'no-document', status: 200 });
+	});
+
+	it('deletes: acknowledges a 204 with no body', async () => {
+		const result = await pushRecordMutation({
+			mutation: mut({ operation: 'delete' }),
+			resolveEndpoint,
+			fetcher: async () => new Response(null, { status: 204 }),
+		});
+		expect(result.outcome).toBe('deleted');
+		expect(result.document).toBeNull();
+	});
+
 	it('parses the { document, currentRevision } envelope into document + currentRevision', async () => {
 		const result = await pushRecordMutation({
 			mutation: mut(),
@@ -218,9 +260,12 @@ describe('pushRecordMutation', () => {
 				fetcher: async () =>
 					jsonResponse(409, { code: 'woo_rxdb_sync_in_progress', message: 'retry' }),
 				observe: (e) => events.push(e),
+				attempt: 4,
 			})
 		).rejects.toMatchObject({ name: 'RecordPushError', reason: 'in-progress', status: 409 });
 		expect(events[0].type).toBe('push.in_progress');
+		// Retried like any transient failure, so it carries the push streak too.
+		expect(events[0].fields).toMatchObject({ reason: 'in-progress', attempt: 4, retryable: true });
 	});
 
 	it('treats a 409 record_locked (per-record CAS lock held) as a retryable error, not a conflict', async () => {
@@ -263,6 +308,27 @@ describe('pushRecordMutation', () => {
 		expect(events[0]).toMatchObject({
 			level: 'error',
 			fields: { status: 409, reason: 'identity-ambiguous' },
+		});
+	});
+
+	it('logs a 401 at warn, so the lane reports the refused session once', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ operation: 'update' }),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(401, { code: 'woocommerce_pos_rest_unauthorized' }),
+				observe: (e) => events.push(e),
+			})
+		).rejects.toMatchObject({
+			name: 'RecordPushError',
+			status: 401,
+			reason: 'woocommerce_pos_rest_unauthorized',
+		});
+		expect(events.map((e) => e.type)).toEqual(['push.error']);
+		expect(events[0]).toMatchObject({
+			level: 'warn',
+			fields: { status: 401, reason: 'woocommerce_pos_rest_unauthorized' },
 		});
 	});
 
@@ -325,9 +391,38 @@ describe('pushRecordMutation', () => {
 		expect(events[0]).toMatchObject({
 			type: 'push.error',
 			level: 'error',
-			fields: { status: 500 },
+			fields: { status: 500, attempt: 1, retryable: true },
 		});
 	});
+
+	it.each([
+		// Retried with backoff by the drain.
+		[500, {}, true],
+		[429, {}, true],
+		[408, {}, true],
+		// Dead-lettered: push.rejected carries the verdict.
+		[400, { code: 'rest_invalid_param' }, false],
+		[403, {}, false],
+		[409, { code: 'woo_rxdb_sync_identity_ambiguous' }, false],
+	])(
+		'stamps push.error for HTTP %s with the attempt and whether the drain retries it',
+		async (status, body, retryable) => {
+			const events: SyncEvent[] = [];
+			await expect(
+				pushRecordMutation({
+					mutation: mut(),
+					resolveEndpoint,
+					fetcher: async () => jsonResponse(status, body),
+					observe: (e) => events.push(e),
+					attempt: 3,
+				})
+			).rejects.toBeInstanceOf(RecordPushError);
+			expect(events[0]).toMatchObject({
+				type: 'push.error',
+				fields: { status, attempt: 3, retryable },
+			});
+		}
+	);
 
 	it('marks WooCommerce delete refusals permanent and preserves their code', async () => {
 		const events: SyncEvent[] = [];
@@ -412,7 +507,13 @@ describe('pushRecordMutation', () => {
 		expect(events[0]).toMatchObject({
 			type: 'push.error',
 			level: 'error',
-			fields: { reason: 'TypeError', message: 'Failed to fetch', phase: 'transport' },
+			fields: {
+				reason: 'TypeError',
+				message: 'Failed to fetch',
+				phase: 'transport',
+				attempt: 1,
+				retryable: true,
+			},
 		});
 	});
 
@@ -484,6 +585,154 @@ describe('pushRecordMutation', () => {
 	});
 });
 
+// A WordPress fatal answers 500 with the localized "critical error" boilerplate
+// as `message` and the PHP error itself in `data.error` — only when the site
+// exposes error details. The error names the cause; the boilerplate does not.
+// This is the body a Dutch till received on 2026-10-08 (#2439, plugin #2157).
+const WP_FATAL_BODY = {
+	code: 'internal_server_error',
+	message: '<p>Er heeft zich een kritieke fout voorgedaan op deze site.</p>',
+	data: {
+		status: 500,
+		error: {
+			type: 1,
+			message: 'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes)',
+			file: '/srv/www/wp-includes/class-wpdb.php',
+			line: 2324,
+		},
+	},
+};
+
+describe('pushRecordMutation — the server’s own sentence (#2439)', () => {
+	it("carries a WordPress fatal's PHP error, not the critical-error boilerplate, on the error AND the event", async () => {
+		const events: SyncEvent[] = [];
+		const expected =
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in wp-includes/class-wpdb.php:2324';
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(500, WP_FATAL_BODY),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({
+			status: 500,
+			reason: 'internal_server_error',
+			permanent: false,
+			serverMessage: expected,
+		});
+		// The ledger row is written from the EVENT (a 500 is retried, never
+		// dead-lettered), so the sentence has to ride the event to be seen at all.
+		expect(events[0]).toMatchObject({
+			type: 'push.error',
+			level: 'error',
+			fields: { status: 500, reason: 'internal_server_error', serverMessage: expected },
+		});
+	});
+
+	it('keeps the top-level message as the sentence when the site hides error details, without its HTML', async () => {
+		const events: SyncEvent[] = [];
+		const plain =
+			'There has been a critical error on this website. Learn more about troubleshooting WordPress.';
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(500, {
+						code: 'internal_server_error',
+						message:
+							'<p>There has been a critical error on this website.</p><p><a href="https://wordpress.org/documentation/article/faq-troubleshooting/">Learn more about troubleshooting WordPress.</a></p>',
+						data: { status: 500 },
+					}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({ serverMessage: plain });
+		expect(events[0]).toMatchObject({ fields: { serverMessage: plain } });
+	});
+
+	it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(400, {
+						code: 'rest_invalid_param',
+						message: 'Invalid parameter(s): billing',
+						data: { status: 400, error: { message: 'gateway: card_declined', file: 'x.php' } },
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Invalid parameter(s): billing' });
+	});
+
+	it('keeps the message when params are a plain list of names (rest_missing_callback_param)', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(400, {
+						code: 'rest_missing_callback_param',
+						message: 'Missing parameter(s): email',
+						data: { status: 400, params: ['email'] },
+					}),
+			})
+		).rejects.toMatchObject({ serverMessage: 'Missing parameter(s): email' });
+	});
+
+	it('names each invalid param and its message for rest_invalid_param', async () => {
+		const events: SyncEvent[] = [];
+		const expected =
+			'billing: billing[country] is not a valid country.; email: Invalid email address.';
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(400, {
+						code: 'rest_invalid_param',
+						message: 'Invalid parameter(s): billing, email',
+						data: {
+							status: 400,
+							params: {
+								billing: 'billing[country] is not a valid country.',
+								email: 'Invalid email address.',
+							},
+							details: {},
+						},
+					}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({ serverMessage: expected });
+		expect(events[0]).toMatchObject({ fields: { serverMessage: expected } });
+	});
+
+	it('treats a message that is only markup as no sentence', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(500, { code: 'x', message: '<p></p>' }),
+			})
+		).rejects.toMatchObject({ serverMessage: undefined });
+	});
+
+	it('omits serverMessage entirely when the body has no sentence (an HTML host page, an empty body)', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut(),
+				resolveEndpoint,
+				fetcher: async () => jsonResponse(502, {}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({ status: 502 });
+		expect(events[0]?.fields).not.toHaveProperty('serverMessage');
+		expect((events[0]?.fields as Record<string, unknown>).reason).toBeUndefined();
+	});
+});
+
 describe('pushEndpointResolver', () => {
 	it('routes each mutation to {syncBase}/push/{collection} via POST', () => {
 		const resolve = pushEndpointResolver('https://shop.example/wp-json/wcpos/v2/');
@@ -517,5 +766,31 @@ describe('reconcileCreateAck', () => {
 				meta_data: [{ key: RECORD_UUID_META_KEY, value: '00000000-0000-4000-8000-000000000099' }],
 			})
 		).toThrow(/never be re-keyed/);
+	});
+});
+
+it('an order row queued before the strip is cleaned at push time', async () => {
+	const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse(200, { id: 1 }));
+	await pushRecordMutation({
+		mutation: mut({
+			collectionName: 'orders',
+			operation: 'update',
+			payload: {
+				status: 'completed',
+				customer_note: 'note',
+				total: '10.00',
+				transaction_id: 'txn',
+				meta_data: [
+					{ key: '_wcpos_payments', value: { schema: 1, payments: [] } },
+					{ key: 'custom', value: 'kept' },
+				],
+			},
+		}),
+		resolveEndpoint,
+		fetcher,
+	});
+	expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string).payload).toEqual({
+		customer_note: 'note',
+		meta_data: [{ key: 'custom', value: 'kept' }],
 	});
 });

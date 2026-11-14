@@ -1,0 +1,287 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import { CountingElsewhereCard, OpenRegisterCard } from './open-register-card';
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
+let separator = '.';
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ site: {}, store: { id: 1 } }),
+	useAppState: () => ({ store: { price_decimal_sep: separator, price_num_decimals: 2 } }),
+}));
+jest.mock('@wcpos/query', () => ({
+	useDocField: <T,>(doc: T, select: (value: T) => unknown) => select(doc),
+}));
+
+let defaultFloat: string | undefined = '200';
+let lastCount: string | undefined = '570.10';
+let hasClosure = true;
+let blind = false;
+let mockCanManageCash = true;
+const open = jest.fn(async () => undefined);
+const print = jest.fn(async () => undefined);
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({
+		closedElsewhere: mockClosedElsewhere,
+		countingBy: mockCountingBy,
+		binding: {
+			registerName: 'Front',
+			registerId: 'r',
+			registers: [{ id: 'r', default_float: defaultFloat }],
+		},
+		lastClosed: { counted: { cash: lastCount } },
+		lastClosure: hasClosure
+			? { number: 3, server_number: 8, closed_at: '2026-09-28T10:00:00Z', counted: { cash: '480' } }
+			: null,
+		actions: { openSession: open },
+		expected: { cash: '155' },
+		blind,
+		canManageCash: mockCanManageCash,
+	}),
+}));
+// The movement sheet reaches the receipt document hook (REST client, expo-crypto); not this test's concern.
+jest.mock('../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
+}));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
+}));
+jest.mock('../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: string) => `£${v}` }),
+}));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children: React.ReactNode;
+		onPress: () => void;
+		testID: string;
+	}) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
+jest.mock('@wcpos/components/input', () => {
+	function Field({
+		onChangeText,
+		testID,
+		inputClassName: _inputClassName,
+		className: _className,
+		type: _type,
+		...props
+	}: {
+		onChangeText: (v: string) => void;
+		testID: string;
+		inputClassName?: string;
+		className?: string;
+		type?: string;
+	}) {
+		return <input {...props} data-testid={testID} onChange={(e) => onChangeText(e.target.value)} />;
+	}
+	function Wrap({ children }: { children?: React.ReactNode }) {
+		return <div>{children}</div>;
+	}
+	// The card's amount is one framed figure: Input.Root / Left / InputField / Right.
+	return {
+		Input: Object.assign(Field, { Root: Wrap, Left: Wrap, Right: Wrap, InputField: Field }),
+	};
+});
+jest.mock('@wcpos/components/text', () => ({
+	// The real context: a real Chip below provides its ink through it.
+	TextClassContext: jest.requireActual('@wcpos/components/text').TextClassContext,
+	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+it('prefills default, selects last count, shows only differing variance, and opens', async () => {
+	render(<OpenRegisterCard />);
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('200');
+	expect(screen.queryByTestId('opening-variance')).toBeNull();
+	fireEvent.click(screen.getByTestId('open-register-chip-last'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('570.10');
+	expect(screen.getByTestId('opening-variance')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('open-register-button'));
+	await waitFor(() =>
+		expect(open).toHaveBeenCalledWith({ expectedFloat: '200', countedFloat: '570.10' })
+	);
+});
+
+jest.mock('@wcpos/printer', () => ({ usePrint: () => ({ print }) }));
+jest.mock('../../receipt/hooks/use-resolved-printer', () => ({
+	useResolvedPrinter: () => ({ resolvedPrinter: null }),
+}));
+jest.mock('../contexts/overlay-side', () => ({ usePanelSide: () => 'right' }));
+
+beforeEach(() => {
+	separator = '.';
+	hasClosure = true;
+	mockCanManageCash = true;
+	defaultFloat = '200';
+	lastCount = '570.10';
+});
+it('without the cash permission shows the sentence and no open', () => {
+	mockCanManageCash = false;
+	render(<OpenRegisterCard />);
+	expect(screen.getByTestId('open-register-no-cash-permission')).toBeTruthy();
+	expect(screen.queryByTestId('open-register-button')).toBeNull();
+	expect(screen.queryByTestId('open-register-key-2')).toBeNull();
+	expect(screen.getByTestId('open-register-last-closure')).toBeTruthy();
+});
+it('the first key replaces the prefilled default', () => {
+	defaultFloat = '150';
+	render(<OpenRegisterCard />);
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('150');
+	expect(screen.getByTestId('open-register-chip-default').getAttribute('aria-pressed')).toBe(
+		'true'
+	);
+	fireEvent.click(screen.getByTestId('open-register-key-2'));
+	fireEvent.click(screen.getByTestId('open-register-key-0'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('20');
+	expect(screen.getByTestId('open-register-chip-default').getAttribute('aria-pressed')).toBe(
+		'false'
+	);
+});
+
+it('a chip is a suggestion too', () => {
+	render(<OpenRegisterCard />);
+	fireEvent.change(screen.getByTestId('open-register-amount'), { target: { value: '600' } });
+	fireEvent.click(screen.getByTestId('open-register-chip-last'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('570.10');
+	fireEvent.click(screen.getByTestId('open-register-key-4'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('4');
+});
+
+it('typing in the field edits the shown text', () => {
+	render(<OpenRegisterCard />);
+	fireEvent.change(screen.getByTestId('open-register-amount'), { target: { value: '600' } });
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('600');
+});
+
+it("the keypad and the field share the store's separator", async () => {
+	separator = ',';
+	render(<OpenRegisterCard />);
+	fireEvent.click(screen.getByTestId('open-register-key-4'));
+	expect(screen.getByTestId('open-register-key-decimal').getAttribute('aria-label')).toBe(',');
+	fireEvent.click(screen.getByTestId('open-register-key-decimal'));
+	fireEvent.click(screen.getByTestId('open-register-key-5'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('4,5');
+	fireEvent.click(screen.getByTestId('open-register-button'));
+	await waitFor(() =>
+		expect(open).toHaveBeenLastCalledWith({ expectedFloat: '200', countedFloat: '4.5' })
+	);
+	fireEvent.change(screen.getByTestId('open-register-amount'), { target: { value: '6,5' } });
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('6,5');
+	fireEvent.click(screen.getByTestId('open-register-button'));
+	await waitFor(() =>
+		expect(open).toHaveBeenLastCalledWith({ expectedFloat: '200', countedFloat: '6.5' })
+	);
+});
+
+it('uses a last count that arrives after the local query, without replacing typed input', () => {
+	defaultFloat = undefined;
+	lastCount = undefined;
+	const view = render(<OpenRegisterCard />);
+	lastCount = '570.10';
+	view.rerender(<OpenRegisterCard />);
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('570.10');
+	fireEvent.change(screen.getByTestId('open-register-amount'), { target: { value: '600' } });
+	defaultFloat = '200';
+	view.rerender(<OpenRegisterCard />);
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('600');
+});
+
+it('opens the last closure panel from the fold and omits it without a closure', () => {
+	const onLastClosure = jest.fn();
+	const view = render(<OpenRegisterCard onLastClosure={onLastClosure} />);
+	fireEvent.click(screen.getByTestId('open-register-last-closure'));
+	expect(onLastClosure).toHaveBeenCalledTimes(1);
+	expect(screen.getByTestId('open-register-last-closure').textContent).toContain('£480');
+	hasClosure = false;
+	view.rerender(<OpenRegisterCard onLastClosure={onLastClosure} />);
+	expect(screen.queryByTestId('open-register-last-closure')).toBeNull();
+});
+
+it('hides the previous cash figures from a blind-count cashier', () => {
+	blind = true;
+	try {
+		render(<OpenRegisterCard onLastClosure={() => {}} />);
+		// The fold keeps its label and navigation; the last-count chip goes with the amount.
+		expect(screen.getByTestId('open-register-last-closure').textContent).not.toContain('£480');
+		expect(screen.queryByTestId('open-register-chip-last')).toBeNull();
+		expect(screen.getByTestId('open-register-chip-default')).toBeTruthy();
+	} finally {
+		blind = false;
+	}
+});
+
+let mockClosedElsewhere: { by: number | null; at: string } | null = null;
+let mockCountingBy: { id: number; name: string | null; at: string | null } | null = null;
+jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
+	useObservableSuspense: () => [{ id: 7, display_name: 'Alex' }],
+}));
+jest.mock('../../../../hooks/user-db-list-resources', () => ({
+	credentialsListResource: () => null,
+}));
+jest.mock('../../../../hooks/use-store-day-label', () => ({
+	useStoreDayLabel: () => ({ time: (at: string) => at.slice(11, 16) }),
+}));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+it.each([
+	null,
+	{ id: 7, name: 'Alex', at: '2026-10-29T17:41:00Z' },
+	{ id: 8, name: null, at: null },
+])('names the counter only when the plugin supplies one (%s)', (counter) => {
+	const previous = mockCountingBy;
+	mockCountingBy = counter;
+	try {
+		render(<CountingElsewhereCard />);
+		expect(screen.getByText('Front')).toBeTruthy();
+		expect(screen.getByText('Counting on another till')).toBeTruthy();
+		expect(screen.queryAllByRole('button')).toHaveLength(0);
+		if (counter)
+			expect(screen.getByTestId('counting-elsewhere-by').textContent).toContain(
+				counter.name ?? 'Cashier'
+			);
+		else expect(screen.queryByTestId('counting-elsewhere-by')).toBeNull();
+	} finally {
+		mockCountingBy = previous;
+	}
+});
+it('says who closed on another till and when, but not after a close here', () => {
+	const previous = mockClosedElsewhere;
+	mockClosedElsewhere = { by: 7, at: '2026-10-29T17:41:00Z' };
+	try {
+		const view = render(<OpenRegisterCard />);
+		expect(screen.getByTestId('open-register-closed-elsewhere').textContent).toContain(
+			'Front was closed on another till at 17:41 by Alex'
+		);
+		mockClosedElsewhere = null;
+		view.rerender(<OpenRegisterCard />);
+		expect(screen.queryByTestId('open-register-closed-elsewhere')).toBeNull();
+	} finally {
+		mockClosedElsewhere = previous;
+	}
+});
+
+it("a suggestion shows at the store's decimals, as the cashier would type it", async () => {
+	// The server keeps money at four decimals; the field keeps the store's two. No padding either way.
+	defaultFloat = '100.0050';
+	lastCount = '63014.5600';
+	render(<OpenRegisterCard />);
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('100.01');
+	fireEvent.click(screen.getByTestId('open-register-chip-last'));
+	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('63014.56');
+	fireEvent.click(screen.getByTestId('open-register-button'));
+	await waitFor(() =>
+		expect(open).toHaveBeenLastCalledWith({ expectedFloat: '100.01', countedFloat: '63014.56' })
+	);
+});

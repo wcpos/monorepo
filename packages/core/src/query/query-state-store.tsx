@@ -5,9 +5,12 @@ import type {
 	FiltersOf,
 	QueryStateActions,
 	QueryStateOf,
-} from './query-state-types';
+} from '@wcpos/query/query-state';
+
+import { usePersistedState } from '../contexts/persisted-state';
 
 const DEFAULT_FILTERS = {
+	refunds: {},
 	products: { categories: [], tags: [], brands: [] },
 	orders: {},
 	coupons: {},
@@ -19,6 +22,8 @@ const DEFAULT_FILTERS = {
 	'tax-rates': {},
 	logs: {},
 } satisfies { [C in CollectionKey]: FiltersOf<C> };
+
+export type QueryStateStore<C extends CollectionKey> = Store<C>;
 
 type Store<C extends CollectionKey> = {
 	getState(): QueryStateOf<C>;
@@ -121,6 +126,12 @@ function createStore<C extends CollectionKey>(
 				if (state.limit < pageSize) publish({ ...state, limit: pageSize });
 			},
 			extendLimit: () => publish({ ...state, limit: state.limit + pageSize }),
+			setLimit: (limit) => {
+				if (!Number.isInteger(limit) || limit <= 0) {
+					throw new Error('Query state limit must be a positive integer');
+				}
+				publish({ ...state, limit: Math.max(limit, pageSize) });
+			},
 		},
 	};
 }
@@ -130,22 +141,32 @@ export function QueryStateProvider<C extends CollectionKey>({
 	initialPageSize,
 	initialSort,
 	initialFilters,
+	initialSearch = '',
+	persistKey,
 	children,
 }: {
 	collection: C;
 	initialPageSize: number;
 	initialSort: QueryStateOf<C>['sort'];
 	initialFilters?: Partial<FiltersOf<C>>;
+	initialSearch?: string;
+	/**
+	 * Keep the store across remounts of this provider under a `PersistedStateProvider`: a
+	 * screen that the host unmounts and mounts again (the register's layout switching trees at
+	 * the phone boundary) comes back with its search, filters, sort and window. The key names
+	 * the screen and its scope; a new key is a new store.
+	 */
+	persistKey?: string;
 	children: React.ReactNode;
 }) {
 	if (!Number.isInteger(initialPageSize) || initialPageSize <= 0) {
 		throw new Error('QueryStateProvider initialPageSize must be a positive integer');
 	}
-	const [store] = React.useState<Store<C>>(() => {
+	const store = usePersistedState<Store<C>>(persistKey, () => {
 		const clearFilters = clone(DEFAULT_FILTERS[collection]);
 		const filters = { ...clearFilters, ...initialFilters } as FiltersOf<C>;
 		return createStore(
-			{ search: '', filters, sort: initialSort, limit: initialPageSize },
+			{ search: initialSearch, filters, sort: initialSort, limit: initialPageSize },
 			clearFilters,
 			filters,
 			initialPageSize
@@ -190,6 +211,15 @@ export function useQueryState<C extends CollectionKey, S = QueryStateOf<C>>(
 		return selected;
 	}, [selector, store]);
 	return React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
+}
+
+/**
+ * The store itself, for hosts that must hand a readonly, subscribable view of query state
+ * to something outside React's render pass — the slot primitive's `createReadonlyView`.
+ * Prefer `useQueryState`; this is not a general-purpose escape hatch.
+ */
+export function useQueryStateStore<C extends CollectionKey>(): QueryStateStore<C> {
+	return useStore<C>();
 }
 
 export function useQueryStateActions<C extends CollectionKey>(): QueryStateActions<C> {

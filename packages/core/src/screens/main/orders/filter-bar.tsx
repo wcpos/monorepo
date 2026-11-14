@@ -1,26 +1,44 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/components/hstack';
+import isEqual from 'lodash/isEqual';
+
+import { Button, ButtonText } from '@wcpos/components/button';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { Suspense } from '@wcpos/components/suspense';
 import { useQueryRuntime } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
+import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
+import { ChipRow } from '@wcpos/components/chip-row';
 
+import { useT } from '../../../contexts/translations';
 import { forceRefreshFilterCustomer } from './force-refresh-filter-customer';
 import { useStoreSession } from '../../../contexts/app-state';
-import { useQueryState } from '../../../query';
+import { type FiltersOf, useQueryState, useQueryStateActions } from '../../../query';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
+import { RegisterPill } from '../components/order/filter-bar/register-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
+import { PaymentMethodPill } from '../components/order/filter-bar/payment-method-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
-import { useEngineRecordByWooId } from '../hooks/use-engine-document';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 import { storeListResource } from '../hooks/store-list-resource';
 
-/**
- *
- */
-export function FilterBar() {
+export function FilterBar({ initialFilters }: { initialFilters: Partial<FiltersOf<'orders'>> }) {
+	const { filters } = useQueryState<'orders'>();
+	const actions = useQueryStateActions<'orders'>();
+	const t = useT();
+	// Clear all counts only what the cashier set: the provider's own cashier and store scope
+	// is the resting state, and Clear all returns to it.
+	const set = (value: unknown) => (value === undefined || value === '' ? null : value);
+	const groups = new Set([...Object.keys(filters), ...Object.keys(initialFilters)]);
+	const changed = [...groups].filter(
+		(field) =>
+			!isEqual(
+				set(filters[field as keyof typeof filters]),
+				set(initialFilters[field as keyof typeof initialFilters])
+			)
+	).length;
 	const customerID = useQueryState<'orders', number | undefined>(
 		(state) => state.filters.customer_id
 	);
@@ -48,26 +66,36 @@ export function FilterBar() {
 	const storesResource = storeListResource(wpCredentials);
 
 	return (
-		<HStack className="w-full flex-wrap">
+		<ChipRow>
 			<StatusPill />
-			<Suspense>
+			<PaymentMethodPill />
+			{/* A pill that reads a record answers after the row has drawn: it holds a chip's
+			    frame meanwhile, so the pills beside it never shift. */}
+			<Suspense fallback={<Skeleton shape="chip" />}>
 				<CustomerPill
 					resource={customerResource}
 					guestCustomer={guestCustomer}
 					onMissing={refreshCustomer}
 				/>
 			</Suspense>
-			<Suspense>
+			<Suspense fallback={<Skeleton shape="chip" />}>
 				<CashierPill resource={cashierResource} onMissing={refreshCashier} />
 			</Suspense>
-			{/* Its own boundary, like the two pills above: a pill still waiting for its records
-			    must never blank the screen around it. Without this the suspension escaped to
-			    expo-router's per-route boundary, whose production fallback is `null`, and the
-			    Orders body rendered empty under a painted header (CI run 33295532237). */}
-			<Suspense>
+			<Suspense fallback={<Skeleton shape="chip" />}>
 				<StorePill resource={storesResource} />
 			</Suspense>
+			<RegisterPill />
 			<DateRangePill />
-		</HStack>
+			{changed >= 2 && (
+				<Button
+					variant="link"
+					size="sm"
+					testID="orders-filter-clear-all"
+					onPress={() => actions.resetFilters()}
+				>
+					<ButtonText>{t('orders.clear_all')}</ButtonText>
+				</Button>
+			)}
+		</ChipRow>
 	);
 }

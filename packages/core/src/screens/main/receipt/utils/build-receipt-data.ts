@@ -6,8 +6,19 @@
  * See field-picker.tsx for the full field reference.
  */
 
-import { POS_META_KEYS } from '@wcpos/sync-core';
+import { getI18n } from 'react-i18next';
+
+import { isCompletingStatus } from '@wcpos/order-math';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { AppInfo } from '@wcpos/utils/app-info';
 import type { TaxId } from '@wcpos/database';
+import type { RegisterDocument } from '@wcpos/query/register-session';
+
+import {
+	decimalSeparatorFormatter,
+	quickDiscountLabel,
+	readQuickDiscountIntent,
+} from '../../pos/hooks/quick-discount';
 
 interface ReceiptOrder {
 	id: number;
@@ -29,6 +40,8 @@ interface ReceiptOrder {
 
 interface ReceiptStore {
 	name: string;
+	logo: string;
+	price_decimals?: number;
 	address: string;
 	phone: string;
 	email: string;
@@ -37,7 +50,14 @@ interface ReceiptStore {
 }
 
 interface ReceiptCustomer {
+	/**
+	 * WooCommerce customer id; null for a guest sale. Mirrors the PHP
+	 * Receipt_Data_Builder so templates can key on `customer.id` (the guest
+	 * customer carries a real billing name, so `name` cannot tell them apart).
+	 */
+	id: number | null;
 	name: string;
+	first_name: string;
 	email: string;
 	phone: string;
 	billing_address: string;
@@ -126,6 +146,14 @@ interface ReceiptPayment {
 }
 
 interface ReceiptFiscal {
+	document_type: 'sale';
+	sale_time: ReceiptOrder['printed'] | null;
+	sale_tz: string;
+	sale_counter: number | null;
+	received_at: null;
+	corrects: string;
+	is_reprint: boolean;
+	reprint_count: number;
 	submission_status: string;
 	fiscal_id: string;
 }
@@ -158,6 +186,8 @@ interface ReceiptTaxSection {
 }
 
 export interface ReceiptData {
+	software: { name: string; plugin_version: string; app_version: string; app_build: string };
+	register: Pick<RegisterDocument, 'id' | 'name'>;
 	i18n?: Record<string, string>;
 	order: ReceiptOrder;
 	store: ReceiptStore;
@@ -223,6 +253,13 @@ function isNumeric(value: unknown): boolean {
 		/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized) &&
 		Number.isFinite(Number(normalized))
 	);
+}
+
+/** Meta text for a receipt line: strings and numbers only, never a typed object. */
+function metaText(value: unknown): string {
+	if (typeof value === 'string') return value;
+	if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+	return '';
 }
 
 function getPosPriceData(item: Record<string, any>): PosPriceData | null {
@@ -509,6 +546,34 @@ function buildTaxSummary(order: Record<string, any>): ReceiptTaxSummaryItem[] {
 }
 
 /**
+ * The sale's own time in its zone, or null when the stamped value or zone cannot be
+ * formatted (a bad clock or a non-IANA zone must not abort a receipt render).
+ */
+function formatSaleTime(
+	saleTime: unknown,
+	timeZone: string | undefined,
+	options: Intl.DateTimeFormatOptions
+): { datetime: string } | null {
+	if (typeof saleTime !== 'string' || !saleTime) return null;
+	const date = new Date(saleTime);
+	if (Number.isNaN(date.getTime())) return null;
+	try {
+		return {
+			datetime: new Intl.DateTimeFormat(
+				'en-US',
+				timeZone ? { ...options, timeZone } : options
+			).format(date),
+		};
+	} catch {
+		try {
+			return { datetime: new Intl.DateTimeFormat('en-US', options).format(date) };
+		} catch {
+			return null;
+		}
+	}
+}
+
+/**
  * Build template-facing tax mode signals from store settings.
  * Mirrors `Receipt_Store_Resolver::build_tax_section()`.
  */
@@ -548,6 +613,9 @@ function capitalizeStatus(status: string): string {
 }
 
 export interface BuildReceiptDataOptions {
+	register?: Pick<RegisterDocument, 'id' | 'name'> | null;
+	pluginVersion?: string;
+	printCount?: number;
 	/**
 	 * Resolves a raw WooCommerce order status (e.g. "completed") to its
 	 * localized display label ("Completed", "Terminé", …). Pass the
@@ -571,6 +639,12 @@ export function buildReceiptData(
 	dp: number = 2,
 	options: BuildReceiptDataOptions = {}
 ): ReceiptData {
+	const provenance = new Map<string, unknown>(
+		(order.meta_data ?? []).map((row: { key: string; value: unknown }) => [row.key, row.value])
+	);
+	const saleTime = provenance.get('_wcpos_sale_time');
+	const saleTz = String(provenance.get('_wcpos_sale_tz') ?? '');
+	const registerId = wooMetaCarrier.readIdentity(order.meta_data).registerId;
 	const billing = order.billing || {};
 	const shipping = order.shipping || {};
 	const lineItems = order.line_items || [];
@@ -602,10 +676,16 @@ export function buildReceiptData(
 		const meta = Array.isArray(item.meta_data)
 			? item.meta_data
 					.filter((entry: Record<string, unknown>) => !String(entry?.key ?? '').startsWith('_'))
+					// Variation attributes are written with only display_key/display_value
+					// (pos/hooks/utils.ts, the variations popover, barcode scans), and a
+					// server round-trip adds display_* beside a taxonomy `key` such as
+					// pa_size. Prefer the display pair, as WC's get_formatted_meta_data
+					// does for the PHP builder, and drop entries with nothing to show.
 					.map((entry: Record<string, unknown>) => ({
-						key: String(entry?.key ?? ''),
-						value: String(entry?.value ?? ''),
+						key: metaText(entry?.display_key) || metaText(entry?.key),
+						value: metaText(entry?.display_value) || metaText(entry?.value),
 					}))
+					.filter(({ key, value }) => key !== '' || value !== '')
 			: [];
 
 		const { raw: savingsRaw, ...priceConvenience } = getLinePriceConvenienceFields({
@@ -721,19 +801,29 @@ export function buildReceiptData(
 			)
 	);
 	const mappedDiscounts: ReceiptAdjustment[] = (order.coupon_lines || []).map(
-		(line: Record<string, any>) =>
-			mapAdjustment(
-				String(line.code || ''),
+		(line: Record<string, any>) => {
+			const intent = readQuickDiscountIntent(line);
+			return mapAdjustment(
+				intent
+					? quickDiscountLabel(
+							intent,
+							getI18n().t,
+							decimalSeparatorFormatter(store.price_decimal_sep)
+						)
+					: String(line.code || ''),
 				toNum(line.discount),
 				toNum(line.discount_tax),
 				displayTax,
 				dp
-			)
+			);
+		}
 	);
 
 	const taxSummary = buildTaxSummary(order);
 
 	const rawStatus = String(order.status ?? '');
+	// Mirrors WC_Order::needs_payment() (payable status, positive total); local status is fresher after offline capture and temporary carts never carry needs_payment.
+	const needsPayment = !isCompletingStatus(rawStatus) && toNum(order.total) > 0;
 	// `useOrderStatusLabel.getLabel` returns the raw status when the
 	// orderStatuses cache hasn't loaded yet — capitalize that fall-through
 	// instead of printing the lowercase identifier.
@@ -793,13 +883,16 @@ export function buildReceiptData(
 			customer_note: order.customer_note || '',
 			wc_status: rawStatus,
 			status_label: statusLabel,
-			needs_payment: Boolean(order.needs_payment),
+			needs_payment: needsPayment,
 			payment_url: typeof order.payment_url === 'string' ? order.payment_url : '',
 			created: { datetime: order.date_created || '' },
 			printed: { datetime: printedDatetime },
 		},
 		store: {
 			name: store.name || '',
+			// Always a string, like PHP's Receipt_Data_Builder; '' keeps the name fallback.
+			logo: typeof store.display?.logo === 'string' && store.display.logo ? store.display.logo : '',
+			price_decimals: store.wc_price_decimals,
 			address: formatAddress({
 				address_1: store.store_address,
 				address_2: store.store_address_2,
@@ -829,8 +922,11 @@ export function buildReceiptData(
 							},
 						]
 					: [];
+			const customerId = Number(order.customer_id) || 0;
 			return {
+				id: customerId > 0 ? customerId : null,
 				name: [billing.first_name, billing.last_name].filter(Boolean).join(' '),
+				first_name: billing.first_name || '',
 				email: billing.email || '',
 				phone: billing.phone || '',
 				billing_address: formatAddress(billing),
@@ -875,14 +971,38 @@ export function buildReceiptData(
 		tax: buildTaxSection(store, displayTax),
 		tax_summary: taxSummary,
 		has_tax_summary: taxSummary.length > 0,
-		payments: [
-			{
-				method: order.payment_method_title || order.payment_method || '',
-				amount: order.total || '0.00',
-				transaction_id: order.transaction_id || '',
-			},
-		],
+		// A payable order has taken no payment; ledger-driven rows are ADR 0040 follow-up work.
+		payments: needsPayment
+			? []
+			: [
+					{
+						method: order.payment_method_title || order.payment_method || '',
+						amount: order.total || '0.00',
+						transaction_id: order.transaction_id || '',
+					},
+				],
+		software: {
+			name: 'WCPOS',
+			plugin_version: options.pluginVersion ?? '',
+			app_version: AppInfo.version,
+			app_build: AppInfo.buildNumber,
+		},
+		register: {
+			id: registerId ?? options.register?.id ?? '',
+			name:
+				!registerId || registerId === options.register?.id ? (options.register?.name ?? '') : '',
+		},
 		fiscal: {
+			document_type: 'sale',
+			sale_time: formatSaleTime(saleTime, saleTz || storeTimezone, printedFormatOptions),
+			sale_tz: saleTz,
+			sale_counter: provenance.has('_wcpos_sale_counter')
+				? toNum(provenance.get('_wcpos_sale_counter'))
+				: null,
+			received_at: null,
+			corrects: '',
+			is_reprint: (options.printCount ?? 0) > 1,
+			reprint_count: Math.max(0, (options.printCount ?? 0) - 1),
 			submission_status: '',
 			fiscal_id: '',
 		},

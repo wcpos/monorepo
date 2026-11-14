@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform } from 'react-native';
 
+import { PreThemeGate } from '@wcpos/components/gate-screen/pre-theme';
 import { reloadApp } from '@wcpos/core/utils/reload-app';
 import {
 	readClearLocalDataOnNextLoadFlag,
@@ -102,62 +103,33 @@ export function useClearLocalDataOnStartup(): ClearLocalDataStartupState {
 
 /**
  * Rendered above every provider (like the root error screen), so no theme and
- * no translations. It must never offer a way back into the app: the register
- * only becomes safe again once a relaunch finishes the clear.
+ * no translations: a `PreThemeGate`. It must never offer a way back into the
+ * app: the register only becomes safe again once a relaunch finishes the
+ * clear. Web's one action reloads, which retries the clear before hydration.
  */
-const styles = StyleSheet.create({
-	container: {
-		backgroundColor: '#fafafa',
-		flex: 1,
-		justifyContent: 'center',
-	},
-	content: {
-		marginHorizontal: 16,
-	},
-	title: {
-		color: '#b3261e',
-		fontSize: 24,
-		fontWeight: '700',
-		paddingBottom: 8,
-	},
-	body: {
-		color: '#000',
-		paddingBottom: 16,
-	},
-	button: {
-		backgroundColor: '#2196f3',
-		borderRadius: 50,
-		padding: 16,
-	},
-	buttonText: {
-		color: '#fff',
-		fontWeight: '600',
-		textAlign: 'center',
-	},
-});
-
 export function ClearLocalDataBlockedScreen() {
+	const web = Platform.OS === 'web';
 	return (
-		<View style={styles.container} testID="clear-local-data-blocked">
-			<View style={styles.content}>
-				<Text style={styles.title}>Reset didn’t finish</Text>
-				<Text style={styles.body}>
-					{Platform.OS === 'web'
-						? 'The local data reset did not complete. Reload the page to retry — nothing new can be saved until it finishes.'
-						: 'The local data reset did not complete. Close the app completely and open it again to retry — nothing new can be saved until it finishes.'}
-				</Text>
-				{Platform.OS === 'web' ? (
-					<TouchableOpacity
-						testID="clear-local-data-blocked-retry"
-						style={styles.button}
-						onPress={() => {
-							reloadApp();
-						}}
-					>
-						<Text style={styles.buttonText}>Reload and retry</Text>
-					</TouchableOpacity>
-				) : null}
-			</View>
-		</View>
+		<PreThemeGate
+			testID="clear-local-data-blocked"
+			tone="warning"
+			title="Reset didn’t finish"
+			description={
+				web
+					? 'The local data reset did not complete. Reload the page to retry — nothing new can be saved until it finishes.'
+					: 'The local data reset did not complete. Close the app completely and open it again to retry — nothing new can be saved until it finishes.'
+			}
+			primary={
+				web
+					? {
+							label: 'Reload and retry',
+							testID: 'clear-local-data-blocked-retry',
+							onPress: () => {
+								reloadApp();
+							},
+						}
+					: undefined
+			}
+		/>
 	);
 }

@@ -1,15 +1,10 @@
 import { AxiosRequestConfig } from 'axios';
-import { Mock } from 'jest-mock';
-
-interface MockResponse {
-	[key: string]: any;
-}
 
 interface HttpClientMock {
-	get: Mock<any, [string, AxiosRequestConfig?]>;
-	post: Mock<any, [string, any, AxiosRequestConfig?]>;
-	put: Mock<any, [string, any, AxiosRequestConfig?]>;
-	delete: Mock<any, [string, AxiosRequestConfig?]>;
+	get: jest.Mock<any, [string, AxiosRequestConfig?]>;
+	post: jest.Mock<any, [string, any, AxiosRequestConfig?]>;
+	put: jest.Mock<any, [string, any, AxiosRequestConfig?]>;
+	delete: jest.Mock<any, [string, AxiosRequestConfig?]>;
 	__setMockResponse: (
 		method: HttpMethod,
 		url: string,
@@ -132,7 +127,12 @@ function paramsMatch(expectedParams: any, actualParams: any): boolean {
 /**
  * Find a matching mock response, supporting partial param matching
  */
-function findMockResponse(method: HttpMethod, url: string, actualParams?: any, actualData?: any): any {
+function findMockResponse(
+	method: HttpMethod,
+	url: string,
+	actualParams?: any,
+	actualData?: any
+): any {
 	const methodResponses = mockResponses[method];
 
 	// First try exact match

@@ -1,4 +1,4 @@
-import type { LogTerminalFields } from './index';
+import type { LoggerOptions, LogTerminalFields } from './index';
 
 export type RecordedEvent = {
 	timestamp: number;
@@ -6,6 +6,7 @@ export type RecordedEvent = {
 	message: string;
 	context: Record<string, unknown>;
 	terminal?: LogTerminalFields;
+	actor?: LoggerOptions['actor'];
 	/** Serialized size charged to the ring's byte budget. */
 	sizeBytes: number;
 };

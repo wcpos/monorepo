@@ -16,6 +16,12 @@
 			"browser": "./dist/render-template.js",
 			"import": "./dist/render-template.js",
 			"default": "./dist/render-template.js"
+		},
+		"./barcode-library": {
+			"types": "./dist/barcode-library.d.ts",
+			"browser": "./dist/barcode-library.js",
+			"import": "./dist/barcode-library.js",
+			"default": "./dist/barcode-library.js"
 		}
 	},
 	"files": [
@@ -32,14 +38,14 @@
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
 		"@xmldom/xmldom": "0.9.12",
 		"bwip-js": "4.11.4",
-		"dompurify": "^3.4.14",
+		"dompurify": "^3.4.17",
 		"iconv-lite": "0.7.3",
 		"mustache": "^4.2.0"
 	},
 	"devDependencies": {
 		"@types/mustache": "^4.2.6",
-		"jsdom": "^30.0.1",
-		"vitest": "^4.1.10"
+		"jsdom": "^31.0.0",
+		"vitest": "^5.1.0"
 	},
 	"sideEffects": false
 }

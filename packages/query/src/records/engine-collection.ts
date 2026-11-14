@@ -1,11 +1,6 @@
-import { map } from 'rxjs/operators';
-
-import type { RxdbSyncEngine } from '@wcpos/sync-engine';
-
-import { observeEngineDatabases } from '../engine-query';
-
 import type { EngineRecord, EngineRecordCollectionName } from './engine-record';
 import type { Observable } from 'rxjs';
+import type { RxCollection } from 'rxdb';
 
 /**
  * THE typed boundary onto `database.collections` (ADR 0028; review candidate 5).
@@ -47,7 +42,9 @@ export type EngineCollection<C extends EngineRecordCollectionName> = {
 	 * Storage-level read that can see tombstones — the deleted-document read path
 	 * (e.g. the cart stock guard resolving stock for a pruned catalog row).
 	 */
+	schema: RxCollection['schema'];
 	storageInstance: {
+		query: RxCollection['storageInstance']['query'];
 		findDocumentsById(ids: string[], withDeleted: boolean): Promise<unknown[]>;
 	};
 };
@@ -66,16 +63,4 @@ export function engineCollection<C extends EngineRecordCollectionName>(
 ): EngineCollection<C> | null {
 	const collection = database?.collections?.[name];
 	return collection ? (collection as EngineCollection<C>) : null;
-}
-
-/**
- * The same resolution as a stream: re-resolves on every `db$` emission, so scope moves and
- * resets rebind to the live collection. Emits `null` while no database (or no collection)
- * is open.
- */
-export function observeEngineCollection<C extends EngineRecordCollectionName>(
-	engine: RxdbSyncEngine,
-	name: C
-): Observable<EngineCollection<C> | null> {
-	return observeEngineDatabases(engine).pipe(map((database) => engineCollection(database, name)));
 }

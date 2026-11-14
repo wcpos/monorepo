@@ -21,6 +21,15 @@ export interface ScanOfferResult {
 export interface ScanSessionOptions {
 	onAccept: (code: string, symbology?: string) => void;
 	cooldownMs?: number;
+	/**
+	 * A continuous source (the camera) re-reports a code on every frame while it
+	 * stays in view, so a repeat is the SAME sighting, not a second scan: it
+	 * extends the cooldown, and the code is accepted again only after it has been
+	 * out of view for cooldownMs. A trigger source (HID, serial, BLE) reports one
+	 * read per pull, so there a repeat after the cooldown is a second item and the
+	 * window is measured from the last accepted read (the default).
+	 */
+	continuous?: boolean;
 	requireDoubleRead?: boolean;
 	now?: () => number;
 }
@@ -125,9 +134,11 @@ export function createScanSession(options: ScanSessionOptions): ScanSession {
 	const cooldownMs = options.cooldownMs ?? DEFAULT_COOLDOWN_MS;
 	const now = options.now ?? Date.now;
 	const requireDoubleRead = options.requireDoubleRead ?? false;
+	const continuous = options.continuous ?? false;
 
-	// code -> timestamp it was last accepted (per-code cooldown).
-	const lastAccepted = new Map<string, number>();
+	// code -> timestamp the per-code cooldown runs from: the last accepted read,
+	// or for a continuous source the last sighting.
+	const cooldownFrom = new Map<string, number>();
 	// code -> timestamp of the first-of-two read awaiting confirmation.
 	let pending: { code: string; at: number } | null = null;
 
@@ -142,8 +153,11 @@ export function createScanSession(options: ScanSessionOptions): ScanSession {
 			return { accepted: false, reason: 'bad-check-digit' };
 		}
 
-		const lastAt = lastAccepted.get(code);
+		const lastAt = cooldownFrom.get(code);
 		if (lastAt !== undefined && at - lastAt < cooldownMs) {
+			if (continuous) {
+				cooldownFrom.set(code, at);
+			}
 			return { accepted: false, reason: 'cooldown' };
 		}
 
@@ -155,7 +169,7 @@ export function createScanSession(options: ScanSessionOptions): ScanSession {
 			pending = null;
 		}
 
-		lastAccepted.set(code, at);
+		cooldownFrom.set(code, at);
 		options.onAccept(code, symbology);
 		return { accepted: true };
 	};
@@ -163,7 +177,7 @@ export function createScanSession(options: ScanSessionOptions): ScanSession {
 	return {
 		offer,
 		reset: () => {
-			lastAccepted.clear();
+			cooldownFrom.clear();
 			pending = null;
 		},
 	};

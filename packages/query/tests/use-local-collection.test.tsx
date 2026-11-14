@@ -3,17 +3,22 @@
  */
 import * as React from 'react';
 
-import { cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 import { Subject } from 'rxjs';
 
 import { QueryProvider } from '../src/provider';
-import { useLocalCollection$ } from '../src/use-local-collection';
+import {
+	type LocalDatabaseWithReset,
+	useFollowedCollection,
+	useFollowedCollection$,
+	useLocalCollection$,
+} from '../src/use-local-collection';
 import { createEngineDatabase, createFakeEngine } from '../src/testing';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
 
 /**
- * The shared mechanism behind every local-collection reader (useLocalQuery, the
+ * The shared mechanism behind every local-collection reader (useLocalQuery$, the
  * logs stat header, the drawer badge). A collection reference is not stable:
  * logs-storage-recovery replaces it IN PLACE announcing only on `reset$`, and a
  * store switch replaces the whole database announcing nothing on `reset$`.
@@ -41,7 +46,7 @@ describe('useLocalCollection$', () => {
 		return renderHook(() => useLocalCollection$('logs'), { wrapper });
 	}
 
-	const latest = (obs: ReturnType<typeof useLocalCollection$>) => {
+	const latest = (obs: ReturnType<typeof useLocalCollection$<Record<string, unknown>>>) => {
 		let seen: unknown;
 		obs.subscribe((value) => (seen = value)).unsubscribe();
 		return (seen as { label?: string } | undefined)?.label;
@@ -58,7 +63,7 @@ describe('useLocalCollection$', () => {
 	 * subscribes after the fact never observes the reset path at all and passes
 	 * against any filter — including no filter.
 	 */
-	const track = (obs: ReturnType<typeof useLocalCollection$>) => {
+	const track = (obs: ReturnType<typeof useLocalCollection$<Record<string, unknown>>>) => {
 		const seen: (string | undefined)[] = [];
 		const subscription = obs.subscribe((value) =>
 			seen.push((value as { label?: string } | undefined)?.label)
@@ -159,4 +164,32 @@ describe('useLocalCollection$', () => {
 		const { result } = harness({ collections: { logs: collectionNamed('plain') } });
 		expect(latest(result.current)).toBe('plain');
 	});
+});
+
+// Removing null support or either reset subscription breaks this lifecycle.
+it.each([null, undefined])('follows a database bound after %s', (absent) => {
+	const reset$ = new Subject<RxCollection>();
+	const first = { name: 'logs' } as RxCollection;
+	const replacement = { name: 'logs' } as RxCollection;
+	const db = { collections: { logs: first }, reset$ } as unknown as LocalDatabaseWithReset;
+	const { result, rerender } = renderHook(
+		({ database }) => ({
+			value: useFollowedCollection(database, 'logs'),
+			stream: useFollowedCollection$(database, 'logs'),
+		}),
+		{ initialProps: { database: absent as LocalDatabaseWithReset | null | undefined } }
+	);
+	const seen: unknown[] = [];
+	result.current.stream.subscribe((value) => seen.push(value)).unsubscribe();
+	expect(result.current.value).toBeUndefined();
+	expect(seen).toEqual([undefined]);
+	rerender({ database: db });
+	expect(result.current.value).toBe(first);
+	const subscription = result.current.stream.subscribe((value) => seen.push(value));
+	act(() => reset$.next(replacement));
+	expect(result.current.value).toBe(replacement);
+	expect(seen).toEqual([undefined, first, replacement]);
+	rerender({ database: absent });
+	expect(result.current.value).toBeUndefined();
+	subscription.unsubscribe();
 });

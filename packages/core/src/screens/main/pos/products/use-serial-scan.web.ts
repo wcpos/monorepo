@@ -1,6 +1,10 @@
 import * as React from 'react';
 
-import type { ScannerProfileDocument } from '@wcpos/database';
+import {
+	readScannerProfiles,
+	saveScannerProfile,
+	type ScannerProfile,
+} from '@wcpos/query/store-local';
 import {
 	createScanSession,
 	createSerialLineDecoder,
@@ -16,7 +20,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
-import { useCollection } from '../../hooks/use-collection';
+import { isChooserCancel } from './chooser-cancel';
 
 import type { UseSerialScanResult } from './use-serial-scan';
 
@@ -87,8 +91,7 @@ function serialPortIdentity(info: SerialPortInfoLike): ScannerIdentity | null {
  * (merged into scanEvents$ by useBarcodeDetection).
  */
 export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
-	const { store } = useAppState();
-	const { collection } = useCollection('scanner_profiles');
+	const { store, storeDB } = useAppState();
 	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
 	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
@@ -232,7 +235,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 					// deviceKey is the primary key, so a re-registration of the same
 					// scanner is an upsert rather than a duplicate row — no read-then-
 					// insert dup check, and no race between two rapid Connect presses.
-					await collection.upsert({
+					await saveScannerProfile(storeDB, {
 						deviceKey: scannerDeviceKey(identity),
 						name: '',
 						connectionType: identity.connectionType,
@@ -251,7 +254,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 				}
 			}
 		},
-		[collection, readLoop, teardown]
+		[storeDB, readLoop, teardown]
 	);
 
 	const connect = React.useCallback(async () => {
@@ -262,25 +265,26 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		try {
 			// A previously saved scanner may use a vendor-specific RFCOMM service
 			// class; include saved UUIDs so it stays visible in the chooser.
-			const profiles = await collection
-				.find({ selector: { connectionType: 'bluetooth-spp' } })
-				.exec();
+			const profiles = await readScannerProfiles(storeDB, ['bluetooth-spp']);
 			const allowedBluetoothServiceClassIds = Array.from(
 				new Set([
 					...KNOWN_SCANNER_BLUETOOTH_SERVICE_CLASS_IDS,
 					...profiles
-						.map((profile: ScannerProfileDocument) => profile.serviceUuid)
+						.map((profile: ScannerProfile) => profile.serviceUuid)
 						.filter((id): id is string => typeof id === 'string' && id.length > 0),
 				])
 			);
 			const port = await serial.requestPort({ allowedBluetoothServiceClassIds });
 			await attachPort(port, true);
 		} catch (error) {
-			serialLogger.warn('serial connect cancelled or failed', {
-				context: { error: String(error) },
-			});
+			// Closing the browser's port chooser throws NotFoundError: a cancel, not a fault.
+			const cancelled = isChooserCancel(error);
+			serialLogger[cancelled ? 'debug' : 'warn'](
+				cancelled ? 'serial connect cancelled' : 'serial connect failed',
+				{ context: { error: String(error) } }
+			);
 		}
-	}, [attachPort, collection]);
+	}, [attachPort, storeDB]);
 
 	// On mount, silently re-open any already-granted port that matches a saved
 	// serial profile (the browser remembers granted devices across reloads).
@@ -293,9 +297,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		(async () => {
 			const [ports, profiles] = await Promise.all([
 				serial.getPorts(),
-				collection
-					.find({ selector: { connectionType: { $in: ['usb-serial', 'bluetooth-spp'] } } })
-					.exec(),
+				readScannerProfiles(storeDB, ['usb-serial', 'bluetooth-spp']),
 			]);
 			if (cancelled) {
 				return;
@@ -304,9 +306,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			// or model, not a physical unit — the same ceiling as vid:pid for two
 			// identical USB scanners. A single unambiguous match reconnects silently;
 			// ambiguity waits for an explicit chooser pick.
-			const savedKeys = new Set(
-				profiles.map((profile: ScannerProfileDocument) => profile.deviceKey)
-			);
+			const savedKeys = new Set(profiles.map((profile: ScannerProfile) => profile.deviceKey));
 			const matches = ports.filter((port) => {
 				const identity = serialPortIdentity(port.getInfo());
 				return identity !== null && savedKeys.has(scannerDeviceKey(identity));
@@ -315,14 +315,15 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 				await attachPort(matches[0], false);
 			}
 		})().catch((error) => {
-			serialLogger.warn('Failed to reopen saved serial scanner', {
+			// A silent best-effort reopen on mount (another tab may hold the port).
+			serialLogger.debug('Failed to reopen saved serial scanner', {
 				context: { error: String(error) },
 			});
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [collection, attachPort]);
+	}, [storeDB, attachPort]);
 
 	const disconnect = React.useCallback(async () => {
 		attachRequestRef.current += 1;

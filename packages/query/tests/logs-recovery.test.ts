@@ -67,6 +67,125 @@ describe('logs storage recovery', () => {
 		expect(reload).toHaveBeenCalledTimes(1);
 	});
 
+	it.each([true, false, 'blocked'])(
+		'claims concurrent logs recovery before removal (storage=%s)',
+		async (storage) => {
+			if (storage === 'blocked')
+				jest.spyOn(sessionStorage, 'setItem').mockImplementation(() => {
+					throw new Error('Quota exceeded');
+				});
+			if (!storage)
+				Object.defineProperty(globalThis, 'sessionStorage', {
+					configurable: true,
+					value: undefined,
+				});
+			await jest.isolateModulesAsync(async () => {
+				const { recoverLogsCollectionStorage: recover } =
+					await import('../src/logs-storage-recovery');
+				let finish!: () => void;
+				const remove = jest.fn(
+					() =>
+						new Promise<void>((resolve) => {
+							finish = resolve;
+						})
+				);
+				const reload = jest.fn();
+				const collection = { name: 'logs', remove };
+				const error = new Error('requestRemote SyntaxError: Expected JSON');
+				const first = recover(collection, error, { reload });
+				const second = recover(collection, error, { reload });
+				const results = Promise.allSettled([first, second]);
+				expect(remove).toHaveBeenCalledTimes(1);
+				if (storage === true)
+					expect(sessionStorage.getItem('wcpos_logs_storage_recovery_attempted')).toBe('1');
+				finish();
+				expect(await results).toEqual([
+					{ status: 'fulfilled', value: true },
+					{ status: 'fulfilled', value: false },
+				]);
+				expect(reload).toHaveBeenCalledTimes(1);
+			});
+		}
+	);
+
+	it('recovers a targeted JSON failure only once without sessionStorage', async () => {
+		Object.defineProperty(globalThis, 'sessionStorage', {
+			configurable: true,
+			value: undefined,
+		});
+		const remove = jest.fn(async () => undefined);
+		const logsCollection = { name: 'logs', remove };
+		const reload = jest.fn();
+		const error = new Error(
+			'SyntaxError: JSON Parse error: Unexpected character: d; targeted recovery failed for log-1: missing-primary-row'
+		);
+
+		await jest.isolateModulesAsync(async () => {
+			const { recoverLogsCollectionStorage: recoverNativeLogs } =
+				await import('../src/logs-storage-recovery');
+			await expect(recoverNativeLogs(logsCollection, error, { reload })).resolves.toBe(true);
+			await expect(recoverNativeLogs(logsCollection, error, { reload })).resolves.toBe(false);
+		});
+
+		expect(remove).toHaveBeenCalledTimes(1);
+		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the native guard open when the logs remove fails', async () => {
+		Object.defineProperty(globalThis, 'sessionStorage', {
+			configurable: true,
+			value: undefined,
+		});
+		const remove = jest
+			.fn()
+			.mockRejectedValueOnce(new Error('remove failed'))
+			.mockResolvedValue(undefined);
+		const logsCollection = { name: 'logs', remove };
+		const reload = jest.fn();
+		const error = new Error(
+			'SyntaxError: JSON Parse error: Unexpected character: d; targeted recovery failed for log-1: missing-primary-row'
+		);
+
+		await jest.isolateModulesAsync(async () => {
+			const { recoverLogsCollectionStorage: recoverNativeLogs } =
+				await import('../src/logs-storage-recovery');
+			await expect(recoverNativeLogs(logsCollection, error, { reload })).rejects.toThrow(
+				'remove failed'
+			);
+			await expect(recoverNativeLogs(logsCollection, error, { reload })).resolves.toBe(true);
+		});
+
+		expect(remove).toHaveBeenCalledTimes(2);
+		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('recovers a targeted JSON failure with sessionStorage', async () => {
+		const remove = jest.fn(async () => undefined);
+		const reload = jest.fn();
+		const error = new Error(
+			'SyntaxError: JSON Parse error: Unexpected character: d; targeted recovery failed for log-1: missing-primary-row'
+		);
+
+		await expect(
+			recoverLogsCollectionStorage({ name: 'logs', remove }, error, { reload })
+		).resolves.toBe(true);
+		expect(remove).toHaveBeenCalledTimes(1);
+		expect(globalThis.sessionStorage.getItem('wcpos_logs_storage_recovery_attempted')).toBe('1');
+		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not recover a targeted failure that is not a JSON parse error', async () => {
+		const remove = jest.fn(async () => undefined);
+
+		await expect(
+			recoverLogsCollectionStorage(
+				{ name: 'logs', remove },
+				new Error('targeted recovery refused: multi-instance')
+			)
+		).resolves.toBe(false);
+		expect(remove).not.toHaveBeenCalled();
+	});
+
 	it('does not recover non-log collections', async () => {
 		const remove = jest.fn(async () => undefined);
 		const productsCollection = { name: 'products', remove };
@@ -144,6 +263,30 @@ describe('logs storage recovery', () => {
 			expect.objectContaining({ beforeDrop: expect.any(Function) })
 		);
 		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not reset an engine collection for a targeted JSON failure', async () => {
+		const resetCollection = jest.fn(
+			async (
+				_collection: string,
+				options?: { beforeDrop?: (active: { scopeId: string }) => Promise<void> }
+			) => {
+				await options?.beforeDrop?.({ scopeId: 'store-7' });
+				return 'reset' as const;
+			}
+		);
+		const engine = { active: () => ({ scopeId: 'store-7' }), scope: { resetCollection } };
+		const reload = jest.fn();
+		const error = new Error(
+			'SyntaxError: JSON Parse error: Unexpected character: d; targeted recovery failed for log-1: missing-primary-row'
+		);
+
+		expect(isRecoverableLogsStorageError(error)).toBe(false);
+		await expect(
+			recoverEngineCollectionStorage(engine as never, 'products', error, { reload })
+		).resolves.toBe(false);
+		expect(resetCollection).not.toHaveBeenCalled();
+		expect(reload).not.toHaveBeenCalled();
 	});
 
 	it('keeps recovery guards independent across store scopes', async () => {

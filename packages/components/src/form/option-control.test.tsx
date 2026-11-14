@@ -8,17 +8,11 @@ import { FormProvider, useForm } from 'react-hook-form';
 
 import { FormCombobox } from './combobox';
 import { FormFieldContext } from './context';
-import { FormSelect } from './select';
 
 /**
- * `FormSelect` and `FormCombobox` were near-identical 71-line files that differed only
- * in the control they default to — and where they had silently diverged, on the clear
- * path, it was a real defect (#1501). They now share `FormOptionControl`.
- *
- * This file is what keeps them from drifting apart again: every assertion runs against
- * both, through the `customComponent` seam so the real shared body executes. The
- * clear-path parity from #1501 keeps its own file; what is pinned here is the rest of
- * the shared contract — the scalar/Option conversion and the aria wiring.
+ * `FormCombobox`'s body, `FormOptionControl`, through the `customComponent` seam so the
+ * real body executes: the scalar/Option conversion and the aria wiring. The clear path
+ * (#1501) keeps its own file; `FormSelect` takes the scalar as it is (`select.test.tsx`).
  *
  * `./common` pulls in react-native-reanimated, which this preset does not transform,
  * and the wrappers it exports are purely presentational. The Select/Combobox modules
@@ -37,7 +31,6 @@ jest.mock('./common', () => {
 	};
 });
 
-jest.mock('../select', () => ({ Select: () => null }));
 jest.mock('../combobox', () => ({ Combobox: () => null }));
 
 type ControlProps = {
@@ -91,10 +84,7 @@ function Harness({
 const control = () => screen.getByTestId('control');
 const passedValue = () => JSON.parse(control().getAttribute('data-value') as string);
 
-describe.each([
-	['FormSelect', FormSelect],
-	['FormCombobox', FormCombobox],
-] as const)('%s shared body', (_name, Field) => {
+describe.each([['FormCombobox', FormCombobox]] as const)('%s shared body', (_name, Field) => {
 	it('lifts a scalar field value into an Option for the control', () => {
 		render(<Harness Field={Field} fieldProps={{ value: 'AU' }} />);
 

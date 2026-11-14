@@ -1,0 +1,211 @@
+import type { EngineRecord } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
+
+import { reconcileCompletedOrder, refreshOrderRecord } from './reconcile-completed-order';
+
+type QueryRuntime = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
+
+// Only the stock read is real: the core shim forwards to it, and these cases assert the
+// forced requirements it declares on the runtime's engine.
+jest.mock('@wcpos/query', () => ({
+	refreshStockFor: (...args: unknown[]) =>
+		(jest.requireActual('@wcpos/query') as typeof import('@wcpos/query')).refreshStockFor(
+			...(args as Parameters<typeof import('@wcpos/query').refreshStockFor>)
+		),
+}));
+
+const reduced = {
+	product_id: 12,
+	variation_id: 0,
+	meta_data: [{ key: '_reduced_stock', value: '1' }],
+};
+const variation = {
+	product_id: 13,
+	variation_id: 14,
+	meta_data: [{ key: '_reduced_stock', value: '2' }],
+};
+const untouched = { product_id: 15, variation_id: 0, meta_data: [{ key: 'other' }] };
+
+function setup(id: number | null = 42) {
+	const release = jest.fn();
+	const stockRelease = jest.fn();
+	const requireRefresh = jest
+		.fn()
+		.mockReturnValue({ ready: Promise.resolve(), release: stockRelease });
+	const orderHandle = {
+		ready: Promise.resolve({ action: 'fetched', appliedRecordIds: ['42'] }),
+		release,
+	};
+	requireRefresh.mockReturnValueOnce(orderHandle);
+	const runtime = { engine: { require: requireRefresh } } as unknown as QueryRuntime;
+	const order = {
+		uuid: 'order-42',
+		payload: { id, line_items: [] },
+		getLatest: jest.fn(() => ({
+			payload: {
+				id,
+				line_items: [reduced, variation, untouched, { product_id: 16, variation_id: 0 }],
+			},
+		})),
+	};
+	return {
+		runtime,
+		order: order as unknown as EngineRecord<'orders'>,
+		requireRefresh,
+		orderHandle,
+		release,
+		stockRelease,
+	};
+}
+
+beforeEach(() => {
+	jest.clearAllMocks();
+	jest.useFakeTimers();
+});
+afterEach(() => {
+	jest.clearAllTimers();
+	jest.useRealTimers();
+});
+
+it('force-refreshes and releases the order before refreshing only reduced products and variations', async () => {
+	const c = setup();
+	let ready!: () => void;
+	c.orderHandle.ready = new Promise((resolve) => {
+		ready = () => resolve({ action: 'fetched', appliedRecordIds: ['42'] });
+	});
+	const completion = reconcileCompletedOrder(c.runtime, c.order);
+	expect(c.requireRefresh.mock.calls).toEqual([
+		[
+			{
+				id: 'checkout:order-refresh:42',
+				collection: 'orders',
+				kind: 'targeted-records',
+				remoteIds: ['42'],
+				forceRefresh: true,
+			},
+		],
+	]);
+	expect(c.order.getLatest).toHaveBeenCalledTimes(1);
+	ready();
+	await expect(completion).resolves.toBe('refreshed');
+	expect(c.order.getLatest).toHaveBeenCalledTimes(2);
+	expect(c.release).toHaveBeenCalledTimes(1);
+	expect(c.release.mock.invocationCallOrder[0]).toBeLessThan(
+		c.requireRefresh.mock.invocationCallOrder[1]
+	);
+	expect(c.requireRefresh.mock.calls.slice(1)).toEqual([
+		[
+			{
+				id: 'stock-adjustment:products:12',
+				collection: 'products',
+				kind: 'targeted-records',
+				remoteIds: ['12'],
+				forceRefresh: true,
+			},
+		],
+		[
+			{
+				id: 'stock-adjustment:variations:14',
+				collection: 'variations',
+				kind: 'targeted-records',
+				remoteIds: ['14'],
+				forceRefresh: true,
+			},
+		],
+	]);
+	expect(c.stockRelease).toHaveBeenCalledTimes(2);
+	expect(jest.getTimerCount()).toBe(0);
+});
+
+it('degrades after ten seconds and still refreshes reduced stock from the local record', async () => {
+	const c = setup();
+	c.orderHandle.ready = new Promise(() => undefined);
+	const completion = reconcileCompletedOrder(c.runtime, c.order);
+	await jest.advanceTimersByTimeAsync(9_999);
+	expect(c.requireRefresh).toHaveBeenCalledTimes(1);
+	await jest.advanceTimersByTimeAsync(1);
+	await expect(completion).resolves.toBe('timed-out');
+	expect(c.release).toHaveBeenCalledTimes(1);
+	expect(c.requireRefresh).toHaveBeenCalledTimes(3);
+	expect(c.stockRelease).toHaveBeenCalledTimes(2);
+});
+
+it('records a recovered arc when the refresh never answers within its bound', async () => {
+	const c = setup();
+	// A store that never answers used to look exactly like one that answered instantly:
+	// the race resolved on the timer and completion carried on with no row at all.
+	c.orderHandle.ready = new Promise(() => {});
+	const completion = reconcileCompletedOrder(c.runtime, c.order);
+	await jest.advanceTimersByTimeAsync(10_000);
+	await completion;
+	expect(getLogger(['wcpos', 'pos', 'checkout']).debug).toHaveBeenCalledWith(
+		'Post-payment order refresh timed out; completing from the local record',
+		expect.objectContaining({
+			terminal: expect.objectContaining({ outcome: 'recovered' }),
+			context: expect.objectContaining({ orderId: 'order-42', timeoutMs: 10_000 }),
+		})
+	);
+	expect(c.release).toHaveBeenCalledTimes(1);
+	expect(c.stockRelease).toHaveBeenCalledTimes(2);
+});
+
+it('records a recovered arc on rejected readiness and still refreshes reduced stock', async () => {
+	const c = setup();
+	c.orderHandle.ready = Promise.reject(new Error('network unavailable'));
+	await expect(reconcileCompletedOrder(c.runtime, c.order)).resolves.toBe('failed');
+	// The sale completed from the local record, so per LEVELS.md this arc recovered —
+	// warning here told the merchant something was broken when nothing was.
+	expect(getLogger(['wcpos', 'pos', 'checkout']).warn).not.toHaveBeenCalled();
+	expect(getLogger(['wcpos', 'pos', 'checkout']).debug).toHaveBeenCalledWith(
+		'Post-payment order refresh failed; completing from the local record',
+		expect.objectContaining({
+			terminal: expect.objectContaining({ outcome: 'recovered' }),
+			context: expect.objectContaining({ orderId: 'order-42', error: 'network unavailable' }),
+		})
+	);
+	expect(c.release).toHaveBeenCalledTimes(1);
+	expect(c.requireRefresh).toHaveBeenCalledTimes(3);
+	expect(c.stockRelease).toHaveBeenCalledTimes(2);
+	expect(jest.getTimerCount()).toBe(0);
+});
+
+it('rejects refresh for an unpersisted order without adjusting stock', async () => {
+	const c = setup(null);
+	await expect(reconcileCompletedOrder(c.runtime, c.order)).rejects.toThrow(
+		'checkout_refresh_requires_persisted_order'
+	);
+	expect(c.requireRefresh).not.toHaveBeenCalled();
+});
+
+it('propagates synchronous refresh admission failure without adjusting stock', async () => {
+	const c = setup();
+	const error = new Error('engine_disposed');
+	c.requireRefresh.mockReset().mockImplementation(() => {
+		throw error;
+	});
+	const adjustStock = jest.fn();
+	expect(() => refreshOrderRecord(c.runtime, 42)).toThrow(error);
+	await expect(reconcileCompletedOrder(c.runtime, c.order, true, adjustStock)).rejects.toBe(error);
+	expect(adjustStock).not.toHaveBeenCalled();
+	expect(c.release).not.toHaveBeenCalled();
+	expect(jest.getTimerCount()).toBe(0);
+});
+
+it('skips the order refresh but still adjusts local stock when refresh is false', async () => {
+	const c = setup(null);
+	await expect(reconcileCompletedOrder(c.runtime, c.order, false)).resolves.toBe('skipped');
+	expect(c.requireRefresh.mock.calls.map(([requirement]) => requirement.collection)).toEqual([
+		'products',
+		'variations',
+	]);
+});
+
+it('uses the persisted id from the latest resident rather than an old unpersisted snapshot', async () => {
+	const c = setup();
+	const stale = {
+		...c.order,
+		payload: { ...c.order.payload, id: undefined },
+	} as EngineRecord<'orders'>;
+	await reconcileCompletedOrder(c.runtime, stale);
+	expect(c.requireRefresh.mock.calls[0][0].remoteIds).toEqual(['42']);
+});

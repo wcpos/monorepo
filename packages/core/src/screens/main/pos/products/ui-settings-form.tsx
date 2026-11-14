@@ -2,27 +2,37 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'expo-router';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button, ButtonText } from '@wcpos/components/button';
+import { useDialog } from '@wcpos/components/dialog';
 import { DocsLink } from '@wcpos/components/docs-link';
-import { Form, FormField, FormSwitch, useFormChangeHandler } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
 import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+	Form,
+	FormDescription,
+	FormField,
+	FormItem,
+	FormLabel,
+	FormSegmentedControl,
+	FormSelect,
+	FormSwitch,
+	useFormChangeHandler,
+} from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { ListRow } from '@wcpos/components/list-row';
+import { SectionHeading } from '@wcpos/components/section-heading';
 import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
 import { MetaDataKeysField } from './meta-data-keys-field';
+import { type BrowseBy, readBrowseBy } from './browse/browse-source';
+import { useBrowseCounts } from './browse/use-browse-terms';
+import { SORT_FIELD_VALUES } from './filter-bar/filter-bar-layout';
 import { useT } from '../../../../contexts/translations';
 import {
 	columnsFormSchema,
@@ -45,6 +55,8 @@ const gridFieldsSchema = z.object({
 
 export const schema = z.object({
 	viewMode: z.enum(['grid', 'table']),
+	variationsStyle: z.enum(['drill', 'inline']).optional(),
+	browseBy: z.enum(['all', 'categories', 'tags', 'brands', 'shortcuts']).optional(),
 	showOutOfStock: z.boolean(),
 	sortBy: z.string(),
 	sortDirection: z.enum(['asc', 'desc']),
@@ -53,24 +65,6 @@ export const schema = z.object({
 	gridColumns: z.number().min(2).max(8),
 	gridFields: gridFieldsSchema,
 });
-
-/**
- * Sortable product fields, stored as the underlying DB field name.
- * These choices order the locally synced window. Server-side ordering applies
- * only to fields that have a wire `orderby` mapping.
- */
-const SORT_FIELD_VALUES = [
-	'name',
-	'sku',
-	'barcode',
-	'sortable_price',
-	'date_created_gmt',
-	'date_modified_gmt',
-	'total_sales',
-	'stock_quantity',
-	'stock_status',
-	'menu_order',
-] as const;
 
 const META_DATA_KEYS_DOCS_URL = 'https://docs.wcpos.com/pos/product-panel/meta-data-keys';
 
@@ -82,6 +76,8 @@ export function UISettingsForm() {
 	const formData = useDocField(uiSettings, (value) => value) as unknown as z.infer<typeof schema>;
 	const { setButtonPressHandler } = useDialogContext();
 	const t = useT();
+	const router = useRouter();
+	const { close } = useDialog();
 
 	/**
 	 *
@@ -114,44 +110,62 @@ export function UISettingsForm() {
 				<VStack>
 					<FormField
 						control={form.control}
-						name="showOutOfStock"
-						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
+						name="viewMode"
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={getUILabel('viewMode')}
+								testID="view-mode"
+								segments={[
+									{ value: 'grid', label: t('common.grid') },
+									{ value: 'table', label: t('common.table') },
+								]}
+							/>
+						)}
+					/>
+					{viewMode === 'grid' ? (
+						<FormField
+							control={form.control}
+							name="gridColumns"
+							render={({ field }) => (
+								<FormItem>
+									<HStack className="items-center justify-between">
+										<FormLabel>{getUILabel('gridColumns')}</FormLabel>
+										<Text className="text-muted-foreground">{field.value}</Text>
+									</HStack>
+									<Slider
+										value={field.value}
+										onValueChange={field.onChange}
+										min={2}
+										max={8}
+										step={1}
+									/>
+								</FormItem>
+							)}
+						/>
+					) : null}
+					<FormField
+						control={form.control}
+						name="browseBy"
+						render={({ field: { value, onChange } }) => (
+							<BrowseByField value={readBrowseBy(value)} onChange={onChange} />
+						)}
 					/>
 					<FormField
 						control={form.control}
-						name="viewMode"
-						render={({ field: { value, onChange } }) => (
-							<View className="gap-1 px-1">
-								<Text>{getUILabel('viewMode')}</Text>
-								<Select
-									value={{
-										value,
-										label: value === 'grid' ? t('common.grid') : t('common.table'),
-									}}
-									onValueChange={(val) => onChange(val?.value || 'table')}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder={getUILabel('viewMode')} />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectGroup>
-											<SelectItem label={t('common.grid')} value="grid" />
-											<SelectItem label={t('common.table')} value="table" />
-										</SelectGroup>
-									</SelectContent>
-								</Select>
-							</View>
-						)}
+						name="showOutOfStock"
+						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
 					/>
 					<HStack className="items-end px-1">
 						<FormField
 							control={form.control}
 							name="sortBy"
-							render={({ field: { value, onChange } }) => {
+							render={({ field }) => {
 								const sortLabels: Record<string, string> = {
 									name: t('common.name'),
 									sku: t('common.sku'),
 									barcode: t('common.barcode'),
+									type: t('common.type'),
 									sortable_price: t('common.price'),
 									date_created_gmt: t('common.date_created'),
 									date_modified_gmt: t('common.date_modified'),
@@ -161,23 +175,13 @@ export function UISettingsForm() {
 									menu_order: t('common.menu_order'),
 								};
 								return (
-									<View className="flex-1 gap-1">
-										<Text>{getUILabel('sortBy')}</Text>
-										<Select
-											value={{ value, label: sortLabels[value] ?? value }}
-											onValueChange={(val) => onChange(val?.value || 'name')}
-										>
-											<SelectTrigger>
-												<SelectValue placeholder={getUILabel('sortBy')} />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectGroup>
-													{SORT_FIELD_VALUES.map((v) => (
-														<SelectItem key={v} label={sortLabels[v]} value={v} />
-													))}
-												</SelectGroup>
-											</SelectContent>
-										</Select>
+									<View className="flex-1">
+										<FormSelect
+											{...field}
+											label={getUILabel('sortBy')}
+											options={SORT_FIELD_VALUES.map((v) => ({ value: v, label: sortLabels[v] }))}
+											placeholder={getUILabel('sortBy')}
+										/>
 									</View>
 								);
 							}}
@@ -185,93 +189,188 @@ export function UISettingsForm() {
 						<FormField
 							control={form.control}
 							name="sortDirection"
-							render={({ field: { value, onChange } }) => (
-								<View className="gap-1">
-									<Text>{getUILabel('sortDirection')}</Text>
-									<ToggleGroup
-										type="single"
-										value={value}
-										onValueChange={(val) => onChange(val || value)}
-									>
-										<ToggleGroupItem value="asc" testID="sort-direction-asc">
-											<Text>{t('common.ascending')}</Text>
-										</ToggleGroupItem>
-										<ToggleGroupItem value="desc" testID="sort-direction-desc">
-											<Text>{t('common.descending')}</Text>
-										</ToggleGroupItem>
-									</ToggleGroup>
-								</View>
+							render={({ field }) => (
+								<FormSegmentedControl
+									{...field}
+									label={getUILabel('sortDirection')}
+									testID="sort-direction"
+									segments={[
+										{ value: 'asc', label: t('common.ascending') },
+										{ value: 'desc', label: t('common.descending') },
+									]}
+								/>
 							)}
 						/>
 					</HStack>
-					{viewMode === 'grid' ? (
-						<VStack>
-							<FormField
-								control={form.control}
-								name="gridColumns"
-								render={({ field }) => (
-									<View className="gap-2 px-1">
-										<HStack className="items-center justify-between">
-											<Text>{getUILabel('gridColumns')}</Text>
-											<Text className="text-muted-foreground">{field.value}</Text>
-										</HStack>
-										<Slider
-											value={field.value}
-											onValueChange={field.onChange}
-											min={2}
-											max={8}
-											step={1}
-										/>
-									</View>
-								)}
+					<FormField
+						control={form.control}
+						name="variationsStyle"
+						render={({ field }) => (
+							<FormSegmentedControl
+								{...field}
+								label={t('pos_products.variations_style')}
+								testID="products-variations-style"
+								value={field.value ?? 'drill'}
+								segments={[
+									{ value: 'drill', label: t('pos_products.variations_open_in_place') },
+									{
+										value: 'inline',
+										// What the inline style does in the view the form is set to: a popover on
+										// a tile, expanded rows under a table row.
+										label:
+											viewMode === 'grid'
+												? t('pos_products.variations_popover')
+												: t('pos_products.variations_expanded_rows'),
+									},
+								]}
 							/>
-							<View className="gap-2 px-1 pt-2">
-								<Text className="font-medium">{t('common.tile_fields')}</Text>
-								{(
-									[
-										'name',
-										'price',
-										'tax',
-										'on_sale',
-										'category',
-										'sku',
-										'barcode',
-										'stock_quantity',
-										'cost_of_goods_sold',
-									] as const
-								).map((fieldKey) => (
-									<FormField
-										key={fieldKey}
-										control={form.control}
-										name={`gridFields.${fieldKey}`}
-										render={({ field }) => <FormSwitch label={getUILabel(fieldKey)} {...field} />}
-									/>
-								))}
-							</View>
-						</VStack>
+						)}
+					/>
+					{viewMode === 'grid' ? (
+						<View className="gap-2 px-1 pt-2">
+							<SectionHeading title={t('common.tile_fields')} />
+							{(
+								[
+									'name',
+									'price',
+									'tax',
+									'on_sale',
+									'category',
+									'sku',
+									'barcode',
+									'stock_quantity',
+									'cost_of_goods_sold',
+								] as const
+							).map((fieldKey) => (
+								<FormField
+									key={fieldKey}
+									control={form.control}
+									name={`gridFields.${fieldKey}`}
+									render={({ field }) => <FormSwitch label={getUILabel(fieldKey)} {...field} />}
+								/>
+							))}
+						</View>
 					) : (
 						<UISettingsColumnsForm getUILabel={getUILabel} />
 					)}
-					<View className="gap-1 px-1">
-						<HStack className="items-center justify-between">
-							<Text>{getUILabel('metaDataKeys')}</Text>
-							<DocsLink testID="meta-data-keys-docs-link" href={META_DATA_KEYS_DOCS_URL}>
-								{t('common.learn_more')}
-							</DocsLink>
-						</HStack>
-						<FormField
-							control={form.control}
-							name="metaDataKeys"
-							render={({ field }) => (
+					<FormField
+						control={form.control}
+						name="metaDataKeys"
+						render={({ field }) => (
+							<FormItem>
+								<HStack className="items-center justify-between">
+									<FormLabel>{getUILabel('metaDataKeys')}</FormLabel>
+									<DocsLink testID="meta-data-keys-docs-link" href={META_DATA_KEYS_DOCS_URL}>
+										{t('common.learn_more')}
+									</DocsLink>
+								</HStack>
 								<MetaDataKeysField value={field.value} onChange={field.onChange} />
-							)}
+								<FormDescription>{t('pos_products.meta_data_keys_description')}</FormDescription>
+							</FormItem>
+						)}
+					/>
+					<View className="gap-2 px-1 pt-2">
+						<SectionHeading
+							title={getUILabel('filterBar')}
+							description={t('pos_products.filter_bar_description')}
 						/>
-						<Text className="text-muted-foreground text-sm">
-							{t('pos_products.meta_data_keys_description')}
-						</Text>
+						<Button
+							variant="outline"
+							testID="customize-filter-bar"
+							onPress={() => {
+								close();
+								router.push('/(app)/(modals)/filter-bar');
+							}}
+						>
+							<ButtonText>{t('pos_products.customize_filter_bar')}</ButtonText>
+						</Button>
 					</View>
 				</VStack>
 			</Form>
 		</VStack>
+	);
+}
+
+/**
+ * Browse by: a radio list, not a segmented control — five labels do not fit a segment row in
+ * German. Each source shows how many terms it would put on the stage; one that has answered
+ * empty is dimmed and says why.
+ */
+function BrowseByField({
+	value,
+	onChange,
+}: {
+	value: BrowseBy;
+	onChange: (value: BrowseBy) => void;
+}) {
+	const t = useT();
+	const counts = useBrowseCounts();
+	const rows: { value: BrowseBy; label: string; countLabel?: string; empty?: string }[] = [
+		{ value: 'all', label: t('pos_products.browse_all_products') },
+		{
+			value: 'categories',
+			label: t('pos_products.browse_categories'),
+			countLabel: t('pos_products.n_categories', { count: counts.categories }),
+			empty: t('pos_products.no_categories_yet'),
+		},
+		{
+			value: 'tags',
+			label: t('pos_products.browse_tags'),
+			countLabel: t('pos_products.n_tags', { count: counts.tags }),
+			empty: t('pos_products.no_tags_yet'),
+		},
+		{
+			value: 'brands',
+			label: t('pos_products.browse_brands'),
+			countLabel: t('pos_products.n_brands', { count: counts.brands }),
+			empty: t('pos_products.no_brands_yet'),
+		},
+		{
+			value: 'shortcuts',
+			label: t('pos_products.browse_shortcuts'),
+			countLabel: t('pos_products.n_quick_filters', { count: counts.shortcuts }),
+			empty: t('pos_products.no_shortcuts_yet'),
+		},
+	];
+	return (
+		<FormItem>
+			<FormLabel>{t('pos_products.browse_by')}</FormLabel>
+			<View
+				role="radiogroup"
+				aria-label={t('pos_products.browse_by')}
+				className="border-border overflow-hidden rounded-lg border"
+			>
+				{rows.map((row) => {
+					// Dimmed only once the source has answered empty; a loading source is still a choice.
+					const count = row.value === 'all' ? undefined : counts[row.value];
+					const disabled = count === 0;
+					const on = row.value === value;
+					return (
+						// `role`/`aria-*`, not `accessibilityState`: react-native-web drops the
+						// latter, so the web build would lose checked and disabled (as SegmentedControl).
+						<ListRow
+							key={row.value}
+							size="sm"
+							selected={on}
+							disabled={disabled}
+							role="radio"
+							aria-checked={on}
+							aria-disabled={disabled}
+							onPress={() => onChange(row.value)}
+							className="gap-2 last:border-b-0"
+							testID={`ui-settings-browse-by-${row.value}`}
+							leading={<Icon name="check" className={on ? 'text-primary' : 'opacity-0'} />}
+							trailing={
+								<Text variant="help">
+									{disabled ? row.empty : count === undefined ? '' : row.countLabel}
+								</Text>
+							}
+						>
+							<Text>{row.label}</Text>
+						</ListRow>
+					);
+				})}
+			</View>
+		</FormItem>
 	);
 }

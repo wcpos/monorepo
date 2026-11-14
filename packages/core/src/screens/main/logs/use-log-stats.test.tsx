@@ -9,21 +9,8 @@ import { useLogStats } from './use-log-stats';
 const mockCount = jest.fn();
 const mockFind = jest.fn();
 const mockLogsCollection = { count: mockCount, find: mockFind };
-// ONE observable for the module's lifetime. A factory minting a fresh `of()` per
-// render would hand `useLogStats` a new dependency every time and spin its memo
-// into a resubscribe loop — the real hook memoizes, and the stand-in must too.
-const mockLogsCollection$ = of(mockLogsCollection);
-
-jest.mock('@wcpos/query', () => ({
-	// The hook reads the collection through `useLocalCollection$` so it follows an
-	// in-place replacement; the stand-in is the same collection as a one-shot
-	// observable. `useLocalCollection$`'s own following behaviour is covered in
-	// packages/query — this suite is about the stats derived from what it hands over.
-	useLocalCollection$: () => mockLogsCollection$,
-	useQueryRuntime: () => ({
-		localDB: { collections: { logs: mockLogsCollection } },
-	}),
-}));
+const mockStoreDB = { collections: { logs: mockLogsCollection } };
+jest.mock('../../../contexts/app-state', () => ({ useAppState: () => ({ storeDB: mockStoreDB }) }));
 
 describe('useLogStats', () => {
 	beforeEach(() => {
@@ -32,18 +19,30 @@ describe('useLogStats', () => {
 		mockFind.mockReturnValue({ $: of([]) });
 	});
 
-	it('bounds the newest sync outcomes before deriving stuck records', async () => {
+	it('bounds the newest record outcomes in the sync and money domains before deriving stuck records', async () => {
 		renderHook(() => useLogStats());
 
-		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(2));
-		expect(mockFind).toHaveBeenCalledWith({
-			selector: {
-				category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' },
-				operationType: { $eq: 'sync.record' },
-			},
-			sort: [{ timestamp: 'desc' }],
-			limit: 5_000,
-		});
+		// Four stuck-record range scans (sync, payments, checkout, terminal-payments)
+		// plus the clock-skew query. A refused payment is written under
+		// `wcpos.payments`, and scanning only the sync range is why a till could lose
+		// one and still report 0 stuck. Each scan is row-capped so an escalation storm
+		// cannot materialize all of retention.
+		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(5));
+		for (const domain of [
+			'wcpos.sync',
+			'wcpos.payments',
+			'wcpos.checkout',
+			'wcpos.terminal-payments',
+		]) {
+			expect(mockFind).toHaveBeenCalledWith({
+				selector: {
+					category: { $gte: domain, $lt: `${domain}/` },
+					operationType: { $eq: 'sync.record' },
+				},
+				sort: [{ timestamp: 'desc' }],
+				limit: 5_000,
+			});
+		}
 	});
 
 	it('derives the clock-skew warning from engine warn rows', async () => {

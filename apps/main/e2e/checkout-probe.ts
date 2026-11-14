@@ -7,26 +7,32 @@ import {
 	type WorkerInfo,
 } from '@playwright/test';
 
-import { authenticatedTest, type StoreAuthorization, tryAddProductBySku } from './fixtures';
+import { log } from '@wcpos/utils/logger';
+
+import { authenticatedTest, ensureRegisterOpen, tryAddProductBySku } from './fixtures';
 import {
 	createRunPrivateProduct,
 	createVariationMatrixProduct,
 	deleteSearchProbe,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
+	renewProductWriterIfExpiring,
 	type RunPrivateProductProbe,
 	searchAndWaitForServer,
 	type SearchProbe,
 	sweepOrphanedProductProbes,
 	type VariationMatrixProbe,
+	type WriterAuthorization,
 } from './search-probe';
 
 import type { WcposTestOptions } from '../playwright.config';
 
 type ProductProbeWorkerFixtures = {
 	productProbeRequest: APIRequestContext;
-	productWriter: StoreAuthorization | null;
+	productWriter: WriterAuthorization | null;
 };
+
+type ProductWriterRenewalFixtures = { productWriterRenewal: void };
 
 type SimpleProductProbeWorkerFixtures = {
 	runPrivateSimpleProducts: SearchProbe[] | null;
@@ -52,12 +58,24 @@ export function workerStoreUrl(workerInfo: WorkerInfo): string {
 	return (workerInfo.project.use as WcposTestOptions).storeUrl || 'https://dev-free.wcpos.com';
 }
 
+async function renewWriterForTeardown(
+	request: APIRequestContext,
+	storeUrl: string,
+	writer: WriterAuthorization
+): Promise<void> {
+	try {
+		await renewProductWriterIfExpiring(request, storeUrl, writer);
+	} catch {
+		log.warn('[checkout-probe] writer renewal before teardown failed');
+	}
+}
+
 /**
  * Worker-private products are reused by that worker's serial test executions,
  * but their random tokens keep concurrent workers and CI runs disjoint.
  */
 const productProbeTest = authenticatedTest.extend<
-	ProductProbeTestFixtures,
+	ProductWriterRenewalFixtures,
 	ProductProbeWorkerFixtures
 >({
 	productProbeRequest: [
@@ -87,6 +105,9 @@ const productProbeTest = authenticatedTest.extend<
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
 				await use(writer);
 			} finally {
+				if (writer) {
+					await renewWriterForTeardown(productProbeRequest, workerStoreUrl(workerInfo), writer);
+				}
 				await sweepOrphanedProductProbes({
 					request: productProbeRequest,
 					storeUrl: workerStoreUrl(workerInfo),
@@ -95,6 +116,20 @@ const productProbeTest = authenticatedTest.extend<
 			}
 		},
 		{ scope: 'worker' },
+	],
+	// Renew the worker's writer before each test so none starts with less than WRITER_RENEW_MARGIN_MS of life.
+	productWriterRenewal: [
+		async ({ productProbeRequest, productWriter }, use, testInfo) => {
+			if (productWriter) {
+				await renewProductWriterIfExpiring(
+					productProbeRequest,
+					workerStoreUrl(testInfo),
+					productWriter
+				);
+			}
+			await use();
+		},
+		{ auto: true },
 	],
 });
 
@@ -125,6 +160,11 @@ export const isolatedProductTest = productProbeTest.extend<
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
 				await use(probes);
 			} finally {
+				await renewWriterForTeardown(
+					productProbeRequest,
+					workerStoreUrl(workerInfo),
+					productWriter
+				);
 				for (const probe of probes) {
 					await deleteSearchProbe({
 						request: productProbeRequest,
@@ -171,6 +211,11 @@ export const isolatedVariableProductTest = productProbeTest.extend<
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
 				await use(probe);
 			} finally {
+				await renewWriterForTeardown(
+					productProbeRequest,
+					workerStoreUrl(workerInfo),
+					productWriter
+				);
 				await deleteSearchProbe({
 					request: productProbeRequest,
 					storeUrl: workerStoreUrl(workerInfo),
@@ -217,6 +262,11 @@ export const isolatedVariationMatrixTest = productProbeTest.extend<
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
 				await use(probe);
 			} finally {
+				await renewWriterForTeardown(
+					productProbeRequest,
+					workerStoreUrl(workerInfo),
+					productWriter
+				);
 				await deleteSearchProbe({
 					request: productProbeRequest,
 					storeUrl: workerStoreUrl(workerInfo),
@@ -273,6 +323,7 @@ export async function tryAddRunPrivateSimpleProduct(page: Page, index = 0): Prom
 			'tryAddRunPrivateSimpleProduct requires isolatedProductTest fixture registration'
 		);
 	}
+	await ensureRegisterOpen(page);
 	const probe = probes?.[index] ?? null;
 	if (probe) {
 		if (!probe.rowTestId) {
@@ -349,11 +400,23 @@ export async function addCheckoutProbeProductAgain(page: Page): Promise<void> {
 			'addCheckoutProbeProductAgain requires isolatedProductTest fixture registration'
 		);
 	}
+	await ensureRegisterOpen(page);
 	const probe = probes?.[0] ?? null;
 	if (probe && probe.rowTestId) {
 		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
 		const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
 		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
+		// A new order starts on the unfiltered grid, where a run-private probe is one row in
+		// hundreds: search for it again (measured live 2026-09-18). The first add already
+		// satisfied this demand, so the engine may answer locally with no wire request: the
+		// rendered row stands in for the response (`localResult`), as the helper documents.
+		await searchAndWaitForServer(
+			page,
+			page.getByTestId('search-products'),
+			'products',
+			probe.token,
+			tile.or(tableButton).first()
+		);
 		await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
 		if (await tile.isVisible()) await tile.click();
 		else await tableButton.click();

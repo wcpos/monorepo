@@ -1,0 +1,428 @@
+import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
+import { log } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { isFinalPaymentStatus } from '@wcpos/order-math';
+import type { PaymentRefusalBody, PaymentRow } from '@wcpos/order-math';
+
+import { legFinality, RETIRE_RETRY_MS, terminalBeforeSend } from '../leg-finality';
+
+import type {
+	CollectInput,
+	CollectResult,
+	PaymentDriver,
+} from '../../../../../../services/payment-drivers/types';
+import type { ServerLegDeps, ServerLegResponse, ServerLegState } from '../server/server-leg';
+
+export type DeviceLegState = Omit<ServerLegState, 'phase'> & {
+	phase: 'idle' | 'creating' | 'collecting' | 'confirming' | 'capturing' | 'final';
+	cancelOnDevice: boolean;
+	resumed: boolean;
+	failureReason: string | null;
+};
+type Outcome = DeviceLegState['outcome'];
+export type DeviceLegInput = Omit<CollectInput, 'handoff' | 'method'> & {
+	orderId: number;
+	resume: boolean;
+	method?: CollectInput['method'];
+};
+export type DeviceLegDeps = Omit<ServerLegDeps, 'onFinal'> & {
+	driver: PaymentDriver | undefined;
+	onFinal?: (state: DeviceLegState) => void;
+	/** The till is in another cashier's scope: a reader result waits for the leg's own. */
+	outOfScope?: () => boolean;
+};
+// How long a device leg waits for a card before the till gives up. A Bluetooth reader waits
+// forever on its own; the cashier can always cancel sooner. Two minutes covers a customer digging
+// for a card and clears a forgotten sale before the next one (Paul, 2026-10-07; was 5 minutes).
+export const DEVICE_LEG_DEADLINE_MS = 120000;
+// When the SDK refuses a cancel, either the reader already has the card and is confirming (a
+// result is seconds away) or the SDK was re-initialised under the leg and nothing will ever
+// come. This is how long the leg waits for that result before treating the reader as gone.
+export const CANCEL_GRACE_MS = 30000;
+/** Offline rows must satisfy the ledger wire contract, not silently drop opaque refs. */
+export function offlineProviderRefs(refs: Record<string, unknown>): PaymentRow['provider_refs'] {
+	const result: PaymentRow['provider_refs'] = {};
+	for (const [key, value] of Object.entries(refs)) {
+		if (value !== null && typeof value !== 'string')
+			throw new Error('Invalid offline provider reference');
+		result[key] = value;
+	}
+	return result;
+}
+export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
+	let state: DeviceLegState = {
+		phase: 'idle',
+		intentId: input.row.id,
+		row: input.row,
+		outcome: null,
+		cancelRequested: false,
+		resumed: input.resume,
+		failureReason: null,
+		cancelOnDevice: deps.driver?.capabilities.cancel === 'on_device',
+		releaseAvailable: false,
+		unstable: false,
+		consecutiveErrors: 0,
+		deadlineAt: 0,
+		deadlineHandled: false,
+		capturing: false,
+		captureFailed: false,
+		error: null,
+		clientEvents: [],
+	};
+	const listeners = new Set<() => void>();
+	let stopped = false;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let graceTimer: ReturnType<typeof setTimeout> | undefined;
+	// The live-tab hold taken around collect(); released on finality as well as when collect
+	// settles, because a leg the cancel path ends may outlive a collect that never answers.
+	let collectHold: (() => void) | undefined;
+	let result: CollectResult | null = null;
+	let inFlight = false;
+	let cancelReason = 'cashier';
+	// The store refused to mint the intent: a void that follows is bookkeeping, not an outcome.
+	let intentRefused = false;
+	const active = () => !stopped && !finality.settling && state.phase !== 'final';
+	const set = (changes: Partial<DeviceLegState>) => {
+		state = { ...state, ...changes };
+		listeners.forEach((fn) => fn());
+	};
+	const finality = legFinality(deps, () => (stopped ? null : state), set);
+	const finish = async (outcome: Outcome, changes: Partial<DeviceLegState> = {}) => {
+		if (!active()) return;
+		deps.clearTimeout(timer!);
+		if (!(await finality.settle())) return;
+		set({ ...changes, phase: 'final', outcome, capturing: false });
+		collectHold?.();
+		collectHold = undefined;
+		deps.onFinal?.(state);
+	};
+	const errorState = (error: unknown) => {
+		const body = (error as { response?: { data?: PaymentRefusalBody } })?.response?.data;
+		const detail = body?.data?.detail as { code?: string; message?: string } | undefined;
+		set({
+			error: {
+				code: detail?.code ?? body?.code ?? 'device_error',
+				message:
+					detail?.message ??
+					body?.message ??
+					(error instanceof Error ? error.message : 'Payment failed'),
+			},
+		});
+		return body;
+	};
+	const apply = async (response: ServerLegResponse) => {
+		if (!active()) return;
+		// Keep the server's outcome even if RxDB cannot mirror it; never recollect money.
+		try {
+			await deps.mirror(response);
+		} catch (error) {
+			if (active()) errorState(error);
+		}
+		if (!active()) return;
+		const changes = { row: response.payment, ...(response.order ? { order: response.order } : {}) };
+		const status = response.payment.status;
+		// Publish finality with the mirrored row, not after returning through another await:
+		// checkout can unmount when the paid row lands, before it consumes the outcome.
+		if (isFinalPaymentStatus(status)) {
+			await finish(
+				status === 'voided' && (result?.outcome === 'declined' || intentRefused)
+					? 'failed'
+					: status,
+				changes
+			);
+		} else set(changes);
+	};
+	const url = (route: string) => `orders/${input.orderId}/payments/${input.row.id}/${route}`;
+	/** Read the store's row; true when it was final and the leg has finished on it. */
+	const settledOnStore = async () => {
+		try {
+			const response = await deps.get(url('status'));
+			await apply(response.data as ServerLegResponse);
+		} catch {
+			return false;
+		}
+		return !active();
+	};
+	async function confirm() {
+		if (!active() || inFlight || (state.phase === 'collecting' && !result)) return;
+		// Every command is bound to the leg's own scope (4333445290 on #2798): a reader result that
+		// lands in another one stays collecting until the service confirms it there (4343940257).
+		if (deps.outOfScope?.()) return;
+		inFlight = true;
+		set({
+			phase: 'confirming',
+			capturing: true,
+			captureFailed: false,
+			error: null,
+			// A reader-side cancel (the SDK's CANCELED, the Tap to Pay screen closed) carries no
+			// reason from any driver; it is named here so the view keeps the mark on the terminal
+			// step while the void confirms, as it does for a cashier cancel and a time-out.
+			failureReason:
+				result?.failure_reason ?? (result?.outcome === 'cancelled' ? 'cancelled' : null),
+		});
+		try {
+			if (input.resume && input.row.status === 'authorized') {
+				const response = state.cancelRequested
+					? await deps.post(url('void'), { reason: cancelReason })
+					: await deps.get(url('status'));
+				await apply(response.data as ServerLegResponse);
+				if (!active()) return;
+				throw new Error('Payment is not final on the store');
+			} else if (input.resume) {
+				// A pending row the till minted online may already be settled on the store: the
+				// provider's webhook can land before the till's own capture. Ask the store before
+				// calling the session lost; an unreachable store leaves the answer below. A row
+				// recorded offline has no store row to ask.
+				if (!state.row.recorded_offline && (await settledOnStore())) return;
+				const lost = {
+					t: new Date(deps.now()).toISOString(),
+					level: 'error' as const,
+					message: 'Reader session was lost',
+				};
+				const row: PaymentRow = {
+					...state.row,
+					status: 'failed',
+					failure_reason: 'reader_session_lost',
+					events: [...(state.row.events ?? []), lost],
+				};
+				// A failed local write must not let dismissal immediately resume the pending row.
+				await deps.mirror({ payment: row });
+				if (active()) {
+					set({ row });
+					await finish('failed');
+				}
+			} else {
+				if (result?.outcome === 'declined') {
+					// Let the provider report its failure before voiding a still-live intent.
+					const response = await deps.get(url('status'));
+					await apply(response.data as ServerLegResponse);
+					if (!active()) return;
+				}
+				const success = result?.outcome === 'captured' || result?.outcome === 'authorized';
+				set({ phase: success ? 'capturing' : 'confirming' });
+				let response: { data: unknown };
+				const release = success ? holdLiveTab('payment') : undefined;
+				try {
+					response = await deps.post(
+						url(success ? 'capture' : 'void'),
+						success && result
+							? {
+									context: {
+										provider_refs: result.provider_refs,
+										receipt: result.receipt,
+										transport: result.transport,
+										amount: result.amount,
+									},
+								}
+							: {
+									// A reader time-out (its own collect window ran out) voids as `timed_out`:
+									// nobody at the till cancelled it. A cancel already requested at the till
+									// (or its deadline) wins over a time-out that lands at the same moment.
+									reason:
+										result?.outcome === 'declined'
+											? (result.failure_reason ?? 'card_declined')
+											: result?.failure_reason === 'timed_out' && !state.cancelRequested
+												? 'timed_out'
+												: cancelReason,
+								}
+					);
+				} finally {
+					release?.();
+				}
+				await apply(response.data as ServerLegResponse);
+				if (!active()) return;
+				throw new Error('Payment is not final on the store');
+			}
+		} catch (error) {
+			if (!active()) return;
+			if (error instanceof LiveTabNotOwnedError) {
+				stop();
+				log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+				return;
+			}
+			const body = errorState(error);
+			if (body?.data?.payment) {
+				await apply({ payment: body.data.payment, order: body.data.order });
+				if (!active()) return;
+			} else if (body?.code === 'wcpos_invalid_transition' && (await settledOnStore())) {
+				// The store refused the capture as a repeat: the webhook settled the row first,
+				// and its answer is on the status route, not in the refusal.
+				return;
+			}
+			set({ captureFailed: true, capturing: false });
+		} finally {
+			inFlight = false;
+		}
+	}
+	async function start() {
+		if (!active() || state.phase !== 'idle') return;
+		if (input.resume) {
+			await confirm();
+			return;
+		}
+		if (!deps.driver || !input.method) {
+			set({ error: { code: 'device_driver_missing', message: 'Device driver or method missing' } });
+			await finish('failed');
+			return;
+		}
+		set({ phase: 'creating', deadlineAt: deps.now() + DEVICE_LEG_DEADLINE_MS });
+		timer = deps.setTimeout(() => {
+			// A cancel the cashier already asked for keeps its own wording: the deadline only
+			// counts as the reason when nothing was requested before it.
+			if (active() && !state.cancelRequested) {
+				set({ deadlineHandled: true });
+				void cancel('deadline');
+			}
+		}, DEVICE_LEG_DEADLINE_MS);
+		let handoff: CollectInput['handoff'] = null;
+		try {
+			finality.intent = input.row.id;
+			const response = await deps.post(url('intent'), {
+				payment: input.row,
+				context: { transport: input.transport },
+			});
+			finality.intent = null;
+			const data = response.data as ServerLegResponse & { handoff?: CollectInput['handoff'] };
+			await apply(data);
+			if (!active()) return;
+			handoff = data.handoff ?? null;
+		} catch (error) {
+			if (!active()) return;
+			// terminalBeforeSend (leg-finality.ts): a refusal before send means nothing reached the
+			// store, so the intent ends here and the cashier chooses again (Codex 4338931660 on #2798).
+			const refused = terminalBeforeSend('intent', error);
+			if (refused) return finish('failed', { error: refused });
+			const body = errorState(error);
+			intentRefused = true;
+			if (body?.data?.payment) await apply({ payment: body.data.payment, order: body.data.order });
+			if (!active()) return;
+			// Nothing reached the reader. Void whatever the store may have minted, re-sent until the
+			// store decides it; the leg then ends failed where it stood, with the store's refusal of
+			// the intent, not the void's bookkeeping (a 400 here once showed as "Approved · payment
+			// not found" — WisePad 3 run, 2026-10-06).
+			for (;;) {
+				try {
+					const voided = await deps.post(url('void'), { reason: 'intent_refused' });
+					await apply(voided.data as ServerLegResponse);
+					break;
+				} catch (voidError) {
+					if (isDefinitiveMoneyRefusal(moneyRefusalOf(voidError))) break;
+					await finality.wait(RETIRE_RETRY_MS);
+					if (!active()) return;
+				}
+			}
+			await finish('failed');
+			return;
+		}
+		if (!active()) return;
+		if (state.cancelRequested) {
+			result = {
+				outcome: 'cancelled',
+				provider_refs: {},
+				receipt: {},
+				amount: null,
+				transport: input.transport,
+			};
+			await confirm();
+			return;
+		}
+		set({ phase: 'collecting' });
+		try {
+			try {
+				// collect may capture on the reader; preparation above owns no payment hold.
+				collectHold = holdLiveTab('payment');
+				result = await deps.driver.collect({
+					dp: input.dp,
+					row: state.row,
+					method: input.method,
+					transport: input.transport,
+					handoff,
+					tipEligibleMinor: input.tipEligibleMinor,
+				});
+			} catch (error) {
+				if (!active()) return;
+				if (error instanceof LiveTabNotOwnedError) {
+					stop();
+					log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+					return;
+				}
+				errorState(error);
+				result = {
+					outcome: 'declined',
+					failure_reason: 'reader_error',
+					provider_refs: {},
+					receipt: {},
+					amount: null,
+					transport: input.transport,
+				};
+			}
+			if (active()) await confirm();
+		} finally {
+			// Keep the reader result protected until confirmation has persisted it.
+			collectHold?.();
+			collectHold = undefined;
+		}
+	}
+	async function cancel(reason = 'cashier') {
+		if (!active() || state.cancelRequested || inFlight || result) return;
+		cancelReason = reason;
+		set({ cancelRequested: true });
+		if (input.resume && input.row.status === 'authorized') {
+			await confirm();
+			return;
+		}
+		if (state.phase === 'collecting' && deps.driver?.capabilities.cancel === 'app') {
+			try {
+				await deps.driver.cancel?.();
+			} catch (error) {
+				if (!active() || result) return;
+				errorState(error);
+				// Give a result that may be seconds away its chance (LEDGER rule 9: never void
+				// against a confirmation in flight). After that the reader is gone — the SDK was
+				// re-initialised under the leg, the session lost — and the till cannot sit on a
+				// leg nothing will end (a walk-away did exactly that for 10+ minutes, 2026-10-06).
+				// Void the intent, after which a late approval can no longer capture, and finish.
+				await new Promise<void>((resolve) => {
+					graceTimer = deps.setTimeout(resolve, CANCEL_GRACE_MS);
+				});
+				if (!active() || result) return;
+				result = {
+					outcome: 'cancelled',
+					failure_reason: 'reader_unresponsive',
+					provider_refs: {},
+					receipt: {},
+					amount: null,
+					transport: input.transport,
+				};
+				await confirm();
+			}
+		}
+	}
+	function stop() {
+		stopped = true;
+		if (timer) deps.clearTimeout(timer);
+		if (graceTimer) deps.clearTimeout(graceTimer);
+		finality.stop();
+	}
+	return {
+		start,
+		cancel,
+		capture: confirm,
+		checkNow: confirm,
+		release: async () => {},
+		stop,
+		dispose: () => {
+			stop();
+			listeners.clear();
+		},
+		getState: () => state,
+		subscribe: (listener: () => void) => {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
+	};
+}
+export type DeviceLeg = ReturnType<typeof createDeviceLeg>;

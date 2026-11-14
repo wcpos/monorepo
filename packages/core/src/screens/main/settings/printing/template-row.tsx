@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { DeviceRow, DeviceRowActions } from '@wcpos/components/device-row';
 import {
 	Select,
 	SelectContent,
@@ -9,16 +10,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
-import { StatusBadge } from '@wcpos/components/status-badge';
-import { Text } from '@wcpos/components/text';
 import type { PrinterProfile } from '@wcpos/printer';
-import type { TemplateDocument } from '@wcpos/database';
+import type { ActiveTemplate } from '@wcpos/query';
 
 import { AUTO_VALUE, templateTypeLabel } from './utils';
 import { useT } from '../../../../contexts/translations';
 
 interface TemplateRowProps {
-	template: TemplateDocument;
+	template: ActiveTemplate;
 	currentValue: string;
 	selectedLabel: string;
 	autoLabel: string;
@@ -28,7 +27,7 @@ interface TemplateRowProps {
 }
 
 /**
- * One row of the Receipt Templates list: title + type chip + printer routing Select.
+ * One row of the Receipt Templates list: title + type chip, the printer routing Select inline right.
  * Presentational — all routing state is owned by the parent.
  */
 export function TemplateRow({
@@ -44,43 +43,41 @@ export function TemplateRow({
 	const templateId = String(template.id);
 
 	return (
-		<View
+		<DeviceRow
 			testID={`template-row-${templateId}`}
-			className="web:hover:bg-accent flex-row items-center gap-3 rounded-lg px-2 py-2"
+			name={template.title}
+			tag={templateTypeLabel(template, t('settings.template_type_thermal'))}
 		>
-			<Text className="flex-1 text-sm font-medium">{template.title}</Text>
-			<StatusBadge
-				variant="muted"
-				label={templateTypeLabel(template, t('settings.template_type_thermal'))}
-			/>
-			<View testID={`template-row-${templateId}-printer-select`}>
-				<Select
-					value={{ value: currentValue, label: selectedLabel }}
-					onValueChange={(option) => {
-						if (option) {
-							onRoutingChange(templateId, option.value);
-						}
-					}}
-				>
-					<SelectTrigger>
-						<SelectValue placeholder={t('settings.select_printer')} />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectGroup>
-							<SelectItem value={AUTO_VALUE} label={autoLabel} />
-							{unavailablePrinterId && (
-								<SelectItem
-									value={unavailablePrinterId}
-									label={t('settings.printer_unavailable')}
-								/>
-							)}
-							{printers.map((printer) => (
-								<SelectItem key={printer.id} value={printer.id} label={printer.name} />
-							))}
-						</SelectGroup>
-					</SelectContent>
-				</Select>
-			</View>
-		</View>
+			<DeviceRowActions>
+				<View testID={`template-row-${templateId}-printer-select`} className="w-64">
+					<Select
+						value={{ value: currentValue, label: selectedLabel }}
+						onValueChange={(option) => {
+							if (option) {
+								onRoutingChange(templateId, option.value);
+							}
+						}}
+					>
+						<SelectTrigger>
+							<SelectValue placeholder={t('settings.select_printer')} />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectGroup>
+								<SelectItem value={AUTO_VALUE} label={autoLabel} />
+								{unavailablePrinterId && (
+									<SelectItem
+										value={unavailablePrinterId}
+										label={t('settings.printer_unavailable')}
+									/>
+								)}
+								{printers.map((printer) => (
+									<SelectItem key={printer.id} value={printer.id} label={printer.name} />
+								))}
+							</SelectGroup>
+						</SelectContent>
+					</Select>
+				</View>
+			</DeviceRowActions>
+		</DeviceRow>
 	);
 }

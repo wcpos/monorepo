@@ -1,23 +1,33 @@
 import * as React from 'react';
 
+import { filter, firstValueFrom } from 'rxjs';
+
+import { observeUserSites, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import type { ReadonlySiteRecord } from '@wcpos/query/user-db';
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Icon } from '@wcpos/components/icon';
-import { Loader } from '@wcpos/components/loader';
+import { Toast } from '@wcpos/components/toast';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
+import { peekRedirectClaim } from '../../../hooks/use-wcpos-auth/redirect-result';
 import { useLoginHandler } from '../hooks/use-login-handler';
 import { useSiteConnect } from '../hooks/use-site-connect';
 
 const authLogger = getLogger(['wcpos', 'auth', 'demo']);
 
+// claimKey that routes the web redirect-return result back to this button.
+export const DEMO_CLAIM_KEY = 'demo';
+
 export function DemoButton() {
+	const { user } = useAppState();
 	const { onConnect, loading: siteConnectLoading } = useSiteConnect();
-	const [connectedSite, setConnectedSite] = React.useState<
-		import('@wcpos/database').SiteDocument | null
-	>(null);
+	const [connectedSite, setConnectedSite] = React.useState<Pick<
+		ReadonlySiteRecord,
+		'uuid' | 'name' | 'wcpos_login_url'
+	> | null>(null);
 	const t = useT();
 
 	// Track which response we've already processed to prevent double-execution
@@ -38,7 +48,45 @@ export function DemoButton() {
 				}
 			: null,
 		extraParams: { user: 'demo' },
+		claimKey: DEMO_CLAIM_KEY,
 	});
+
+	// The fallback redirect reloads the page and loses connectedSite. Resolve
+	// the stored site so this button's auth hook can claim the pending result.
+	React.useEffect(() => {
+		const claim = peekRedirectClaim();
+		if (!claim || claim.claimKey !== DEMO_CLAIM_KEY) return;
+		let cancelled = false;
+
+		void (async () => {
+			try {
+				const sites: NonNullable<typeof connectedSite>[] = await firstValueFrom(
+					observeUserSites(user).pipe(filter((value) => value !== PENDING_USER_DB_READ))
+				);
+				if (cancelled) return;
+				const site = sites.find((site) => site.wcpos_login_url === claim.loginUrl);
+				if (!site) {
+					authLogger.error('Demo login could not resume after redirect: demo site not found', {
+						code: ERROR_CODES.AUTH_UNEXPECTED,
+						showToast: true,
+					});
+					return;
+				}
+				authTriggeredRef.current = true;
+				setConnectedSite(site);
+			} catch (err) {
+				if (cancelled) return;
+				authLogger.error(`Demo login could not resume after redirect: ${getErrorMessage(err)}`, {
+					code: ERROR_CODES.AUTH_UNEXPECTED,
+					showToast: true,
+				});
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [user]);
 
 	// Handle OAuth response. Side-effect only (login / logging); the
 	// processedResponseRef both dedupes and signals completion - no state is set
@@ -55,8 +103,23 @@ export function DemoButton() {
 		if (response.type === 'success') {
 			authLogger.debug('Demo login successful');
 			processedResponseRef.current = responseKey;
-			void handleLoginSuccess({ params: response.params } as any);
+			// handleLoginSuccess reports its own failure (row + toast) before rethrowing.
+			void handleLoginSuccess({ params: response.params } as any).catch(() => undefined);
 		} else if (response.type === 'error') {
+			// The auth hook already wrote this failure's coded row (state mismatch, IPC failure,
+			// a thrown prompt): one incident, one row, so the cashier gets only the toast.
+			if (response.reported) {
+				authLogger.debug('Demo login did not complete', {
+					context: { errorDetails: response.error },
+				});
+				Toast.show({
+					type: 'error',
+					title: t('auth.login_did_not_complete'),
+					description: t('auth.login_did_not_complete_hint'),
+				});
+				processedResponseRef.current = responseKey;
+				return;
+			}
 			authLogger.error(`Demo login failed: ${response.error}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
@@ -65,7 +128,7 @@ export function DemoButton() {
 			// Also mark processed on error to prevent retry.
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, connectedSite, handleLoginSuccess]);
+	}, [response, connectedSite, handleLoginSuccess, t]);
 
 	const handleDemoLogin = async () => {
 		// Reset auth state for new login attempt
@@ -116,17 +179,11 @@ export function DemoButton() {
 			testID="enter-demo-store-button"
 			onPress={handleDemoLogin}
 			disabled={loading}
-			variant="muted"
+			variant="ghost"
 			size="sm"
-			rightIcon={
-				loading ? (
-					<Loader variant="muted" size="xs" />
-				) : (
-					<Icon variant="muted" size="xs" name="arrowRight" />
-				)
-			}
+			loading={loading}
 		>
-			<ButtonText>{t('auth.enter_demo_store')}</ButtonText>
+			<ButtonText>{t('auth.try_the_demo_store')}</ButtonText>
 		</Button>
 	);
 }

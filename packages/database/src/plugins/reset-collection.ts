@@ -30,13 +30,13 @@ const pendingReAdditions = new Set<string>();
 /**
  * Set of collection names that this plugin manages.
  * Only these collections will be auto-recreated after removal.
- * Collections created by other plugins (e.g., FlexSearch) are excluded.
+ * Collections created by other plugins are excluded.
  */
 const managedStoreCollections = new Set(Object.keys(storeCollections));
 
 /**
  * Check if a collection is managed by this plugin.
- * Returns false for collections created by other plugins (e.g., FlexSearch indexes).
+ * Returns false for collections created by other plugins.
  * (The fast_store branch left with fastStoreDB — no fast_store database can be
  * created any more.)
  */
@@ -59,7 +59,7 @@ const storeReset = new Subject<RxCollection>();
  * Features:
  * - Attaches `reset$` observable to databases for subscribers to react
  * - Only manages collections defined in storeCollections
- * - Ignores collections created by other plugins (e.g., FlexSearch indexes)
+ * - Ignores collections created by other plugins
  *
  * Usage:
  * ```typescript
@@ -113,9 +113,19 @@ export const resetCollectionPlugin: RxPlugin = {
 					},
 				});
 
-				// Only re-add collections we manage (not FlexSearch, etc.)
+				// Only re-add collections we manage
 				if (!isManagedCollection(collectionName, database.name)) {
 					resetLogger.debug('Skipping unmanaged collection', {
+						context: { collection: collectionName, database: database.name },
+					});
+					return;
+				}
+
+				// RxDatabase.close() sets closePromise before it closes each collection, so a
+				// database close is not a reset; collection.remove() closes with it unset.
+				const { closePromise } = database as unknown as { closePromise: Promise<boolean> | null };
+				if (closePromise || database.closed) {
+					resetLogger.debug('Skipping re-addition - database is closing', {
 						context: { collection: collectionName, database: database.name },
 					});
 					return;
@@ -191,7 +201,7 @@ export const resetCollectionPlugin: RxPlugin = {
 						if (!schema) {
 							resetLogger.error('No schema found for store collection', {
 								showToast: false,
-								code: ERROR_CODES.SCHEMA_MISMATCH,
+								code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 								context: {
 									collection: collectionName,
 								},
@@ -209,9 +219,12 @@ export const resetCollectionPlugin: RxPlugin = {
 						});
 					}
 				} catch (error: any) {
+					// The collection is re-added from the very schema the app runs, so this
+					// is a failure to create it, not data from an incompatible version
+					// (SYNC311, whose advice is to clear local data).
 					resetLogger.error('Failed to re-add collection', {
 						showToast: true,
-						code: ERROR_CODES.SCHEMA_MISMATCH,
+						code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 						context: {
 							collection: collectionName,
 							database: database.name,

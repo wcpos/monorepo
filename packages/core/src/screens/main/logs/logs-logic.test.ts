@@ -34,6 +34,13 @@ describe('displayCategory', () => {
 });
 
 describe('displayKind', () => {
+	it('does not call a null actor id an action', () => {
+		expect(
+			displayKind({ level: 'info', actor: { id: null } } as unknown as Parameters<
+				typeof displayKind
+			>[0])
+		).toBe('info');
+	});
 	it('lets severity win over everything', () => {
 		expect(displayKind({ level: 'error', actor: { name: 'Paul' } })).toBe('error');
 		expect(displayKind({ level: 'warn', category: 'wcpos.sync.engine' })).toBe('warn');
@@ -572,6 +579,14 @@ describe('deriveStuckRecords', () => {
 });
 
 describe('rowDetailData', () => {
+	// Push rows persist the mutation kind as `op`; others name it `operation`.
+	it('names the record change in the Operation fact from `op` or `operation`', () => {
+		expect(
+			rowDetailData(row({ operationType: 'sync.record', context: { op: 'update' } })).operation
+		).toBe('sync.record · update');
+		expect(rowDetailData(row({ context: { operation: 'delete' } })).operation).toBe('delete');
+	});
+
 	it('assembles correlation values from terminal fields and context', () => {
 		const detail = rowDetailData(
 			row({
@@ -592,7 +607,7 @@ describe('rowDetailData', () => {
 		expect(detail.request).toBe('c41a88 · 400 · 500 ms');
 		expect(detail.serverCode).toBe('woocommerce_rest_invalid_tax_class');
 		expect(detail.attempts).toEqual({
-			count: 3,
+			times: 3,
 			firstSeen: 1_000,
 			lastSeen: 2_000,
 		});

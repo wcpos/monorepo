@@ -74,11 +74,13 @@ describe('createTaxRateSchedulerFetcher', () => {
 			expect.objectContaining({
 				uuid: 'woo-tax-rate:1',
 				remoteId: remoteId(1),
+				remoteKey: String(remoteId(1) ?? ''),
 				sync: expect.objectContaining({ source: 'woo-rest', partial: false }),
 			}),
 			expect.objectContaining({
 				uuid: 'woo-tax-rate:2',
 				remoteId: remoteId(2),
+				remoteKey: String(remoteId(2) ?? ''),
 				sync: expect.objectContaining({ source: 'woo-rest', partial: false }),
 			}),
 		]);

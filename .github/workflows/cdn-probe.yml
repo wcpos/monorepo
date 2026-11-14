@@ -1,0 +1,32 @@
+# Watch the released web POS bundle sources every fifteen minutes.
+# Check jsDelivr metadata for the 1.11 and 2.0 lanes.
+# Check the cdn.wcpos.com manifest for the 2.0 lane only.
+# Failures create or update the "CDN probe failing" issue in this repository.
+# Recovery comments on and closes that issue; no external alert secrets are used.
+name: CDN probe
+
+on:
+  schedule:
+    # Off the hour: GitHub delays or drops schedules that fire at minute zero.
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cdn-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+      - run: bash scripts/release/cdn-probe.sh
+        env:
+          GH_TOKEN: ${{ github.token }}

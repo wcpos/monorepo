@@ -428,7 +428,7 @@ export async function applyReplicationActions(
 					type: 'apply.barcode-rederive',
 					level: 'warn',
 					collection: target.collection,
-					fields: { docs: docs.length, applied: false },
+					fields: { docs: docs.length, applied: false, outcome: 'failed' },
 				});
 			}
 		}

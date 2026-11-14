@@ -218,7 +218,11 @@ test('one representative path exercises every ordered rule', () => {
 		['apps/main/e2e/fixtures.ts', 'web-helper', { web: 'full' }],
 		['packages/core/src/x.test.ts', 'unit-test-file', { unit: 'core' }],
 		['packages/virtual-printer/src/x.ts', 'leaf-package', { unit: 'none' }],
-		['packages/virtual-printer/self-signed-cert.test.mjs', 'leaf-package', { unit: 'none', lint: true }],
+		[
+			'packages/virtual-printer/self-signed-cert.test.mjs',
+			'leaf-package',
+			{ unit: 'none', lint: true },
+		],
 		['packages/virtual-printer/package.json', 'package-deps', { native: 'rebuild', web: 'full' }],
 		['packages/core/src/polyfills.ts', 'native-source', { native: 'cachehit' }],
 		['packages/core/package.json', 'package-deps', { native: 'rebuild' }],
@@ -231,7 +235,11 @@ test('one representative path exercises every ordered rule', () => {
 		['jest.config.js', 'root-jest', { unit: 'all', web: 'none' }],
 		['prettier.config.mjs', 'root-format', { lint: true, unit: 'none' }],
 		['.github/workflows/deploy.yml', 'workflow', { web: 'full', self: 'deploy' }],
-		['.github/actions/setup-monorepo/action.yml', 'github-shared', { unit: 'all', web: 'full' }],
+		[
+			'.github/actions/setup-monorepo/action.yml',
+			'github-shared',
+			{ unit: 'all', web: 'full', native: 'none', lint: true },
+		],
 		['scripts/check-ci-test-matrix.mjs', 'scripts', { lint: true, unit: 'none' }],
 		['apps/web', 'submodule', { lint: true, unit: 'none' }],
 	];
@@ -305,6 +313,18 @@ test('app and package source targeting next retain cache-hit device coverage', (
 	assert.equal(plan.native, 'cachehit');
 });
 
+test('a native workflow change still runs the device suites', () => {
+	assert.equal(planFor(['.github/workflows/e2e-native.yml'], {}).native, 'cachehit');
+});
+
+test('a shared action change does not suppress a native rebuild in a mixed change', () => {
+	const plan = planFor(
+		['.github/actions/setup-monorepo/action.yml', 'apps/main/app.config.ts'],
+		{}
+	);
+	assert.equal(plan.native, 'rebuild');
+});
+
 test('workflow self-triggers widen only their associated tier', () => {
 	assert.equal(planFor(['.github/workflows/test.yml'], {}).unit, 'all');
 	assert.equal(planFor(['.github/workflows/e2e-native.yml'], {}).native, 'cachehit');
@@ -316,8 +336,10 @@ test('script sub-paths classify conservatively', () => {
 		['scripts/tool.test.mjs', { unit: 'none', web: 'none' }],
 		['scripts/e2e-native-seed.mjs', { native: 'cachehit', web: 'none' }],
 		['scripts/ci-plan.mjs', { unit: 'all', web: 'full' }],
-		['scripts/build-opfs-worker.mjs', { unit: 'all', web: 'full' }],
-		['scripts/patch-opfs-worker.mjs', { unit: 'all', web: 'full' }],
+		['scripts/build-sqlite-worker.mjs', { unit: 'all', web: 'full' }],
+		['scripts/sqlite-worker-entry.mjs', { unit: 'all', web: 'full' }],
+		['scripts/sqlite-basics-oo1.mjs', { unit: 'all', web: 'full' }],
+		['scripts/sqlite-worker-probe.mjs', { unit: 'all', web: 'full' }],
 		['scripts/patch-rxdb-premium-fix.mjs', { unit: 'all', web: 'full' }],
 		['scripts/generate-error-codes.mjs', { unit: 'all', web: 'full' }],
 		['scripts/extract-js-strings.js', { unit: 'all', web: 'full' }],
@@ -382,8 +404,10 @@ test('a multi-line git error still emits one line per output key', () => {
 	});
 	rmSync(repo, { recursive: true, force: true });
 	const lines = result.stdout.split('\n').filter(Boolean);
-	assert.equal(lines.length, 7, result.stdout);
-	assert.ok(lines.every((line) => /^(lint|unit|web|only_specs|native|self|reason)=/.test(line)));
+	assert.equal(lines.length, 8, result.stdout);
+	assert.ok(
+		lines.every((line) => /^(lint|unit|web|only_specs|native|self|gallery|reason)=/.test(line))
+	);
 	const output = outputOf(result);
 	assert.equal(output.web, 'full');
 	assert.match(output.reason, /git diff against/);
@@ -406,3 +430,18 @@ test('missing base and non-PR events return the everything-plan', () => {
 		);
 	}
 });
+
+for (const file of [
+	'apps/template-studio/src/template-loader.ts',
+	'apps/template-studio/src/__tests__/studio-paths.test.ts',
+	'apps/template-studio/package.json',
+	'apps/template-studio/vite.config.ts',
+]) {
+	test(`template studio selects its unit lane: ${file}`, () => {
+		const plan = planFor([file], { commentOnly: false });
+		assert.equal(plan.unit, 'template-studio');
+		assert.equal(plan.lint, true);
+		assert.equal(plan.web, 'none');
+		assert.equal(plan.native, 'none');
+	});
+}

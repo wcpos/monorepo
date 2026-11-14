@@ -1,28 +1,23 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
-
 import type { CellContext } from '@wcpos/core/table-types';
 import { HStack } from '@wcpos/components/hstack';
+import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { useT } from '../../../../contexts/translations';
-import { useCollectionBinding } from '../../../../query';
+import { useCollectionQueryHandle, useQuerySnapshot } from '../../../../query';
 
-import type { QueryStateOf } from '../../../../query';
+import type { QueryHandle, QueryStateOf } from '../../../../query';
 
 /**
  *
  */
-function GroupedNamesList({
-	resource,
-}: {
-	resource: ReturnType<typeof useCollectionBinding<'products'>>['resource'];
-}) {
-	const result = useObservableSuspense(resource);
-	const names = result.hits.map((hit) => hit.record?.payload.name);
+function GroupedNamesList({ handle }: { handle: QueryHandle }) {
+	const { hits } = useQuerySnapshot(handle, []);
+	const names = hits.map((hit) => hit.record?.payload.name);
 	const t = useT();
 
 	/**
@@ -30,7 +25,7 @@ function GroupedNamesList({
 	 */
 	return (
 		<HStack className="flex-wrap gap-0">
-			<Text className="text-muted-foreground text-xs">{`${t('common.grouped')}: `}</Text>
+			<Text variant="help">{`${t('common.grouped')}: `}</Text>
 			<Text className="text-xs" decodeHtml>
 				{names.join(', ')}
 			</Text>
@@ -54,7 +49,13 @@ export function GroupedNames({ row }: CellContext<{ record: EngineRecord<'produc
 		}),
 		[wooIds.length]
 	);
-	const binding = useCollectionBinding('products', state, { remoteIds });
+	// The owner sits above the boundary: its retain (an effect) starts the read, so it must
+	// commit while the list suspends.
+	const handle = useCollectionQueryHandle('products', state, { remoteIds });
 
-	return <GroupedNamesList resource={binding.resource} />;
+	return (
+		<Suspense>
+			<GroupedNamesList handle={handle} />
+		</Suspense>
+	);
 }

@@ -56,7 +56,7 @@ const sanitizeRoles = (data: Record<string, unknown>): string[] | undefined => {
 /**
  * Normalize server and legacy wp_credentials payloads before they are written
  * into RxDB. The schema is strict, so OAuth response metadata such as
- * token_type must not be persisted or old IndexedDB rows can fail migration.
+ * token_type must not be persisted.
  */
 export const sanitizeWPCredentialsData = (data: unknown): WPCredentialsData => {
 	if (!isRecord(data)) {

@@ -1,0 +1,17 @@
+# Behaviour ledger: `pos/contexts/order-money-divergence`
+
+Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md` on `research/composed-ledger` (wcpos/roadmap#341) by wcpos/roadmap#345. Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
+
+**Job:** Retain server-versus-POS money discrepancies and separately remember server ownership of order totals.
+
+**Composes:** none directly.
+
+## Lines
+
+1. Subscribe above POS screens and retain discrepancies by order UUID rather than emitting only a global toast — divergence may arrive for a background tab or while the cart is unmounted — evidence: `index.tsx:18–25`, “Divergence can land on an order the cashier is not looking at”; “A component-” / “local subscription would simply miss it, so the subscription lives above” / “the POS screens and outlives them.” — platform: all.
+2. Keep server ownership sticky across clean acknowledgements and make divergence non-dismissible — once local settlement stands down, a clean acknowledgement is not proof that local arithmetic became correct — evidence: `index.tsx:34–39`, “every subsequent ack for the order is clean BY” / “CONSTRUCTION”; “the POS” / “would re-assert its arithmetic, the server would overrule it again” — platform: all.
+3. Keep server-owned IDs separately from the fifty-entry detail cap and never evict ownership within the scope — the fifty-first discrepancy must not return an older order’s money to rejected local arithmetic — evidence: `index.tsx:69`, “Every order whose money the server has taken over, ids only, NEVER evicted.”; `index.tsx:77–78`, “the 51st” / “divergence silently hands an earlier order's money BACK to the POS.” — platform: all.
+4. Replace detail with the latest discrepancy and evict by last divergence, not first insertion — an actively diverging sale must not lose its warning merely because it first diverged long ago — evidence: `29a440e711 2026-08-25 fix(pos): evict the divergence detail by last divergence, not first` — platform: all.
+5. Count distinct diverged orders independently of retained detail and escalate at three — repeated disagreement across sales is a store-level problem, not an endless series of isolated cashier anomalies — evidence: `index.tsx:124–127`, “Distinct diverged orders that turn "this sale disagrees" into "this store” / “disagrees"”; “three is a” / “condition of the install” — platform: all.
+6. Reset on engine scope switches even when the engine instance is reused, and hide entries belonging to a replaced engine immediately — same-site store changes must not leak another scope’s discrepancy/ownership state — evidence: `eaba5ae4bf 2026-08-06 feat(sync): order-money divergence alert at save time + round-trip precision contracts (R1) (#1033)` — platform: all.
+7. Leave checkout available under authoritative server totals and return safe empty defaults without a provider — the warning asks the cashier to review, not to repair arithmetic or lose the cart — evidence: `index.tsx:45–46`, “Nothing here blocks the sale. The server's totals stand — the alert exists so” / “the cashier reviews them first.”; `index.tsx:273`, “an advisory surface, and a missing provider must never take the cart down” — platform: all.

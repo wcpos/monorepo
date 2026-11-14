@@ -17,6 +17,7 @@ const emptyTotals: CensusTotals = {
 	brands: null,
 	tags: null,
 	coupons: null,
+	refunds: null,
 };
 const mockSubscribers = new Set<(totals: CensusTotals) => void>();
 const mockUnsubscribe = jest.fn();

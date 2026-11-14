@@ -14,6 +14,7 @@ import {
 	withoutLocallyProtected,
 	withoutUnchanged,
 } from '../write-path/local-work-guard';
+import { findAllUncached } from './find-all-uncached';
 
 import type { LocalReferenceDocument } from './reference-collection-schema';
 
@@ -69,7 +70,7 @@ export function referenceCollectionRepository(
 		},
 		async listServerSourcedAbsent(keptDocumentIds) {
 			const kept = new Set(keptDocumentIds);
-			return (await collection.find().exec())
+			return (await findAllUncached(collection))
 				.map((doc) => doc.toJSON())
 				.filter(
 					(
@@ -93,7 +94,7 @@ export function referenceCollectionRepository(
 		},
 		async pruneServerSourcedAbsent(keptDocumentIds: readonly string[]): Promise<string[]> {
 			const kept = new Set(keptDocumentIds);
-			const docs = await collection.find().exec();
+			const docs = await findAllUncached(collection);
 			const toRemove = docs
 				.map((doc) => doc.toJSON())
 				.filter((doc) => canPrune(doc) && !kept.has(doc.uuid))

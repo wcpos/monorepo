@@ -36,12 +36,13 @@ import {
 	type TargetedDescriptor,
 	type UpsertRefreshDescriptor,
 } from '../collections/collection-descriptors';
+import { findAllUncached } from '../collections/find-all-uncached';
 import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import {
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
-import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
+import { hasPendingLocalWork, partitionPulledRows } from '../write-path/local-work-guard';
 
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { RxCollection, RxDatabase } from 'rxdb';
@@ -150,11 +151,13 @@ async function pullByIds(
 	wooIds: number[],
 	persist?: (documents: Record<string, unknown>[]) => Promise<void>,
 	pruneByIds?: PruneByIds
-): Promise<number> {
-	if (wooIds.length === 0) return 0;
-	const collection = collectionOf(ctx, d.collection);
+): Promise<{ applied: number; appliedRecordIds: string[]; prunedRecordIds: string[] }> {
 	const includeChunk = ctx.pullBatchSize?.() ?? INCLUDE_CHUNK;
 	let applied = 0;
+	const appliedRecordIds: string[] = [],
+		prunedRecordIds: string[] = [];
+	if (wooIds.length === 0) return { applied, appliedRecordIds, prunedRecordIds };
+	const collection = collectionOf(ctx, d.collection);
 	for (let at = 0; at < wooIds.length; at += includeChunk) {
 		const chunk = wooIds.slice(at, at + includeChunk);
 		const payloads = d.parse(
@@ -170,7 +173,7 @@ async function pullByIds(
 			const absent = chunk.filter((id) => !present.has(id));
 			pruned = pruneByIds
 				? await pruneByIds(absent)
-				: await removeByWooIds(ctx, d.collection, d.wooIdField, absent);
+				: await removeByWooIds(ctx, d.collection, d.wooIdField, absent, prunedRecordIds);
 			if (pruned > 0) {
 				ctx.observe?.({
 					type: 'targeted.pull.shortfall-prune',
@@ -190,15 +193,18 @@ async function pullByIds(
 			d.projectMaterialized(payload, ctx.barcodeSelectors?.())
 		);
 		const documents = materialized.map(({ storedDocument }) => storedDocument);
-		const applicable = await withoutLocallyProtected(
+		// The same boundary as the scheduler drain: an unchanged row (the server's stamp agrees)
+		// is applied without a write, so a journal entry for a record whose content did not move
+		// never mints a new revision — and never re-renders what shows it.
+		const { applicable, changed } = await partitionPulledRows(
 			collection as never,
-			documents as { uuid: string }[]
+			documents as { uuid: string; remoteId: string }[]
 		);
 		if (persist) await persist(applicable);
 		else {
-			if (applicable.length > 0)
+			if (changed.length > 0)
 				assertBulkSuccess(
-					await collection.bulkUpsert(applicable as never[]),
+					await collection.bulkUpsert(changed as never[]),
 					'change-signal-handlers upsert'
 				);
 			const rows = manifestRowsForApplied(materialized, applicable as { uuid: string }[]);
@@ -208,9 +214,10 @@ async function pullByIds(
 				await upsertManifestRows(ctx.database.collections[manifestName] as never, rows);
 			}
 		}
+		appliedRecordIds.push(...applicable.map((document) => String(document.remoteId)));
 		applied += documents.length + pruned;
 	}
-	return applied;
+	return { applied, appliedRecordIds, prunedRecordIds };
 }
 
 /** Tombstone by numeric Woo id: resolve storage rows via the descriptor's id field. */
@@ -218,13 +225,14 @@ async function removeByWooIds(
 	ctx: HandlerContext,
 	name: string,
 	wooIdField: 'remoteId',
-	wooIds: number[]
+	wooIds: number[],
+	prunedRecordIds?: string[]
 ): Promise<number> {
 	if (wooIds.length === 0) return 0;
 	const collection = collectionOf(ctx, name);
 	const remoteIds = wooIds.map((id) => mintRemoteId(id, `${name} tombstone id`));
 	const docs = await collection
-		.find({ selector: { [wooIdField]: { $in: remoteIds } } as never })
+		.find({ selector: { remoteKey: { $in: remoteIds } } as never })
 		.exec();
 	const protectedRemoteIds = new Set<RemoteId>();
 	const removable: string[] = [];
@@ -255,6 +263,7 @@ async function removeByWooIds(
 			remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId)).map(wooIdOf)
 		);
 	}
+	prunedRecordIds?.push(...remoteIds.filter((id) => !protectedRemoteIds.has(id)));
 	// A delete for a never-synced id is vacuously applied — tombstone semantics,
 	// not a shortfall (mirrors the web lanes).
 	return wooIds.length;
@@ -280,13 +289,13 @@ async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): P
 	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) =>
 		d.project(payload, ctx.barcodeSelectors?.())
 	);
-	const applicable = await withoutLocallyProtected(
+	const { changed } = await partitionPulledRows(
 		collection as never,
 		documents as { uuid: string }[]
 	);
-	if (applicable.length > 0) {
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkUpsert(applicable as never[]),
+			await collection.bulkUpsert(changed as never[]),
 			'change-signal-handlers upsert'
 		);
 	}
@@ -320,20 +329,20 @@ async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor)
 		throw new Error(`${d.collection} refresh: incomplete-snapshot; repeated record in page walk`);
 	}
 	const documents = [...documentsByUuid.values()];
-	const applicable = await withoutLocallyProtected(
+	const { changed } = await partitionPulledRows(
 		collection as never,
 		documents as { uuid: string }[]
 	);
-	if (applicable.length > 0) {
+	if (changed.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkUpsert(applicable as never[]),
+			await collection.bulkUpsert(changed as never[]),
 			'change-signal-handlers upsert'
 		);
 	}
 	// Prune by the fetched KEEP-SET of storage ids (uuid keys) — id-space
 	// discipline per the terms flip: storage ids only, never Woo ids.
 	const kept = new Set(documents.map((doc) => (doc as { uuid: string }).uuid));
-	const existing = await collection.find().exec();
+	const existing = await findAllUncached(collection);
 	const doomed = existing
 		.filter((doc) => !hasPendingLocalWork(doc.toJSON()))
 		.map((doc) => (doc as { primary: string }).primary)
@@ -366,7 +375,7 @@ function collectShapeEffects(ctx: HandlerContext): ShapeEffects {
 		switch (descriptor.shape) {
 			case 'targeted': {
 				targeted[descriptor.collection] = {
-					pull: (wooIds) => pullByIds(ctx, descriptor, wooIds),
+					pull: async (wooIds) => (await pullByIds(ctx, descriptor, wooIds)).applied,
 					remove: (wooIds) =>
 						removeByWooIds(ctx, descriptor.collection, descriptor.wooIdField, wooIds),
 				};
@@ -419,7 +428,7 @@ async function loadSyncedTargetedDocs(
 			candidate.shape === 'targeted' && candidate.hybrid === collection
 	);
 	if (!descriptor) return [];
-	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+	const docs = await findAllUncached(collectionOf(ctx, descriptor.collection));
 	return docs.map((doc) => {
 		const json = doc.toJSON() as {
 			uuid: string;
@@ -450,7 +459,7 @@ async function rebaselineTargeted(
 			candidate.shape === 'targeted' && candidate.hybrid === collection
 	);
 	if (!descriptor) return { requested: 0, applied: 0, pruned: 0 };
-	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+	const docs = await findAllUncached(collectionOf(ctx, descriptor.collection));
 	const wooIds = new Set<number>();
 	for (const doc of docs) {
 		const json = doc.toJSON() as Record<string, unknown> & {
@@ -462,7 +471,7 @@ async function rebaselineTargeted(
 	}
 	const requested = [...wooIds].sort((left, right) => left - right);
 	const missingIds: number[] = [];
-	const applied = await pullByIds(ctx, descriptor, requested, undefined, async (absentWooIds) => {
+	const pull = await pullByIds(ctx, descriptor, requested, undefined, async (absentWooIds) => {
 		missingIds.push(...absentWooIds);
 		return 0;
 	});
@@ -470,7 +479,7 @@ async function rebaselineTargeted(
 		missingIds.length > 0
 			? await removeByWooIds(ctx, descriptor.collection, descriptor.wooIdField, missingIds)
 			: 0;
-	return { requested: requested.length, applied, pruned };
+	return { requested: requested.length, applied: pull.applied, pruned };
 }
 
 /**
@@ -519,7 +528,7 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 						candidate.shape === 'targeted' && candidate.hybrid === collection
 				);
 				if (!descriptor) return 0;
-				const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+				const docs = await findAllUncached(collectionOf(ctx, descriptor.collection));
 				const wooIds = new Set<number>();
 				for (const doc of docs) {
 					const json = doc.toJSON() as Record<string, unknown> & {

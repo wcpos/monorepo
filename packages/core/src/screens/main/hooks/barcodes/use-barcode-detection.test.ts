@@ -9,6 +9,7 @@ import { BehaviorSubject, Subject } from 'rxjs';
 
 import type { ScanEvent } from '@wcpos/scanner';
 
+import { resetScanOwnersForTests } from './scan-owner';
 import { resetHeuristicTooShortRateLimit } from './too-short-feedback';
 import { useBarcodeDetection } from './use-barcode-detection';
 
@@ -82,7 +83,7 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('@wcpos/utils/logger', () => {
-	const barcodeLogger = { warn: jest.fn() };
+	const barcodeLogger = { warn: jest.fn(), debug: jest.fn() };
 
 	return {
 		getLogger: () => barcodeLogger,
@@ -100,6 +101,7 @@ jest.mock('@wcpos/utils/user-activity', () => ({
 
 const barcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogger as {
 	warn: jest.Mock;
+	debug: jest.Mock;
 };
 
 const dispatchBarcode = (barcode: string) => {
@@ -114,6 +116,7 @@ describe('useBarcodeDetection', () => {
 		jest.clearAllMocks();
 		(Platform as { OS: string }).OS = 'web';
 		resetHeuristicTooShortRateLimit();
+		resetScanOwnersForTests();
 		minChars$.next(8);
 		prefix$.next('');
 		suffix$.next('');
@@ -125,6 +128,117 @@ describe('useBarcodeDetection', () => {
 		jest.runOnlyPendingTimers();
 		jest.useRealTimers();
 		(Platform as { OS: string }).OS = 'web';
+	});
+
+	it('only the newest active consumer scans, then hands ownership back on unmount', () => {
+		const firstScans: string[] = [];
+		const secondScans: string[] = [];
+		const first = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const firstSubscription = first.result.current.barcode$.subscribe((code) =>
+			firstScans.push(code)
+		);
+		const second = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const secondSubscription = second.result.current.barcode$.subscribe((code) =>
+			secondScans.push(code)
+		);
+		try {
+			act(() => {
+				dispatchBarcode('12345678');
+				jest.advanceTimersByTime(200);
+			});
+			expect(firstScans).toEqual([]);
+			expect(secondScans).toEqual(['12345678']);
+			second.unmount();
+			act(() => {
+				dispatchBarcode('87654321');
+				jest.advanceTimersByTime(200);
+			});
+			expect(firstScans).toEqual(['87654321']);
+			expect(secondScans).toEqual(['12345678']);
+		} finally {
+			firstSubscription.unsubscribe();
+			secondSubscription.unsubscribe();
+		}
+	});
+
+	// Pins the pipeline gate: the keydown gate alone would keep the wedge case green.
+	it.each(['hub', 'attributed'] as const)('gates the %s stream to the newest owner', (source) => {
+		const first = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const second = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const firstCodes: string[] = [];
+		const firstEvents: ScanEvent[] = [];
+		const secondCodes: string[] = [];
+		const secondEvents: ScanEvent[] = [];
+		const subscriptions = [
+			first.result.current.barcode$.subscribe((code) => firstCodes.push(code)),
+			first.result.current.scanEvents$.subscribe((event) => firstEvents.push(event)),
+			second.result.current.barcode$.subscribe((code) => secondCodes.push(code)),
+			second.result.current.scanEvents$.subscribe((event) => secondEvents.push(event)),
+		];
+		const event: ScanEvent = {
+			code: '12345678',
+			source:
+				source === 'hub' ? { kind: 'serial' } : { kind: 'wedge-attributed', profileId: 'one' },
+			timestamp: 123,
+		};
+		act(() => (source === 'hub' ? hubEvents$ : attributedEvents$).next(event));
+		expect(firstCodes).toEqual([]);
+		expect(firstEvents).toEqual([]);
+		expect(secondCodes).toEqual(['12345678']);
+		expect(secondEvents).toEqual([event]);
+		subscriptions.forEach((subscription) => subscription.unsubscribe());
+	});
+
+	// Pins the keydown gate: a non-owner must not feed its detector, so its callback never runs.
+	it('does not invoke a non-owner callback on a web burst', () => {
+		const firstCallback = jest.fn();
+		const secondCallback = jest.fn();
+		const first = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: firstCallback })
+		);
+		const second = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: secondCallback })
+		);
+		const subscriptions = [
+			first.result.current.barcode$.subscribe(),
+			second.result.current.barcode$.subscribe(),
+		];
+		act(() => {
+			dispatchBarcode('12345678');
+			jest.advanceTimersByTime(200);
+		});
+		expect(firstCallback).not.toHaveBeenCalled();
+		expect(secondCallback).toHaveBeenCalledTimes(1);
+		expect(secondCallback).toHaveBeenCalledWith('12345678');
+		subscriptions.forEach((subscription) => subscription.unsubscribe());
+	});
+
+	// Pins the ownership-loss disposal: a burst in flight dies with the claim, callback and all.
+	it('drops a burst in flight when another consumer claims ownership before it settles', () => {
+		const firstCallback = jest.fn();
+		const first = renderHook(() =>
+			useBarcodeDetection({ isActive: true, callback: firstCallback })
+		);
+		const firstScans: string[] = [];
+		const firstSubscription = first.result.current.barcode$.subscribe((code) =>
+			firstScans.push(code)
+		);
+		act(() => {
+			dispatchBarcode('12345678');
+		});
+		const second = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const secondScans: string[] = [];
+		const secondSubscription = second.result.current.barcode$.subscribe((code) =>
+			secondScans.push(code)
+		);
+		act(() => {
+			jest.advanceTimersByTime(200);
+		});
+		expect(firstCallback).not.toHaveBeenCalled();
+		expect(firstScans).toEqual([]);
+		expect(secondScans).toEqual([]);
+		firstSubscription.unsubscribe();
+		secondSubscription.unsubscribe();
 	});
 
 	it.each([10, 20])('never turns focused search typing at %i ms/key into a scan', (gap) => {
@@ -280,6 +394,66 @@ describe('useBarcodeDetection', () => {
 		subscription.unsubscribe();
 	});
 
+	it('a scanner terminator does not reach a focused button', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((code) => detected.push(code));
+		const button = document.createElement('button');
+		const keys: string[] = [];
+		button.addEventListener('keydown', (event) => keys.push(event.key));
+		document.body.appendChild(button);
+		button.focus();
+		try {
+			act(() => {
+				for (const key of '12345678') {
+					button.dispatchEvent(
+						new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+					);
+					jest.advanceTimersByTime(10);
+				}
+			});
+			const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+			act(() => {
+				button.dispatchEvent(enter);
+			});
+			// The burst latches on the second key; every key from there belongs to the scanner.
+			expect(keys).toEqual(['1']);
+			expect(enter.defaultPrevented).toBe(true);
+			act(() => jest.advanceTimersByTime(200));
+			expect(detected).toEqual(['12345678']);
+		} finally {
+			button.remove();
+			subscription.unsubscribe();
+		}
+	});
+
+	it('a slow typist and Enter outside a burst reach the focused button', () => {
+		renderHook(() => useBarcodeDetection());
+		const button = document.createElement('button');
+		const keys: string[] = [];
+		button.addEventListener('keydown', (event) => keys.push(event.key));
+		document.body.appendChild(button);
+		button.focus();
+		try {
+			act(() => {
+				for (const key of '123') {
+					button.dispatchEvent(
+						new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+					);
+					jest.advanceTimersByTime(200);
+				}
+			});
+			const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+			act(() => {
+				button.dispatchEvent(enter);
+			});
+			expect(keys).toEqual(['1', '2', '3', 'Enter']);
+			expect(enter.defaultPrevented).toBe(false);
+		} finally {
+			button.remove();
+		}
+	});
+
 	it('uses the updated minimum length when scanner settings change after mount', () => {
 		const detected: string[] = [];
 		const { result } = renderHook(() => useBarcodeDetection());
@@ -367,7 +541,9 @@ describe('useBarcodeDetection', () => {
 		// toast; the rejection is only logged (and visible in the test panel).
 		expect(detected).toEqual([]);
 		expect(mockToastShow).not.toHaveBeenCalled();
-		expect(barcodeLogger.warn).toHaveBeenCalledWith(
+		// …and only forensically: no toast means almost certainly a typist, so no amber row.
+		expect(barcodeLogger.warn).not.toHaveBeenCalled();
+		expect(barcodeLogger.debug).toHaveBeenCalledWith(
 			'Fast keystroke burst was shorter than the minimum length',
 			expect.objectContaining({
 				context: expect.objectContaining({ terminated: false, toastShown: false }),
@@ -375,6 +551,120 @@ describe('useBarcodeDetection', () => {
 		);
 
 		subscription.unsubscribe();
+	});
+
+	describe('cross-source de-dup (#2263)', () => {
+		it('a slow long wedge burst is still one scan when the device copy came first', () => {
+			avgThreshold$.next(40);
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			try {
+				act(() => {
+					hubEvents$.next({ code: '1234567890123', source: { kind: 'hid-pos' }, timestamp: 1 });
+					for (const [index, key] of [...'1234567890123'].entries()) {
+						if (index > 0) jest.advanceTimersByTime(30);
+						document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+					}
+					jest.advanceTimersByTime(151);
+				});
+
+				expect(barcodes).toEqual(['1234567890123']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
+
+		it.each([
+			{ name: 'one scan, two sources', structuredFirst: false },
+			{ name: 'structured source first', structuredFirst: true },
+		])('$name', ({ structuredFirst }) => {
+			const barcodes: string[] = [];
+			const events: ScanEvent[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const barcodeSubscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			const eventSubscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+			const deviceEvent: ScanEvent = {
+				code: '12345678',
+				source: { kind: 'hid-pos' },
+				timestamp: 1,
+			};
+			try {
+				act(() => {
+					if (structuredFirst) hubEvents$.next(deviceEvent);
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+					if (!structuredFirst) hubEvents$.next(deviceEvent);
+				});
+
+				expect({ barcodes, eventCount: events.length }).toEqual({
+					barcodes: ['12345678'],
+					eventCount: 1,
+				});
+			} finally {
+				barcodeSubscription.unsubscribe();
+				eventSubscription.unsubscribe();
+			}
+		});
+
+		it('emits a deliberate re-scan after the window', () => {
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			const deviceEvent: ScanEvent = {
+				code: '12345678',
+				source: { kind: 'hid-pos' },
+				timestamp: 1,
+			};
+			try {
+				act(() => {
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+					hubEvents$.next(deviceEvent);
+					jest.advanceTimersByTime(501);
+					hubEvents$.next(deviceEvent);
+				});
+
+				expect(barcodes).toEqual(['12345678', '12345678']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
+
+		it('passes different codes within the window', () => {
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			try {
+				act(() => {
+					hubEvents$.next({ code: '11111111', source: { kind: 'hid-pos' }, timestamp: 1 });
+					hubEvents$.next({ code: '22222222', source: { kind: 'hid-pos' }, timestamp: 1 });
+				});
+
+				expect(barcodes).toEqual(['11111111', '22222222']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
+
+		it('same source, same code, 300 ms apart counts twice', () => {
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			try {
+				act(() => {
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+					jest.advanceTimersByTime(300);
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+				});
+
+				expect(barcodes).toEqual(['12345678', '12345678']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
 	});
 
 	it('bridges attributed scans to barcode$ without duplicating scanEvents$', () => {

@@ -1,0 +1,196 @@
+import * as React from 'react';
+import { Pressable, type PressableProps, View } from 'react-native';
+
+import { flexRender, type RowData } from '@tanstack/react-table';
+
+import { usePointer } from '@wcpos/components/lib/device';
+import { cn } from '@wcpos/components/lib/utils';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
+import { TableCell } from '@wcpos/components/table';
+import { TooltipPassiveTriggers } from '@wcpos/components/tooltip';
+
+import { getColumnStyle } from './column-style';
+
+import type { Row } from '../../../../table-types';
+import type { DataTableFeatures } from './index';
+
+export function getRowTestID(item: { id: string; original: unknown }) {
+	const record = (item.original as { record?: { payload?: { slug?: string }; uuid?: string } })
+		.record;
+	// Woo numeric ids can appear after a create ack; the adapter uuid/hit id is stable for the row.
+	const stableId = record?.payload?.slug ?? record?.uuid ?? item.id;
+	return stableId !== null && stableId !== undefined && stableId !== ''
+		? `data-table-row-${stableId}`
+		: undefined;
+}
+
+/**
+ * The table's column layout (visibility, widths, the caller's extra data), as the rows' input.
+ * The compiler caches what a row derives from `item`, and TanStack keeps the row object when a
+ * column is switched off or resized: without this the header changed and every row kept its
+ * old cells (2026-10-27, the POS Price column). A context reaches the row past parents that
+ * the compiler also serves from cache.
+ */
+export const RowLayoutContext = React.createContext<unknown>(null);
+
+/** `layout` is unused on purpose: passing it makes the row's cells depend on it. */
+function visibleCells<TData extends RowData>(
+	item: Row<TData, DataTableFeatures>,
+	_layout: unknown
+) {
+	return item.getVisibleCells();
+}
+
+export function DataTableRow<TData extends RowData>({
+	item,
+	onPress: press,
+	pressWhenActionsHidden,
+	testID,
+	trailing,
+	accessibilityLabel,
+	renderCell,
+}: {
+	item: Row<TData, DataTableFeatures>;
+	onPress?: PressableProps['onPress'];
+	/**
+	 * The record's opener on a table whose actions caret is the one control that opens it: with
+	 * the Actions column hidden the caret is gone, so the row takes the press instead.
+	 */
+	pressWhenActionsHidden?: () => void;
+	testID?: string;
+	trailing?: React.ReactNode;
+	/**
+	 * The row's name for when it is the only control: with the trailing control gone (the
+	 * Actions column hidden) the row takes the button role and this name; while a trailing
+	 * button is present it is ignored, so no button nests in a button on web.
+	 */
+	accessibilityLabel?: string;
+	/** A sub-row's cells render against their own context (the inline variations table). */
+	renderCell?: (
+		cell: ReturnType<Row<TData, DataTableFeatures>['getVisibleCells']>[number]
+	) => React.ReactNode;
+}) {
+	const pointer = usePointer();
+	// On web the pressable's host node: the press guard below must tell it from inner controls.
+	const pressable = React.useRef<React.ElementRef<typeof Pressable>>(null);
+	const layout = React.useContext(RowLayoutContext);
+	const cells = visibleCells(item, layout);
+	const content = (cell: (typeof cells)[number]) => (
+		<ErrorBoundary key={cell.id}>
+			<Suspense>
+				{cell.column.id === 'actions' && trailing !== undefined
+					? trailing
+					: renderCell
+						? renderCell(cell)
+						: flexRender(cell.column.columnDef.cell, cell.getContext())}
+			</Suspense>
+		</ErrorBoundary>
+	);
+	// The actions cell (the caller's trailing control: `+`, a chevron, the in-cart count) sits
+	// BESIDE the row's pressable, never inside it: a button inside a button is invalid HTML and
+	// React reports it on web. The pressable covers every other cell.
+	const actions = cells.find((cell) => cell.column.id === 'actions');
+	const body = cells.filter((cell) => cell.column.id !== 'actions');
+	const image = body.find((cell) => cell.column.id === 'image');
+	const primary = body.filter((cell) => cell.column.id !== 'price' && cell.column.id !== 'image');
+	// A table whose settings HIDE the actions column hides the trailing control with it, as the
+	// old table did; a table with no actions column at all shows the caller's control.
+	const actionsHidden = item.getAllCells().some((cell) => cell.column.id === 'actions') && !actions;
+	const trailingNode = actions ? content(actions) : actionsHidden ? null : trailing;
+	const onPress = press ?? (actionsHidden ? pressWhenActionsHidden : undefined);
+	// A caller may name the row for the case where its trailing control is gone (the Actions
+	// column hidden): then the row is the only add control and takes the button role; with a
+	// trailing button present it stays a plain pressable, so no button nests in a button on web.
+	const rowIsControl = accessibilityLabel !== undefined && trailingNode == null;
+	return (
+		// The row's testID names the whole row, trailing control included, as the old table's
+		// did: specs find a row's `+` inside the row, so the id must not sit on the pressable alone.
+		<View
+			testID={testID ?? getRowTestID(item)}
+			// The hover tint is the ROW's, actions cell included: the pressable stops short of
+			// that cell, so a hover there would leave the cell white (Paul, 2026-10-23). A row with
+			// no press (the management tables open a record from its actions icon only) has none.
+			className={
+				pointer === 'fine' && onPress
+					? 'border-border web:hover:bg-accent flex-row items-center border-b'
+					: 'border-border flex-row items-center border-b'
+			}
+		>
+			<Pressable
+				ref={pressable}
+				// No `accessibilityRole="button"` by default: on web that renders a <button>, and the
+				// cells may carry their own controls (category chips, an edit icon), which may not
+				// nest in one. A caller whose row is the only control names it (`accessibilityLabel`).
+				accessibilityRole={rowIsControl ? 'button' : undefined}
+				accessibilityLabel={rowIsControl ? accessibilityLabel : undefined}
+				onPress={
+					onPress
+						? (event) => {
+								// A press that started on a control inside a cell is that control's, not the
+								// row's (web bubbles the click; native's responder already stops here).
+								const target = (event as unknown as { nativeEvent?: { target?: unknown } })
+									.nativeEvent?.target;
+								// `Element` exists on web only; Hermes has no DOM, and native's responder
+								// system already grants the innermost pressable.
+								// A labelled row IS a <button> on web, so the row itself is not an inner control.
+								const control =
+									typeof Element !== 'undefined' && target instanceof Element
+										? target.closest('button,[role="button"],a,input,select,textarea')
+										: null;
+								if (control && control !== (pressable.current as unknown)) return;
+								onPress(event);
+							}
+						: undefined
+				}
+				className={cn(
+					'min-h-row flex-1 flex-row items-center',
+					onPress && 'active:bg-accent',
+					// The cells' own vertical inset (`TableCell` py-1.5), so a thumb never meets the rules.
+					pointer !== 'fine' && 'gap-3 px-3 py-1.5'
+				)}
+			>
+				{/* A tooltip in a cell (the price's tax) is a hint here, not a control: the press is the row's. */}
+				<TooltipPassiveTriggers>
+					{pointer === 'fine' ? (
+						body.map((cell, index) => (
+							<TableCell
+								key={cell.id}
+								style={getColumnStyle(
+									index === body.length - 1 && !actions
+										? { ...cell.column.columnDef.meta, width: undefined, flex: 1 }
+										: cell.column.columnDef.meta
+								)}
+							>
+								{content(cell)}
+							</TableCell>
+						))
+					) : (
+						<>
+							{image && (
+								<View style={getColumnStyle(image.column.columnDef.meta)}>{content(image)}</View>
+							)}
+							<View className="min-w-0 flex-1">{primary.map(content)}</View>
+							{body.filter((cell) => cell.column.id === 'price').map(content)}
+						</>
+					)}
+				</TooltipPassiveTriggers>
+			</Pressable>
+			{trailingNode !== undefined && trailingNode !== null ? (
+				pointer === 'fine' && actions ? (
+					// The trailing control is a row-sized target (`+`, the in-cart count, a chevron), wider
+					// than a cell's padding leaves: it sits centred in the column, so every row's control
+					// shares one centre line, the browse rows' chevron included (`TermRow`).
+					<TableCell
+						className="px-0"
+						style={getColumnStyle({ ...actions.column.columnDef.meta, align: 'center' })}
+					>
+						{trailingNode}
+					</TableCell>
+				) : (
+					<View className="pr-3">{trailingNode}</View>
+				)
+			) : null}
+		</View>
+	);
+}

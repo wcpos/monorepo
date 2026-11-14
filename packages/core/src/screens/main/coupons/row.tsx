@@ -1,0 +1,69 @@
+import * as React from 'react';
+
+import { useRouter } from 'expo-router';
+
+import { Icon } from '@wcpos/components/icon';
+import { ListRow } from '@wcpos/components/list-row';
+import { Text } from '@wcpos/components/text';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
+
+import { ActiveBadge } from './cells/active';
+import { useT } from '../../../contexts/translations';
+import { useStoreDayLabel } from '../../../hooks/use-store-day-label';
+import { useProAccess } from '../contexts/pro-access';
+import { useNumberFormat } from '../hooks/use-number-format';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
+import { discountTypeLabel } from './discount-type-label';
+
+export function CouponRow({ record }: { record: EngineRecord<'coupons'> }) {
+	const coupon = useRecordField(record, ({ payload }) => payload);
+	const { day } = useStoreDayLabel();
+	const { format } = useNumberFormat({ fixedDecimalScale: true });
+	const t = useT();
+	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	const router = useRouter();
+	const editable = !readOnly && caps.canEditCoupons;
+	const type = coupon.discount_type ?? 'percent';
+	return (
+		<ListRow
+			testID={`coupons-row-${record.uuid}`}
+			onPress={
+				editable
+					? () =>
+							router.push({
+								pathname: '/coupons/edit/[couponId]',
+								params: { couponId: record.uuid },
+							})
+					: undefined
+			}
+			bodyClassName="gap-1"
+			trailing={
+				<>
+					<ActiveBadge status={coupon.status} dateExpiresGmt={coupon.date_expires_gmt} />
+					<Icon name="chevronRight" className="text-muted-foreground" />
+				</>
+			}
+		>
+			<Text numberOfLines={1} className="font-semibold">
+				{coupon.code}
+			</Text>
+			{!!coupon.description && (
+				<Text numberOfLines={1} variant="key">
+					{coupon.description}
+				</Text>
+			)}
+			<Text numberOfLines={1} variant="key">
+				{[
+					discountTypeLabel(type, t),
+					format(Number(coupon.amount)),
+					coupon.date_expires_gmt
+						? `${t('coupons.expires')} ${day(coupon.date_expires_gmt)}`
+						: null,
+				]
+					.filter(Boolean)
+					.join(' · ')}
+			</Text>
+		</ListRow>
+	);
+}

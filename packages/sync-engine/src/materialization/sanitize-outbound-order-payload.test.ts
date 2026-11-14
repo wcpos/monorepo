@@ -62,4 +62,23 @@ describe('sanitizeOutboundOrderPayload', () => {
 
 		expect(sanitizeOutboundOrderPayload(input)).toBe(input);
 	});
+
+	it('a coalesced snapshot carrying the resident ledger and a paid status leaves both off the wire', () => {
+		const output = sanitizeOutboundOrderPayload({
+			status: 'completed',
+			customer_note: 'note',
+			total: '10.00',
+			payment_method: 'pos_cash',
+			meta_data: [
+				{ key: '_wcpos_payments', value: { schema: 1, payments: [{ id: 'p' }] } },
+				{ key: '_wcpos_payment_method', value: 'pos_cash' },
+				{ key: 'custom', value: 'kept' },
+			],
+		});
+
+		expect(output).toEqual({
+			customer_note: 'note',
+			meta_data: [{ key: 'custom', value: 'kept' }],
+		});
+	});
 });

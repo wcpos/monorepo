@@ -1,6 +1,7 @@
 import 'whatwg-fetch';
 
 import { AppInfo } from '@wcpos/utils/app-info';
+import { SYNC_PROTOCOL_VERSION } from '@wcpos/utils/sync-protocol';
 
 import { refreshAccessToken, resetRefreshCooldown } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
@@ -80,8 +81,12 @@ describe('refreshAccessToken', () => {
 			{ headers: { 'x-wcpos': '1' } }
 		);
 		const [refreshUrl, , requestConfig] = post.mock.calls[0];
-		expect(new URL(refreshUrl).searchParams.get('wcpos_protocol')).toBe('2');
-		expect(new URL(refreshUrl).searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
+		expect(new URL(refreshUrl).searchParams.get('wcpos_protocol')).toBe(
+			String(SYNC_PROTOCOL_VERSION)
+		);
+		expect(new URL(refreshUrl).searchParams.get('wcpos_client')).toBe(
+			`web/${AppInfo.version} payments=1.3`
+		);
 		expect(requestConfig.headers).not.toHaveProperty('x-wcpos-protocol');
 		expect(requestConfig.headers).not.toHaveProperty('x-wcpos-client');
 		expect(wpUser.incrementalPatch).toHaveBeenCalledWith({
@@ -110,8 +115,8 @@ describe('refreshAccessToken', () => {
 				{
 					headers: {
 						'x-wcpos': '1',
-						'x-wcpos-protocol': '2',
-						'x-wcpos-client': `android/${AppInfo.version}`,
+						'x-wcpos-protocol': String(SYNC_PROTOCOL_VERSION),
+						'x-wcpos-client': `android/${AppInfo.version} payments=1.3`,
 						'user-agent': 'WCPOS/1.2.3 (android; build 45)',
 					},
 				}
@@ -137,8 +142,8 @@ describe('refreshAccessToken', () => {
 		const [refreshUrl, , requestConfig] = post.mock.calls[0];
 		expect(new URL(refreshUrl).searchParams.has('wcpos_protocol')).toBe(false);
 		expect(new URL(refreshUrl).searchParams.has('wcpos_client')).toBe(false);
-		expect(requestConfig.headers['x-wcpos-protocol']).toBe('2');
-		expect(requestConfig.headers['x-wcpos-client']).toBe(`web/${AppInfo.version}`);
+		expect(requestConfig.headers['x-wcpos-protocol']).toBe(String(SYNC_PROTOCOL_VERSION));
+		expect(requestConfig.headers['x-wcpos-client']).toBe(`web/${AppInfo.version} payments=1.3`);
 	});
 
 	it('returns null and marks authentication failed when refresh fails', async () => {
@@ -261,7 +266,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
+			`https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`,
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'x-wcpos': '1' } }
 		);
@@ -278,7 +283,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
+			`https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`,
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'x-wcpos': '1' } }
 		);
@@ -295,7 +300,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
+			`https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`,
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'x-wcpos': '1' } }
 		);
@@ -314,7 +319,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post.mock.calls[0]?.[0]).toBe(
-			'https://example.test/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Frefresh&wcpos_protocol=2&wcpos_client=web%2F0.0.0'
+			`https://example.test/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Frefresh&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`
 		);
 	});
 
@@ -330,7 +335,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post.mock.calls[0]?.[0]).toBe(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0'
+			`https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`
 		);
 	});
 
@@ -458,15 +463,155 @@ describe('refreshAccessToken', () => {
 			expect(loggerCalls.info).not.toHaveBeenCalled();
 		});
 
-		it('keeps a transient refresh failure at warn (attention only if it persists)', async () => {
+		it('keeps one transient refresh failure forensic: the session is still valid and it retries', async () => {
 			const post = jest.fn().mockRejectedValue(new Error('HTTP 503: Service Unavailable'));
 			const { config } = makeConfig(post);
 
 			await refreshAccessToken({ ...config, operationId: 'transient-arc' });
 
-			expect(loggerCalls.warn).toHaveBeenCalledWith('Unable to refresh session', expect.anything());
-			expect(loggerCalls.warn.mock.calls[0]?.[1]?.terminal).not.toHaveProperty('operationId');
+			// Never AUTH101 "session ended", never AUTH999 "contact support" for a blip.
+			expect(loggerCalls.warn).not.toHaveBeenCalled();
 			expect(loggerCalls.error).not.toHaveBeenCalled();
+			expect(loggerCalls.debug).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ code: 'SYNC131' })
+			);
+		});
+
+		it('counts the streak per session: another cashier’s failures do not make a first blip "persist"', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const first = makeConfig(post).config;
+			const other = makeConfig(post).config;
+			(other.wpUser as unknown as { id: number }).id = 2;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (let attempt = 0; attempt < 2; attempt += 1) {
+					now += 120_000;
+					await refreshAccessToken({ ...first, operationId: `first-${attempt}` });
+				}
+				now += 120_000;
+				await refreshAccessToken({ ...other, operationId: 'other-0' });
+			} finally {
+				clock.mockRestore();
+			}
+
+			expect(loggerCalls.warn).not.toHaveBeenCalled();
+			expect(loggerCalls.error).not.toHaveBeenCalled();
+		});
+
+		it('does not let another session’s backoff skip this session’s refresh', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const first = makeConfig(post).config;
+			const other = makeConfig(post).config;
+			(other.wpUser as unknown as { id: number }).id = 2;
+
+			await refreshAccessToken({ ...first, operationId: 'first' });
+			await refreshAccessToken({ ...other, operationId: 'other' });
+
+			// Both sessions reached the store: the first's cooldown did not apply to the second.
+			expect(post).toHaveBeenCalledTimes(2);
+		});
+
+		it('keys the session by store as well as user: the same user id on another store starts fresh', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			// No `url`: the engine's session fetcher passes only the API bases.
+			const storeA = makeConfig(post, { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' }).config;
+			const storeB = makeConfig(post, { wcpos_api_url: 'https://b.test/wp-json/wcpos/v2/' }).config;
+
+			await refreshAccessToken({ ...storeA, operationId: 'a' });
+			await refreshAccessToken({ ...storeB, operationId: 'b' });
+
+			// Store A's backoff did not skip store B's refresh.
+			expect(post).toHaveBeenCalledTimes(2);
+		});
+
+		it('gives the same store the same key whether or not the caller passes its url', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const engineSite = { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' };
+			const httpClientSite = { ...engineSite, url: 'https://a.test' };
+			const viaEngine = makeConfig(post, engineSite);
+			const viaHttpClient = makeConfig(post, httpClientSite as never);
+			(viaHttpClient.config as { wpUser: unknown }).wpUser = viaEngine.wpUser;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (const config of [viaEngine.config, viaHttpClient.config, viaEngine.config]) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: 'alternating' });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			// Three failures for ONE store, alternating callers: the streak persisted.
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+		});
+
+		it('keeps each session’s streak its own: interleaved stores neither reset nor inflate each other', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const storeA = makeConfig(post, { wcpos_api_url: 'https://a.test/wp-json/wcpos/v2/' }).config;
+			const storeB = makeConfig(post, { wcpos_api_url: 'https://b.test/wp-json/wcpos/v2/' }).config;
+
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (const config of [storeA, storeA, storeB, storeA]) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: 'interleaved' });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			// A's third failure persists (B's in between neither reset A nor counted toward it).
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+			expect(loggerCalls.warn).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ context: expect.objectContaining({ failureStreak: 3 }) })
+			);
+		});
+
+		it('codes a 2xx refresh with an unreadable body SYNC151 (malformed), not "cannot be reached"', async () => {
+			const post = jest.fn().mockResolvedValue({ status: 200, data: { unexpected: true } });
+			const { config } = makeConfig(post);
+
+			await refreshAccessToken({ ...config, operationId: 'malformed' });
+
+			expect(loggerCalls.debug).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({ code: 'SYNC151' })
+			);
+		});
+
+		it('warns with the store’s own code once transient refresh failures persist', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('Network request failed'));
+			const { config } = makeConfig(post);
+
+			// Step past each backoff window so every attempt really reaches the store.
+			let now = Date.now();
+			const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+			try {
+				for (let attempt = 0; attempt < 3; attempt += 1) {
+					now += 120_000;
+					await refreshAccessToken({ ...config, operationId: `transient-${attempt}` });
+				}
+			} finally {
+				clock.mockRestore();
+			}
+
+			expect(loggerCalls.error).not.toHaveBeenCalled();
+			expect(loggerCalls.warn).toHaveBeenCalledTimes(1);
+			expect(loggerCalls.warn).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({
+					code: 'SYNC121',
+					context: expect.objectContaining({ failureStreak: 3 }),
+				})
+			);
+			expect(loggerCalls.warn.mock.calls[0]?.[1]?.terminal).not.toHaveProperty('operationId');
 		});
 	});
 });
@@ -475,14 +620,44 @@ describe('refreshAccessToken', () => {
 // Headers are normalized as HTTP fields, not compared as JS dictionary casing/order.
 describe('refresh wire fixtures', () => {
 	it.each([
-		['web', false, false, '?wcpos_protocol=2&wcpos_client=web%2F0.0.0'],
+		[
+			'web',
+			false,
+			false,
+			`?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`,
+		],
 		['web', true, false, ''],
-		['web', false, true, '&wcpos_protocol=2&wcpos_client=web%2F0.0.0'],
+		[
+			'web',
+			false,
+			true,
+			`&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=web%2F0.0.0+payments%3D1.3`,
+		],
 		['web', true, true, ''],
-		['android', false, false, '?wcpos_protocol=2&wcpos_client=android%2F0.0.0'],
-		['android', true, false, '?wcpos_protocol=2&wcpos_client=android%2F0.0.0'],
-		['android', false, true, '&wcpos_protocol=2&wcpos_client=android%2F0.0.0'],
-		['android', true, true, '&wcpos_protocol=2&wcpos_client=android%2F0.0.0'],
+		[
+			'android',
+			false,
+			false,
+			`?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=android%2F0.0.0+payments%3D1.3`,
+		],
+		[
+			'android',
+			true,
+			false,
+			`?wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=android%2F0.0.0+payments%3D1.3`,
+		],
+		[
+			'android',
+			false,
+			true,
+			`&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=android%2F0.0.0+payments%3D1.3`,
+		],
+		[
+			'android',
+			true,
+			true,
+			`&wcpos_protocol=${SYNC_PROTOCOL_VERSION}&wcpos_client=android%2F0.0.0+payments%3D1.3`,
+		],
 	] as const)('%s capability=%s query=%s', async (platform, capability, query, suffix) => {
 		const previous = { ...AppInfo };
 		Object.assign(AppInfo, {
@@ -514,12 +689,16 @@ describe('refresh wire fixtures', () => {
 					platform === 'android'
 						? {
 								'x-wcpos': '1',
-								'x-wcpos-protocol': '2',
-								'x-wcpos-client': 'android/0.0.0',
+								'x-wcpos-protocol': String(SYNC_PROTOCOL_VERSION),
+								'x-wcpos-client': 'android/0.0.0 payments=1.3',
 								'user-agent': 'WCPOS/test (android)',
 							}
 						: capability
-							? { 'x-wcpos': '1', 'x-wcpos-protocol': '2', 'x-wcpos-client': 'web/0.0.0' }
+							? {
+									'x-wcpos': '1',
+									'x-wcpos-protocol': String(SYNC_PROTOCOL_VERSION),
+									'x-wcpos-client': 'web/0.0.0 payments=1.3',
+								}
 							: { 'x-wcpos': '1' },
 			});
 		} finally {

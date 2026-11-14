@@ -18,7 +18,11 @@ export function FormSwitch({
 	...props
 }: FormItemProps<boolean> & Partial<React.ComponentProps<typeof Switch>>) {
 	const switchRef = React.useRef<React.ComponentRef<typeof Switch>>(null);
-	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+	const { itemNativeID, labelNativeID, ariaProps } = useFormControlAria({
+		label,
+		description,
+		onLabelPress: handleOnLabelPress,
+	});
 
 	React.useImperativeHandle(ref, () => {
 		if (!switchRef.current) {
@@ -32,7 +36,12 @@ export function FormSwitch({
 	}
 
 	return (
-		<FormItem className="px-1">
+		// No side padding: the switch's left edge is the column's, where the other fields and the
+		// labels above it start.
+		<FormItem nativeID={itemNativeID}>
+			{/* No row floor: stacked switches keep the web pitch. Their 44 pt squares may overlap
+			    by a few points in the gap between two tracks, where the later row wins; each
+			    square still covers its own track. */}
 			<View className="w-full flex-row items-center gap-3">
 				<Switch
 					ref={switchRef}

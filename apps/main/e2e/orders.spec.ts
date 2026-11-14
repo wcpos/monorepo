@@ -1,9 +1,20 @@
 import { expect, type Page } from '@playwright/test';
 
-import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
-import { getStoreVariant, navigateToPage, tryAddProductBySku } from './fixtures';
+import {
+	closeOrderSheet,
+	getStoreVariant,
+	navigateToPage,
+	openOrderSheet,
+	tryAddProductBySku,
+} from './fixtures';
+import {
+	addCheckoutProbeProductAgain,
+	isolatedProductTest as test,
+	tryAddRunPrivateSimpleProduct,
+} from './checkout-probe';
 import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
 import {
+	checkoutControl,
 	expectMoneyMatches,
 	expectTaxParity,
 	openCheckout,
@@ -15,7 +26,7 @@ import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
 
 /**
  * Layer 2 is live: pro-authenticated shards use one of 16 provisioned
- * e2e-cashier accounts. Serialized PR runs use band A (slots 1..8); push,
+ * e2e-cashier accounts. PR runs use band A (slots 1..8); push,
  * workflow_dispatch, and local runs use band B (slots 9..16). The normalized
  * shard index selects within the band. Two simultaneous non-PR runs can still
  * share band B (accepted residual); secretless runs keep the demo login.
@@ -60,11 +71,7 @@ test.describe('Orders Page (Pro)', () => {
 		test.skip(variant !== 'pro', 'Orders page requires Pro');
 	});
 
-	test('should navigate to Orders page and see order list', async ({ posPage: page }) => {
-		await navigateToOrders(page);
-	});
-
-	test('should show order columns', async ({ posPage: page }) => {
+	test('Orders page columns and filters', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
 		// Wait for orders data to load first
@@ -76,6 +83,8 @@ test.describe('Orders Page (Pro)', () => {
 		const columnHeaders = screen.getByRole('columnheader');
 		await expect(columnHeaders.first()).toBeVisible({ timeout: 15_000 });
 		expect(await columnHeaders.count()).toBeGreaterThanOrEqual(2);
+
+		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show orders or empty state', async ({ posPage: page }) => {
@@ -120,6 +129,7 @@ test.describe('Orders Page (Pro)', () => {
 			{ timeout: 90_000 }
 		);
 		savePending.catch(() => {});
+		await openOrderSheet(page);
 		await page.getByTestId('save-to-server-button').click();
 		const saveResponse = await savePending;
 		if (!saveResponse.ok()) {
@@ -152,7 +162,9 @@ test.describe('Orders Page (Pro)', () => {
 		if (ackDoc && sentPayload.cart_tax !== undefined) {
 			expectTaxParity(ackDoc.cart_tax, sentPayload.cart_tax, 'cart_tax parity');
 		}
+		await openOrderSheet(page);
 		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+		await closeOrderSheet(page);
 
 		const screen = await navigateToOrders(page);
 		const searchInput = screen.getByTestId('search-orders');
@@ -170,27 +182,53 @@ test.describe('Orders Page (Pro)', () => {
 			.toBeGreaterThanOrEqual(1);
 	});
 
-	test('should show filter pills', async ({ posPage: page }) => {
-		const screen = await navigateToOrders(page);
-
-		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
-	});
-
-	test('should show order actions menu', async ({ posPage: page }, testInfo) => {
+	test('should open the order modal with its actions from the row', async ({
+		posPage: page,
+	}, testInfo) => {
 		await addOrderProbeProduct(page);
 		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
-		const { uuid } = await openCheckout(page);
-		await page.getByTestId('cancel-checkout-button').click();
+		const { uuid, surface } = await openCheckout(page);
+		await checkoutControl(page, surface, 'close').click();
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 
 		const screen = await navigateToOrders(page);
 		const createdRow = screen.getByTestId(`data-table-row-${uuid}`);
 		await expect(createdRow).toBeVisible({ timeout: 30_000 });
-		const actionsButton = createdRow.getByTestId('order-actions-button');
-		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
-		await actionsButton.click();
+		// On a fine pointer the row is no press target: the actions caret is the one control that
+		// opens the order (#2993, Paul 2026-10-27; `orders/cells/actions.tsx`).
+		await createdRow.getByTestId('order-open-button').click();
 
-		await expect(page.getByTestId('order-delete-menu-item')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('order-modal-delete')).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('a phone reopen from Orders lands on the tabs with that order in the cart (#2374)', async ({
+		posPage: page,
+	}, testInfo) => {
+		await addOrderProbeProduct(page);
+		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
+		const { uuid, surface } = await openCheckout(page);
+		await checkoutControl(page, surface, 'close').click();
+		// A second saved order takes the cart, so only the reopen can bring the first one back.
+		// (A bare new-order tab would not do: the cart treats the route's old id as an echo.)
+		await page.getByTestId('new-order-tab').click();
+		await addCheckoutProbeProductAgain(page);
+		const second = await openCheckout(page);
+		await checkoutControl(page, second.surface, 'close').click();
+
+		const screen = await navigateToOrders(page);
+		await screen.getByTestId(`data-table-row-${uuid}`).getByTestId('order-open-button').click();
+		await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
+		await page.setViewportSize({ width: 412, height: 915 });
+		await page.getByTestId('order-modal-reopen').filter({ visible: true }).click();
+
+		await expect(page).toHaveURL(new RegExp(`/cart/${uuid}$`), { timeout: 30_000 });
+		// The (tabs) navigator, not the (columns) fallback that draws the same tab bar. The web
+		// document title cannot tell them apart: it reads "WCPOS" on both.
+		await expect(page.getByTestId('pos-tabs-navigator')).toBeVisible({ timeout: 30_000 });
+		await expect(
+			page.getByTestId(`open-order-tab-${uuid}`).filter({ visible: true })
+		).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
 	});
 });
 
@@ -201,11 +239,6 @@ test.describe('Orders Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
-	});
-
-	test('should show upgrade overlay on Orders', async ({ posPage: page }) => {
-		await navigateToPage(page, 'orders');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {

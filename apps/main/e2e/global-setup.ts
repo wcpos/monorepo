@@ -8,15 +8,28 @@ import {
 	LOADED_COUNT_READY,
 	LOADED_COUNT_TEST_ID,
 } from './catalogue-readiness';
-import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
+import {
+	ALL_E2E_CASHIER_USERNAMES,
+	cashierAuthStateName,
+	currentShardIndex,
+	getE2ECashierAuth,
+} from './cashier-slot';
 import {
 	COLD_START_ENABLED,
 	COLD_START_STATE_NAME,
 	installThinCatalogueRoutes,
 } from './cold-start';
-import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
-import { restoreLocalStorage } from './indexeddb-helpers';
+import {
+	authenticateWithStore,
+	E2E_PASSWORD,
+	E2E_USERNAME,
+	stubStoreVersionForE2E,
+} from './fixtures';
+import { hasTillAnchor, restoreLocalStorageAsClone } from './indexeddb-helpers';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
+import { closeStaleRegisterSessions } from './register-session-cleanup';
+import { startWriterLoginHolder } from './search-probe';
+import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
 // Resolved by playwright.config, never re-derived here: these used to be two
 // independent copies with different fallbacks, so a lane could bootstrap against
 // one store and then run its specs against another.
@@ -25,6 +38,15 @@ import { assertLaneStoresConfigured, FREE_STORE_URL, PRO_STORE_URL } from '../pl
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 const AUTH_STATE_DIR = path.join(__dirname, '.auth-state');
+
+// What the latest setupVariant attempt saw (console warnings/errors, the thrown
+// message, the visible text). Module-level so setupVariantWithRetry can tell a
+// store outage from a real login failure without changing setupVariant's shape.
+let lastSetupEvidence = '';
+
+// These answer 2xx without a valid credential, so a dead restored session would pass.
+// CI run 37281168136, token minted 2026-09-03.
+const PUBLIC_WCPOS_V2_ROUTES = ['echo', 'ping', 'site', 'auth/test'];
 
 const STUB_UPLOADS_IN_CROSS_ORIGIN_E2E = process.env.E2E_STUB_UPLOADS !== 'false';
 const TRANSPARENT_PNG_BASE64 =
@@ -56,12 +78,16 @@ export function isAuthenticatedStoreApiResponse(
 	const url = new URL(responseUrl);
 	const store = new URL(storeUrl);
 	const storePath = store.pathname.replace(/\/+$/, '');
+	const apiPath = `${storePath}/wp-json/wcpos/v2/`;
+	const restRoute = url.searchParams.get('rest_route');
 	return (
 		responseOk &&
 		url.origin === store.origin &&
-		(url.pathname.startsWith(`${storePath}/wp-json/wcpos/v2/`) ||
+		((url.pathname.startsWith(apiPath) &&
+			!PUBLIC_WCPOS_V2_ROUTES.includes(url.pathname.slice(apiPath.length).replace(/\/$/, ''))) ||
 			(url.pathname.replace(/\/+$/, '') === storePath &&
-				url.searchParams.get('rest_route')?.startsWith('/wcpos/v2/') === true))
+				restRoute?.startsWith('/wcpos/v2/') === true &&
+				!PUBLIC_WCPOS_V2_ROUTES.includes(restRoute.slice('/wcpos/v2/'.length).replace(/\/$/, ''))))
 	);
 }
 
@@ -151,7 +177,8 @@ async function reuseValidAuthState(
 	stateName: string,
 	variant: StoreVariant,
 	storeUrl: string,
-	baseURL: string
+	baseURL: string,
+	trust = false
 ): Promise<string[] | null> {
 	const statePath = path.join(AUTH_STATE_DIR, `${stateName}.json`);
 	if (!fs.existsSync(statePath)) return null;
@@ -168,6 +195,19 @@ async function reuseValidAuthState(
 	if (!state.opfs || !state.localStorage || !Array.isArray(state.storeIds)) {
 		fs.rmSync(statePath, { force: true });
 		return null;
+	}
+	// Its register was never anchored, so every restore would adopt the old till
+	// instead of re-minting its own.
+	if (!hasTillAnchor(state.localStorage as Record<string, string>)) {
+		console.log(
+			`[global-setup] ${stateName}: cached auth state predates the till anchor; logging in again`
+		);
+		fs.rmSync(statePath, { force: true });
+		return null;
+	}
+	if (trust) {
+		console.log(`[global-setup] Reusing ${stateName} state from this run's shared setup`);
+		return state.storeIds as string[];
 	}
 
 	const browser = await chromium.launch();
@@ -187,6 +227,7 @@ async function reuseValidAuthState(
 		// the booted app immediately talks wcpos/v2 (census, open-orders poll),
 		// so an authenticated 2xx arrives within seconds when the token lives
 		// and never arrives when it is dead.
+		// Public probes (echo, ping, site, auth/test) do not count.
 		let sawAuthenticatedOk = false;
 		page.on('response', (response) => {
 			if (isAuthenticatedStoreApiResponse(response.url(), storeUrl, response.ok())) {
@@ -196,7 +237,7 @@ async function reuseValidAuthState(
 		await page.route('**/*', blockScriptRequests);
 		await page.goto(baseURL, { waitUntil: 'commit' });
 		await restoreOPFS(page, state.opfs as never);
-		await restoreLocalStorage(page, state.localStorage as never);
+		await restoreLocalStorageAsClone(page, state.localStorage as Record<string, string>);
 		await page.unroute('**/*', blockScriptRequests);
 		await page.reload({ waitUntil: 'commit' });
 		await page.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
@@ -209,7 +250,7 @@ async function reuseValidAuthState(
 		}
 		if (
 			await page
-				.getByTestId('error-boundary-fallback')
+				.locator('[data-testid="error-boundary-fallback"], [data-testid="error-boundary-screen"]')
 				.first()
 				.isVisible()
 				.catch(() => false)
@@ -232,6 +273,19 @@ async function reuseValidAuthState(
 		await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
 			timeout: CATALOGUE_READY_TIMEOUT_MS,
 		});
+		// The category root passes the count check too (its footer carries the catalogue total),
+		// so a snapshot whose till browses by categories — one exported before setup chose All
+		// products — would be reused and every product-root spec would open on term tiles.
+		// The product grid is what the specs need; a browse root is a stale snapshot.
+		if (
+			await page
+				.getByTestId('browse-root')
+				.first()
+				.isVisible()
+				.catch(() => false)
+		) {
+			throw new Error('restored state browses by a taxonomy, not All products');
+		}
 		console.log(`[global-setup] Reusing cached ${stateName} state (validated boot + catalogue)`);
 		return state.storeIds as string[];
 	} catch (error) {
@@ -244,6 +298,15 @@ async function reuseValidAuthState(
 		await browser.close();
 	}
 }
+
+// The e2e-setup job (#2321) makes every shard's states once per run. Only the run
+// attempt that made them skips the validating boot; a re-run's tokens may have aged.
+const SHARED_SETUP_MARKER = path.join(AUTH_STATE_DIR, 'shared-setup-run.txt');
+const RUN_ATTEMPT = `${process.env.GITHUB_RUN_ID}#${process.env.GITHUB_RUN_ATTEMPT}`;
+const sharedStateIsFromThisAttempt = () =>
+	!!process.env.GITHUB_RUN_ID &&
+	fs.existsSync(SHARED_SETUP_MARKER) &&
+	fs.readFileSync(SHARED_SETUP_MARKER, 'utf-8') === RUN_ATTEMPT;
 
 /**
  * Run auth for a single store variant, export state, and save to disk.
@@ -273,19 +336,23 @@ async function setupVariant(
 		shardIndex?: number;
 		/** Open the POS against THIS store rather than whichever lists first. */
 		storeId?: string;
+		/** Take a well-formed saved state as is, without the validating boot. */
+		trust?: boolean;
 	} = {}
 ): Promise<string[]> {
 	const cashierAuth = getE2ECashierAuth(variant, options.shardIndex ?? 0);
 	const stateName = cashierAuthStateName(options.stateName ?? variant, cashierAuth);
+	lastSetupEvidence = '';
+
+	if (!options.coldStart) {
+		const reused = await reuseValidAuthState(stateName, variant, storeUrl, baseURL, options.trust);
+		if (reused) return reused;
+	}
+	// After the reuse checks, so in CI only the e2e-setup job logs it (#2321).
 	console.log(
 		`[global-setup] Authenticating with ${variant} store: ${storeUrl}` +
 			(options.coldStart ? ' (cold start — bulk catalogue sync blocked)' : '')
 	);
-
-	if (!options.coldStart) {
-		const reused = await reuseValidAuthState(stateName, variant, storeUrl, baseURL);
-		if (reused) return reused;
-	}
 
 	let discoveredStoreIds: string[] = [];
 	const browser = await chromium.launch();
@@ -322,6 +389,7 @@ async function setupVariant(
 	authPage.on('console', (msg) => {
 		if (msg.type() === 'error' || msg.type() === 'warning') {
 			console.log(`[global-setup] [${variant}] ${msg.type()}: ${msg.text()}`);
+			lastSetupEvidence += `${msg.text()}\n`;
 		}
 	});
 	authPage.on('pageerror', (err) => {
@@ -349,6 +417,22 @@ async function setupVariant(
 		});
 		discoveredStoreIds = storeIds;
 
+		// `authenticateWithStore` set All products (a till that never chose browses by
+		// categories; the specs read the product grid at the root), but it returns when the
+		// dialog has closed, and the form's string values are debounced with the RxState write
+		// un-awaited, so closing the page here could terminate the OPFS worker before `all` is
+		// committed and export a snapshot that still browses by categories (Codex, #2415). Read
+		// it back from a fresh boot before exporting: no browse root is the persisted setting.
+		// The warm snapshot also needs the catalogue count ready; the cold one has no rows.
+		await authPage.reload({ waitUntil: 'commit' });
+		await authPage.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
+		if (!options.coldStart) {
+			await expect(authPage.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+				timeout: CATALOGUE_READY_TIMEOUT_MS,
+			});
+		}
+		await expect(authPage.getByTestId('browse-root')).toHaveCount(0);
+
 		console.log(`[global-setup] Auth complete for ${stateName}, exporting state...`);
 
 		// Close the auth page so the OPFS worker terminates and releases all
@@ -373,6 +457,7 @@ async function setupVariant(
 
 		console.log(`[global-setup] Saved ${stateName} state (${Object.keys(opfs).length} OPFS files)`);
 	} catch (error) {
+		lastSetupEvidence += `${error instanceof Error ? error.message : String(error)}\n`;
 		// Capture screenshot for debugging — use the auth page if still open
 		const screenshotPage = context.pages().at(-1);
 		if (screenshotPage) {
@@ -387,6 +472,7 @@ async function setupVariant(
 				.evaluate(() => document.body?.innerText?.substring(0, 500) || '')
 				.catch(() => '');
 			console.log(`[global-setup] Visible text: ${bodyText}`);
+			lastSetupEvidence += `${bodyText}\n`;
 		}
 		throw error;
 	} finally {
@@ -395,6 +481,25 @@ async function setupVariant(
 	}
 
 	return discoveredStoreIds;
+}
+
+/**
+ * setupVariant, retried with backoff only when the store itself was unreachable.
+ * Each attempt launches a fresh browser and context; any other failure rethrows.
+ */
+async function setupVariantWithRetry(...args: Parameters<typeof setupVariant>): Promise<string[]> {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return await setupVariant(...args);
+		} catch (error) {
+			const delay = loginRetryDelaysMs[attempt - 1];
+			if (delay === undefined || !isStoreUnreachable(lastSetupEvidence)) throw error;
+			console.log(
+				`[global-setup] [${args[0]}] store unreachable (attempt ${attempt}/${loginRetryDelaysMs.length + 1}); retrying in ${delay / 1000}s`
+			);
+			await new Promise((resolve) => setTimeout(resolve, delay));
+		}
+	}
 }
 
 /**
@@ -408,17 +513,66 @@ async function globalSetup(config: FullConfig) {
 	// Normalize Playwright's 1-based shard number to the 0-based index used
 	// within the PR (1..8) or non-PR/local (9..16) cashier band.
 	const shardIndex = currentShardIndex(config);
+	const staggerMs = setupStaggerMs(shardIndex, !!process.env.CI);
+	if (staggerMs > 0) {
+		console.log(`[global-setup] Staggering shard ${shardIndex} start by ${staggerMs / 1000}s`);
+		await new Promise((resolve) => setTimeout(resolve, staggerMs));
+	}
 
 	// Create the state directory
 	fs.mkdirSync(AUTH_STATE_DIR, { recursive: true });
 
+	// The e2e-setup job (no E2E_SHARD_INDEX, so no stagger): every shard in turn.
+	// Trusting what it just saved syncs the free user once, each pro cashier once.
+	const sharedShards = Number(process.env.E2E_SHARED_SETUP_SHARDS);
+	if (Number.isInteger(sharedShards) && sharedShards > 0) {
+		// Before any shard sells: close the stale register sessions the run's cashiers left open.
+		await closeStaleRegisterSessions(runCashierLogins(sharedShards));
+		for (let index = 0; index < sharedShards; index++) await setupShard(baseURL, index, true);
+		fs.writeFileSync(SHARED_SETUP_MARKER, RUN_ATTEMPT);
+		return;
+	}
+	const trust = sharedStateIsFromThisAttempt();
+	if (process.env.CI && !trust) {
+		console.log('[global-setup] WARNING: no shared e2e-setup state (#2321); this shard logs in');
+	}
+	await setupShard(baseURL, shardIndex, trust);
+	// One writer login holder per shard; workers never log in: concurrent logins on the shared writer row
+	// revoke each other (~/agent/research/dev-sites-e2e-red-2026-11-09/report.md §3, dev-pro 2026-11-12).
+	// Playwright runs the returned function as this setup's teardown.
+	return startWriterLoginHolder([FREE_STORE_URL, PRO_STORE_URL]);
+}
+
+/** Per store: one cashier login to close with, and every shard's cashier as an opener. */
+function runCashierLogins(shards: number) {
+	const variants: [StoreVariant, string][] = FREE_STORE_URL ? [['free', FREE_STORE_URL]] : [];
+	return [...variants, ['pro', PRO_STORE_URL] as [StoreVariant, string]].map(
+		([variant, storeUrl]) => {
+			const cashiers = Array.from({ length: shards }, (_, index) =>
+				getE2ECashierAuth(variant, index)
+			);
+			const login = cashiers[0] ?? { username: E2E_USERNAME, password: E2E_PASSWORD };
+			const openers = cashiers.map((cashier) => cashier?.username ?? E2E_USERNAME);
+			return {
+				storeUrl,
+				username: login.username,
+				password: login.password,
+				// Every band's cashiers too: a PR run cleans a stray a push run left, and back.
+				openers: [...new Set([...openers, ...ALL_E2E_CASHIER_USERNAMES])],
+			};
+		}
+	);
+}
+
+async function setupShard(baseURL: string, shardIndex: number, trust: boolean) {
+	const opts = { shardIndex, trust };
 	// Auth both variants in sequence (parallel would contend on the same stores)
 	// Naming a free store is what turns the free matrix on, so it is also exactly
 	// when the free bootstrap is worth paying for — an OAuth plus catalogue sync.
 	if (FREE_STORE_URL) {
-		await setupVariant('free', FREE_STORE_URL, baseURL, { shardIndex });
+		await setupVariantWithRetry('free', FREE_STORE_URL, baseURL, opts);
 	}
-	const proStoreIds = await setupVariant('pro', PRO_STORE_URL, baseURL, { shardIndex });
+	const proStoreIds = await setupVariantWithRetry('pro', PRO_STORE_URL, baseURL, opts);
 
 	// One auth state PER store, so a spec can target the store its assertions
 	// need. The tax-parity specs are the reason this exists: a store's rate set
@@ -458,7 +612,7 @@ async function globalSetup(config: FullConfig) {
 	// captured BEFORE steady-state sync fills the catalogue. Opt-in — it costs a
 	// second full OAuth round.
 	if (COLD_START_ENABLED) {
-		await setupVariant('pro', PRO_STORE_URL, baseURL, {
+		await setupVariantWithRetry('pro', PRO_STORE_URL, baseURL, {
 			stateName: COLD_START_STATE_NAME,
 			coldStart: true,
 			shardIndex,

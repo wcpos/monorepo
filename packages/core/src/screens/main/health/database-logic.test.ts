@@ -46,6 +46,9 @@ describe('database page logic', () => {
 	});
 
 	it('never computes a percentage for windowed collections even with a fresh census', () => {
+		const refunds = deriveCollectionRow('refunds', 10, census(100));
+		expect(refunds.windowed).toBe(true);
+		expect(refunds.percentLocal).toBeNull();
 		const orders = deriveCollectionRow('orders', 200, census(17887));
 		expect(orders.windowed).toBe(true);
 		expect(orders.percentLocal).toBeNull();

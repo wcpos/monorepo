@@ -7,18 +7,15 @@ import * as z from 'zod';
 
 import {
 	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
-import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose } from '@wcpos/components/modal';
+import { Form, FormField, FormTextarea } from '@wcpos/components/form';
+import { MoneyList } from '@wcpos/components/money-list';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Table,
 	TableBody,
@@ -27,12 +24,13 @@ import {
 	TableHeader,
 	TableRow,
 } from '@wcpos/components/table';
+import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	calculateLineItemRefund,
@@ -42,9 +40,10 @@ import {
 	formatLineItemRefundWithTax,
 	formatRefundUnitPrice,
 } from './calculate-refund';
-import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
+import { classifyRefundFailure } from './refund-failure';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
+import { FormAmountField } from '../../components/amount-field';
 import { useT } from '../../../../contexts/translations';
 import { useTaxSettingsOptional } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
@@ -120,6 +119,7 @@ export function RefundOrderForm({ order }: Props) {
 	const { store } = useAppState();
 	const refundMutation = useRefundMutation();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const http = useRestHttpClient();
 	const router = useRouter();
 	const taxRates = useTaxSettingsOptional();
@@ -155,6 +155,7 @@ export function RefundOrderForm({ order }: Props) {
 	});
 	const refundOptions = React.useMemo(() => deriveRefundDestinationOptions(gateway), [gateway]);
 	const isPosCash = orderData.payment_method === 'pos_cash';
+	const awaitingGateway = gatewaysLoading && !isPosCash;
 	const defaultDestination: RefundDestination = isPosCash
 		? 'cash'
 		: refundOptions[0]?.enabled
@@ -192,7 +193,12 @@ export function RefundOrderForm({ order }: Props) {
 				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
 				setRefundDetailsLoading(false);
 			})
-			.catch(() => {
+			.catch((error: unknown) => {
+				// The refund limits fall back to the order's saved refunds; recorded so a
+				// support case can see the store's history was not read.
+				refundLogger.info('Refund history not loaded from the store; using the saved refunds', {
+					context: { orderId: orderData.id, error: getErrorMessage(error) },
+				});
 				if (!mounted) return;
 				setRefundDetails(getRefundsFallback());
 				setRefundDetailsLoading(false);
@@ -208,7 +214,12 @@ export function RefundOrderForm({ order }: Props) {
 		return refundDetails.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
 	}, [refundDetails]);
 
-	const maxRefundable = computeMaxRefundable(orderData.total || '0', refundDetails, dp);
+	const maxRefundable = computeMaxRefundable(
+		orderData.total || '0',
+		refundDetails,
+		dp,
+		readLedger(orderData.meta_data)
+	);
 
 	const initialLineItems = React.useMemo(() => {
 		return (orderData.line_items || []).map((item) => ({
@@ -242,19 +253,28 @@ export function RefundOrderForm({ order }: Props) {
 		},
 	});
 
+	// An effect because the form's line items are react-hook-form state that must follow the
+	// refund history as it loads. While the history loads every remaining quantity is a 0
+	// placeholder, and a reconnect restarts the load (useRestHttpClient returns a new client per
+	// online status), so the entered quantities are kept and clamped only once the history has loaded.
 	React.useEffect(() => {
 		const currentLineItems = form.getValues('line_items') || [];
 		form.reset(
 			{
 				...form.getValues(),
-				line_items: initialLineItems.map((item, index) => ({
-					...item,
-					refund_qty: Math.min(currentLineItems[index]?.refund_qty ?? 0, item.remaining_quantity),
-				})),
+				line_items: initialLineItems.map((item, index) => {
+					const enteredQty = currentLineItems[index]?.refund_qty ?? 0;
+					return {
+						...item,
+						refund_qty: refundDetailsLoading
+							? enteredQty
+							: Math.min(enteredQty, item.remaining_quantity),
+					};
+				}),
 			},
 			{ keepDirty: true, keepTouched: true }
 		);
-	}, [form, initialLineItems]);
+	}, [form, initialLineItems, refundDetailsLoading]);
 
 	React.useEffect(() => {
 		if (form.getFieldState('refund_destination').isDirty) {
@@ -312,13 +332,33 @@ export function RefundOrderForm({ order }: Props) {
 	const refundTotalNum = parseFloat(refundTotal);
 	const formattedRefundTotal = format(refundTotalNum);
 	const isValid = !refundDetailsLoading && refundTotalNum > 0 && refundTotalNum <= maxRefundable;
+	// The label reads the value that is submitted, so it cannot promise one destination and send another.
+	const submitLabel =
+		!isValid || awaitingGateway
+			? t('orders.process_refund')
+			: refundDestination === 'cash'
+				? t('orders.submit_refund_cash', { amount: formattedRefundTotal })
+				: t('orders.submit_refund_original', { amount: formattedRefundTotal });
 
 	const handleSubmit = React.useCallback(async () => {
-		if (loading || refundDetailsLoading) return;
+		// Gateways still loading: the destination is not known yet (it must not default
+		// to cash and refund the wrong way), so nothing is submitted. A POS cash order
+		// needs no gateway contract — its refund is always cash.
+		if (loading || refundDetailsLoading || awaitingGateway) return;
 		if (!orderData.id) return;
 		// #163 follow-up ruling: the latch can fire while the confirm dialog sits
 		// open, so re-read it here rather than trusting the rendered disabled state.
 		if (blockIfDegraded('refund', { orderId: orderData.id })) {
+			setConfirmOpen(false);
+			return;
+		}
+		// The link can drop while the confirm dialog sits open: nothing is sent, the line below says why.
+		if (!online) {
+			setConfirmOpen(false);
+			return;
+		}
+		// The amount can fall while the confirm sits open; a refund the form rejects is never sent.
+		if (!isValid) {
 			setConfirmOpen(false);
 			return;
 		}
@@ -388,22 +428,36 @@ export function RefundOrderForm({ order }: Props) {
 			// generic "refund failed" toast on top of it.
 			if (isStorageBlockedError(err)) return;
 
-			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
-			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
-			refundLogger[logLevel](serverMessage, {
+			const report = classifyRefundFailure(err, t);
+			const options = {
 				showToast: true,
-				code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				toast: {
+					title: report.title,
+					...(report.text2 !== undefined && { text2: report.text2 }),
+				},
 				context: {
 					orderId: orderData.id,
+					status: err?.response?.status,
 					error: getErrorMessage(err),
 				},
-			});
+			};
+			if (report.code === undefined) {
+				refundLogger.info('Refund not sent: WCPOS was in the background', options);
+			} else {
+				refundLogger[report.level === 'error' ? 'error' : 'warn']('Refund failed', {
+					...options,
+					code: report.code,
+				});
+			}
 		} finally {
 			setLoading(false);
 		}
 	}, [
 		blockIfDegraded,
+		online,
+		isValid,
 		loading,
+		awaitingGateway,
 		refundDetailsLoading,
 		form,
 		order,
@@ -416,17 +470,21 @@ export function RefundOrderForm({ order }: Props) {
 
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
-				<HStack className="justify-between">
-					<Text className="text-muted-foreground">
-						{t('common.total')}: {format(parseFloat(orderData.total || '0'))}
-					</Text>
+			<DialogBody contentContainerClassName="gap-4">
+				<MoneyList>
+					<MoneyList.Row
+						testID="refund-order-total"
+						label={t('common.total')}
+						amount={format(parseFloat(orderData.total || '0'))}
+					/>
 					{previousRefundTotal > 0 && (
-						<Text className="text-muted-foreground">
-							{t('orders.previously_refunded')}: {format(-previousRefundTotal)}
-						</Text>
+						<MoneyList.Row
+							testID="refund-previously-refunded"
+							label={t('orders.previously_refunded')}
+							amount={format(-previousRefundTotal)}
+						/>
 					)}
-				</HStack>
+				</MoneyList>
 
 				<Table>
 					<TableHeader>
@@ -475,7 +533,9 @@ export function RefundOrderForm({ order }: Props) {
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
-											render={({ field: qtyField }) => <FormInput type="numeric" {...qtyField} />}
+											render={({ field: qtyField }) => (
+												<FormAmountField kind="count" live {...qtyField} />
+											)}
 										/>
 									</TableCell>
 									<TableCell className="flex-1">
@@ -491,7 +551,11 @@ export function RefundOrderForm({ order }: Props) {
 					control={form.control}
 					name="custom_amount"
 					render={({ field }) => (
-						<FormInput
+						<FormAmountField
+							kind="money"
+							live
+							// Typed to the places it is validated to, which need not be the store's.
+							places={dp}
 							label={t('orders.custom_refund_amount')}
 							testID="refund-custom-amount"
 							placeholder={(0).toFixed(dp)}
@@ -515,57 +579,60 @@ export function RefundOrderForm({ order }: Props) {
 				{!isPosCash ? (
 					<VStack space="sm">
 						<Text>{t('orders.refund_destination')}</Text>
-						<RefundDestinationRadioGroup
+						<SegmentedControl
 							value={refundDestination}
 							onValueChange={(next) =>
-								form.setValue('refund_destination', next, { shouldDirty: true })
+								form.setValue('refund_destination', next as RefundDestination, {
+									shouldDirty: true,
+								})
 							}
-							options={[
+							segments={[
 								{
 									value: 'original_method',
 									label: t('orders.refund_to_original_method', {
 										gateway: orderData.payment_method_title || orderData.payment_method || '',
 									}),
-									description: refundOptions[0].enabled
-										? undefined
-										: t('orders.original_method_refund_unavailable'),
-									enabled: refundOptions[0].enabled,
+									disabled: !refundOptions[0].enabled,
 									testID: 'refund-destination-original_method',
 								},
 								{
-									value: 'cash' as const,
+									value: 'cash',
 									label: t('orders.refund_to_cash'),
-									enabled: true,
 									testID: 'refund-destination-cash',
 								},
 							]}
 						/>
+						{refundOptions[0].enabled ? null : (
+							<Text variant="help">{t('orders.original_method_refund_unavailable')}</Text>
+						)}
 					</VStack>
 				) : null}
 
-				{gatewaysError && !isPosCash ? (
+				{gatewaysError && !isPosCash && online ? (
 					<Text className="text-muted-foreground">
 						{t('orders.original_method_refund_lookup_failed')}
 					</Text>
 				) : null}
 
-				<HStack className="items-center justify-between border-t pt-4">
-					<Text className="text-lg font-bold">{t('orders.refund_total')}</Text>
-					<Text className="text-lg font-bold">{formattedRefundTotal}</Text>
-				</HStack>
-
-				<HStack className="justify-end">
-					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction
-						testID="process-refund-button"
-						loading={loading}
-						disabled={!isValid || storageDegraded}
-						onPress={() => setConfirmOpen(true)}
-					>
-						{t('orders.process_refund')}
-					</ModalAction>
-				</HStack>
-			</VStack>
+				<MoneyList.Total label={t('orders.refund_total')} amount={formattedRefundTotal} />
+			</DialogBody>
+			{online ? null : (
+				<VStack className="px-4 pb-2">
+					<Text testID="refund-offline-reason" variant="help">
+						{t('orders.refund_needs_connection')}
+					</Text>
+				</VStack>
+			)}
+			<DialogFooter
+				close
+				intent={{
+					label: submitLabel,
+					testID: 'process-refund-button',
+					disabled: !isValid || storageDegraded || awaitingGateway || !online,
+					onPress: () => setConfirmOpen(true),
+					loading: loading || awaitingGateway,
+				}}
+			/>
 
 			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 				<AlertDialogContent>
@@ -578,17 +645,15 @@ export function RefundOrderForm({ order }: Props) {
 							})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							testID="confirm-process-refund-button"
-							onPress={handleSubmit}
-							disabled={loading || storageDegraded}
-						>
-							{t('orders.process_refund')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
+					<AlertDialogFooter
+						confirm={{
+							destructive: true,
+							label: t('orders.process_refund'),
+							testID: 'confirm-process-refund-button',
+							onPress: () => void handleSubmit(),
+							disabled: loading || storageDegraded || awaitingGateway || !isValid,
+						}}
+					/>
 				</AlertDialogContent>
 			</AlertDialog>
 		</Form>

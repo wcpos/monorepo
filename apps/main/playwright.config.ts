@@ -56,7 +56,8 @@ function configuredStoreUrl(envValue: string | undefined): string {
  * coverage says so, and one that does not (cold-start; a local pro-only run) pays
  * nothing for it. The risk this reopens — a lane silently losing free coverage,
  * which is how dev-free vanished for weeks — is closed where it belongs, by a
- * contract test asserting deploy.yml names BOTH stores for every lane.
+ * contract test pinning deploy.yml's store per lane: main names both, next names
+ * pro only (owner ruling 2026-10-19), so an empty free store there is deliberate.
  */
 export const FREE_STORE_URL = configuredStoreUrl(process.env.E2E_STORE_URL_FREE);
 export const PRO_STORE_URL =
@@ -78,7 +79,9 @@ export function assertLaneStoresConfigured(): void {
 	throw new Error(
 		'E2E_STORE_URL_PRO is not set. Every lane runs the pro matrix, so the workflow ' +
 			'must name its store (main → dev-pro, next → dev-next); the config will not ' +
-			'guess one. The free matrix is opt-in: name E2E_STORE_URL_FREE to run it.'
+			'guess one. An EMPTY value in CI usually means the run belongs to neither ' +
+			'trunk (a PR based on a feature branch, or a dispatch without the lane input): ' +
+			'retarget it or name the lane. The free matrix is opt-in: name E2E_STORE_URL_FREE to run it.'
 	);
 }
 const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
@@ -90,6 +93,8 @@ const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
 const COLD_START_ENABLED = /^(1|true)$/i.test(process.env.E2E_COLD_START || '');
 const COLD_SPEC = /\.cold\.spec\.ts$/;
 const LIVE_SPEC = /\.live\.spec\.ts$/;
+// The e2e job's timeout-minutes is 60; stopping Playwright at 50 leaves setup and teardown room so it can write the blob, html and json reports before GitHub kills the job (#2253: every shard was cut off at 60 min and uploaded nothing).
+const CI_GLOBAL_TIMEOUT_MS = 50 * 60 * 1000;
 
 /**
  * Playwright configuration for WCPOS E2E tests
@@ -110,7 +115,10 @@ export default defineConfig<WcposTestOptions>({
 	testIgnore: /\.perf\.spec\.ts$/,
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
-	retries: process.env.CI ? 2 : 0,
+	// One retry on next: run 36682500606 had ~60 hard-failing specs x 3 attempts
+	// capping 4 of 6 shards at the 50-min globalTimeout, and next is where #2284's
+	// reds live. main keeps 2, because that is its release gate.
+	retries: process.env.CI ? (process.env.E2E_LANE === 'next' ? 1 : 2) : 0,
 	// Total store load is runs x shards x workers. With 4 shards and a deep PR
 	// queue, 4 workers/shard put ~100 concurrent browser sessions on one dev
 	// store and saturated its PHP pool (2026-08-19: every main-lane gate failed
@@ -129,6 +137,7 @@ export default defineConfig<WcposTestOptions>({
 			]
 		: 'html',
 	timeout: 180_000,
+	globalTimeout: process.env.CI ? CI_GLOBAL_TIMEOUT_MS : undefined,
 
 	use: {
 		baseURL: process.env.BASE_URL || 'http://localhost:8081',
@@ -164,6 +173,8 @@ export default defineConfig<WcposTestOptions>({
 							// posPage fixture has hydrated a context (three hydrations per shard
 							// for three skips, run 33617749219). Exclude at collection instead.
 							/server-created-visibility\.spec\.ts/,
+							/checkout-tender\.spec\.ts/,
+							/checkout-device\.spec\.ts/,
 							/\.perf\.spec\.ts$/,
 							COLD_SPEC,
 							LIVE_SPEC,
@@ -233,7 +244,7 @@ export default defineConfig<WcposTestOptions>({
 	webServer: process.env.BASE_URL
 		? undefined
 		: {
-				command: 'pnpm run build:web && npx serve web-build -p 8081 -s',
+				command: 'pnpm run build:web && npx --no-install serve web-build -p 8081 -s',
 				url: 'http://localhost:8081',
 				reuseExistingServer: !process.env.CI,
 				// This budget covers a full cold `build:web`, not just `serve`

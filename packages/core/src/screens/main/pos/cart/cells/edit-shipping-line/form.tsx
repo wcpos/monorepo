@@ -1,42 +1,42 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
 	FormInput,
-	FormRadioGroup,
+	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
+	SavedFieldProvider,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../../../contexts/translations';
-import { CurrencyInput } from '../../../../components/currency-input';
+import { FormAmountField } from '../../../../components/amount-field';
 import { FormErrors } from '../../../../components/form-errors';
-import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
+import { metaDataSchema } from '../../../../components/meta-data-form';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
-import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
+import { useOptionLists } from '../../../../components/option-lists';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
-import { useUpdateShippingLine } from '../../../hooks/use-update-shipping-line';
+import { AmountRow, CustomFieldRows } from '../cart-line-rows';
+import { useCartLineAutosave } from '../use-cart-line-autosave';
 
 /**
  * No tax class field — same reason as the Add shipping dialog: WooCommerce has no
  * per-line shipping tax class, so the store's `shipping_tax_class` setting is the only
  * one there is. See `extractShippingLineData` in @wcpos/order-math. Tax STATUS stays:
- * the POS plugin honours it server-side.
+ * the POS plugin honours it server-side. The instance ID is a developer fact: the JSON tab shows it
+ * (property rows rule 10), and the record keeps it because only changed roots are written.
  */
 const formSchema = z.object({
 	method_title: z.string().optional(),
 	method_id: z.string().optional(),
-	instance_id: z.string().optional(),
 	amount: z.number().optional(),
 	prices_include_tax: z.boolean().optional(),
 	tax_status: z.enum(['taxable', 'none']),
@@ -45,16 +45,23 @@ const formSchema = z.object({
 
 interface Props {
 	uuid: string;
-	item: NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+	item: import('@wcpos/query').OrderShippingLine;
 }
 
 /**
  *
  */
-export function EditShippingLineForm({ uuid, item }: Props) {
+export function EditShippingLineForm(props: Props) {
+	return (
+		<SavedFieldProvider>
+			<EditShippingLineFormFields {...props} />
+		</SavedFieldProvider>
+	);
+}
+
+function EditShippingLineFormFields({ uuid, item }: Props) {
 	const t = useT();
-	const { updateShippingLine } = useUpdateShippingLine();
-	const { onOpenChange } = useRootContext();
+	const { taxStatus } = useOptionLists();
 	const { getShippingLineData } = useShippingLineData();
 	const { amount, tax_status, prices_include_tax } = getShippingLineData(item);
 
@@ -68,7 +75,6 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 		defaultValues: {
 			method_title: item.method_title ?? undefined,
 			method_id: item.method_id ?? undefined,
-			instance_id: item.instance_id,
 			amount: toNumber(amount),
 			prices_include_tax,
 			tax_status,
@@ -76,118 +82,71 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 		},
 	});
 
-	/**
-	 *
-	 */
-	const handleSave = React.useCallback(
-		async (data: FormValues) => {
-			await updateShippingLine(uuid, {
-				method_title: data.method_title,
-				method_id: data.method_id,
-				instance_id: data.instance_id,
-				amount: data.amount,
-				tax_status: data.tax_status,
-				prices_include_tax: data.prices_include_tax,
-				meta_data: data.meta_data as NonNullable<
-					import('@wcpos/database').OrderDocument['shipping_lines']
-				>[number]['meta_data'],
-			});
-			onOpenChange(false);
-		},
-		[updateShippingLine, uuid, onOpenChange]
-	);
+	useCartLineAutosave('shipping_lines', uuid, form);
 
-	/**
-	 * Form submission handlers that include validation
-	 */
-	const onSave = form.handleSubmit(handleSave);
-
-	/**
-	 *
-	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<FormField
-					control={form.control}
-					name="method_title"
-					render={({ field }) => (
-						<FormInput label={t('pos_cart.shipping_method_title')} {...field} />
-					)}
-				/>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="method_id"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormSelect
-									label={t('pos_cart.shipping_method')}
-									customComponent={ShippingMethodSelect}
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="instance_id"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('pos_cart.instance_id')} {...field} />
-							</View>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="amount"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('pos_cart.amount')}
-									type="numeric"
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<View className="flex-1 justify-center">
+				<PropertyList prefix="shipping-line">
+					<PropertyRow id="method_title" label={t('pos_cart.shipping_method_title')}>
 						<FormField
 							control={form.control}
-							name="prices_include_tax"
+							name="method_title"
 							render={({ field }) => (
-								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
+								<FormInput testID="edit-shipping-line-method_title-input" {...field} />
 							)}
 						/>
-					</View>
-				</HStack>
-				<FormField
-					control={form.control}
-					name="tax_status"
-					render={({ field: { value, onChange, ...rest } }) => (
-						<FormRadioGroup
-							label={t('common.tax_status')}
-							customComponent={TaxStatusRadioGroup}
-							value={value}
-							onChange={onChange}
-							{...rest}
+					</PropertyRow>
+					<PropertyRow id="method_id" label={t('pos_cart.shipping_method')}>
+						<FormField
+							control={form.control}
+							name="method_id"
+							render={({ field }) => (
+								<FormSelect
+									customComponent={ShippingMethodSelect}
+									{...field}
+									value={field.value ?? ''}
+								/>
+							)}
 						/>
-					)}
-				/>
-				<MetaDataForm />
-				<DialogFooter className="px-0">
-					<DialogClose>{t('common.close')}</DialogClose>
-					<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
-				</DialogFooter>
-			</VStack>
+					</PropertyRow>
+					<AmountRow prefix="shipping-line" mark="amount">
+						<FormField
+							control={form.control}
+							name="amount"
+							render={({ field }) => (
+								<FormAmountField kind="money" testID="edit-shipping-line-amount-input" {...field} />
+							)}
+						/>
+					</AmountRow>
+					<PropertyRow
+						id="includes-tax"
+						label={t('pos_cart.amount_includes_tax')}
+						name="prices_include_tax"
+						control={
+							<FormField
+								control={form.control}
+								name="prices_include_tax"
+								render={({ field }) => (
+									<FormSwitch testID="edit-shipping-line-includes-tax-switch" {...field} />
+								)}
+							/>
+						}
+					/>
+					<PropertyRow id="tax" label={t('common.tax')} name="tax_status">
+						<FormField
+							control={form.control}
+							name="tax_status"
+							render={({ field }) => (
+								<FormSegmentedControl {...field} segments={taxStatus} testID={field.name} />
+							)}
+						/>
+					</PropertyRow>
+					<CustomFieldRows prefix="shipping-line" meta={item.meta_data} />
+				</PropertyList>
+			</DialogBody>
+			<DialogFooter close />
 		</Form>
 	);
 }

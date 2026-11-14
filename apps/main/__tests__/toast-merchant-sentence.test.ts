@@ -64,7 +64,7 @@ describe('logger toast → merchant sentence', () => {
 		expect(shown.mock.calls[0][0].testId).toBe(`toast-${CODE}`);
 	});
 
-	it('leaves a call site that passes its own cashier copy untouched', () => {
+	it('keeps a call site’s own cashier copy as the title and adds the code’s action hint', () => {
 		const explicit = 'Could not save the customer.';
 
 		getLogger(['wcpos', 'test']).error(DEV_MESSAGE, {
@@ -75,9 +75,9 @@ describe('logger toast → merchant sentence', () => {
 
 		const config = shown.mock.calls[0][0];
 		expect(config.title).toBe(explicit);
-		// An explicit title is deliberate and complete: the action hint must not
-		// be bolted onto it, or all 33 such sites grow a second sentence.
-		expect(config.description).toBeUndefined();
+		// S4 (owner, 2026-10-17): the title says what happened, the code still says
+		// what to do — "Checkout failed" alone left the cashier with no next step.
+		expect(config.description).toBe(catalogue[`health.logs.error_action.${CODE}`]);
 	});
 
 	it('keeps an explicit secondary message ahead of the action hint', () => {

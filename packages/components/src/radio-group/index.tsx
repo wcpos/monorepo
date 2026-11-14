@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import * as RadioGroupPrimitive from '@rn-primitives/radio-group';
 
 import { HStack } from '../hstack';
 import { Label } from '../label';
+import { MinTargetBand } from '../lib/min-target';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 import { VStack } from '../vstack';
@@ -36,7 +37,7 @@ function RadioGroup({
 	return (
 		<RadioGroupContext.Provider value={{ value, onValueChange, disabled }}>
 			<RadioGroupPrimitive.Root
-				className={cn('web:grid gap-2', className)}
+				className={cn('gap-2', className)}
 				value={value}
 				onValueChange={onValueChange ?? noopOnValueChange}
 				disabled={disabled}
@@ -50,18 +51,21 @@ function RadioGroupItem({
 	className,
 	...props
 }: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
+	const { value: selectedValue, disabled } = useRadioGroupContext();
 	return (
 		<RadioGroupPrimitive.Item
 			className={cn(
-				'native:h-5 native:w-5 web:ring-offset-background web:focus:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 border-primary text-primary aspect-square h-4 w-4 items-center justify-center rounded-full border',
-				props.disabled && 'web:cursor-not-allowed opacity-50',
+				'border-border bg-card size-5 items-center justify-center rounded-full border',
+				props.value === selectedValue && 'border-primary',
+				(props.disabled || disabled) && 'web:cursor-not-allowed opacity-45',
 				className
 			)}
 			{...props}
 		>
 			<RadioGroupPrimitive.Indicator className="flex items-center justify-center">
-				<View className="native:h-[10] native:w-[10] bg-primary aspect-square h-[9px] w-[9px] rounded-full" />
+				<View className="bg-primary size-2.5 rounded-full" />
 			</RadioGroupPrimitive.Indicator>
+			<MinTargetBand square />
 		</RadioGroupPrimitive.Item>
 	);
 }
@@ -98,7 +102,8 @@ function RadioGroupOption({
 	const isDisabled = groupDisabled || disabled;
 
 	return (
-		<HStack className={cn('items-start', isDisabled && 'opacity-50', className)} space="sm">
+		// The item dims itself; the row dims only the text beside it, so nothing compounds.
+		<HStack className={cn('items-start', className)} space="sm">
 			<RadioGroupItem
 				aria-describedby={descriptionID}
 				aria-labelledby={labelID}
@@ -107,7 +112,7 @@ function RadioGroupOption({
 				className={itemClassName}
 				{...props}
 			/>
-			<VStack className="flex-1" space="xs">
+			<VStack className={cn('flex-1', isDisabled && 'opacity-45')} space="xs">
 				<Label
 					nativeID={labelID}
 					className={labelClassName}
@@ -120,15 +125,26 @@ function RadioGroupOption({
 					{label}
 				</Label>
 				{description ? (
-					<Text
-						nativeID={descriptionID}
-						className={cn('text-muted-foreground text-sm', descriptionClassName)}
-					>
+					<Text nativeID={descriptionID} variant="help" className={descriptionClassName}>
 						{description}
 					</Text>
 				) : null}
 			</VStack>
-			{right}
+			{right ? (
+				// The trailing slot is part of the option's press target (a preview can be most of
+				// the row on a phone). Not a second accessible control: the item carries the radio.
+				<Pressable
+					accessible={false}
+					tabIndex={-1}
+					disabled={isDisabled}
+					testID={props.testID ? `${props.testID}-right` : undefined}
+					onPress={() => {
+						if (value !== selectedValue) onValueChange?.(value);
+					}}
+				>
+					{right}
+				</Pressable>
+			) : null}
 		</HStack>
 	);
 }

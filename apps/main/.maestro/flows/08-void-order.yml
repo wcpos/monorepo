@@ -55,18 +55,7 @@ appId: com.wcpos.main.dev
     timeout: 15000
 # The chained suite preserves flow 06/07's cart. Explicitly select the new-order
 # tab so this flow owns an empty order; it gets its own tab on the first write.
-# On a phone the tab strip scrolls, and with the earlier flows' carts still open
-# the "+" tab sits off its right end (run 33750030091, Android phone). The
-# strip's › selects the next tab and scrolls it into view — step along it the
-# way a cashier would until "+" is on screen. Bounded: one press per open tab.
-- repeat:
-    while:
-      notVisible:
-        id: "new-order-tab"
-    times: 8
-    commands:
-      - tapOn:
-          id: "scrollable-tabs-next"
+# The + cell sits outside the scroller at the strip's end and is always on screen.
 - tapOn:
     id: "new-order-tab"
 - assertNotVisible:
@@ -141,6 +130,12 @@ appId: com.wcpos.main.dev
       text: "${output.amountRe}"
     timeout: 30000
 - tapOn:
+    id: "order-meta-button"
+- extendedWaitUntil:
+    visible:
+      id: "order-meta-dialog"
+    timeout: 15000
+- tapOn:
     id: "void-button"
 # The voided order leaves the tab strip and the cart falls back to a fresh
 # empty order. Do not retry this destructive tap: while the server delete is
@@ -153,7 +148,7 @@ appId: com.wcpos.main.dev
 - assertNotVisible:
     id: "cart-quantity-input"
 # Relaunch: the voided order must not come back. Tabs sort date_created ASC
-# (use-open-orders-resource.ts), so a resurrected order would sit at the END
+# (use-open-orders-handle.ts), so a resurrected order would sit at the END
 # of the strip beside the "+" tab; the strip auto-scrolls to the selected
 # "new" tab on mount. Requiring the "+" tab on screen first means the
 # negative assertion is looking exactly where a ghost would appear.

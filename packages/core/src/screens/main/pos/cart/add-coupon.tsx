@@ -1,6 +1,5 @@
 import * as React from 'react';
-
-import { useObservableSuspense } from 'observable-hooks';
+import { View } from 'react-native';
 
 import { Platform } from '@wcpos/utils/platform';
 import {
@@ -13,19 +12,31 @@ import {
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
-import { useGuardedExtension, useSearchSelect } from '../../../../query';
+import { useAppInfo } from '../../../../hooks/use-app-info';
+import {
+	useDrawnHandle,
+	useGuardedExtension,
+	useQuerySnapshot,
+	useSearchSelect,
+} from '../../../../query';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useAddCoupon } from '../hooks/use-add-coupon';
 
-import type { SearchSelectBinding } from '../../../../query';
+import type { SearchSelect } from '../../../../query';
 
 interface CouponHit {
 	id: string;
@@ -34,10 +45,16 @@ interface CouponHit {
 
 type CouponPayload = EngineRecord<'coupons'>['payload'];
 
-export function AddCoupon() {
+export function AddCoupon({ onNewCoupon }: { onNewCoupon: () => void }) {
 	const t = useT();
+	const { license } = useAppInfo();
+	const isPro = license?.isPro ?? false;
+	const { caps } = useUserCapabilities();
+	// The store must answer: a coupon created here is acknowledged before it is applied (add-coupon-form.tsx).
+	const { status: onlineStatus } = useOnlineStatus();
+	const storeReachable = onlineStatus === 'online-website-available';
 	const { addCoupon } = useAddCoupon();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 	const [error, setError] = React.useState<string | null>(null);
 	const [selected, setSelected] = React.useState<CouponPayload | null>(null);
 	const [isApplying, setIsApplying] = React.useState(false);
@@ -57,49 +74,94 @@ export function AddCoupon() {
 		try {
 			const result = await addCoupon(selected.code ?? '');
 			if (result.success) {
-				onOpenChange(false);
+				closeDialog();
 			} else {
 				setError(result.error || t('pos_cart.failed_to_apply_coupon'));
 			}
 		} finally {
 			setIsApplying(false);
 		}
-	}, [selected, isApplying, addCoupon, onOpenChange, t]);
+	}, [selected, isApplying, addCoupon, closeDialog, t]);
 
 	return (
-		<VStack className="gap-4">
-			{error && <Text className="text-destructive">{error}</Text>}
-			<Combobox onValueChange={handleValueChange}>
-				<ComboboxTrigger testID="add-coupon-combobox">
-					<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
-				</ComboboxTrigger>
-				<ComboboxContent
-					portalHost="pos"
-					{...(Platform.OS === 'web'
-						? ({ style: { width: 'var(--radix-popover-trigger-width)' } } as any)
-						: {})}
-				>
-					<CouponSearch onSearchChange={() => setError(null)} />
-				</ComboboxContent>
-			</Combobox>
-			<DialogFooter className="px-0">
-				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction
-					testID="add-coupon-submit"
-					onPress={handleApply}
-					disabled={!selected || isApplying}
-				>
-					{t('common.apply')}
-				</DialogAction>
-			</DialogFooter>
-		</VStack>
+		<>
+			<DialogBody contentContainerClassName="gap-4">
+				{error && <Text className="text-bad">{error}</Text>}
+				<PropertyList prefix="coupon">
+					<PropertyRow label={t('common.coupon')} id="coupon">
+						<HStack className="gap-2">
+							{/* The popover root is a plain, unclassed View (#3072): the picker takes the
+							    row's remaining width through this wrapper, never through the trigger. */}
+							<View className="flex-1">
+								<Combobox onValueChange={handleValueChange}>
+									<ComboboxTrigger testID="add-coupon-combobox">
+										<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
+									</ComboboxTrigger>
+									<ComboboxContent
+										portalHost="pos"
+										{...(Platform.OS === 'web'
+											? ({ style: { width: 'var(--radix-popover-trigger-width)' } } as any)
+											: {})}
+									>
+										<CouponSearch onSearchChange={() => setError(null)} />
+									</ComboboxContent>
+								</Combobox>
+							</View>
+							{isPro && caps.canCreateCoupons && storeReachable ? (
+								<Tooltip>
+									<TooltipTrigger asChild onPress={onNewCoupon}>
+										<IconButton
+											name="plus"
+											testID="add-coupon-new"
+											accessibilityLabel={t('pos_cart.new_coupon')}
+										/>
+									</TooltipTrigger>
+									<TooltipContent>
+										<Text>{t('pos_cart.new_coupon')}</Text>
+									</TooltipContent>
+								</Tooltip>
+							) : (
+								<Tooltip showOnNative>
+									<CapabilityTooltipTrigger>
+										<IconButton
+											name="plus"
+											testID="add-coupon-new"
+											accessibilityLabel={t('pos_cart.new_coupon')}
+											disabled
+										/>
+									</CapabilityTooltipTrigger>
+									<TooltipContent>
+										<Text>
+											{!isPro
+												? t('common.upgrade_to_pro')
+												: !caps.canCreateCoupons
+													? t('capability_hints.create_coupons_admin_path')
+													: t('pos_cart.new_coupon_offline')}
+										</Text>
+									</TooltipContent>
+								</Tooltip>
+							)}
+						</HStack>
+					</PropertyRow>
+				</PropertyList>
+			</DialogBody>
+			<DialogFooter
+				close
+				intent={{
+					label: t('common.apply'),
+					testID: 'add-coupon-submit',
+					onPress: () => void handleApply(),
+					disabled: !selected || isApplying,
+				}}
+			/>
+		</>
 	);
 }
 
 function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 	const t = useT();
-	const binding = useSearchSelect('coupon');
-	const { setSearch } = binding;
+	const select = useSearchSelect('coupon');
+	const { setSearch } = select;
 
 	const onSearch = React.useCallback(
 		(value: string) => {
@@ -114,23 +176,32 @@ function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 			<ComboboxInput
 				testID="add-coupon-search-input"
 				placeholder={t('pos_cart.search_coupons')}
-				value={binding.search}
+				value={select.search}
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CouponList binding={binding} />
+				<CouponList select={select} />
 			</Suspense>
 		</>
 	);
 }
 
-function CouponList({ binding }: { binding: SearchSelectBinding }) {
-	const result = useObservableSuspense(binding.resource) as { hits: CouponHit[] };
+function CouponList({ select }: { select: SearchSelect }) {
+	// Drawn, not live: a typed search's new handle answers while the previous options stay.
+	const shown = useDrawnHandle(select.handle);
+	const settling = shown !== select.handle;
+	const snapshot = useQuerySnapshot(shown, ['pending', 'exhausted']);
+	const result = snapshot as unknown as {
+		hits: CouponHit[];
+	};
 	const t = useT();
 	const handleEndReached = useGuardedExtension(
-		binding.extendLimit,
+		select.extendLimit,
 		result.hits.length,
-		binding.limit
+		select.limit,
+		// The rows drawn may be the previous search's: a full old page must not page the new
+		// search before its first page answers, so settling counts as pending.
+		{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }
 	);
 
 	return (
@@ -196,15 +267,15 @@ function CouponItemContent({ coupon }: { coupon: CouponPayload }) {
 				    inherit that decode — and the closed trigger (ComboboxValue) renders the
 				    same `code` as its label. A coupon code is the shop_coupon post title,
 				    encoded like any other title, so both ends decode. */}
-				<Text className="text-sm font-medium" decodeHtml>
+				<Text variant="subheading" decodeHtml>
 					{coupon.code}
 				</Text>
 				{coupon.description ? (
-					<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
+					<Text variant="help" numberOfLines={1} decodeHtml>
 						{coupon.description}
 					</Text>
 				) : (
-					<Text className="text-muted-foreground text-xs">{typeLabel}</Text>
+					<Text variant="help">{typeLabel}</Text>
 				)}
 			</VStack>
 			{amountLabel && (

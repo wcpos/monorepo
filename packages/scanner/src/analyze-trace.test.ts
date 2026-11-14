@@ -41,7 +41,7 @@ describe('analyzeScanTrace', () => {
 			{
 				kind: 'raise-threshold',
 				value: 40,
-				patch: { barcode_scanning_avg_time_input_threshold: 40 },
+				settings: { barcode_scanning_avg_time_input_threshold: 40 },
 			},
 		]);
 	});
@@ -62,7 +62,7 @@ describe('analyzeScanTrace', () => {
 		expect(analysis.leadingSymbol).toBe('*');
 		expect(analysis.trailingEnter).toBe(true);
 		expect(analysis.suggestions).toEqual([
-			{ kind: 'set-prefix', value: '*', patch: { barcode_scanning_prefix: '*' } },
+			{ kind: 'set-prefix', value: '*', settings: { barcode_scanning_prefix: '*' } },
 		]);
 	});
 
@@ -80,7 +80,7 @@ describe('analyzeScanTrace', () => {
 		expect(analysis.detectedAsScan).toBe(true);
 		expect(analysis.tooShort).toBe(true);
 		expect(analysis.suggestions).toEqual([
-			{ kind: 'lower-min-chars', value: 4, patch: { barcode_scanning_min_chars: 4 } },
+			{ kind: 'lower-min-chars', value: 4, settings: { barcode_scanning_min_chars: 4 } },
 		]);
 	});
 
@@ -140,7 +140,7 @@ describe('analyzeScanTrace', () => {
 		// value must be the code length (2), not clamped to a higher floor that
 		// would leave the barcode still below the minimum.
 		expect(analysis.suggestions).toEqual([
-			{ kind: 'lower-min-chars', value: 2, patch: { barcode_scanning_min_chars: 2 } },
+			{ kind: 'lower-min-chars', value: 2, settings: { barcode_scanning_min_chars: 2 } },
 		]);
 	});
 

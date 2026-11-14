@@ -6,9 +6,9 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../../contexts/app-state';
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;
@@ -20,7 +20,8 @@ interface Props {
  */
 export function Subtotal({ row, column }: CellContext<Props, 'subtotal'>) {
 	const item = row.original.item;
-	const { format } = useCurrencyFormat();
+	// The order's currency, as the Total column next to it (and a receipt for another order) reads.
+	const { format } = useCurrentOrderCurrencyFormat();
 	const { store } = useAppState();
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 
@@ -40,9 +41,11 @@ export function Subtotal({ row, column }: CellContext<Props, 'subtotal'>) {
 	 */
 	return (
 		<VStack space="xs" className="justify-end">
-			<Text className="text-right">{format(Number(displaySubtotal) || 0)}</Text>
+			<Text tabular className="text-right">
+				{format(Number(displaySubtotal) || 0)}
+			</Text>
 			{column.columnDef.meta?.show?.('tax') && (
-				<Text className="text-muted-foreground text-right text-sm">
+				<Text variant="key" tabular className="text-right">
 					{`${taxDisplayCart} ${format(Number(item.subtotal_tax) || 0)} tax`}
 				</Text>
 			)}

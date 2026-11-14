@@ -1,57 +1,60 @@
 import * as React from 'react';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
-import { Text } from '@wcpos/components/text';
-import { Tree } from '@wcpos/components/tree';
+import { SavedFieldProvider } from '@wcpos/components/form';
+import { Loader } from '@wcpos/components/loader';
+import { Suspense } from '@wcpos/components/suspense';
 import { useRecordField } from '@wcpos/query';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { EditOrderMetaForm } from './form';
-import { useT } from '../../../../../../contexts/translations';
 
 import type { CurrentOrderRecord } from '../../../contexts/current-order';
 
 interface Props {
 	order: CurrentOrderRecord;
+	/** The autosave's flush, for the sheet's Sync order (see `EditOrderMetaForm`). */
+	flushRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }
 
-/**
- *
- */
-export function EditOrderMeta({ order }: Props) {
-	const t = useT();
-	const [value, setValue] = React.useState('form');
-
+/** The order sheet's Form tab: the fields that save as they change, and the two sends. */
+export function EditOrderMeta({ order, flushRef }: Props) {
 	/**
 	 * We need to refresh the component when the order data changes
 	 */
 	const payload = useRecordField(order, (record) => record.payload);
 	const formData = React.useMemo(() => {
 		return {
+			customer_note: payload.customer_note ?? '',
 			currency: payload.currency,
-			transaction_id: payload.transaction_id,
 			meta_data: payload.meta_data,
 		};
 	}, [payload]);
 
+	// The hand-over, kept apart from the fields that save as they change: the order's own four
+	// conditions of the cart's open-orders scope ('' when missing; the form reads the till's).
+	const handOverData = React.useMemo(() => {
+		const identity = wooMetaCarrier.readIdentity(payload.meta_data);
+		return {
+			status: payload.status ?? '',
+			cashier_id: identity.cashierId ?? '',
+			store_id: identity.storeId ?? '',
+			register_id: identity.registerId ?? '',
+		};
+	}, [payload]);
+
 	return (
-		<Tabs value={value} onValueChange={setValue}>
-			<TabsList className="w-full flex-row">
-				<TabsTrigger value="form" className="flex-1">
-					<Text>{t('common.form')}</Text>
-				</TabsTrigger>
-				<TabsTrigger value="json" className="flex-1">
-					<Text>{t('common.json')}</Text>
-				</TabsTrigger>
-			</TabsList>
-			<TabsContent value="form">
+		<SavedFieldProvider>
+			{/* Keyed per order: the form holds its own draft (defaultValues) while it is open.
+			    The hand-over reads the credential's store list, a Suspense resource. */}
+			<Suspense fallback={<Loader size="sm" />}>
 				<EditOrderMetaForm
+					key={order.uuid}
 					order={order}
 					formData={formData as React.ComponentProps<typeof EditOrderMetaForm>['formData']}
+					handOverData={handOverData}
+					flushRef={flushRef}
 				/>
-			</TabsContent>
-			<TabsContent value="json">
-				<Tree value={payload} />
-			</TabsContent>
-		</Tabs>
+			</Suspense>
+		</SavedFieldProvider>
 	);
 }

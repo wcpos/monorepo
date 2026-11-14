@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { createWedgeState, foldWedgeKey, scannerDeviceKey, type WedgeState } from '@wcpos/scanner';
 import { useDocField } from '@wcpos/query';
+import { saveScannerProfile } from '@wcpos/query/store-local';
 
 import { wedgeKeyEventsModule, type WedgeKeyPayload } from './use-attributed-wedge';
 import { useAppState } from '../../../../contexts/app-state';
-import { useCollection } from '../use-collection';
 
 export interface ScannerCandidate {
 	deviceName: string;
@@ -29,8 +29,7 @@ export interface ScannerCandidate {
  * contiguous fast burst rather than latching on a single fast keypair.
  */
 export const useScannerRegistration = () => {
-	const { store } = useAppState();
-	const { collection } = useCollection('scanner_profiles');
+	const { store, storeDB } = useAppState();
 	const [capturing, setCapturing] = React.useState(false);
 	const [candidate, setCandidate] = React.useState<ScannerCandidate | null>(null);
 	const subscriptionRef = React.useRef<{ remove: () => void } | null>(null);
@@ -102,7 +101,7 @@ export const useScannerRegistration = () => {
 		);
 	}, [stop]);
 
-	const save = React.useCallback(
+	const register = React.useCallback(
 		async (name: string) => {
 			if (!candidate) {
 				return;
@@ -110,7 +109,7 @@ export const useScannerRegistration = () => {
 			// Upsert on the canonical key, so re-registering a scanner that is
 			// already saved renames it rather than adding a second row for the
 			// same physical device.
-			await collection.upsert({
+			await saveScannerProfile(storeDB, {
 				deviceKey: scannerDeviceKey({
 					connectionType: 'keyboard',
 					vendorId: candidate.vendorId,
@@ -126,7 +125,7 @@ export const useScannerRegistration = () => {
 			});
 			setCandidate(null);
 		},
-		[collection, candidate]
+		[storeDB, candidate]
 	);
 
 	// Teardown on unmount: never leave the interceptor in capture-all mode.
@@ -138,7 +137,7 @@ export const useScannerRegistration = () => {
 		candidate,
 		start,
 		stop,
-		save,
+		register,
 		discard: () => setCandidate(null),
 	};
 };

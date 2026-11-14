@@ -1,15 +1,22 @@
 import * as React from 'react';
-import { type LayoutChangeEvent, Platform, ScrollView, View } from 'react-native';
+import {
+	type LayoutChangeEvent,
+	Platform,
+	ScrollView,
+	type ScrollViewInstance,
+	View,
+} from 'react-native';
 
-import * as Haptics from 'expo-haptics';
 import * as TabsPrimitive from '@rn-primitives/tabs';
 import { withUniwind } from 'uniwind';
 
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
+import { useIsPhone } from '../lib/device';
+import { hapticPress } from '../lib/haptics';
 import { cn } from '../lib/utils';
 import { OptionSelect } from '../select';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 // Wrap ScrollView with uniwind to support className prop
 const StyledScrollView = withUniwind(ScrollView);
@@ -19,6 +26,11 @@ const Tabs = TabsPrimitive.Root;
 
 type TabsListProps = TabsPrimitive.ListProps & {
 	asSelect?: boolean;
+	/**
+	 * With `asSelect`, the phone Select's trigger testID (each option takes
+	 * `${testID}-option-${value}`); otherwise the list's.
+	 */
+	testID?: string;
 };
 
 type TabsTriggerProps = TabsPrimitive.TriggerProps & {
@@ -39,13 +51,24 @@ function getTabsSelectOptions(children: React.ReactNode) {
 		});
 }
 
-function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListProps) {
+/**
+ * On a phone, the tab strip is a Select; otherwise the plain list. The fold is the app's one
+ * layout boundary (`useIsPhone`), not a CSS breakpoint, so a screen that also folds there never
+ * gets its phone body under a desktop strip, and only one of the two is rendered.
+ */
+function TabsListAsSelect({
+	className,
+	children,
+	testID,
+	...props
+}: Omit<TabsListProps, 'asSelect'>) {
 	const { value, onValueChange } = TabsPrimitive.useRootContext();
 	const options = React.useMemo(() => getTabsSelectOptions(children), [children]);
+	const isPhone = useIsPhone();
 
-	return (
-		<>
-			<StyledView className="w-full sm:hidden">
+	if (isPhone) {
+		return (
+			<StyledView className="w-full">
 				<OptionSelect
 					options={options}
 					value={value}
@@ -56,19 +79,21 @@ function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListP
 					}}
 					placeholder={options[0]?.label ?? ''}
 					triggerClassName="w-full"
+					triggerTestID={testID}
 					matchWidth
 				/>
 			</StyledView>
-			<TabsPrimitive.List
-				className={cn(
-					'bg-muted hidden items-center justify-center rounded-md p-1 sm:inline-flex',
-					className
-				)}
-				{...props}
-			>
-				{children}
-			</TabsPrimitive.List>
-		</>
+		);
+	}
+
+	return (
+		<TabsPrimitive.List
+			className={cn('border-border flex-row items-end gap-1 border-b', className)}
+			testID={testID}
+			{...props}
+		>
+			{children}
+		</TabsPrimitive.List>
 	);
 }
 
@@ -86,7 +111,7 @@ function TabsList({ asSelect, className, children, ...props }: TabsListProps) {
 
 	return (
 		<TabsPrimitive.List
-			className={cn('bg-muted inline-flex items-center justify-center rounded-md p-1', className)}
+			className={cn('border-border flex-row items-end gap-1 border-b', className)}
 			{...props}
 		>
 			{children}
@@ -114,8 +139,17 @@ function MeasuredTab({
 	} as any);
 }
 
-function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.ListProps) {
-	const scrollRef = React.useRef<ScrollView>(null);
+/**
+ * The overflow arrows are icon-only, so they carry names; the caller translates them.
+ */
+function ScrollableTabsList({
+	className,
+	children,
+	previousLabel,
+	nextLabel,
+	...props
+}: TabsPrimitive.ListProps & { previousLabel: string; nextLabel: string }) {
+	const scrollRef = React.useRef<ScrollViewInstance>(null);
 	const totalWidthRef = React.useRef(0);
 	const containerWidthRef = React.useRef(0);
 	const [scrollable, setScrollable] = React.useState(false);
@@ -233,6 +267,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 			{scrollable && (
 				<IconButton
 					name="chevronLeft"
+					accessibilityLabel={previousLabel}
 					testID="scrollable-tabs-prev"
 					onPress={onPressLeft}
 					disabled={currentIndex === 0}
@@ -249,7 +284,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 				onLayout={handleLayout}
 			>
 				<TabsPrimitive.List
-					className={cn('bg-muted inline-flex flex-row items-center rounded-md py-2', className)}
+					className={cn('border-border flex-row items-end gap-1 border-b', className)}
 					{...props}
 				>
 					{childrenArray.map((child, index) => {
@@ -269,6 +304,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 			{scrollable && (
 				<IconButton
 					name="chevronRight"
+					accessibilityLabel={nextLabel}
 					testID="scrollable-tabs-next"
 					onPress={onPressRight}
 					disabled={currentIndex === childrenArray.length - 1}
@@ -286,9 +322,7 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
 
 	const handlePress = React.useCallback(
 		(e: any) => {
-			if (Platform.OS !== 'web' && !props.disabled) {
-				void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			}
+			if (!props.disabled) hapticPress();
 			onPress?.(e);
 		},
 		[props.disabled, onPress]
@@ -297,15 +331,18 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
 	return (
 		<TextClassContext.Provider
 			value={cn(
-				'text-muted-foreground web:transition-all text-center text-sm',
-				value === props.value && 'text-primary-foreground'
+				// One weight in both states: the ink and the underline carry the selection. A heavier
+				// face is wider, so the old semibold on the active tab grew it and the strip reflowed
+				// on every switch (chip ledger line 21; Paul's ruling 2026-10-30 on #3100).
+				'text-muted-foreground text-center text-base font-medium',
+				value === props.value && 'text-foreground'
 			)}
 		>
 			<TabsPrimitive.Trigger
 				className={cn(
-					'web:ring-offset-background web:transition-all web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 web:whitespace-nowrap inline-flex items-center justify-center rounded-md px-3 py-1.5',
-					props.disabled && 'web:pointer-events-none opacity-50',
-					props.value === value && 'bg-primary shadow-sm',
+					'web:cursor-default h-ctl active:bg-accent -mb-px flex-row items-center justify-center border-b-2 border-transparent px-3',
+					props.disabled && 'web:pointer-events-none opacity-45',
+					props.value === value && 'border-primary',
 					className
 				)}
 				onPress={handlePress}
@@ -319,15 +356,7 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
  *
  */
 function TabsContent({ className, ...props }: TabsPrimitive.ContentProps) {
-	return (
-		<TabsPrimitive.Content
-			className={cn(
-				'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 pt-4',
-				className
-			)}
-			{...props}
-		/>
-	);
+	return <TabsPrimitive.Content className={cn('pt-4', className)} {...props} />;
 }
 
 export { ScrollableTabsList, Tabs, TabsContent, TabsList, TabsTrigger };

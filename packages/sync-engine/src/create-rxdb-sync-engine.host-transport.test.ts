@@ -34,7 +34,10 @@ describe('RxdbSyncEngine host transport reflection', () => {
 		expect(transport.fetcher).not.toBe(fetcher);
 		const init = { method: 'GET' } as const;
 		const response = await transport.fetcher('https://example.test/probe', init);
-		expect(fetcher).toHaveBeenCalledWith('https://example.test/probe', init);
+		expect(fetcher).toHaveBeenCalledWith('https://example.test/probe', {
+			...init,
+			signal: expect.any(AbortSignal),
+		});
 		expect(await response.text()).toBe('{}');
 
 		await engine.ready;

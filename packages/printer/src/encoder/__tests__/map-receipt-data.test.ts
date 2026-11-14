@@ -23,6 +23,7 @@ const offlineReceiptData = {
 		email: 'store@example.com',
 	},
 	customer: {
+		first_name: 'John',
 		name: 'John Doe',
 		email: 'john@example.com',
 		phone: '(555) 987-6543',
@@ -140,6 +141,30 @@ const offlineReceiptDataWithAdjustments = {
 };
 
 describe('mapReceiptData', () => {
+	it('forwards the store price_decimals so the formatter honours it end to end', () => {
+		const offline = {
+			store: { id: 1, name: 'JPY Store', price_decimals: 0, address: '', phone: '', email: '' },
+			order: { id: 1, number: '1', currency: 'JPY', currency_symbol: '¥', created_at: '' },
+			customer: { id: null, name: '' },
+			lines: [],
+			fees: [],
+			shipping: [],
+			discounts: [],
+			totals: { subtotal: 1234, total: 1234, tax_total: 0, discount_total: 0 },
+			tax: {},
+			tax_summary: [],
+			payments: [],
+			refunds: [],
+		};
+		const mapped = mapReceiptData(offline as Record<string, any>);
+		expect(mapped.store.price_decimals).toBe(0);
+		const noDecimals = mapReceiptData({
+			...offline,
+			store: { ...offline.store, price_decimals: undefined },
+		} as Record<string, any>);
+		expect(noDecimals.store.price_decimals).toBeUndefined();
+	});
+
 	afterEach(() => {
 		vi.useRealTimers();
 	});
@@ -540,9 +565,37 @@ describe('mapReceiptData', () => {
 
 		it('maps customer fields', () => {
 			expect(mapped.customer.name).toBe('John Doe');
-			expect(mapped.customer.id).toBe(0);
+			expect(ReceiptDataSchema.parse(mapped).customer.first_name).toBe('John');
+			// No id on the offline shape = guest (schema: null/0 = guest).
+			expect(mapped.customer.id).toBeNull();
 			expect(mapped.customer.billing_address).toEqual({});
 			expect(mapped.customer.shipping_address).toEqual({});
+		});
+
+		it('defaults an absent customer first name to an empty string', () => {
+			const result = mapReceiptData({ customer: { name: 'Doe' } });
+			expect(result.customer.first_name).toBe('');
+		});
+
+		it.each([0, 3, undefined])('preserves store price_decimals=%s', (decimals) => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				store: { ...offlineReceiptData.store, price_decimals: decimals },
+			});
+			expect(ReceiptDataSchema.parse(result).store.price_decimals).toBe(decimals);
+		});
+
+		it('passes a real customer id through and nulls guest ids', () => {
+			const known = mapReceiptData({
+				...offlineReceiptData,
+				customer: { ...offlineReceiptData.customer, id: 7 },
+			});
+			expect(known.customer.id).toBe(7);
+			const guest = mapReceiptData({
+				...offlineReceiptData,
+				customer: { ...offlineReceiptData.customer, id: 0 },
+			});
+			expect(guest.customer.id).toBeNull();
 		});
 
 		it('provides a default cashier', () => {
@@ -993,4 +1046,84 @@ describe('mapReceiptData', () => {
 			expect(result.has_tax_summary).toBe(false);
 		});
 	});
+});
+
+describe('schema 1.4 receipt identity', () => {
+	it.each([sampleReceiptData, offlineReceiptData])(
+		'round-trips identity through the allowlist',
+		(base) => {
+			const identity = {
+				software: {
+					name: 'WCPOS',
+					plugin_version: 'plugin',
+					app_version: 'app',
+					app_build: 'build',
+				},
+				register: { id: 'register-1', name: 'Front till' },
+				fiscal: {
+					document_type: 'refund',
+					sale_time: { ...sampleReceiptData.order.printed, datetime: 'Sale time' },
+					sale_tz: 'Europe/Madrid',
+					sale_counter: 42,
+					received_at: sampleReceiptData.order.printed,
+					corrects: 'original-1',
+					is_reprint: true,
+					reprint_count: 1,
+				},
+			};
+			const mapped = mapReceiptData({ ...base, ...identity });
+			expect(mapped).toMatchObject(identity);
+			expect(ReceiptDataSchema.parse(mapped)).toMatchObject(identity);
+		}
+	);
+
+	it('defaults partial new blocks without inventing identity on a 1.3 mapping', () => {
+		const legacy = mapReceiptData(sampleReceiptData);
+		expect(legacy).not.toHaveProperty('software');
+		expect(legacy).not.toHaveProperty('register');
+		expect(legacy.fiscal).not.toHaveProperty('document_type');
+		const parsed = ReceiptDataSchema.parse({ ...legacy, software: {}, register: {} });
+		expect(parsed.software).toEqual({
+			name: 'WCPOS',
+			plugin_version: '',
+			app_version: '',
+			app_build: '',
+		});
+		expect(parsed.register).toEqual({ id: '', name: '' });
+		expect(parsed.fiscal).toMatchObject({
+			document_type: 'sale',
+			sale_time: null,
+			sale_tz: '',
+			sale_counter: null,
+			received_at: null,
+			corrects: '',
+		});
+	});
+});
+
+it.each([undefined, false, true])(
+	'derives a missing refund flag, preserving explicit %s',
+	(flag) => {
+		const mapped = mapReceiptData({
+			...sampleReceiptData,
+			fiscal: { document_type: 'refund', is_refund_document: flag },
+		});
+		expect(mapped.fiscal.is_refund_document).toBe(flag ?? true);
+		expect(ReceiptDataSchema.parse(mapped).fiscal.is_refund_document).toBe(flag ?? true);
+	}
+);
+
+// Without the envelope pass-through, mapping treats a report as a sale and drops its table.
+it('a report envelope is preserved through the mapper', () => {
+	const data = {
+		report: {
+			title: 'Sales',
+			columns: [{ key: 'amount' }],
+			rows: [{ key: 'row-cash', cells: [{ key: 'amount', value: '10', formatted: '£10.00' }] }],
+		},
+		store: { name: 'Shop' },
+		fiscal: { document_type: 'report', is_report_document: true },
+	};
+	expect(mapReceiptData(data)).toMatchObject(data);
+	expect(mapReceiptData(data).order).toBeDefined();
 });

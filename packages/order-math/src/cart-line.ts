@@ -1,9 +1,7 @@
-import find from 'lodash/find';
-import uniq from 'lodash/uniq';
-
 import { POS_META_KEYS } from '@wcpos/sync-core';
 
 import { calculateTaxesForValue } from './internal/lines/calc-taxes-for-value';
+import { consolidateTaxes } from './internal/lines/consolidate-taxes';
 import {
 	extractFeeLineData,
 	extractLineItemData,
@@ -12,7 +10,8 @@ import {
 	parsePosData,
 	updatePosDataMeta,
 } from './internal/lines/pos-data';
-import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from './internal/money/precision';
+import { getRoundingPrecision, roundHalfUp } from './internal/money/precision';
+import { sumStoredLineTax } from './internal/money/sum-taxes';
 import {
 	INHERIT_TAX_CLASS,
 	NO_SHIPPING_TAX,
@@ -62,48 +61,6 @@ import type {
  * Any new fixture for line taxes MUST use an amount whose tax is not a whole cent.
  */
 
-/**
- * A line's `total_tax` / `subtotal_tax`, derived from its STORED per-rate array.
- *
- * WooCommerce never sums the raw tax. `set_taxes()` first formats every per-rate value
- * to storage precision, and only then aggregates the FORMATTED array:
- *
- *     $tax_data['total'] = array_map( 'wc_format_decimal', $total );   // storage precision
- *     $this->set_prop( 'taxes', $tax_data );
- *     if ( 'yes' === get_option( 'woocommerce_tax_round_at_subtotal' ) ) {
- *         $this->set_total_tax( array_sum( $tax_data['total'] ) );
- *     } else {
- *         $this->set_total_tax( array_sum( array_map( 'wc_round_tax_total', $tax_data['total'] ) ) );
- *     }
- *
- * Both branches read `$tax_data['total']` — the stored array — so the rule is the same
- * either way: ROUND EACH RATE FIRST, THEN SUM. This package used to round the raw
- * multi-rate total instead, which is `round(a + b)` against WooCommerce's
- * `round(a) + round(b)`. On a single-rate store the two agree and nothing shows. On a
- * two-rate store they part company by a microunit whenever the raw sum sits on a
- * boundary — measured on dev-pro 2026-08-24, a fee whose rates give 0.089127 and
- * 0.019608: the till sent `total_tax` 0.108734 where the store stored 0.108735, and
- * every such sale raised the totals-changed banner.
- *
- * That microunit was previously read as an unavoidable PHP-float-vs-decimal tie and
- * written into `expectTaxParity` as a tolerance. It is not a tie. It is this.
- *
- * @param storedPerRate - Per-rate taxes ALREADY at configured storage precision.
- */
-function sumStoredLineTax(
-	storedPerRate: readonly number[],
-	dp: number,
-	pricesIncludeTax: boolean,
-	taxRoundAtSubtotal: boolean
-): number {
-	const summands = taxRoundAtSubtotal
-		? storedPerRate
-		: storedPerRate.map((value) => roundTaxTotal(value, dp, pricesIncludeTax));
-	const total = summands.reduce((sum, value) => sum + value, 0);
-	// `wc_format_decimal( $amount )` with $dp === false renders at rounding precision.
-	return roundHalfUp(total, getRoundingPrecision(dp));
-}
-
 // DB element types — used only for casts at the pos-data helper boundary.
 // (The structural Input types are supertypes of these; see types.assignability.test.ts.)
 type DbLineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -111,8 +68,6 @@ type DbFeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines'
 type DbShippingLine = NonNullable<
 	import('@wcpos/database').OrderDocument['shipping_lines']
 >[number];
-
-type Tax = { id: number; total: number };
 
 // ===== public types (SPEC §3) =====
 
@@ -228,7 +183,7 @@ function detectMalformedPosData(
 // ===== changes merges (ports of the use-update-* hooks' merge blocks) =====
 
 /**
- * THE changes-merge for line items — `useUpdateLineItem` calls this rather than carrying
+ * THE changes-merge for line items — `useUpdateCartLine` calls this rather than carrying
  * its own copy (the block it was ported from is deleted):
  * `price`/`regular_price`/`tax_status` go into `_woocommerce_pos_data` with
  * `?? prev` fallbacks; everything else merges top-level.
@@ -265,7 +220,7 @@ function applyLineItemChanges(
 }
 
 /**
- * THE changes-merge for fee lines — `useUpdateFeeLine` calls this rather than carrying its
+ * THE changes-merge for fee lines — `useUpdateCartLine` calls this rather than carrying its
  * own copy (the block it was ported from is deleted):
  * `amount`/`percent`/`prices_include_tax`/`percent_of_cart_total_with_tax` go into
  * `_woocommerce_pos_data` with `?? prev` fallbacks; everything else (name,
@@ -295,7 +250,7 @@ function applyFeeLineChanges(
 }
 
 /**
- * THE changes-merge for shipping lines — `useUpdateShippingLine` calls this rather than
+ * THE changes-merge for shipping lines — `useUpdateCartLine` calls this rather than
  * carrying its own copy (the block it was ported from is deleted):
  * `amount`/`prices_include_tax`/`tax_status` go into `_woocommerce_pos_data` with
  * `?? prev` fallbacks; everything else (method_title, method_id, ...) merges top-level.
@@ -333,39 +288,11 @@ function applyShippingLineChanges(
 
 // ===== compute bodies (ports of the use-calculate-*-tax-and-totals hooks) =====
 
-/**
- * Consolidates unique taxes by combining subtotal and total tax values.
- *
- * Per-rate taxes are ALWAYS emitted unrounded, at the configured rounding precision, whatever
- * `taxRoundAtSubtotal` says — see PER_RATE_TAXES_ARE_UNROUNDED. That setting governs
- * `total_tax`/`subtotal_tax` only, and those are rounded by the caller.
- *
- * Moved from use-calculate-line-item-tax-and-totals.ts, which is now deleted.
- */
-const consolidateTaxes = (
-	subtotalTaxes: { taxes: Tax[] },
-	totalTaxes: { taxes: Tax[] },
-	noSubtotal: boolean,
-	roundingPrecision: number
-) => {
-	const uniqueTaxIds = uniq([
-		...subtotalTaxes.taxes.map((tax) => tax.id),
-		...totalTaxes.taxes.map((tax) => tax.id),
-	]);
-
-	return uniqueTaxIds.map((id) => {
-		const subtotalTax = find(subtotalTaxes.taxes, { id }) || { total: 0 };
-		const totalTax = find(totalTaxes.taxes, { id }) || { total: 0 };
-
-		return {
-			id,
-			subtotal: noSubtotal
-				? ''
-				: roundHalfUp(subtotalTax.total, roundingPrecision).toFixed(roundingPrecision),
-			total: roundHalfUp(totalTax.total, roundingPrecision).toFixed(roundingPrecision),
-		};
-	});
-};
+// Exemption changes tax outputs only, after inclusive prices have been decomposed.
+function vatExemptTaxFields(config: CartConfig, product = false) {
+	if (!config.vatExempt) return {};
+	return { taxes: [], total_tax: '0', ...(product && { subtotal_tax: '0' }) };
+}
 
 /**
  * The line-item tax maths. Began as a port of `calculateLineItemTaxesAndTotals`
@@ -385,22 +312,24 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 	const subtotal = price * quantity;
 
 	// Calculate taxes for total and subtotal
-	const totalTaxResult = calculateTaxesForValue(
+	let totalTaxResult = calculateTaxesForValue(
 		{
 			amount: total,
 			taxClass: lineItem.tax_class ?? '',
 			taxStatus: tax_status,
 			amountIncludesTax: pricesIncludeTax,
+			orderItem: true,
 		},
 		config
 	);
 
-	const subtotalTaxResult = calculateTaxesForValue(
+	let subtotalTaxResult = calculateTaxesForValue(
 		{
 			amount: subtotal,
 			taxClass: lineItem.tax_class ?? '',
 			taxStatus: tax_status,
 			amountIncludesTax: pricesIncludeTax,
+			orderItem: true,
 		},
 		config
 	);
@@ -414,6 +343,21 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		},
 		config
 	);
+
+	// Calculate total and subtotal excluding tax
+	const totalExclTax = pricesIncludeTax ? total - totalTaxResult.total : total;
+	const subtotalExclTax = pricesIncludeTax ? subtotal - subtotalTaxResult.total : subtotal;
+
+	if (pricesIncludeTax && totalTaxResult.taxes.length > 0) {
+		// WC_Order_Item_Product::calculate_taxes → calc_tax( get_total(), rates, false ).
+		// Re-derive taxes from the emitted rounded net, preserving the gross-derived net (#2333 B).
+		const netTotal6 = roundHalfUp(totalExclTax, roundingPrecision);
+		const netSubtotal6 = roundHalfUp(subtotalExclTax, roundingPrecision);
+		const taxClass = lineItem.tax_class ?? '';
+		const reDerive = { amountIncludesTax: false, taxClass, taxStatus: tax_status, orderItem: true };
+		totalTaxResult = calculateTaxesForValue({ ...reDerive, amount: netTotal6 }, config);
+		subtotalTaxResult = calculateTaxesForValue({ ...reDerive, amount: netSubtotal6 }, config);
+	}
 
 	// total_tax / subtotal_tax come from the STORED per-rate array, never from the raw
 	// multi-rate sum — see sumStoredLineTax.
@@ -436,10 +380,6 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		taxRoundAtSubtotal
 	);
 
-	// Calculate total and subtotal excluding tax
-	const totalExclTax = pricesIncludeTax ? total - totalTaxResult.total : total;
-	const subtotalExclTax = pricesIncludeTax ? subtotal - subtotalTaxResult.total : subtotal;
-
 	// Calculate price per unit excluding tax
 	const priceWithoutTax = pricesIncludeTax ? price - perUnitTaxResult.total : price;
 
@@ -457,6 +397,7 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		total_tax: String(roundedTotalTax),
 		subtotal_tax: String(roundedSubtotalTax),
 		taxes,
+		...vatExemptTaxFields(config, true),
 	};
 }
 
@@ -499,7 +440,7 @@ function calculatePercentAmount(
 /**
  * The fee-line tax maths. Began as a port of `calculateFeeLineTaxesAndTotals`
  * (use-calculate-fee-line-tax-and-totals.ts); that hook was deleted once `useAddFee` and
- * `useUpdateFeeLine` came through here, so this is now the only copy — do not reintroduce
+ * `useUpdateCartLine` came through here, so this is now the only copy — do not reintroduce
  * a second one in `packages/core`.
  */
 function computeFeeLine(
@@ -527,6 +468,7 @@ function computeFeeLine(
 			taxClass: feeLine.tax_class,
 			taxStatus: feeLine.tax_status ?? 'taxable',
 			amountIncludesTax: prices_include_tax,
+			orderItem: true,
 		},
 		config
 	);
@@ -547,13 +489,14 @@ function computeFeeLine(
 		// Per-rate taxes are stored unrounded whatever taxRoundAtSubtotal says; only
 		// total_tax above is rounded. See PER_RATE_TAXES_ARE_UNROUNDED.
 		taxes: tax.taxes.map((t, index) => ({ ...t, total: String(storedPerRate[index]) })),
+		...vatExemptTaxFields(config),
 	};
 }
 
 /**
  * The shipping-line tax maths. Began as a port of `calculateShippingLineTaxesAndTotals`
  * (use-calculate-shipping-line-tax-and-totals.ts); that hook was deleted once `useAddShipping`
- * and `useUpdateShippingLine` came through here, so this is now the only copy — do not
+ * and `useUpdateCartLine` came through here, so this is now the only copy — do not
  * reintroduce a second one in `packages/core`.
  */
 function computeShippingLine(
@@ -597,6 +540,7 @@ function computeShippingLine(
 			taxStatus: inherited === NO_SHIPPING_TAX ? 'none' : tax_status,
 			amountIncludesTax,
 			shipping: true,
+			orderItem: true,
 		},
 		config
 	);
@@ -629,6 +573,7 @@ function computeShippingLine(
 		// Per-rate taxes are stored unrounded whatever taxRoundAtSubtotal says; only
 		// total_tax above is rounded. See PER_RATE_TAXES_ARE_UNROUNDED.
 		taxes: tax.taxes.map((t, index) => ({ ...t, total: String(storedPerRate[index]) })),
+		...vatExemptTaxFields(config),
 	};
 }
 
@@ -646,6 +591,10 @@ export function calculateCartLine(
 	input: Extract<CartLineInput, { kind: 'shipping' }>,
 	config: CartConfig
 ): CalcLineResult<ShippingLineInput>;
+export function calculateCartLine(
+	input: CartLineInput,
+	config: CartConfig
+): CalcLineResult<LineItemInput | FeeLineInput | ShippingLineInput>;
 export function calculateCartLine(
 	input: CartLineInput,
 	config: CartConfig

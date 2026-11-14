@@ -33,7 +33,6 @@ jest.mock('@wcpos/core/screens/main/contexts/extra-data', () => ({}));
 jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({}));
 jest.mock('@wcpos/core/screens/main/hooks/barcodes/scan-hub-context', () => ({}));
 jest.mock('@wcpos/core/screens/main/upgrade-required', () => ({}));
-jest.mock('@wcpos/core/screens/main/hooks/use-collection', () => ({}));
 jest.mock('@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client', () => ({}));
 jest.mock('@wcpos/core/screens/main/hooks/use-rest-http-client', () => ({}));
 jest.mock('@wcpos/hooks/use-http-client/refresh-access-token', () => ({}));

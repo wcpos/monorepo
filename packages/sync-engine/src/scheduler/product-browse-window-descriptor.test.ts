@@ -9,6 +9,7 @@ import {
 	productBrowseWindowPredecessorQueryKey,
 	productBrowseWindowQueryKey,
 	productBrowseWindowQueryKeyFromDimensions,
+	productBrowseWindowQueryParams,
 } from './product-browse-window-descriptor';
 import { BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT } from './browse-window-continuation';
 
@@ -29,8 +30,11 @@ describe('productBrowseWindowQueryKeyFromDimensions', () => {
 				featured: true,
 				on_sale: false,
 				stock_status: 'instock',
+				min_price: 10,
+				max_price: 10.5,
+				type: 'variable',
 			},
-			'products:browse-window:limit=200:orderby=price:order=desc:category=2,7:tag=3,11:brand=5,13:featured=1:on_sale=0:stock_status=instock',
+			'products:browse-window:limit=200:orderby=price:order=desc:category=2,7:tag=3,11:brand=5,13:featured=1:on_sale=0:stock_status=instock:min_price=10:max_price=10.5:type=variable',
 		],
 	] satisfies [ProductBrowseDimensions, string][])('encodes and parses %s', (dims, expected) => {
 		const queryKey = productBrowseWindowQueryKeyFromDimensions(dims);
@@ -72,6 +76,32 @@ describe('productBrowseWindowQueryKeyFromDimensions', () => {
 		expect(
 			productBrowseWindowQueryKeyFromDimensions({ category: [2, { id: 7 }, 9] as never })
 		).toBe('products:browse-window:limit=100:category=2,9');
+	});
+
+	it('gives price and type filter combinations distinct coverage lanes', () => {
+		expect(productBrowseWindowQueryKeyFromDimensions({ min_price: 10 })).not.toBe(
+			productBrowseWindowQueryKeyFromDimensions({ max_price: 10 })
+		);
+		expect(productBrowseWindowQueryKeyFromDimensions({ type: 'simple' })).not.toBe(
+			productBrowseWindowQueryKeyFromDimensions({ type: 'variable' })
+		);
+	});
+
+	it('emits price and type params and omits them for an unfiltered request', () => {
+		const descriptor = parseProductBrowseWindowDescriptor(
+			productBrowseWindowQueryKeyFromDimensions({
+				min_price: 10,
+				max_price: 10.5,
+				type: 'external',
+			})
+		)!;
+
+		expect(productBrowseWindowQueryParams(descriptor).toString()).toBe(
+			'orderby=menu_order&order=asc&status=publish&min_price=10&max_price=10.5&type=external'
+		);
+		expect(productBrowseWindowQueryParams(descriptor, { omitFilters: true }).toString()).toBe(
+			'orderby=menu_order&order=asc&status=publish'
+		);
 	});
 });
 
@@ -184,6 +214,9 @@ describe('product browse-window descriptor', () => {
 		['featured=1', { featured: true }],
 		['on_sale=0', { on_sale: false }],
 		['stock_status=onbackorder', { stock_status: 'onbackorder' }],
+		['min_price=10', { min_price: 10 }],
+		['max_price=10.5', { max_price: 10.5 }],
+		['type=grouped', { type: 'grouped' }],
 	] as const)('parses the %s filter dimension', (dimension, parsed) => {
 		expect(
 			parseProductBrowseWindowDescriptor(`products:browse-window:limit=100:${dimension}`)
@@ -220,6 +253,8 @@ describe('product browse-window descriptor', () => {
 		'featured=true',
 		'on_sale=2',
 		'stock_status=lowstock',
+		'min_price=01',
+		'max_price=1.0',
 		'tag=3:category=2',
 	])('rejects the non-canonical or invalid filter dimension %s', (dimension) => {
 		expect(

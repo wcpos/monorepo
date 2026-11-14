@@ -39,12 +39,15 @@ import {
 	ReferenceCollection,
 	type RemoteId,
 	remoteIdOrNull,
+	remoteKeyFor,
+	SERVER_OWNED_ORDER_META_KEYS,
 	taxRateDocumentId,
 	withOrderColumns,
 	wooIdOf,
 	WooOrderPayload,
 } from '@wcpos/sync-core';
 
+import { mergeProtectedOrderMeta } from '../write-path/merge-protected-order-meta';
 import {
 	type BarcodeSelectors,
 	barcodeSelectorsFor,
@@ -60,11 +63,14 @@ import {
 import { stripNonStringMetaDisplayFields } from '../materialization/strip-order-meta-display';
 import {
 	EngineOrderRepository,
+	type OrderIngestionContext,
 	POS_ORDER_IDENTITY_META_KEYS,
 } from '../write-path/engine-order-repository';
 import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
 import { preserveEquivalentLocalPrecision } from '../write-path/order-money-divergence';
 import { type WooTaxRatePayload } from './tax-rate-schema';
+import { removeRefundChildren } from '../write-path/refund-children';
+import { adoptedSync, type ResidentSync, stampedSync } from '../write-path/order-revision';
 
 import type { RxDatabase } from 'rxdb';
 import type { WooReferencePayload } from './reference-collection-schema';
@@ -78,7 +84,7 @@ type WooPayload = Record<string, unknown> & { id?: number };
  * pure, so every caller must hand the scope it is writing into — omitting them
  * materializes no `barcode` field.
  */
-type RecordProjection = (
+export type RecordProjection = (
 	payload: WooPayload,
 	barcodeSelectors?: BarcodeSelectors
 ) => Record<string, unknown>;
@@ -127,49 +133,13 @@ function parseBareArray(body: unknown): WooPayload[] {
 	return body as WooPayload[];
 }
 
-/**
- * The lab /variations include envelope: `{ documents: [...] }`. Each wrapper
- * is flattened into the payload the projection consumes — `parent_id` rides
- * the wrapper (not the inner payload), and the wrapper-level `_rxdb_digest`
- * (a transport-only Leg-3 digest) is carried through onto the flattened row
- * for the existence manifest.
- */
+// The plugin has emitted bare variation arrays since 2.0.0.
+// Each record carries its own identity and revision stamp.
 export function parseVariationsEnvelope(body: unknown): WooPayload[] {
-	/**
-	 * A BARE wc/v3 array is accepted as well as the `{ documents: [...] }` wrapper.
-	 *
-	 * `/variations` is the only targeted lane that wraps; `/products` and `/customers` answer with a
-	 * bare array and carry their stamps on the record. The wrapper exists to supply `id` and
-	 * `parent_id`, and WooCommerce has carried BOTH in the variation payload itself since WC 8.3
-	 * (the plugin backfills them below that), so it adds nothing the payload does not already have.
-	 *
-	 * Tolerance ships FIRST and on its own. The server cannot drop the wrapper until every deployed
-	 * client can read both shapes — this function used to throw on anything else, so a plugin that
-	 * changed the envelope would have broken variation sync on every till the moment a merchant
-	 * updated. That is the standing rule for this seam: the client tolerates both shapes, the server
-	 * emits exactly one, and the tolerance is removed only once the plugin's minimum supported
-	 * version is past the release that changed it.
-	 */
-	if (Array.isArray(body)) {
-		return body as WooPayload[];
+	if (!Array.isArray(body)) {
+		throw new Error('variations pull returned a non-array body');
 	}
-	const documents = (body as { documents?: unknown })?.documents;
-	if (!Array.isArray(documents)) {
-		throw new Error('variations pull returned neither a documents array nor a bare array');
-	}
-	return (
-		documents as {
-			id: number;
-			parent_id: number;
-			payload: Record<string, unknown>;
-			_rxdb_digest?: string;
-		}[]
-	).map((wrapper) => ({
-		...wrapper.payload,
-		id: wrapper.id,
-		parent_id: wrapper.parent_id,
-		...(wrapper._rxdb_digest !== undefined ? { _rxdb_digest: wrapper._rxdb_digest } : {}),
-	}));
+	return body as WooPayload[];
 }
 
 /** shape: 'greedy-prunable' — one re-pull upserts AND prunes; no per-id arms. */
@@ -284,7 +254,11 @@ export type CollectionWriteFacet = {
 		barcodeSelectors?: BarcodeSelectors
 	) => Record<string, unknown>;
 	/** Missing-row ack/discard write-back through the collection's repository seam. */
-	upsertServerDocument: (db: RxDatabase, document: Record<string, unknown>) => Promise<void>;
+	upsertServerDocument: (
+		db: RxDatabase,
+		document: Record<string, unknown>,
+		context?: OrderIngestionContext
+	) => Promise<void>;
 	/** Create/update ack: re-anchor sync.revision, capture the remote id, drop
 	 * the drained mutationId, clear dirty when nothing is pending. */
 	reconcile: (db: RxDatabase, ack: WriteAck, signal?: AbortSignal) => Promise<void>;
@@ -300,23 +274,45 @@ export type CollectionWriteFacet = {
 	onDeleteAck: (
 		db: RxDatabase,
 		mutation: { mutationId: string; recordId: string },
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		/** Annihilation reports cleanup without rejecting committed removal; must not throw. */
+		onCleanupError?: (error: unknown) => void
 	) => Promise<void>;
 };
 
 /** shape: 'local-only' — no change-signal arms (orders). */
 export type LocalOnlyDescriptor = {
 	shape: 'local-only';
-	collection: Extract<SyncCollectionName, 'orders'>;
-	write: CollectionWriteFacet;
+	collection: Extract<SyncCollectionName, 'orders' | 'refunds'>;
+	write?: CollectionWriteFacet;
 };
 
 type AckDoc = {
+	toJSON(): Record<string, unknown>;
 	incrementalModify(
 		fn: (data: Record<string, unknown>) => Record<string, unknown>
 	): Promise<unknown>;
 	remove(): Promise<unknown>;
 };
+
+/**
+ * What a whole order document carries (ADR 0040): `status`, the ledger and completions in
+ * `meta_data`, `date_paid` and `payment_method`, with `total` and `currency`. The push contract
+ * allows a trimmed acknowledgement (a bare `{ id }`), which says nothing about a key it omits, so
+ * only a whole document may replace the resident's server-owned meta wholesale.
+ */
+const WHOLE_ORDER_FIELDS = [
+	'total',
+	'currency',
+	'status',
+	'meta_data',
+	'date_paid',
+	'payment_method',
+] as const;
+
+function carriesWholeOrder(document: Record<string, unknown> | null | undefined): boolean {
+	return !!document && WHOLE_ORDER_FIELDS.every((field) => field in document);
+}
 
 function ackBookkeeping(options: {
 	collection: CollectionWriteFacet['collection'];
@@ -363,7 +359,7 @@ function ackBookkeeping(options: {
 				const pending = (
 					Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
 				).filter((id) => id !== ack.mutation.mutationId);
-				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
+				const sync = (data.sync ?? {}) as ResidentSync;
 				let adoptionPatch = ackDocumentPatch;
 				if (adoptionPatch && (preserveMetaKeys || adoptPayload) && pending.length === 0) {
 					const localPayload = (data.payload ?? {}) as Record<string, unknown>;
@@ -378,14 +374,11 @@ function ackBookkeeping(options: {
 						const adoptedMeta = Array.isArray(adoptedPayload.meta_data)
 							? [...adoptedPayload.meta_data]
 							: [];
-						for (const key of preserveMetaKeys) {
-							const localEntry = localMeta.find((entry) => entry?.key === key);
-							if (!localEntry) continue;
-							const index = adoptedMeta.findIndex((entry) => entry?.key === key);
-							if (index === -1) adoptedMeta.push(localEntry);
-							else adoptedMeta[index] = localEntry;
-						}
-						adoptedPayload = { ...adoptedPayload, meta_data: adoptedMeta };
+
+						adoptedPayload = {
+							...adoptedPayload,
+							meta_data: mergeProtectedOrderMeta(localMeta, adoptedMeta),
+						};
 					}
 					adoptionPatch = withOrderColumns({ ...adoptionPatch, payload: adoptedPayload });
 				}
@@ -408,31 +401,62 @@ function ackBookkeeping(options: {
 					// the ack's status/total past the pending-successor guard.
 					if (grafted !== residentPayload) identityPatch = { payload: grafted };
 				}
+				const remoteId =
+					ack.mutation.operation === 'create'
+						? (remoteIdOrNull(ack.remoteId) ?? data[remoteIdField])
+						: data[remoteIdField];
+				const base = {
+					...sync,
+					...(ack.mutation.operation === 'create' && createAckSource
+						? { source: createAckSource }
+						: {}),
+				};
+				const stamped = ack.currentRevision ? stampedSync(base, ack.currentRevision) : base;
+				// Only an ack adopting the whole document certifies it (ADR 0040 §1.3): the orders
+				// adoption keeps the local value of every key a trimmed ack omits, so stamping one
+				// would certify the till's own money as the server's.
+				const wholeAdoption =
+					adopting &&
+					collection === 'orders' &&
+					!!ack.currentRevision &&
+					carriesWholeOrder(ack.document);
 				return {
 					...data,
 					...(adopting && adoptionPatch ? adoptionPatch : identityPatch),
-					[remoteIdField]:
-						ack.mutation.operation === 'create'
-							? (remoteIdOrNull(ack.remoteId) ?? data[remoteIdField])
-							: data[remoteIdField],
-					sync: {
-						...sync,
-						revision: ack.currentRevision ?? sync.revision,
-						...(ack.mutation.operation === 'create' && createAckSource
-							? { source: createAckSource }
-							: {}),
-					},
+					[remoteIdField]: remoteId,
+					remoteKey: remoteKeyFor(remoteId as string | null),
+					sync: wholeAdoption ? adoptedSync(stamped, Date.now()) : stamped,
 					local: { ...local, pendingMutationIds: pending, dirty: pending.length > 0 },
 				};
 			});
 		},
-		onDeleteAck: async (db, mutation, signal) => {
-			if (signal?.aborted) return;
+		onDeleteAck: async (db, mutation, signal, onCleanupError) => {
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
 			const doc = (await db.collections[collection]
 				.findOne(mutation.recordId)
 				.exec()) as AckDoc | null;
-			if (!doc || signal?.aborted) return; // already removed, or the scope switched
-			await doc.remove();
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+			// Delete mutations carry only the UUID, and the existence manifest has no UUID map.
+			// RxDB retains the removed row: recover its remoteId when a prior cascade failed.
+			const data =
+				doc?.toJSON() ??
+				(collection === 'orders'
+					? (
+							await db.collections.orders.storageInstance.findDocumentsById(
+								[mutation.recordId],
+								true
+							)
+						)[0]
+					: undefined);
+			if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+			const remoteId = (data?.remoteId as string | null | undefined) ?? null;
+			if (doc) await doc.remove();
+			try {
+				if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
+			} catch (error) {
+				if (!onCleanupError) throw error; // Ordinary delete acks retry the cascade.
+				onCleanupError(error); // Removal committed: annihilation must not restore the chain.
+			}
 		},
 	};
 }
@@ -453,7 +477,8 @@ export const variationMaterialized: MaterializedProjection = (rawPayload, barcod
 const customerMaterialized: MaterializedProjection = (rawPayload) =>
 	materializeTargeted('customers', rawPayload);
 
-const productDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
+/** The CURRENT generation's stored product document (the drainable generation derives its own). */
+export const productDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
 	productMaterialized(rawPayload, barcodeSelectors).storedDocument;
 
 export const variationDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
@@ -528,7 +553,9 @@ function createWriteFacet(input: {
 					throw new Error(`Engine scope database is missing collection "${input.collection}"`);
 				}
 				assertBulkSuccess(
-					await collection.bulkUpsert([document] as never[]),
+					await collection.bulkUpsert([
+						{ ...document, remoteKey: remoteKeyFor(document.remoteId as string | null) },
+					] as never[]),
 					`write facet ${input.collection} upsert`
 				);
 			}),
@@ -572,15 +599,25 @@ function catalogAckPatch(
 	return patch;
 }
 
-const productsWriteFacet = createWriteFacet({
-	collection: 'products',
-	remoteIdField: 'remoteId',
-	pullPath: '/products',
-	parse: parseBareArray,
-	project: productDocument,
-	documentPatchFromAckDocument: (document, barcodeSelectors) =>
-		catalogAckPatch(productDocument, document, barcodeSelectors),
-});
+/**
+ * The products write facet over a given stored-document projection. The current
+ * generation uses `productDocument`; the drainable generation passes the
+ * projection its schema shipped (`drainable-generation.ts`), so an ack written
+ * into a previous-generation database fits that database's schema.
+ */
+export function productsWriteFacetProjectedBy(project: RecordProjection): CollectionWriteFacet {
+	return createWriteFacet({
+		collection: 'products',
+		remoteIdField: 'remoteId',
+		pullPath: '/products',
+		parse: parseBareArray,
+		project,
+		documentPatchFromAckDocument: (document, barcodeSelectors) =>
+			catalogAckPatch(project, document, barcodeSelectors),
+	});
+}
+
+const productsWriteFacet = productsWriteFacetProjectedBy(productDocument);
 const variationsWriteFacet = createWriteFacet({
 	collection: 'variations',
 	remoteIdField: 'remoteId',
@@ -588,24 +625,9 @@ const variationsWriteFacet = createWriteFacet({
 	parse: parseVariationsEnvelope,
 	project: variationDocument,
 	documentPatchFromAckDocument: (document, barcodeSelectors) =>
-		catalogAckPatch(variationDocument, flattenVariationAckDocument(document), barcodeSelectors),
+		catalogAckPatch(variationDocument, document, barcodeSelectors),
 });
 
-/**
- * The variation push ack `document` is the SAME wrapper shape the pull
- * envelope carries — `{ id, parent_id, payload, _rxdb_digest? }` with identity
- * and the REST fields inside `payload` (Write_Controller::document_for) — so
- * it must be flattened exactly like parseVariationsEnvelope flattens a pull
- * row before the flat-payload projection can key it. Passing the wrapper
- * straight through leaves no top-level meta_data, identifyRecord throws, and
- * adoption silently degrades to the bookkeeping-only ack. A document that is
- * already flat (defensive: no nested payload object) passes through untouched.
- */
-function flattenVariationAckDocument(document: Record<string, unknown>): Record<string, unknown> {
-	if (typeof document.payload !== 'object' || document.payload === null) return document;
-	const [flattened] = parseVariationsEnvelope({ documents: [document] });
-	return flattened ?? document;
-}
 const customersWriteFacet = createWriteFacet({
 	collection: 'customers',
 	remoteIdField: 'remoteId',
@@ -671,12 +693,36 @@ const ordersWriteFacet = createWriteFacet({
 	// #818: WooCommerce APPENDS an order line posted without an `id`. Adoption is
 	// skipped while a successor is queued, so without this the resident — and
 	// every push built from it — keeps posting ID-LESS lines and duplicates the
-	// cart. Identity only, never a value. The display-field strip re-applies
-	// because a payload may predate it (#885/#890) and this rewrites line arrays.
-	graftAckIdentity: (payload, source, options) =>
-		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source, options)),
-	upsert: async (db, document) => {
-		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
+	// cart. Editable values stay local; server-owned money facts replace local meta.
+	// The display-field strip re-applies for payloads predating it (#885/#890).
+	graftAckIdentity: (payload, source, options) => {
+		const sourceMeta = (Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
+			SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
+		);
+		// A whole document's server-owned set replaces the resident's, deletions included. A
+		// trimmed acknowledgement (the push contract allows a bare `{ id }`) says nothing about a
+		// key it omits: only the keys it carries are replaced, and the rest stay as the resident
+		// holds them until a whole document adopts. Otherwise an ordinary note or line push would
+		// strip the ledger and make a paid order read unpaid (ADR 0040).
+		const whole = carriesWholeOrder(source);
+		const carried = new Set(sourceMeta.map(({ key }) => key));
+		return stripNonStringMetaDisplayFields({
+			...graftServerLineIdentity(payload, source, options),
+			// Even with a successor, the server owns these facts; editable intent stays local.
+			meta_data: [
+				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
+					(entry) =>
+						!SERVER_OWNED_ORDER_META_KEYS.includes(entry.key) || (!whole && !carried.has(entry.key))
+				),
+				...sourceMeta,
+			],
+		});
+	},
+	upsert: async (db, document, context) => {
+		await new EngineOrderRepository(db.collections as never).upsertMany(
+			[document as never],
+			context
+		);
 	},
 });
 
@@ -753,6 +799,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		write: couponsWriteFacet,
 	},
 	{ shape: 'local-only', collection: 'orders', write: ordersWriteFacet },
+	{ shape: 'local-only', collection: 'refunds' },
 ] as const;
 
 /**

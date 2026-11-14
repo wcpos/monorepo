@@ -4,7 +4,9 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { defer, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
+import { isGravatarUrl } from '@wcpos/components/avatar/gravatar';
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { ImageAttachmentSource } from './types';
 type HttpGet = ReturnType<typeof useHttpClient>['get'];
@@ -30,11 +32,15 @@ const emptyResource: ImageResource = new ObservableResource(of(EMPTY_STATE));
 
 export const ERROR_RETRY_DELAY_MS = 30_000;
 
+/**
+ * Resolves to the image, or to `null` for a Gravatar URL's 404: asked for `d=404`, Gravatar's
+ * 404 is the final answer "this person has no picture", not a failure to retry.
+ */
 async function fetchImageBlob(
 	_source: ImageAttachmentSource,
 	imageUrl: string,
 	get: HttpGet
-): Promise<Blob> {
+): Promise<Blob | null> {
 	let cache: Cache | undefined;
 	if (typeof caches !== 'undefined') {
 		try {
@@ -51,11 +57,25 @@ async function fetchImageBlob(
 	// wcposHeaders: false prevents X-WCPOS header which triggers CORS preflight on external URLs.
 	// quietErrors: a missing/blocked image is decorative — log a warning, not an
 	// error (the component falls back to a placeholder).
+	// failureCode: this URL is outside the REST namespace, so the client's
+	// status table has no meaning for it — a missing upload would otherwise be
+	// logged as AUTH311 "store route unavailable". The registered meaning of a
+	// failure here is PRODUCT201: the image is unavailable, the product still sells.
+	// A Gravatar URL asks for `d=404` (`withoutDefaultGravatar`), so its 404 resolves (no
+	// failure log row) and is returned as "no picture" below.
 	const response = await get(imageUrl, {
 		responseType: 'arraybuffer',
 		wcposHeaders: false,
 		quietErrors: true,
+		failureCode: ERROR_CODES.PRODUCT_IMAGE_UNAVAILABLE,
+		...(isGravatarUrl(imageUrl) && {
+			validateStatus: (status: number) => (status >= 200 && status < 300) || status === 404,
+		}),
 	});
+
+	if (response?.status === 404 && isGravatarUrl(imageUrl)) {
+		return null;
+	}
 
 	if (!response || response.status !== 200) {
 		throw new Error(`Failed to fetch image: ${response?.status} ${response?.statusText}`);
@@ -82,6 +102,26 @@ async function fetchImageBlob(
 	return blob;
 }
 
+/** An HTTP client failure with no response: the request never got a reply script may read. */
+function isTransportFailure(err: unknown): boolean {
+	const failure = err as { isAxiosError?: boolean; response?: unknown } | null;
+	return !!failure?.isAxiosError && !failure.response;
+}
+
+/**
+ * Whether the browser can draw the URL as an <img>, which needs no CORS. Resolves once it has
+ * loaded (the consumer's <img> then paints it from the browser's cache) and rejects if it cannot
+ * be drawn, so every consumer falls back to its placeholder rather than a broken image.
+ */
+function drawsFromUrl(imageUrl: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const probe = new Image();
+		probe.onload = () => resolve();
+		probe.onerror = () => reject(new Error(`Image unavailable: ${imageUrl}`));
+		probe.src = imageUrl;
+	});
+}
+
 function getImageResource(
 	source: ImageAttachmentSource,
 	imageUrl: string,
@@ -89,17 +129,32 @@ function getImageResource(
 ): ImageResource {
 	let resource = imageResourceCache.get(imageUrl);
 	if (!resource) {
+		const failed = (err: unknown) => {
+			// Keep the errored resource cached: a Suspense retry re-renders with
+			// an uncommitted useMemo, so immediate eviction would refetch in a
+			// tight loop. Evict after a delay so a later mount can retry.
+			setTimeout(() => {
+				imageResourceCache.delete(imageUrl);
+			}, ERROR_RETRY_DELAY_MS);
+			const error = err instanceof Error ? err : new Error('Unknown error');
+			return of({ uri: undefined, error });
+		};
 		const state$ = defer(() => fetchImageBlob(source, imageUrl, get)).pipe(
-			map((blob): ImageAttachmentState => ({ uri: URL.createObjectURL(blob), error: null })),
+			// "No picture" is kept like a success, for the session: never evicted, never refetched.
+			map((blob): ImageAttachmentState =>
+				blob ? { uri: URL.createObjectURL(blob), error: null } : EMPTY_STATE
+			),
 			catchError((err) => {
-				// Keep the errored resource cached: a Suspense retry re-renders with
-				// an uncommitted useMemo, so immediate eviction would refetch in a
-				// tight loop. Evict after a delay so a later mount can retry.
-				setTimeout(() => {
-					imageResourceCache.delete(imageUrl);
-				}, ERROR_RETRY_DELAY_MS);
-				const error = err instanceof Error ? err : new Error('Unknown error');
-				return of({ uri: undefined, error });
+				if (!isTransportFailure(err)) return failed(err);
+				// No reply at all: the browser refused to let script read it — an upload served
+				// without CORS headers to a page on another origin (the REST API sends them, the
+				// web server's static files do not), mixed content, or offline. An <img> needs
+				// no CORS, so a picture the browser can draw is drawn from its URL, as the cart's
+				// are (owner, 2026-10-26), and kept for the session: a refetch would fail the same way.
+				return defer(() => drawsFromUrl(imageUrl)).pipe(
+					map((): ImageAttachmentState => ({ uri: imageUrl, error: null })),
+					catchError(failed)
+				);
 			})
 		);
 		resource = new ObservableResource(state$);

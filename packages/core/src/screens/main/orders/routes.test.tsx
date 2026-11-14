@@ -1,0 +1,42 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { render, screen } from '@testing-library/react';
+
+import OrdersRoute from '../../../../../../apps/main/app/(app)/(drawer)/orders';
+import ViewRoute from '../../../../../../apps/main/app/(app)/(drawer)/orders/(modals)/view/[orderId]';
+
+jest.mock(
+	'@wcpos/core/screens/main/components/pro-guard',
+	() => ({
+		withProAccess: (Component: React.ComponentType, page: string) => () => (
+			<div data-testid={`guard-${page}`}>
+				<Component />
+			</div>
+		),
+	}),
+	{ virtual: true }
+);
+jest.mock(
+	'@wcpos/core/screens/main/rest/lazy',
+	() => ({
+		loadRest: () => Promise.resolve({ OrdersScreen: () => <div data-testid="new-orders" /> }),
+	}),
+	{ virtual: true }
+);
+jest.mock('expo-router', () => ({
+	useLocalSearchParams: () => ({ orderId: 'order-uuid' }),
+	Redirect: ({ href }: { href: { pathname: string; params: { orderId: string } } }) => (
+		<a data-testid="redirect" href={href.pathname.replace('[orderId]', href.params.orderId)} />
+	),
+}));
+// The screen guards its own body (the bar stays reachable on Free), so the route no longer wraps it.
+it('switches the index to the v2 orders screen, unwrapped', async () => {
+	render(<OrdersRoute />);
+	expect(await screen.findByTestId('new-orders')).toBeTruthy();
+	expect(screen.queryByTestId('guard-orders')).toBeNull();
+});
+it('redirects legacy detail links to the order modal', () => {
+	render(<ViewRoute />);
+	expect(screen.getByTestId('redirect').getAttribute('href')).toBe('/orders/edit/order-uuid');
+});

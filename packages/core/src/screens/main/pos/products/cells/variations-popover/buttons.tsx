@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
-import { Text } from '@wcpos/components/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
+import { decode } from 'html-entities';
+
+import { Chip } from '@wcpos/components/chip';
+import { HStack } from '@wcpos/components/hstack';
 
 interface VariationButtonsProps {
 	attribute: {
@@ -28,27 +29,26 @@ export function VariationButtons({
 }: VariationButtonsProps) {
 	const options = attribute?.options || [];
 
-	const handleSelect = (option: string | undefined) => {
-		if (option) {
-			if (disabledOptions[option]) return;
-			onSelect?.({ id: attribute.id, name: attribute.name, option });
-		}
+	// A variation option is a selectable choice, so it is a Chip (decision 10); an option
+	// with no stock in the current combination is dimmed, never hidden. Pressing the picked
+	// option again keeps it, as the toggle group it replaced did.
+	const handleSelect = (option: string) => {
+		if (option === selected || disabledOptions[option]) return;
+		onSelect?.({ id: attribute.id, name: attribute.name, option });
 	};
 
 	return (
-		<View className="flex-row">
-			<ToggleGroup value={selected} onValueChange={handleSelect} type="single">
-				{options.map((option: string) => (
-					<ToggleGroupItem
-						key={option}
-						value={option}
-						disabled={optionCounts[option] === 0 || disabledOptions[option]}
-						testID={`variation-option-${option}`}
-					>
-						<Text decodeHtml>{option}</Text>
-					</ToggleGroupItem>
-				))}
-			</ToggleGroup>
-		</View>
+		<HStack className="flex-wrap gap-2">
+			{options.map((option: string) => (
+				<Chip
+					key={option}
+					label={decode(option)}
+					on={option === selected}
+					dimmed={optionCounts[option] === 0 || !!disabledOptions[option]}
+					onPress={() => handleSelect(option)}
+					testID={`variation-option-${option}`}
+				/>
+			))}
+		</HStack>
 	);
 }

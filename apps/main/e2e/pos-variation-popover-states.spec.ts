@@ -5,7 +5,7 @@ import {
 	variationMatrixProbe,
 	workerStoreUrl,
 } from './checkout-probe';
-import { becomesVisible } from './fixtures';
+import { becomesVisible, ensureRegisterOpen } from './fixtures';
 import { ensureGridView } from './pos-view-mode';
 import { searchAndWaitForServer } from './search-probe';
 import { readPreventOverselling } from './visibility-probe';
@@ -71,6 +71,7 @@ async function setStockStatusPill(page: Page, value: 'instock' | 'outofstock' | 
 
 test.describe('POS variation popover option states', () => {
 	test.beforeEach(async ({ posPage: page }) => {
+		await ensureRegisterOpen(page);
 		const probe = variationMatrixProbe(page);
 		test.skip(
 			probe === null,

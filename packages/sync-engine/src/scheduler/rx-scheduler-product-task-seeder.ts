@@ -115,6 +115,9 @@ export async function seedProductBrowseWindowSchedulerTask(
 		...(input.featured !== undefined ? { featured: input.featured } : {}),
 		...(input.on_sale !== undefined ? { on_sale: input.on_sale } : {}),
 		...(input.stock_status ? { stock_status: input.stock_status } : {}),
+		...(input.min_price !== undefined ? { min_price: input.min_price } : {}),
+		...(input.max_price !== undefined ? { max_price: input.max_price } : {}),
+		...(input.type ? { type: input.type } : {}),
 	};
 	const window: ProductBrowseWindowDescriptor = {
 		limit,

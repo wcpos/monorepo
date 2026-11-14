@@ -49,7 +49,9 @@ function orderTask(overrides: Partial<FetchTask> = {}): FetchTask {
 	};
 }
 
-function response(payload: PullResponse<WirePullDocument> | unknown[]): Response {
+function response(
+	payload: (Omit<PullResponse<WirePullDocument>, 'hasMore'> & { complete: boolean }) | unknown[]
+): Response {
 	return new Response(JSON.stringify(payload), {
 		status: 200,
 		headers: { 'content-type': 'application/json' },
@@ -89,7 +91,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			writeCustomPullCheckpoint: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: true })
+			response({ documents, checkpoint: nextCheckpoint, complete: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -104,9 +106,10 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledWith(
 			'http://wcpos.local/wp-json/wcpos/v2/orders/pull?limit=25&updated_at_gmt=2026-05-20T10%3A00%3A00.000Z&order_id=10&sequence=10&include_deletes=true'
 		);
-		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ uuid: uuidFor(11), remoteId: '11' }),
-		]);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[expect.objectContaining({ uuid: uuidFor(11), remoteId: '11' })],
+			expect.anything()
+		);
 		expect(checkpointStore.writeCustomPullCheckpoint).toHaveBeenCalledWith(nextCheckpoint);
 		expect(result).toEqual({
 			taskId: 'orders:custom-pull:windowed',
@@ -141,7 +144,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({
 				documents: [doc],
 				checkpoint: nextCheckpoint,
-				hasMore: false,
+				complete: true,
 			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
@@ -196,7 +199,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				response({
 					documents: [applied, skipped],
 					checkpoint: nextCheckpoint,
-					hasMore: false,
+					complete: true,
 				})
 			),
 			// Order 12 has a queued local mutation: the adapter drops it before the upsert.
@@ -240,7 +243,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				response({
 					documents: [stored, dirtyResident],
 					checkpoint: nextCheckpoint,
-					hasMore: false,
+					complete: true,
 				})
 			),
 		});
@@ -286,7 +289,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({
 				documents: [serverDoc],
 				checkpoint: nextCheckpoint,
-				hasMore: false,
+				complete: true,
 			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
@@ -322,7 +325,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({
 				documents: [serverDoc],
 				checkpoint: nextCheckpoint,
-				hasMore: false,
+				complete: true,
 			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
@@ -335,7 +338,7 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		await schedulerFetcher(orderTask());
 
-		expect(repository.upsertMany).toHaveBeenCalledWith([]);
+		expect(repository.upsertMany).toHaveBeenCalledWith([], expect.anything());
 	});
 
 	it('marks the custom-pull lane complete when the final greedy batch exhausts the remote orders catalog', async () => {
@@ -352,7 +355,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordCumulativeQueryResult: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -405,7 +408,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordCumulativeQueryResult: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -448,7 +451,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			})),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -484,7 +487,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordCumulativeQueryResult: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -520,7 +523,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordRecords: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: true })
+			response({ documents, checkpoint: nextCheckpoint, complete: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -540,7 +543,8 @@ describe('createOrdersSchedulerFetcher', () => {
 					uuid: uuidFor(Number(document.payload.id)),
 					remoteId: remoteId(Number(document.payload.id)),
 				})
-			)
+			),
+			expect.anything()
 		);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
 			collection: 'orders',
@@ -567,7 +571,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			}),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -587,7 +591,8 @@ describe('createOrdersSchedulerFetcher', () => {
 					uuid: uuidFor(Number(document.payload.id)),
 					remoteId: remoteId(Number(document.payload.id)),
 				})
-			)
+			),
+			expect.anything()
 		);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalled();
 		expect(checkpointStore.writeCustomPullCheckpoint).not.toHaveBeenCalled();
@@ -636,52 +641,58 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledWith(
 			'http://wcpos.local/wp-json/wcpos/v2/orders?include=123%2C456&per_page=2&orderby=include'
 		);
-		expect(repository.upsertMany).toHaveBeenCalledWith([
-			{
-				uuid: uuidFor(123),
-				remoteId: remoteId(123),
-				payload: {
-					id: 123,
-					date_modified_gmt: '2026-05-20T10:10:00',
-					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
-				},
-				sync: {
-					revision: '2026-05-20T10:10:00',
-					partial: false,
-					source: 'woo-rest',
-					checkpoint: {
-						updatedAtGmt: '2026-05-20T10:10:00',
-						orderId: 123,
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[
+				{
+					uuid: uuidFor(123),
+					remoteId: remoteId(123),
+					remoteKey: String(remoteId(123) ?? ''),
+					payload: {
+						id: 123,
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
+					},
+					sync: {
 						revision: '2026-05-20T10:10:00',
-						sequence: 0,
+						partial: false,
+						source: 'woo-rest',
+						checkpoint: {
+							updatedAtGmt: '2026-05-20T10:10:00',
+							orderId: 123,
+							revision: '2026-05-20T10:10:00',
+							sequence: 0,
+						},
 					},
+					local: { dirty: false, pendingMutationIds: [] },
 				},
-				local: { dirty: false, pendingMutationIds: [] },
-			},
-			{
-				uuid: uuidFor(456),
-				remoteId: remoteId(456),
-				payload: {
-					id: 456,
-					date_modified_gmt: '2026-05-20T10:11:00',
-					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(456) }],
-				},
-				sync: {
-					revision: '2026-05-20T10:11:00',
-					partial: false,
-					source: 'woo-rest',
-					checkpoint: {
-						updatedAtGmt: '2026-05-20T10:11:00',
-						orderId: 456,
+				{
+					uuid: uuidFor(456),
+					remoteId: remoteId(456),
+					remoteKey: String(remoteId(456) ?? ''),
+					payload: {
+						id: 456,
+						date_modified_gmt: '2026-05-20T10:11:00',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(456) }],
+					},
+					sync: {
 						revision: '2026-05-20T10:11:00',
-						sequence: 0,
+						partial: false,
+						source: 'woo-rest',
+						checkpoint: {
+							updatedAtGmt: '2026-05-20T10:11:00',
+							orderId: 456,
+							revision: '2026-05-20T10:11:00',
+							sequence: 0,
+						},
 					},
+					local: { dirty: false, pendingMutationIds: [] },
 				},
-				local: { dirty: false, pendingMutationIds: [] },
-			},
-		]);
+			],
+			expect.anything()
+		);
 		expect(result).toEqual({
 			taskId: 'orders:ids:123,456:on-demand',
+			appliedRecordIds: ['123', '456'],
 			documentCount: 2,
 			requestCount: 1,
 			completed: true,
@@ -808,12 +819,15 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 		// The materialized document carries status under `payload`; the promoted
 		// top-level `status` is added by the collection descriptor at write time.
-		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({
-				uuid: uuidFor(123),
-				payload: expect.objectContaining({ status: 'completed' }),
-			}),
-		]);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[
+				expect.objectContaining({
+					uuid: uuidFor(123),
+					payload: expect.objectContaining({ status: 'completed' }),
+				}),
+			],
+			expect.anything()
+		);
 	});
 
 	it('does NOT overwrite a targeted order that has queued local mutations, but keeps it covered', async () => {
@@ -862,11 +876,13 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		// 123 has a queued local mutation → its dirty local copy wins (not overwritten); only 456 is upserted.
-		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ uuid: uuidFor(456) }),
-		]);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[expect.objectContaining({ uuid: uuidFor(456) })],
+			expect.anything()
+		);
 		expect(repository.upsertMany).not.toHaveBeenCalledWith(
-			expect.arrayContaining([expect.objectContaining({ uuid: uuidFor(123) })])
+			expect.arrayContaining([expect.objectContaining({ uuid: uuidFor(123) })]),
+			expect.anything()
 		);
 		// ...but 123 stays in coverage so the window isn't reported incomplete and re-pulled.
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
@@ -1046,11 +1062,13 @@ describe('createOrdersSchedulerFetcher', () => {
 		// The pending set is re-read once per batch, not snapshotted once up front.
 		expect(pendingMutationOrderIds).toHaveBeenCalledTimes(2);
 		// Batch 1: 456 not yet queued → 123 upserted.
-		expect(repository.upsertMany).toHaveBeenNthCalledWith(1, [
-			expect.objectContaining({ uuid: uuidFor(123) }),
-		]);
+		expect(repository.upsertMany).toHaveBeenNthCalledWith(
+			1,
+			[expect.objectContaining({ uuid: uuidFor(123) })],
+			expect.anything()
+		);
 		// Batch 2: 456 queued mid-pull → skipped, NOT overwritten by the stale server copy.
-		expect(repository.upsertMany).toHaveBeenNthCalledWith(2, []);
+		expect(repository.upsertMany).toHaveBeenNthCalledWith(2, [], expect.anything());
 	});
 
 	it('does NOT overwrite a browser-window order that has queued local mutations', async () => {
@@ -1093,11 +1111,13 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		// 456 has a queued local mutation → skipped; only 123 is upserted.
-		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ uuid: uuidFor(123) }),
-		]);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[expect.objectContaining({ uuid: uuidFor(123) })],
+			expect.anything()
+		);
 		expect(repository.upsertMany).not.toHaveBeenCalledWith(
-			expect.arrayContaining([expect.objectContaining({ uuid: uuidFor(456) })])
+			expect.arrayContaining([expect.objectContaining({ uuid: uuidFor(456) })]),
+			expect.anything()
 		);
 	});
 
@@ -1261,6 +1281,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(repository.upsertMany.mock.calls[1][0]).toHaveLength(1);
 		expect(result).toEqual({
 			taskId: 'orders:ids:bulk:on-demand',
+			appliedRecordIds: Array.from({ length: 101 }, (_, i) => String(i + 1)),
 			documentCount: 101,
 			requestCount: 2,
 			completed: true,
@@ -1339,49 +1360,74 @@ describe('createOrdersSchedulerFetcher', () => {
 		]);
 		expect(result).toEqual({
 			taskId: 'orders:ids:limit-two:on-demand',
+			appliedRecordIds: ['1', '2', '3', '4', '5'],
 			documentCount: 5,
 			requestCount: 3,
 			completed: true,
 		});
 	});
 
-	it('fails targeted order tasks when Woo omits a requested order id', async () => {
+	// The guard itself (a dirty or pending resident survives) is the repository's and is pinned in
+	// engine-order-repository.delete-manifest.test.ts; this lane's contract is to hand the omitted
+	// ids and the FRESH pending set to that guarded call and to complete the task.
+	it.each([
+		{ label: 'hands an omitted order to the guarded removal', pendingIds: [] },
+		{ label: 'hands the pending set along with an omitted order', pendingIds: [uuidFor(456)] },
+	])('$label and completes while applying the returned order', async ({ pendingIds }) => {
+		const pending = new Set(pendingIds);
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
+			removeDeletedOrders: vi.fn(
+				async (_ids: string[], _protectedIds?: ReadonlySet<string>) => undefined
+			),
 		};
-		const fetcher = vi.fn(async () =>
-			response([
-				{
-					id: 123,
-					date_modified_gmt: '2026-05-20T10:10:00',
-					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
-				},
-			])
-		);
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
+			coverageRepository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
 				writeCustomPullCheckpoint: vi.fn(async () => undefined),
 			},
-			fetcher,
+			pendingMutationOrderIds: async () => pending,
+			fetcher: async () =>
+				response([
+					{
+						id: 123,
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
+					},
+				]),
 		});
 
-		await expect(
-			schedulerFetcher(
-				orderTask({
-					id: 'orders:ids:missing:on-demand',
-					requirementId: 'orders.missing',
-					queryKey: 'orders:ids:missing',
-					documentIds: ['woo-order:123', 'woo-order:456'],
-					remoteIds: [123, 456].map(remoteId),
-					limit: 2,
-					mode: 'on-demand',
-				})
-			)
-		).rejects.toThrow('Woo REST targeted order response missing requested order ids: 456');
-		expect(repository.upsertMany).not.toHaveBeenCalled();
+		const result = await schedulerFetcher(
+			orderTask({
+				id: 'orders:ids:missing:on-demand',
+				requirementId: 'orders.missing',
+				queryKey: 'orders:ids:missing',
+				documentIds: ['woo-order:123', 'woo-order:456'],
+				remoteIds: [123, 456].map(remoteId),
+				limit: 2,
+				mode: 'on-demand',
+			})
+		);
+
+		expect(repository.removeDeletedOrders).toHaveBeenCalledExactlyOnceWith(['456'], pending);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[expect.objectContaining({ uuid: uuidFor(123), remoteId: '123' })],
+			expect.objectContaining({ source: 'pull' })
+		);
+		expect(result).toEqual({
+			taskId: 'orders:ids:missing:on-demand',
+			documentCount: 1,
+			requestCount: 1,
+			completed: true,
+			appliedRecordIds: ['123'],
+		});
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ records: [{ id: 'woo-order:123' }], complete: true })
+		);
 	});
 
 	it('fetches customer browser order query tasks through Woo REST filter descriptors', async () => {
@@ -1421,20 +1467,24 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledWith(
 			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&customer=42&per_page=25&page=1&orderby=id&order=desc'
 		);
-		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({
-				uuid: uuidFor(789),
-				remoteId: remoteId(789),
-				payload: {
-					id: 789,
-					status: 'processing',
-					date_modified_gmt: '2026-05-20T10:12:00',
-					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(789) }],
-				},
-				sync: expect.objectContaining({ source: 'woo-rest', partial: false }),
-				local: { dirty: false, pendingMutationIds: [] },
-			}),
-		]);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[
+				expect.objectContaining({
+					uuid: uuidFor(789),
+					remoteId: remoteId(789),
+					remoteKey: String(remoteId(789) ?? ''),
+					payload: {
+						id: 789,
+						status: 'processing',
+						date_modified_gmt: '2026-05-20T10:12:00',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(789) }],
+					},
+					sync: expect.objectContaining({ source: 'woo-rest', partial: false }),
+					local: { dirty: false, pendingMutationIds: [] },
+				}),
+			],
+			expect.anything()
+		);
 		expect(result).toEqual({
 			taskId: 'orders:browser:processing:windowed',
 			documentCount: 1,
@@ -2086,10 +2136,10 @@ describe('createOrdersSchedulerFetcher', () => {
 		new Date(epochSeconds * 1_000).toISOString().slice(0, 19);
 	const beforeParam = (epochSeconds: number) =>
 		encodeURIComponent(new Date(epochSeconds * 1_000).toISOString());
-	const rangedOrder = (wooId: number, epochSeconds: number) => ({
+	const rangedOrder = (wooId: number, epochSeconds: number, modifiedSeconds = epochSeconds) => ({
 		id: wooId,
 		date_created_gmt: gmtSeconds(epochSeconds),
-		date_modified_gmt: gmtSeconds(epochSeconds),
+		date_modified_gmt: gmtSeconds(modifiedSeconds),
 		meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(wooId) }],
 	});
 	const rangedResponse = (payload: unknown[], headers: Record<string, string> = {}) =>
@@ -2100,11 +2150,13 @@ describe('createOrdersSchedulerFetcher', () => {
 
 	/**
 	 * A Woo `/orders` stand-in that honours exactly the params the ranged walk cursors on —
-	 * `after`/`before` (exclusive, `dates_are_gmt`), `exclude`, `per_page`, `page` — and
+	 * `after`/`before`/`modified_after` (exclusive, `dates_are_gmt`), `exclude`, `per_page`, `page` — and
 	 * advertises `X-WP-Total` / `X-WP-TotalPages` for the window it just answered. Orders can
 	 * be removed between requests, which is how the "trashed mid-walk" case is exercised.
 	 */
-	function rangedOrderServer(orders: { wooId: number; seconds: number }[]) {
+	function rangedOrderServer(
+		orders: { wooId: number; seconds: number; modifiedSeconds?: number }[]
+	) {
 		const live = new Map(orders.map((order) => [order.wooId, order] as const));
 		const fetcher = vi.fn(async (url: string) => {
 			const params = new URL(url).searchParams;
@@ -2112,6 +2164,9 @@ describe('createOrdersSchedulerFetcher', () => {
 			const before = beforeParamValue === null ? Infinity : Date.parse(beforeParamValue) / 1_000;
 			const afterParamValue = params.get('after');
 			const after = afterParamValue === null ? -Infinity : Date.parse(afterParamValue) / 1_000;
+			const modifiedParamValue = params.get('modified_after');
+			const modifiedAfter =
+				modifiedParamValue === null ? -Infinity : Date.parse(modifiedParamValue) / 1_000;
 			const excluded = new Set(
 				(params.get('exclude') ?? '')
 					.split(',')
@@ -2122,12 +2177,16 @@ describe('createOrdersSchedulerFetcher', () => {
 			const page = Number(params.get('page'));
 			const matching = [...live.values()]
 				.filter(
-					(order) => order.seconds < before && order.seconds >= after && !excluded.has(order.wooId)
+					(order) =>
+						order.seconds < before &&
+						order.seconds > after &&
+						(order.modifiedSeconds ?? order.seconds) > modifiedAfter &&
+						!excluded.has(order.wooId)
 				)
 				.sort((left, right) => right.seconds - left.seconds || right.wooId - left.wooId);
 			const slice = matching.slice((page - 1) * perPage, page * perPage);
 			return rangedResponse(
-				slice.map((order) => rangedOrder(order.wooId, order.seconds)),
+				slice.map((order) => rangedOrder(order.wooId, order.seconds, order.modifiedSeconds)),
 				{
 					'X-WP-Total': String(matching.length),
 					'X-WP-TotalPages': String(Math.max(1, Math.ceil(matching.length / perPage))),
@@ -2196,6 +2255,157 @@ describe('createOrdersSchedulerFetcher', () => {
 			fetcher: overrides.fetcher as never,
 		});
 	}
+
+	const PAID_WINDOW_START = 1782864000;
+	const PAID_RANGE_QUERY_KEY = RANGE_QUERY_KEY.replace(
+		':search=',
+		`:modified_after=${PAID_WINDOW_START}:search=`
+	);
+
+	it('switches to a modified_after request after the created-in-range phase is short', async () => {
+		const coverageRepository = rangedLaneStore();
+		const { fetcher } = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+
+		await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+		const params = new URL(fetcher.mock.calls[1][0]).searchParams;
+		expect(params.has('after')).toBe(false);
+		expect(params.get('modified_after')).toBe(
+			new Date((PAID_WINDOW_START - 1) * 1_000).toISOString()
+		);
+		expect(params.get('before')).toBe(new Date((PAID_WINDOW_START + 1) * 1_000).toISOString());
+		expect(params.get('dates_are_gmt')).toBe('true');
+		expect(params.get('orderby')).toBe('date');
+		expect(params.get('order')).toBe('desc');
+		expect(params.get('page')).toBe('1');
+		expect(params.get('per_page')).toBe('25');
+		expect(params.has('exclude')).toBe(false);
+	});
+
+	it('downloads earlier-created orders modified after the window start and completes only after phase 2', async () => {
+		const coverageRepository = rangedLaneStore();
+		const repository = { upsertMany: vi.fn(async (_documents: OrderDocument[]) => undefined) };
+		const server = rangedOrderServer([
+			{ wooId: 1, seconds: PAID_WINDOW_START + 1 },
+			{ wooId: 2, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START + 10 },
+			{ wooId: 3, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START - 1 },
+			{ wooId: 4, seconds: PAID_WINDOW_START, modifiedSeconds: PAID_WINDOW_START + 10 },
+			{ wooId: 5, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START },
+		]);
+		const fetcher = vi.fn(async (url: string) => {
+			expect(coverageRepository.recordCumulativeQueryResult).not.toHaveBeenCalled();
+			return server.fetcher(url);
+		});
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+
+		const result = await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+		expect(result).toMatchObject({ documentCount: 4, requestCount: 2, completed: true });
+		expect(
+			repository.upsertMany.mock.calls.flatMap(([docs]) => docs.map((doc) => doc.uuid))
+		).toEqual([uuidFor(1), uuidFor(4), uuidFor(5), uuidFor(2)]);
+		expect(coverageRepository.recordCumulativeQueryResult).toHaveBeenCalledTimes(1);
+		expect(coverageRepository.lane()).toMatchObject({ complete: true });
+		expect(coverageRepository.lane()?.rangedResume).toBeUndefined();
+		expect(coverageRepository.publishRangedResume).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				resume: expect.objectContaining({ totalRecords: 4, downloadedRecords: 4 }),
+			})
+		);
+	});
+
+	it('downloads an earlier-created order whose modified time equals the window start', async () => {
+		const coverageRepository = rangedLaneStore();
+		const repository = { upsertMany: vi.fn(async (_documents: OrderDocument[]) => undefined) };
+		const { fetcher } = rangedOrderServer([
+			{ wooId: 7, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START },
+		]);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+
+		const result = await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+		expect(result).toMatchObject({ documentCount: 1, requestCount: 2, completed: true });
+		expect(
+			repository.upsertMany.mock.calls.flatMap(([docs]) => docs.map((doc) => doc.uuid))
+		).toEqual([uuidFor(7)]);
+	});
+
+	it('keeps a rangedResume and never records complete when the phase-2 request fails', async () => {
+		const coverageRepository = rangedLaneStore();
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const fetcher = vi.fn(async (url: string) =>
+			new URL(url).searchParams.has('modified_after')
+				? new Response(null, { status: 500 })
+				: server.fetcher(url)
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+
+		await expect(schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }))).rejects.toThrow(
+			'Woo REST browser order query request failed: 500'
+		);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(coverageRepository.recordCumulativeQueryResult).not.toHaveBeenCalledWith(
+			expect.objectContaining({ complete: true })
+		);
+		expect(coverageRepository.lane()).toMatchObject({
+			complete: false,
+			rangedResume: { beforeSeconds: PAID_WINDOW_START + 11 },
+		});
+	});
+
+	it.each([PAID_WINDOW_START + 1, PAID_WINDOW_START - 10])(
+		'resumes directly into phase 2 from persisted beforeSeconds=%s',
+		async (beforeSeconds) => {
+			const coverageRepository = rangedLaneStore();
+			await coverageRepository.publishRangedResume({
+				resume: { beforeSeconds, excludeWooIds: [], totalRecords: null, downloadedRecords: 0 },
+				expected: null,
+			});
+			const { fetcher } = rangedOrderServer([
+				{ wooId: 1, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START + 10 },
+			]);
+			const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+
+			const result = await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+			const params = new URL(fetcher.mock.calls[0][0]).searchParams;
+			expect(params.has('after')).toBe(false);
+			expect(params.get('modified_after')).toBe(
+				new Date((PAID_WINDOW_START - 1) * 1_000).toISOString()
+			);
+			expect(params.get('before')).toBe(new Date(beforeSeconds * 1_000).toISOString());
+			expect(result).toMatchObject({ documentCount: 1, requestCount: 1, completed: true });
+		}
+	);
+
+	it('persists an incomplete phase-2 cursor at the per-pass record bound', async () => {
+		const coverageRepository = rangedLaneStore();
+		const { fetcher } = rangedOrderServer([
+			{ wooId: 25_001, seconds: PAID_WINDOW_START + 10 },
+			...Array.from({ length: 25_000 }, (_, index) => ({
+				wooId: 25_000 - index,
+				seconds: PAID_WINDOW_START - index,
+				modifiedSeconds: PAID_WINDOW_START + 10,
+			})),
+		]);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+
+		const result = await schedulerFetcher(
+			orderTask({ queryKey: PAID_RANGE_QUERY_KEY, limit: 200 })
+		);
+
+		expect(result).toMatchObject({ documentCount: 10_000, completed: false });
+		expect(coverageRepository.lane()).toMatchObject({
+			complete: false,
+			rangedResume: {
+				beforeSeconds: PAID_WINDOW_START - 9_998 + 1,
+				excludeWooIds: [15_002],
+				totalRecords: 25_001,
+				downloadedRecords: 10_000,
+			},
+		});
+	});
 
 	it.each(['header-only', 'body-only', 'both'] as const)(
 		'produces the same ranged outcome from a %s response',
@@ -2716,18 +2926,22 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledWith(
 			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&search=hat&per_page=50&page=1&orderby=id&order=desc'
 		);
-		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({
-				uuid: uuidFor(789),
-				remoteId: remoteId(789),
-				payload: {
-					id: 789,
-					status: 'processing',
-					date_modified_gmt: '2026-05-20T10:12:00',
-					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(789) }],
-				},
-			}),
-		]);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[
+				expect.objectContaining({
+					uuid: uuidFor(789),
+					remoteId: remoteId(789),
+					remoteKey: String(remoteId(789) ?? ''),
+					payload: {
+						id: 789,
+						status: 'processing',
+						date_modified_gmt: '2026-05-20T10:12:00',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(789) }],
+					},
+				}),
+			],
+			expect.anything()
+		);
 		expect(coverageRepository.recordRecords).toHaveBeenCalledWith({
 			collection: 'orders',
 			queryKey: 'orders:browser:status=processing:search=hat:limit=50',
@@ -2784,11 +2998,14 @@ describe('createOrdersSchedulerFetcher', () => {
 			})
 		);
 
-		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({
-				uuid: uuidFor(789),
-			}),
-		]);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			[
+				expect.objectContaining({
+					uuid: uuidFor(789),
+				}),
+			],
+			expect.anything()
+		);
 		expect(coverageRepository.recordQueryResult).not.toHaveBeenCalled();
 	});
 
@@ -2827,7 +3044,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
 			writeCustomPullCheckpoint: vi.fn(async () => undefined),
 		};
-		const fetcher = vi.fn(async () => response({ documents: [], checkpoint, hasMore: true }));
+		const fetcher = vi.fn(async () => response({ documents: [], checkpoint, complete: false }));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
@@ -2888,7 +3105,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		type ReadShape = {
 			name: string;
 			task: FetchTask;
-			body: (wooId: number) => PullResponse<WirePullDocument> | unknown[];
+			body: (wooId: number) => Parameters<typeof response>[0];
 		};
 
 		const readShapes: ReadShape[] = [
@@ -2903,7 +3120,7 @@ describe('createOrdersSchedulerFetcher', () => {
 						},
 					] as WirePullDocument[],
 					checkpoint: nextCheckpoint,
-					hasMore: false,
+					complete: true,
 				}),
 			},
 			{
@@ -2968,4 +3185,192 @@ describe('createOrdersSchedulerFetcher', () => {
 			expect(upserted[0].payload).toMatchObject(sixDecimalMoney);
 		});
 	});
+});
+
+it('sends the register dimension as pos_register', async () => {
+	const registerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+	const fetcher = vi.fn(async (_url: string) => response([]));
+	const schedulerFetcher = createOrdersSchedulerFetcher({
+		baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+		repository: { upsertMany: vi.fn(async () => undefined) },
+		checkpointStore: {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		},
+		fetcher,
+	});
+	await schedulerFetcher(
+		orderTask({ queryKey: `orders:browser:status=all:register=${registerId}:search=:limit=25` })
+	);
+	expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('pos_register')).toBe(registerId);
+});
+
+it.each([
+	['BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB', false, []],
+	['AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA', true, ['woo-order:901', 'woo-order:902']],
+])(
+	'checks returned register %s before recording lane coverage',
+	async (returnedRegister, complete, documentIds) => {
+		const registerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+		const recordQueryResult = vi.fn(async () => undefined);
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: { upsertMany: vi.fn(async () => undefined) },
+			coverageRepository: { recordQueryResult },
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher: vi.fn(async () =>
+				response(
+					[registerId, returnedRegister].map((value, index) => ({
+						id: 901 + index,
+						status: 'processing',
+						date_modified_gmt: '2026-05-20T10:12:00',
+						meta_data: [
+							{ key: '_woocommerce_pos_uuid', value: uuidFor(901 + index) },
+							{ key: '_wcpos_register', value },
+						],
+					}))
+				)
+			),
+		});
+		await schedulerFetcher(
+			orderTask({
+				queryKey: `orders:browser:status=all:register=${registerId}:search=:limit=25`,
+			})
+		);
+		expect(recordQueryResult).toHaveBeenLastCalledWith(
+			expect.objectContaining({ complete, records: documentIds.map((id) => ({ id })) })
+		);
+	}
+);
+
+it('sends the payment method dimension as payment_method', async () => {
+	const fetcher = vi.fn(async (_url: string) => response([]));
+	const schedulerFetcher = createOrdersSchedulerFetcher({
+		baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+		repository: { upsertMany: vi.fn(async () => undefined) },
+		checkpointStore: {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		},
+		fetcher,
+	});
+	await schedulerFetcher(
+		orderTask({ queryKey: 'orders:browser:status=all:payment_method=MyGateway:search=:limit=25' })
+	);
+	expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('payment_method')).toBe('MyGateway');
+});
+
+it.each([
+	['pos_cash', [], true],
+	[
+		'stripe',
+		[
+			{ key: '_wcpos_payment_method', value: 'stripe' },
+			{ key: '_wcpos_payment_method', value: 'pos_cash' },
+		],
+		true,
+	],
+	['stripe', [{ key: '_wcpos_payment_method', value: 'stripe' }], false],
+])(
+	'checks returned payment method %s and index rows %j before completing coverage',
+	async (payment_method, indexRows, complete) => {
+		const recordQueryResult = vi.fn(async () => undefined);
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: { upsertMany: vi.fn(async () => undefined) },
+			coverageRepository: { recordQueryResult },
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher: vi.fn(async () =>
+				response([
+					{
+						id: 901,
+						status: 'processing',
+						date_modified_gmt: '2026-05-20T10:12:00',
+						payment_method,
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(901) }, ...indexRows],
+					},
+				])
+			),
+		});
+		await schedulerFetcher(
+			orderTask({ queryKey: 'orders:browser:status=all:payment_method=pos_cash:search=:limit=25' })
+		);
+		expect(recordQueryResult).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				complete,
+				records: complete ? [{ id: 'woo-order:901' }] : [],
+			})
+		);
+	}
+);
+
+// The repository's pull fence compares an adoption against WHEN the request went out: the
+// adoption's clock (`Date.now`), read before the fetch, never after its answer (dev-next
+// 2026-10-23, orders 115547/115569).
+it.each([
+	{
+		lane: 'custom pull',
+		task: orderTask(),
+		body: { documents: [customPullDoc(11)], checkpoint: nextCheckpoint, complete: true },
+	},
+	{
+		lane: 'targeted',
+		task: orderTask({
+			id: 'orders:ids:11:on-demand',
+			queryKey: 'orders:ids:11',
+			documentIds: ['woo-order:11'],
+			remoteIds: [remoteId(11)],
+			limit: 1,
+			mode: 'on-demand',
+		}),
+		body: [
+			{
+				id: 11,
+				date_modified_gmt: '2026-05-20T10:10:00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(11) }],
+			},
+		],
+	},
+	{
+		lane: 'browser',
+		task: orderTask({
+			id: 'orders:browser:processing:windowed',
+			queryKey: 'orders:browser:status=processing:search=:limit=50',
+			limit: 50,
+		}),
+		body: [
+			{
+				id: 11,
+				status: 'processing',
+				date_modified_gmt: '2026-05-20T10:10:00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(11) }],
+			},
+		],
+	},
+])('$lane: hands the repository the time its request went out', async ({ task, body }) => {
+	const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+	const repository = { upsertMany: vi.fn(async () => undefined) };
+	const schedulerFetcher = createOrdersSchedulerFetcher({
+		baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+		repository,
+		checkpointStore: {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		},
+		fetcher: vi.fn(async () => {
+			clock.mockReturnValue(9_000);
+			return response(body);
+		}),
+	});
+	await schedulerFetcher(task).finally(() => clock.mockRestore());
+	expect(repository.upsertMany).toHaveBeenCalledWith(
+		[expect.objectContaining({ uuid: uuidFor(11) })],
+		{ source: 'pull', requestedAt: 1_000 }
+	);
 });

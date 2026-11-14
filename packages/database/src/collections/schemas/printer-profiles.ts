@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 8,
+	version: 0,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',

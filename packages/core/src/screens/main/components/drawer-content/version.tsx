@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { Pressable } from 'react-native';
 
-import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogBody,
@@ -11,13 +10,12 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@wcpos/components/dialog';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useT } from '@wcpos/core/contexts/translations';
-import { useTheme } from '@wcpos/core/contexts/theme';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
@@ -57,9 +55,7 @@ function AboutDialogContent() {
 				<VStack space="md">
 					{/* App Info Section */}
 					<VStack space="xs">
-						<Text className="text-muted-foreground text-xs font-semibold uppercase">
-							{t('common.application')}
-						</Text>
+						<Text variant="caption">{t('common.application')}</Text>
 						<InfoRow label={t('common.app_version')} value={appVersion} />
 						<InfoRow
 							label={t('common.version', { platform: platformLabels[platform] })}
@@ -71,9 +67,7 @@ function AboutDialogContent() {
 					{/* Server Info Section (if connected) */}
 					{site && (
 						<VStack space="xs">
-							<Text className="text-muted-foreground text-xs font-semibold uppercase">
-								{t('common.server')}
-							</Text>
+							<Text variant="caption">{t('common.server')}</Text>
 							{/* Show Pro version if present, otherwise show free version */}
 							{site.wcposProVersion ? (
 								<InfoRow label={t('common.wcpos_pro_plugin')} value={site.wcposProVersion} />
@@ -88,9 +82,7 @@ function AboutDialogContent() {
 					{/* License Section (if connected) */}
 					{license && (
 						<VStack space="xs">
-							<Text className="text-muted-foreground text-xs font-semibold uppercase">
-								{t('common.license')}
-							</Text>
+							<Text variant="caption">{t('common.license')}</Text>
 							<InfoRow
 								label={t('common.status')}
 								value={license.isPro ? t('common.pro') : t('common.free')}
@@ -99,14 +91,13 @@ function AboutDialogContent() {
 					)}
 				</VStack>
 			</DialogBody>
-			<DialogFooter>
-				<Button variant="outline" onPress={() => openExternalURL('https://updates.wcpos.com')}>
-					<HStack>
-						<Icon name="globe" size="sm" />
-						<Text>{t('common.release_notes')}</Text>
-					</HStack>
-				</Button>
-			</DialogFooter>
+			<DialogFooter
+				secondary={{
+					label: t('common.release_notes'),
+					icon: 'globe',
+					onPress: () => void openExternalURL('https://updates.wcpos.com'),
+				}}
+			/>
 		</>
 	);
 }
@@ -115,7 +106,8 @@ function AboutDialogContent() {
  * Version display with About dialog
  */
 export function Version() {
-	const { screenSize } = useTheme();
+	const t = useT();
+	const phone = useIsPhone();
 	const { appVersion } = useAppInfo();
 
 	return (
@@ -124,15 +116,15 @@ export function Version() {
 				<Pressable>
 					<Text
 						className={cn(
-							'text-sidebar-foreground text-3xs p-2 px-4 opacity-50 active:opacity-100',
-							screenSize === 'lg' && 'px-0 text-center'
+							'text-sidebar-foreground p-2 px-3 text-xs opacity-50 active:opacity-100',
+							!phone && 'px-0 text-center'
 						)}
 					>
-						{screenSize === 'lg' ? `v ${appVersion}` : `Version ${appVersion}`}
+						{phone ? `Version ${appVersion}` : `v ${appVersion}`}
 					</Text>
 				</Pressable>
 			</DialogTrigger>
-			<DialogContent size="sm">
+			<DialogContent size="sm" closeLabel={t('common.close')}>
 				<AboutDialogContent />
 			</DialogContent>
 		</Dialog>

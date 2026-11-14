@@ -17,20 +17,10 @@ import { useCSSVariable } from 'uniwind';
 import { Platform } from '@wcpos/utils/platform';
 
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
+import { SPINNER } from '../lib/motion';
+import { TONE } from '../lib/tone';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
-
-/**
- * Map variant to CSS variable name for SVG stroke colors
- */
-const variantToCSSVariable: Record<string, string> = {
-	default: '--color-foreground',
-	primary: '--color-primary',
-	destructive: '--color-destructive',
-	secondary: '--color-secondary',
-	muted: '--color-muted-foreground',
-	success: '--color-success',
-};
+import { TextClassContext } from '../text/context';
 
 /**
  * Should match text and icon variants
@@ -40,10 +30,10 @@ const loaderVariants = cva('inset-0 content-center items-center', {
 		variant: {
 			default: '',
 			primary: 'text-primary',
-			destructive: 'text-destructive',
 			secondary: 'text-secondary',
-			muted: 'text-muted',
-			success: 'text-success',
+			muted: 'text-muted-foreground',
+			bad: TONE.bad.text,
+			ok: TONE.ok.text,
 		},
 		size: {
 			default: 'size-4.5',
@@ -73,11 +63,7 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 	// Combine all classNames to find the effective text color
 	const combinedClassName = cn(loaderVariants({ variant, size }), textClass, className);
 
-	// Extract CSS variable from className, falling back to variant's default
-	const cssVariable =
-		getColorVariableFromClassName(combinedClassName) ||
-		variantToCSSVariable[variant ?? 'default'] ||
-		'--color-foreground';
+	const cssVariable = getColorVariableFromClassName(combinedClassName) || '--color-foreground';
 
 	// Use Uniwind's useCSSVariable hook to get the actual theme color
 	const resolvedColor = String(useCSSVariable(cssVariable) ?? '');
@@ -94,7 +80,11 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 		// from the timing's): a spinner is a functional progress indicator, and
 		// web's CSS animation ignores reduce-motion too.
 		rotation.value = withRepeat(
-			withTiming(360, { duration: 1000, easing: Easing.linear, reduceMotion: ReduceMotion.Never }),
+			withTiming(360, {
+				duration: SPINNER,
+				easing: Easing.linear,
+				reduceMotion: ReduceMotion.Never,
+			}),
 			-1,
 			false,
 			undefined,
@@ -137,3 +127,5 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 		</View>
 	);
 }
+
+export { Spin } from './spin';

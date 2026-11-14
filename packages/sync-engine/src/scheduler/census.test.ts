@@ -21,6 +21,7 @@ describe('collection census', () => {
 			'brands',
 			'tags',
 			'coupons',
+			'refunds',
 		]);
 		expect(CENSUS_COLLECTIONS.map(censusQueryKey)).toEqual([
 			'census:orders',
@@ -32,6 +33,7 @@ describe('collection census', () => {
 			'census:brands',
 			'census:tags',
 			'census:coupons',
+			'census:refunds',
 		]);
 		for (const collection of CENSUS_COLLECTIONS) {
 			expect(censusCollectionFromQueryKey(censusQueryKey(collection))).toBe(collection);

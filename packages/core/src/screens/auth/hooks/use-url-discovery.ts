@@ -8,7 +8,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { isBotChallengeError } from './bot-challenge';
 import { useT } from '../../../contexts/translations';
-import { parseLinkHeader } from '../../../lib/url';
+import { normalizeStoreUrl, parseLinkHeader, withAsciiHost } from '../../../lib/url';
 
 const discoveryLogger = getLogger(['wcpos', 'auth', 'discovery']);
 
@@ -71,7 +71,8 @@ interface UseUrlDiscoveryReturn {
 const extractWpApiUrlFromLink = (link: string | undefined): string | null => {
 	if (!link) return null;
 	const parsed = parseLinkHeader(link);
-	return get(parsed, ['https://api.w.org/', 'url']) || null;
+	const url = get(parsed, ['https://api.w.org/', 'url']);
+	return url ? withAsciiHost(url) : null;
 };
 
 /**
@@ -98,15 +99,6 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const [wpApiUrl, setWpApiUrl] = React.useState<string | null>(null);
 	const http = useHttpClient();
 	const t = useT();
-
-	/**
-	 * Clean and normalize the input URL
-	 */
-	const normalizeUrl = React.useCallback((url: string): string => {
-		const protocol = 'https'; // Always use HTTPS for security
-		const urlWithoutProtocol = url.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
-		return `${protocol}://${urlWithoutProtocol}`;
-	}, []);
 
 	/**
 	 * Try to discover wp-json URL from Link header
@@ -172,10 +164,17 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				// quietErrors for the same reason as the Link-header probe: this
 				// runs precisely BECAUSE the first probe found nothing, so its
 				// failure is the expected second half of "not a WordPress site".
+				// `wcpos=1` because a HEAD carries no `X-WCPOS` marker (no
+				// preflight), and since plugin 1.10.0 the REST layer stamps
+				// `Access-Control-Allow-Origin` only on requests it owns; the
+				// query-var marker is how a marker-less request is owned
+				// (roadmap#383). The front-page probe needs no marker: the plugin
+				// allows `_method=head` on the front end unconditionally.
 				// unauthenticated for the same reason as the Link-header probe too.
 				const response = await http.head(fallbackUrl, {
 					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
 					quietErrors: true,
+					params: { wcpos: 1 },
 					unauthenticated: true,
 				});
 
@@ -238,7 +237,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 			setWpApiUrl(null);
 
 			try {
-				const normalizedUrl = normalizeUrl(url);
+				const normalizedUrl = normalizeStoreUrl(url);
 
 				// Step 1: Try Link header discovery
 				const linkProbe = await tryLinkHeaderDiscovery(normalizedUrl);
@@ -295,7 +294,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				throw err;
 			}
 		},
-		[normalizeUrl, tryLinkHeaderDiscovery, tryFallbackDiscovery, t]
+		[tryLinkHeaderDiscovery, tryFallbackDiscovery, t]
 	);
 
 	return {

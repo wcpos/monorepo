@@ -6,15 +6,15 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 import { CouponForm, couponFormSchema } from '../components/coupon/coupon-form';
-import { useMutation } from '../hooks/mutations/use-mutation';
+import { useCouponRecord } from './commands/use-coupon-record';
 
 export function AddCouponScreen() {
-	const { create } = useMutation({ collectionName: 'coupons' });
+	const { createCoupon } = useCouponRecord();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const router = useRouter();
@@ -30,7 +30,7 @@ export function AddCouponScreen() {
 		async (data: z.infer<typeof couponFormSchema>) => {
 			setLoading(true);
 			try {
-				const created = await create({ data });
+				const created = await createCoupon(data);
 				if (created) {
 					router.back();
 				}
@@ -38,28 +38,34 @@ export function AddCouponScreen() {
 				setLoading(false);
 			}
 		},
-		[create, router]
+		[createCoupon, router]
 	);
 
+	const onSubmit = form.handleSubmit(handleSave);
+
 	return (
-		<Modal>
-			<ModalContent size="lg">
-				<ModalHeader>
-					<ModalTitle>
+		<Dialog route>
+			<DialogContent side="right" size="xl">
+				<DialogHeader>
+					<DialogTitle>
 						<Text>{t('coupons.add_coupon')}</Text>
-					</ModalTitle>
-				</ModalHeader>
-				<ModalBody>
-					<ErrorBoundary>
-						<CouponForm
-							form={form}
-							onSubmit={handleSave}
-							onClose={() => router.back()}
-							loading={loading}
-						/>
-					</ErrorBoundary>
-				</ModalBody>
-			</ModalContent>
-		</Modal>
+					</DialogTitle>
+				</DialogHeader>
+				<ErrorBoundary>
+					<CouponForm
+						form={form}
+						footer={{
+							intent: {
+								label: t('coupons.add_coupon'),
+								testID: 'coupon-form-add',
+								loading,
+								onPress: () => void onSubmit(),
+							},
+							close: { testID: 'coupon-form-close' },
+						}}
+					/>
+				</ErrorBoundary>
+			</DialogContent>
+		</Dialog>
 	);
 }

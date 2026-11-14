@@ -1,16 +1,18 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { isAsleepBlock, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { type ReadonlySiteRecord, recordSiteInfo } from '@wcpos/query/user-db';
+
+import { fetchLiveSiteInfo, SiteInfoStatusError } from '../utils/fetch-live-site-info';
+import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
 const appLogger = getLogger(['wcpos', 'app', 'site']);
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
+	site: ReadonlySiteRecord;
 }
 
 interface SiteInfoResult {
@@ -62,51 +64,25 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 			setError(null);
 
 			try {
-				const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
+				const data = await fetchLiveSiteInfo(http, wpApiUrl);
 
-				// Check if response is successful
-				if (!response || response.status < 200 || response.status >= 300) {
-					const errorMsg = `Invalid response status: ${response?.status}`;
-					appLogger.error('Failed to fetch site info: Invalid response status', {
-						code: ERROR_CODES.SYNC_UNEXPECTED,
-						context: {
-							status: response?.status,
-							statusText: response?.statusText,
-							siteUrl,
-						},
-					});
-					setError(errorMsg);
-					return;
-				}
-
-				const data = get(response, 'data', {});
-
-				// Check if data exists and has expected structure
-				if (!data || typeof data !== 'object') {
+				if (!data) {
 					appLogger.debug('Site info response contains no valid data', {
-						context: { siteUrl, hasData: !!data },
+						context: { siteUrl, hasData: false },
 					});
 					return;
 				}
 
-				// Only patch if we have at least one valid field to update
-				const hasValidData =
-					data.wp_version ||
-					data.wc_version ||
-					data.wcpos_version ||
-					data.wcpos_pro_version ||
-					data.license;
-				if (hasValidData) {
-					const patch: Record<string, unknown> = {
-						wp_version: data?.wp_version ?? '',
-						wc_version: data?.wc_version ?? '',
-						wcpos_version: data?.wcpos_version ?? '',
-						wcpos_pro_version: data?.wcpos_pro_version ?? '',
-					};
-					if (data.license !== undefined) patch.license = data.license || {};
-					await site.incrementalPatch(patch);
-				}
+				await recordSiteInfo(site, data);
 			} catch (err) {
+				if (err instanceof SiteInfoStatusError) {
+					appLogger.error('Failed to fetch site info: Invalid response status', {
+						code: ERROR_CODES.STORE_SERVER_ERROR,
+						context: { status: err.status, statusText: err.statusText, siteUrl },
+					});
+					setError(err.message);
+					return;
+				}
 				if (isAsleepBlock(err)) {
 					deferredRef.current = true;
 					// Nothing was attempted, so nothing failed: leave `error` unset and
@@ -120,9 +96,16 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					return;
 				}
 				const errorMsg = getErrorMessage(err);
-				const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
+				// Offline is forensic (nothing was attempted); otherwise the code of what the
+				// store did — SYNC999's "re-enter and save" was never true of a read.
+				const code = storeRequestFailureCode(err);
+				const logLevel = isExpectedPreflightBlock(err)
+					? 'debug'
+					: ERROR_CATALOGUE[code].severity === 'error'
+						? 'error'
+						: 'warn';
 				appLogger[logLevel]('Failed to fetch site info', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+					code,
 					context: {
 						error: errorMsg,
 						siteUrl,

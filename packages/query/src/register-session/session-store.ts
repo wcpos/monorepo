@@ -1,0 +1,813 @@
+import { tz } from '@date-fns/tz';
+import { format } from 'date-fns/format';
+import { parseISO } from 'date-fns/parseISO';
+
+import { hasPendingLocalWork } from '@wcpos/sync-engine';
+import {
+	fromMinor,
+	isActiveCouponLine,
+	isActiveFeeLine,
+	isActiveLineItem,
+	isActiveShippingLine,
+	readCompletions,
+	readLedger,
+	toMinor,
+} from '@wcpos/order-math';
+import { AppInfo } from '@wcpos/utils/app-info';
+import type {
+	CashMovementRow,
+	ClosureDocument,
+	ClosureRow,
+	OrderDocument,
+	RefundDocumentType,
+	RegisterSessionCollection,
+	RegisterSessionRow,
+	UserDatabase,
+} from '@wcpos/database';
+
+import {
+	advancePerpetual,
+	isoGmt,
+	mintClosureNumber,
+	mintUuid,
+	readRegister,
+	reviseClosureReservation,
+} from './register-document';
+import { reversalsInFlight } from './reversal-claims';
+import { registerCollections, type RegisterStoreDatabase } from './store-database';
+import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
+import { baselineContains } from './baseline';
+import { isSessionOrder, isUnsyncedMovement, unaccepted, unsyncedCount } from './drawer-rules';
+
+import type { DeepReadonly } from 'rxdb';
+import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
+import type { ReadonlyClosureDocument } from './reads';
+
+export const pending = {
+	sync_status: 'pending',
+	sync_attempts: 0,
+	sync_next_at: null,
+	sync_error: null,
+} as const;
+export class RegisterSessionRequiredError extends Error {
+	constructor() {
+		super('register_session_not_open');
+		this.name = 'RegisterSessionRequiredError';
+	}
+}
+export const openSessionSelector = { status: 'open', sync_status: { $ne: 'failed' } } as const;
+/**
+ * The open session for a register, or throws. A read: it changes nothing, so an action guard
+ * may call it before `next`. `requireOpenSession` returns only its id.
+ */
+export async function findOpenSession(
+	storeDB: RegisterStoreDatabase,
+	registerId: string | null,
+	enabled: boolean
+) {
+	if (!enabled) return null;
+	const sessions = registerCollections(storeDB).register_sessions;
+	const session = await sessions
+		?.findOne({
+			selector: { register_id: registerId ?? '', ...openSessionSelector },
+		})
+		.exec();
+	if (!session) throw new RegisterSessionRequiredError();
+	// A refused close abandoned while the store still counts it (#2016): no sale attaches to a
+	// session the store is counting. An offline abandon, with no closure written, keeps selling.
+	if (session.pending_status === 'open' && session.server_status === 'counting') {
+		const closure = await registerCollections(storeDB).closures?.findOne(session.id).exec();
+		if (unaccepted(closure)) throw new RegisterSessionRequiredError();
+	}
+	return session;
+}
+export async function requireOpenSession(
+	storeDB: RegisterStoreDatabase,
+	registerId: string | null,
+	enabled: boolean
+) {
+	const session = await findOpenSession(storeDB, registerId, enabled);
+	if (!session) return null;
+	// Retain the baseline; pending rows supply the delta until the next detail refresh.
+	return session.id;
+}
+/**
+ * Whether the register's session is being counted. `findOpenSession` matches `status: 'open'`
+ * only and throws on a miss, so this is its own read. It runs on the tap or scan: one `findOne`.
+ */
+export async function isRegisterCounting(storeDB: RegisterStoreDatabase, registerId: string) {
+	const counting = await registerCollections(storeDB)
+		.register_sessions?.findOne({
+			selector: { register_id: registerId, status: 'counting', sync_status: { $ne: 'failed' } },
+		})
+		.exec();
+	return !!counting;
+}
+export function openSession(
+	storeDB: RegisterStoreDatabase,
+	input: {
+		registerId: string;
+		expectedFloat: string | null;
+		countedFloat: string;
+		openedBy: number;
+		businessDay: { year: number; month: number; day: number };
+		storeId?: number | null;
+	}
+) {
+	const sessions = registerCollections(storeDB).register_sessions;
+	const { year, month, day } = input.businessDay;
+	return sessions.insert({
+		id: mintUuid(),
+		register_id: input.registerId,
+		store_id: input.storeId ?? null,
+		status: 'open',
+		opened_at_gmt: new Date().toISOString(),
+		opened_by: input.openedBy,
+		business_day: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+		expected_float: input.expectedFloat,
+		counted_float: input.countedFloat,
+		opening_variance:
+			input.expectedFloat === null
+				? null
+				: fromMinor(toMinor(input.countedFloat, 4) - toMinor(input.expectedFloat, 4), 4),
+		...pending,
+	});
+}
+type SessionStatus = RegisterSessionRow['status'];
+/**
+ * The statuses each local move may start from, read from today's callers. Counting starts from
+ * open, and again over a count (Sign out while the session is counting). Selling resumes from a
+ * count, or from a close the store refused (#2016). The close comes from a count, from open (a
+ * refresh can reopen the row under the count pane), and again from closed (a refused close's
+ * retry, #3304). A second abandon and a count over a closed session are refused.
+ */
+const ALLOWED_FROM: Record<SessionStatus, readonly SessionStatus[]> = {
+	counting: ['open', 'counting'],
+	open: ['counting', 'closed'],
+	closed: ['open', 'counting', 'closed'],
+};
+export class IllegalSessionTransitionError extends Error {
+	constructor(
+		readonly from: SessionStatus,
+		readonly to: SessionStatus
+	) {
+		super(`register_session_illegal_transition: ${from} -> ${to}`);
+		this.name = 'IllegalSessionTransitionError';
+	}
+}
+async function transition(
+	sessions: RegisterSessionCollection,
+	id: string,
+	status: SessionStatus,
+	extra: Partial<RegisterSessionRow> = {}
+) {
+	const row = await sessions.findOne(id).exec();
+	if (!row) throw new RegisterSessionRequiredError();
+	const at = new Date().toISOString();
+	// Checked inside the write: a refresh landing after the read is the status the move sees.
+	return row.incrementalModify((data) => {
+		if (!ALLOWED_FROM[status].includes(data.status))
+			throw new IllegalSessionTransitionError(data.status, status);
+		return {
+			...data,
+			...pending,
+			...extra,
+			status,
+			pending_status: status,
+			status_at: at,
+			...(status === 'counting' ? { counting_started_at_gmt: at } : {}),
+			...(status === 'closed' ? { closed_at_gmt: at } : {}),
+		};
+	});
+}
+export const startCounting = (storeDB: RegisterStoreDatabase, id: string) =>
+	transition(registerCollections(storeDB).register_sessions, id, 'counting');
+export const backToSelling = (storeDB: RegisterStoreDatabase, id: string) =>
+	// The approval snapshot belongs to the counting attempt it was given for; `approval_required`
+	// is the server's flag and stays until the server clears it.
+	transition(registerCollections(storeDB).register_sessions, id, 'open', {
+		approved_counted: null,
+		count_note: null,
+		count_denominations: null,
+	});
+export const closeSession = async (
+	storeDB: RegisterStoreDatabase,
+	id: string,
+	input: {
+		counted: Record<string, string>;
+		closedBy?: number;
+		timezone?: string;
+		note?: string;
+		denominations?: { value: string; pieces: number }[];
+	}
+) => {
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
+	const session = await sessions.findOne(id).exec();
+	if (!session) throw new RegisterSessionRequiredError();
+	// A retry of a refused close (#3304) is held out of the outbox: once the store has the session
+	// closed, the outbox sends the closure as it stands, so the close must not become sendable
+	// until the closure is rewritten. A crash here leaves a refused close the cashier can retry.
+	const held = unaccepted(await closures?.findOne(id).exec());
+	return transition(sessions, id, 'closed', {
+		...(held ? { sync_status: 'failed' as const } : {}),
+		business_day:
+			session.business_day ||
+			format(
+				parseISO(
+					session.opened_at_gmt.endsWith('Z') ? session.opened_at_gmt : `${session.opened_at_gmt}Z`
+				),
+				'yyyy-MM-dd',
+				{ in: input.timezone && input.timezone !== 'device' ? tz(input.timezone) : undefined }
+			),
+		counted: input.counted,
+		count_note: input.note ?? null,
+		count_denominations: input.denominations ?? null,
+		closed_by: input.closedBy ?? null,
+		closure_id: id,
+	});
+};
+/**
+ * Put a refused movement back in the outbox. The row is the only record of cash that has
+ * physically moved, so the cashier needs a way to send it again once whatever the server
+ * objected to — a capability, a closed session, a bad field — has been dealt with.
+ */
+export async function retryMovement(storeDB: RegisterStoreDatabase, movementId: string) {
+	const movements = registerCollections(storeDB).cash_movements;
+	const row = await movements.findOne(movementId).exec();
+	if (!row) throw new Error('invalid_retry_target');
+	const retried = await row.incrementalPatch({ ...pending });
+	// A refused reversal's claim on its target was dropped by the refresh that followed the
+	// refusal; retrying the reversal restores it, or a close before the server's next snapshot
+	// records the target as never voided. The reversal is pending BEFORE the claim is written,
+	// so a refresh landing between the two writes sees a pending reversal and lets it stand.
+	if (row.voids) {
+		const target = await movements.findOne(row.voids).exec();
+		await target?.incrementalModify((doc) => {
+			doc.voided_by ??= row.id;
+			return doc;
+		});
+	}
+	// A closure dead-lettered by this movement's refusal is never looked at again (the outbox
+	// passes only pending rows), so it would stay failed after the movement lands. Re-queue it;
+	// it still waits for the movement to sync before it sends.
+	const closures = await registerCollections(storeDB)
+		.closures.find({ selector: { session_id: row.session_id, sync_status: 'failed' } })
+		.exec();
+	await Promise.all(
+		closures
+			.filter((closure) => closure.movement_ids.includes(row.id))
+			.map((closure) => closure.incrementalPatch({ ...pending }))
+	);
+	return retried;
+}
+// A retry's held close (#3302): the status POST reads these; a refresh mid-retry overwrites them.
+const HELD_CLOSE_FIELDS = [
+	'status',
+	'status_at',
+	'closed_at_gmt',
+	'counted',
+	'count_note',
+	'count_denominations',
+	'closed_by',
+	'closure_id',
+	'business_day',
+] as const;
+type HeldClose = Partial<Pick<RegisterSessionRow, (typeof HELD_CLOSE_FIELDS)[number]>>;
+/**
+ * Put a refused close back in the outbox (#2016), as `retryMovement` does for cash: the same
+ * status POST with the same count, once the cashier has dealt with what the store objected to.
+ */
+export async function requeueClose(storeDB: RegisterStoreDatabase, id: string, close?: HeldClose) {
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
+	const row = await sessions.findOne(id).exec();
+	if (!row) throw new Error('invalid_retry_target');
+	const closure = await closures.findOne(id).exec();
+	if (closure?.sync_status === 'failed') await closure.incrementalPatch({ ...pending });
+	const held = HELD_CLOSE_FIELDS.filter((field) => close?.[field] !== undefined);
+	const restored = Object.fromEntries(held.map((field) => [field, close![field]]));
+	return row.incrementalPatch({ ...restored, ...pending, pending_status: 'closed' });
+}
+export function recordMovement(
+	storeDB: RegisterStoreDatabase,
+	input: {
+		sessionId: string;
+		type: 'paid_in' | 'paid_out' | 'no_sale';
+		amount: string;
+		reason: string;
+		actor: number;
+	}
+) {
+	const movements = registerCollections(storeDB).cash_movements;
+	return movements.insert({
+		id: mintUuid(),
+		session_id: input.sessionId,
+		type: input.type,
+		amount: input.amount,
+		reason: input.reason,
+		created_by: input.actor,
+		created_at_gmt: new Date().toISOString(),
+		...pending,
+	});
+}
+/** The movement row by id, or null: the hook reads the void target's own figures for its audit event. */
+export function readMovement(storeDB: RegisterStoreDatabase, movementId: string) {
+	return registerCollections(storeDB).cash_movements.findOne(movementId).exec();
+}
+
+export async function voidMovement(
+	storeDB: RegisterStoreDatabase,
+	movementId: string,
+	actor: number
+) {
+	const movements = registerCollections(storeDB).cash_movements;
+	const row = await movements.findOne(movementId).exec();
+	if (!row || row.type === 'void') throw new Error('invalid_void_target');
+	// Repeated Undo taps share one durable reversal: the target's voided_by names it. The claim
+	// lands before the reversal row exists; `reversalsInFlight` tells a refresh in that gap
+	// apart from an orphaned claim (see `claimStands`).
+	const id = mintUuid();
+	reversalsInFlight.add(id);
+	try {
+		const claimed = await row.incrementalModify((doc) => {
+			doc.voided_by ??= id;
+			return doc;
+		});
+		const reversalId = claimed.voided_by!;
+		const existing = await movements.findOne(reversalId).exec();
+		if (existing) return existing;
+		try {
+			return await movements.insert({
+				id: reversalId,
+				session_id: row.session_id,
+				type: 'void',
+				amount: '0',
+				reason: '',
+				created_by: actor,
+				created_at_gmt: new Date().toISOString(),
+				voids: row.id,
+				...pending,
+			});
+		} catch (error) {
+			// Another tap inserted this reversal after the lookup above: that row is the reversal.
+			if ((error as { code?: string }).code === 'CONFLICT') {
+				const raced = await movements.findOne(reversalId).exec();
+				if (raced) return raced;
+			}
+			// No reversal row: the claim this call made must not leave the target marked voided.
+			if (reversalId === id)
+				await row.getLatest().incrementalModify((doc) => {
+					if (doc.voided_by === id) doc.voided_by = null;
+					return doc;
+				});
+			throw error;
+		}
+	} finally {
+		reversalsInFlight.delete(id);
+	}
+}
+
+export async function writeClosure({
+	storeDB,
+	userDB,
+	siteUuid,
+	session,
+	counted,
+	otherTenders,
+	movements,
+	orders,
+	baseline,
+	refundRecords = [],
+	labels,
+	resolveCashierName,
+	timezone = 'device',
+	note = '',
+	denominations = [],
+	revise = false,
+}: {
+	timezone?: string;
+	/** Rewrite an unaccepted closure with these figures (a refused close's retry, #3304). */
+	revise?: boolean;
+	storeDB: RegisterStoreDatabase;
+	userDB: UserDatabase;
+	siteUuid: string;
+	session: Readonly<
+		Pick<
+			RegisterSessionRow,
+			| 'id'
+			| 'register_id'
+			| 'store_id'
+			| 'opened_at_gmt'
+			| 'opened_by'
+			| 'closed_at_gmt'
+			| 'closed_by'
+			| 'business_day'
+			| 'approved_by'
+			| 'counted_float'
+			| 'expected_float'
+			| 'opening_variance'
+			| 'sync_status'
+		>
+	>;
+	counted: string;
+	note?: string;
+	denominations?: { value: string; pieces: number }[];
+	otherTenders: Record<string, string>;
+	movements: readonly CashMovementRow[];
+	orders: readonly ClosureOrder[];
+	/** The session as it stands now and its refunds: what the server's snapshot already counts. */
+	baseline?: {
+		session: RegisterSessionRow;
+		refundSources: readonly ReadonlyEngineRecord<'refunds'>[];
+	};
+	refundRecords?: readonly RefundDocumentType[];
+	resolveCashierName?: (id: number) => string;
+	labels?: {
+		register_name: string;
+		closed_by_name: string;
+		opened_by_name?: string;
+		approved_by_name?: string;
+	};
+}) {
+	const closures = registerCollections(storeDB).closures;
+	const existing = await closures.findOne(session.id).exec();
+	if (existing && (!revise || !unaccepted(existing))) {
+		await advancePerpetual(userDB, siteUuid, session.register_id, {
+			sales: existing.period_sales_total,
+			refunds: existing.period_refunds_total,
+			closureId: existing.id,
+		});
+		return existing;
+	}
+	const bound = orders.filter((order) => isSessionOrder(order, session.id));
+	const sold = bound.filter((order) =>
+		readLedger(order.payload.meta_data).some(
+			(row) => row.session_id === session.id && row.status === 'captured'
+		)
+	);
+	// Money belongs to each captured leg; sale facts belong only to the completing session.
+	const completedHere = sold.filter((order) => {
+		const completions = readCompletions(order.payload.meta_data);
+		if (completions.length) return completions[completions.length - 1].session === session.id;
+		const captured = readLedger(order.payload.meta_data).filter((row) => row.status === 'captured');
+		const latest = captured.reduce((last, row) =>
+			(row.created_at_gmt ?? '') >= (last.created_at_gmt ?? '') ? row : last
+		);
+		return latest.session_id === session.id;
+	});
+	const ledgerRows = orders.flatMap((order) => readLedger(order.payload.meta_data));
+	const refunds = attributeRefunds(session.id, ledgerRows, refundRecords);
+	const rows = ledgerRows.filter(
+		(row) => row.session_id === session.id && row.status === 'captured'
+	);
+	const entries = movements.filter((row) => row.session_id === session.id);
+	const till_expected = deriveExpected(
+		{
+			session: baseline?.session ?? session,
+			movements: entries,
+			ledgerRowsBySession: ledgerRows,
+			refundRecords,
+		},
+		baseline && baselineContains(orders, baseline.refundSources, entries, baseline.session)
+	);
+	const counts = { cash: counted, ...otherTenders };
+	const sum = (values: (string | null | undefined)[]) =>
+		fromMinor(
+			values.reduce((total, value) => total + toMinor(value, 4), 0),
+			4
+		);
+	const methodName = (method: string) =>
+		bound.find((order) => order.payload.payment_method === method)?.payload.payment_method_title ??
+		'';
+	const payment_methods: Record<
+		string,
+		{ method: string; name: string; sales: string; refunds: string }
+	> = {};
+	for (const row of rows) {
+		const method = row.kind === 'cash' ? 'cash' : row.method_id;
+		const previous = payment_methods[method];
+		payment_methods[method] = {
+			method,
+			name: methodName(method),
+			sales: sum([previous?.sales ?? '0', row.amount]),
+			refunds: '0.0000',
+		};
+	}
+	for (const [method, amount] of Object.entries(refunds.byMethod)) {
+		payment_methods[method] = {
+			method,
+			name: methodName(method),
+			sales: payment_methods[method]?.sales ?? '0',
+			refunds: fromMinor(amount, 4),
+		};
+	}
+	const tax_rates: Record<
+		string,
+		{ rate?: number; name: string; net: string; tax: string; gross: string }
+	> = {};
+	const addTaxRates = (document: ClosureOrder['payload'] | RefundDocumentType) => {
+		const netByRate: Record<string, number> = {};
+		const lines = [
+			...(document.line_items ?? []).filter(isActiveLineItem),
+			...(document.fee_lines ?? []).filter(isActiveFeeLine),
+			...(document.shipping_lines ?? []).filter(isActiveShippingLine),
+		];
+		for (const line of lines)
+			for (const tax of line.taxes ?? [])
+				netByRate[String(tax.id)] = (netByRate[String(tax.id)] ?? 0) + toMinor(line.total, 4);
+		for (const tax of document.tax_lines ?? []) {
+			const key = String(tax.rate_id);
+			const amount = toMinor(tax.tax_total ?? '0', 4) + toMinor(tax.shipping_tax_total ?? '0', 4);
+			const net = netByRate[key] ?? 0;
+			const previous = tax_rates[key];
+			tax_rates[key] = {
+				rate: tax.rate_percent,
+				name:
+					tax.rate_percent == null ? (tax.label ?? '') : `${tax.label ?? ''} ${tax.rate_percent}%`,
+				net: sum([previous?.net ?? '0', fromMinor(net, 4)]),
+				tax: sum([previous?.tax ?? '0', fromMinor(amount, 4)]),
+				gross: sum([previous?.gross ?? '0', fromMinor(net + amount, 4)]),
+			};
+		}
+	};
+	// Unpaid orders have no tax to report; session refunds reduce the same tax bases.
+	for (const order of completedHere) addTaxRates(order.payload);
+	for (const refund of refundRecords) {
+		if (refundSessionId(refund) === session.id) addTaxRates(refund);
+	}
+	const dirtyOrders = bound.filter(hasPendingLocalWork);
+	// A refused movement is cash the server's ledger does not hold: the closure records it (#3271).
+	const dirtyMovements = entries.filter(isUnsyncedMovement);
+
+	const counters = bound
+		.map((order) =>
+			Number(order.payload.meta_data?.find(({ key }) => key === '_wcpos_sale_counter')?.value)
+		)
+		.filter((value) => value > 0);
+	const period_sales_total = sum(rows.map((row) => row.amount));
+	const transaction_count = sold.length;
+	const draft: ClosureRow = {
+		id: session.id,
+		session_id: session.id,
+		register_id: session.register_id,
+		store_id: session.store_id ?? null,
+		number: 0,
+		opened_at: isoGmt(session.opened_at_gmt),
+		business_day:
+			session.business_day ||
+			format(
+				parseISO(
+					session.opened_at_gmt.endsWith('Z') ? session.opened_at_gmt : `${session.opened_at_gmt}Z`
+				),
+				'yyyy-MM-dd',
+				{ in: timezone === 'device' ? undefined : tz(timezone) }
+			),
+		closed_by: session.closed_by ?? null,
+		closed_at: session.closed_at_gmt!,
+		till_expected,
+		expected: till_expected,
+		counted: counts,
+		variance: Object.fromEntries(
+			Object.entries(counts).map(([method, value]) => [
+				method,
+				fromMinor(toMinor(value, 4) - toMinor(till_expected[method] ?? '0', 4), 4),
+			])
+		),
+		period_sales_total,
+		period_refunds_total: fromMinor(
+			Object.values(refunds.byMethod).reduce((total, amount) => total + amount, 0),
+			4
+		),
+		perpetual_sales_total: '0',
+		perpetual_refunds_total: '0',
+		unsynced_count: unsyncedCount(session, bound, entries),
+		unsynced_total: sum([
+			...dirtyMovements.map((row) => row.amount),
+			...dirtyOrders
+				.flatMap((order) => readLedger(order.payload.meta_data))
+				.filter((row) => row.session_id === session.id && row.status === 'captured')
+				.map((row) => fromMinor(toMinor(row.amount, 4) - toMinor(row.refunded_amount, 4), 4)),
+		]),
+		first_sale_counter: counters.length ? Math.min(...counters) : null,
+		last_sale_counter: counters.length ? Math.max(...counters) : null,
+		software_version: AppInfo.version,
+		printed_at: null,
+		print_count: 0,
+		breakdowns: {
+			...labels,
+			opened_by: session.opened_by ?? null,
+			approved_by: session.approved_by ?? null,
+			payment_methods,
+			tax_rates,
+			opening_float: {
+				expected: session.expected_float ?? null,
+				counted: session.counted_float,
+				variance: session.opening_variance ?? null,
+			},
+			movements: entries.map(
+				({ id, type, amount, reason, voids, voided_by, created_at_gmt, created_by }) => ({
+					id,
+					type,
+					amount,
+					reason,
+					voids: voids ?? null,
+					created_at_gmt,
+					created_by,
+					voided_by: voided_by ?? null,
+				})
+			),
+			transaction_count,
+			discounts: {
+				count: completedHere.reduce(
+					(count, order) =>
+						count + (order.payload.coupon_lines ?? []).filter(isActiveCouponLine).length,
+					0
+				),
+				amount: sum(
+					completedHere.flatMap((order) => [
+						order.payload.discount_total,
+						order.payload.discount_tax,
+					])
+				),
+			},
+			items_sold: fromMinor(
+				completedHere
+					.flatMap((order) => order.payload.line_items ?? [])
+					.filter(isActiveLineItem)
+					.reduce((total, item) => total + toMinor(String(item.quantity ?? 0), 4), 0),
+				4
+			).replace(/\.?0+$/, ''),
+			average_sale: fromMinor(
+				transaction_count ? Math.round(toMinor(period_sales_total, 4) / transaction_count) : 0,
+				4
+			),
+			drawer_openings: entries.filter((row) => row.type === 'no_sale' && !row.voided_by).length,
+			variance_note: note,
+			denominations: denominations
+				.filter(({ pieces }) => pieces > 0)
+				.map(({ value, pieces }) => ({
+					value,
+					pieces,
+					amount: fromMinor(toMinor(value, 4) * pieces, 4),
+				})),
+			refund_count: refunds.count,
+			cashiers: [
+				...new Set(
+					bound
+						.map((order) =>
+							String(order.payload.meta_data?.find(({ key }) => key === '_pos_user')?.value ?? '')
+						)
+						.filter(Boolean)
+				),
+			].map((id) => ({ id: Number(id), name: resolveCashierName?.(Number(id)) || id })),
+		},
+		order_ids: bound.map((order) => order.uuid),
+		movement_ids: entries.map((row) => row.id),
+		...pending,
+	};
+	let row: ClosureDocument;
+	if (existing) {
+		// A refused close's retry (#3304) rewrites its closure under the same number, reservation
+		// first: a crash before the row leaves the session held, and the next retry takes the
+		// reserved period out of the totals, so the period is still counted once.
+		const reserved = await reviseClosureReservation(userDB, siteUuid, session.register_id, {
+			...draft,
+			printed_at: existing.printed_at,
+			print_count: existing.print_count,
+			printed_number: existing.printed_number,
+		});
+		// The receipt snapshot holds the old figures, and the closure pane prefers it.
+		row = await existing.incrementalModify(({ receipt_snapshot: _snapshot, ...previous }) => ({
+			...previous,
+			...reserved,
+			order_ids: [...reserved.order_ids],
+			movement_ids: [...reserved.movement_ids],
+		}));
+	} else {
+		// Reserve the snapshot in the same atomic document write as its number. A failed insert
+		// or restarted till reuses this exact snapshot; the existing outbox remains the only sender.
+		await mintClosureNumber(userDB, siteUuid, session.register_id, draft);
+		const reserved = (await readRegister(userDB))!.sites[siteUuid].registers![session.register_id]
+			.closure_reservation!.row;
+		row = await insertReserved(storeDB, reserved);
+	}
+	await advancePerpetual(userDB, siteUuid, session.register_id, {
+		sales: row.period_sales_total,
+		refunds: row.period_refunds_total,
+		closureId: row.id,
+	});
+	return row;
+}
+
+/** The reserved closure as the local row; a concurrent writer's row is the row. */
+async function insertReserved(storeDB: RegisterStoreDatabase, reserved: DeepReadonly<ClosureRow>) {
+	const closures = registerCollections(storeDB).closures;
+	try {
+		return await closures.insert({
+			...reserved,
+			order_ids: [...reserved.order_ids],
+			movement_ids: [...reserved.movement_ids],
+		});
+	} catch (error) {
+		const winner = await closures.findOne(reserved.id).exec();
+		if (!winner) throw error;
+		return winner;
+	}
+}
+
+/** Finish a close a restart interrupted after its reservation: the reserved row is the closure. */
+export async function recoverClosureReservation(
+	ctx: { storeDB: RegisterStoreDatabase; userDB: UserDatabase; siteUuid: string },
+	reserved: DeepReadonly<ClosureRow>
+) {
+	const { register_sessions: sessions, closures } = registerCollections(ctx.storeDB);
+	if (!(await sessions.findOne(reserved.session_id).exec())) return;
+	const row =
+		(await closures.findOne(reserved.id).exec()) ?? (await insertReserved(ctx.storeDB, reserved));
+	await advancePerpetual(ctx.userDB, ctx.siteUuid, row.register_id, {
+		sales: row.period_sales_total,
+		refunds: row.period_refunds_total,
+		closureId: row.id,
+	});
+}
+
+type ClosureOrder = {
+	uuid: string;
+	local?: { dirty: boolean };
+	payload: Partial<
+		Pick<
+			OrderDocument,
+			| 'discount_total'
+			| 'discount_tax'
+			| 'payment_method'
+			| 'payment_method_title'
+			| 'coupon_lines'
+			| 'line_items'
+			| 'fee_lines'
+			| 'shipping_lines'
+		>
+	> & {
+		meta_data?: Parameters<typeof readLedger>[0];
+		tax_lines?: readonly Pick<
+			NonNullable<OrderDocument['tax_lines']>[number],
+			'rate_id' | 'rate_percent' | 'tax_total' | 'shipping_tax_total' | 'label'
+		>[];
+	};
+};
+
+/** Store-local approval acknowledgement; no engine mutation is queued. */
+export async function recordApproval(
+	storeDB: RegisterStoreDatabase,
+	sessionId: string,
+	{
+		approvedBy,
+		approvedCounted,
+	}: {
+		approvedBy: number;
+		approvedCounted: Record<string, string>;
+	}
+) {
+	const session = await registerCollections(storeDB).register_sessions.findOne(sessionId).exec();
+	if (!session) throw new RegisterSessionRequiredError();
+	await session.incrementalPatch({
+		approved_by: approvedBy,
+		approved_counted: approvedCounted,
+		approval_required: false,
+		sync_error: null,
+	});
+}
+
+export async function setClosureReceiptSnapshot(
+	storeDB: RegisterStoreDatabase,
+	closureId: string,
+	receiptSnapshot: string
+) {
+	const record = await registerCollections(storeDB).closures?.findOne(closureId).exec();
+	await record?.incrementalPatch({ receipt_snapshot: receiptSnapshot });
+}
+
+export async function refreshClosureRow(
+	storeDB: RegisterStoreDatabase,
+	identity: string,
+	correctionsCount: ClosureRow['corrections_count']
+) {
+	const local = await registerCollections(storeDB)
+		.closures?.findOne({
+			selector: { $or: [{ id: identity }, { server_closure_id: identity }] },
+		})
+		.exec();
+	await local?.incrementalPatch({ corrections_count: correctionsCount });
+}
+
+/** Mirror a dispatched print on the same document that supplied its prospective count. */
+export async function recordClosurePrint(
+	closure: ReadonlyClosureDocument,
+	count: number,
+	printedAt: () => string,
+	server = false
+) {
+	await (closure as ClosureDocument).incrementalModify((row) => ({
+		...row,
+		print_count: Math.max(row.print_count + (server ? 1 : 0), count),
+		printed_at: row.printed_at ?? printedAt(),
+	}));
+}

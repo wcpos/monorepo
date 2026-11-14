@@ -6,9 +6,9 @@
  * nothing, so the imports point here instead.
  *
  * The public index (`@wcpos/order-math`) is the settle pipeline. It IS now
- * live: `use-cart-settlement.ts` calls `settleCart`, `settleAggregate`,
- * `createCartConfig` and `snapshotFromOrderJSON` as the cart's single writer
- * (#1505, 2026-08-23). That cutover retired the PRODUCTION coupon-replay and
+ * live: cart commands and the session-owned settlement coordinator call its
+ * settlement functions with the shared cart config (ADR 0033). The original
+ * cutover (#1505, 2026-08-23) retired the PRODUCTION coupon-replay and
  * order-totals consumers — `pos/hooks/calculate-order-totals` survives as a test
  * seam, see below.
  *
@@ -25,11 +25,13 @@
  *
  * Runtime paths that legitimately need the money primitives, and are NOT part of
  * any migration:
- *   - `hooks/use-tax-display-values` and `hooks/use-calculate-taxes-from-value`
+ *   - `hooks/use-tax-display-values`
  *     — product/tax display.
+ *   - `components/product/tax-based-on/tax-derivation` — the "Tax based on" panel's
+ *     class rate: `calculateTaxesForValue` on 100 is the class's effective percentage.
  *   - `orders/refund/calculate-refund` — refunds.
  *   - `pos/hooks/use-add-coupon`, `pos/hooks/use-recalculate-coupons`,
- *     `pos/hooks/coupon-rejection-message` — coupon application and its typed
+ *     `pos/hooks/coupon-rejection-message` — shared CouponContext consumers and typed
  *     rejections.
  *
  * GONE — the per-line tax hooks. `use-calculate-line-item-tax-and-totals` and its
@@ -53,8 +55,12 @@ export * from './money/precision';
 export * from './money/calculate-taxes';
 export * from './money/sum-taxes';
 export * from './lines/pos-data';
+// The cart's own per-class tax on a value, for surfaces that explain a rate (the POS "Tax based
+// on" panel reads a class's effective percentage off 100, compound and priority honoured).
+export { calculateTaxesForValue } from './lines/calc-taxes-for-value';
 export * from './coupons/discount';
 export * from './coupons/helpers';
 export * from './coupons/recalculate';
 export * from './coupons/validate';
 export * from './order-totals';
+export * from './coupons/context';

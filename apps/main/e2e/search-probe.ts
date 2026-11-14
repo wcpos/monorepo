@@ -1,8 +1,24 @@
 import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+
+import { request as playwrightRequest, test } from '@playwright/test';
 
 import { log } from '@wcpos/utils/logger';
 
 import { type StoreAuthorization, storeRequestOptions } from './probe-credential';
+import {
+	createWriterAuthFile,
+	realWriterClock,
+	requestWriterRenewal,
+	WRITER_AUTH_FILE_ENV,
+	WRITER_POLL_MS,
+	WRITER_WAIT_MS,
+	type WriterClock,
+	writerJitterMs,
+	WriterLoginHolder,
+	writerStoreKey,
+} from './writer-login-holder';
 
 import type { APIRequestContext, APIResponse, Locator, Page } from '@playwright/test';
 
@@ -85,6 +101,106 @@ export function productWriterCredentialsConfigured(): boolean {
 	);
 }
 
+// The plugin's access token lives 30 minutes; estimating expiry from login start never puts it later than the server's.
+export const WRITER_ACCESS_TOKEN_TTL_MS = 30 * 60_000;
+// The life a worker needs when its test has no timeout (0): product-visibility's 20-minute budget, the longest.
+export const WRITER_RENEW_MARGIN_MS = 20 * 60_000;
+// Beyond the test's own timeout: its teardown's writer calls. Also the whole need outside a test (worker fixtures).
+export const WRITER_LIFE_SLACK_MS = 60_000;
+
+/** The life a writer needs for a test with this timeout (undefined: outside a test), capped so a fresh token meets it. */
+export function writerLifeNeeded(timeoutMs: number | undefined): number {
+	const needed =
+		timeoutMs === undefined
+			? WRITER_LIFE_SLACK_MS
+			: timeoutMs === 0
+				? WRITER_RENEW_MARGIN_MS
+				: timeoutMs + WRITER_LIFE_SLACK_MS;
+	return Math.min(needed, WRITER_ACCESS_TOKEN_TTL_MS - WRITER_LIFE_SLACK_MS);
+}
+
+/** The running test's need, read at call time so a raised timeout raises it too. */
+export function writerLifeNeededMs(): number {
+	let timeoutMs: number | undefined;
+	try {
+		timeoutMs = test.info().timeout;
+	} catch {
+		timeoutMs = undefined; // Outside a test: worker-fixture setup or teardown.
+	}
+	return writerLifeNeeded(timeoutMs);
+}
+// expiresAt is epoch milliseconds.
+export type WriterAuthorization = StoreAuthorization & { expiresAt: number };
+
+/** Where workers find the shard holder's authorizations; injectable so unit tests use their own. */
+export interface WriterSource extends Partial<WriterClock> {
+	file?: string;
+}
+
+/** The holder's current authorization for one store, keyed by URL without trailing slashes. */
+export function publishedWriterAuthorization(
+	storeUrl: string,
+	file: string | undefined = process.env[WRITER_AUTH_FILE_ENV]
+): WriterAuthorization | null {
+	if (!file) return null;
+	try {
+		const published = JSON.parse(fs.readFileSync(file, 'utf8'));
+		if (!published || typeof published !== 'object' || Array.isArray(published)) return null;
+		const authorization = published[writerStoreKey(storeUrl)];
+		if (
+			authorization &&
+			typeof authorization === 'object' &&
+			(authorization.transport === 'header' || authorization.transport === 'query') &&
+			typeof authorization.value === 'string' &&
+			authorization.value.length > 0 &&
+			typeof authorization.expiresAt === 'number' &&
+			Number.isFinite(authorization.expiresAt)
+		) {
+			return authorization;
+		}
+	} catch {
+		return null;
+	}
+	return null;
+}
+
+/**
+ * globalSetup's per-shard writer holder: it logs in only when a worker asks, and publishes a token
+ * only after one products read accepts it. Returns the teardown, or undefined without writer credentials.
+ */
+export async function startWriterLoginHolder(
+	storeUrls: string[]
+): Promise<(() => Promise<void>) | undefined> {
+	try {
+		if (!productWriterCredentialsConfigured()) return undefined;
+	} catch {
+		log.warn('[global-setup] product-writer credentials are incomplete; no writer holder');
+		return undefined;
+	}
+	const file = createWriterAuthFile();
+	const request = await playwrightRequest.newContext();
+	const holder = new WriterLoginHolder({
+		file,
+		storeUrls: storeUrls.filter(Boolean),
+		login: (storeUrl) =>
+			storeLoginAuthorization(
+				request,
+				storeUrl,
+				process.env.E2E_PRODUCT_WRITER_USER!,
+				process.env.E2E_PRODUCT_WRITER_PASS!
+			),
+		validate: async (storeUrl, authorization) =>
+			isOkStatus(await writerReadStatus(request, storeUrl, authorization)),
+	});
+	process.env[WRITER_AUTH_FILE_ENV] = file;
+	holder.start();
+	return async () => {
+		await holder.stop();
+		await request.dispose();
+		fs.rmSync(path.dirname(file), { recursive: true, force: true });
+	};
+}
+
 export function productProbeFailureAction({
 	writerConfigured,
 	failure,
@@ -111,7 +227,7 @@ class WriterAuthenticationFailure extends Error {
 	}
 }
 
-/** A single alphanumeric FlexSearch token, unique across workers, retries and parallel runs. */
+/** A single alphanumeric search term, unique across workers, retries and parallel runs. */
 export function mintSearchProbeToken(workerIndex: number): string {
 	return `zx${workerIndex.toString(36)}${Date.now().toString(36)}${randomUUID().replaceAll('-', '').slice(0, 8)}`;
 }
@@ -133,20 +249,130 @@ export function mintSearchProbeToken(workerIndex: number): string {
  * always-on at dev-free since 2026-08-21), silently degrading a header-carried
  * token to an anonymous 401 — so the helper verifies the header with one read
  * and falls back to the `?authorization=` param.
+ *
+ * Workers never log in: concurrent logins of the one writer user revoke each other on the
+ * plugin's session row, so this returns the shard holder's current authorization
+ * (writer-login-holder.ts), asking it for a renewal when the token has less life than this
+ * test needs. A refused one waits 2-5 s and re-reads, then asks the holder for one renewal
+ * and retries once.
  */
 export async function productWriterAuthorization(
 	request: APIRequestContext,
-	storeUrl: string
-): Promise<StoreAuthorization | null> {
+	storeUrl: string,
+	source: WriterSource = {}
+): Promise<WriterAuthorization | null> {
 	const user = process.env.E2E_PRODUCT_WRITER_USER;
 	const pass = process.env.E2E_PRODUCT_WRITER_PASS;
 	productWriterCredentialsDecision(user, pass);
 	if (!user || !pass) return null;
 
+	const clock = { ...realWriterClock, ...source };
+	const file = source.file ?? process.env[WRITER_AUTH_FILE_ENV];
+	const failed = (detail: string) =>
+		new Error(`Configured product-writer authentication failed (${detail})`);
+	const noHolder = () => failed(`no holder authorization within ${WRITER_WAIT_MS / 1000}s`);
+	const neededMs = writerLifeNeededMs();
+
+	let held = await awaitHolderWriter(storeUrl, file, clock, neededMs);
+	if (!held) throw noHolder();
+	let status = await writerReadStatus(request, storeUrl, held);
+	if (isOkStatus(status)) return held;
+	// A token minted while another login lands can read anonymous for a moment: wait, then re-read.
+	await clock.sleep(writerJitterMs(clock.random));
+	held = await awaitHolderWriter(storeUrl, file, clock, neededMs);
+	if (!held) throw noHolder();
+	status = await writerReadStatus(request, storeUrl, held);
+	if (isOkStatus(status)) return held;
+	const renewed = await awaitHolderWriter(storeUrl, file, clock, neededMs, held.value);
+	if (renewed) {
+		await clock.sleep(writerJitterMs(clock.random));
+		status = await writerReadStatus(request, storeUrl, renewed);
+		if (isOkStatus(status)) return renewed;
+	}
+	throw failed(status === null ? 'no response' : `HTTP ${status}`);
+}
+
+/**
+ * The holder's authorization once it has `neededMs` of life (and is not `rejected`), else null after
+ * the wait. While it has not, every poll asks the holder to renew the token this worker saw.
+ */
+async function awaitHolderWriter(
+	storeUrl: string,
+	file: string | undefined,
+	clock: WriterClock,
+	neededMs: number,
+	rejected?: string
+): Promise<WriterAuthorization | null> {
+	const deadline = clock.now() + WRITER_WAIT_MS;
+	for (;;) {
+		const held = publishedWriterAuthorization(storeUrl, file);
+		if (held && held.value !== rejected && held.expiresAt - clock.now() >= neededMs) {
+			return held;
+		}
+		if (file) requestWriterRenewal(file, storeUrl, held);
+		if (clock.now() >= deadline) return null;
+		await clock.sleep(WRITER_POLL_MS);
+	}
+}
+
+/**
+ * Renew in place so worker-scoped fixtures and specs holding this one object
+ * for the worker's life all receive the fresh credential, taken from the holder.
+ */
+export async function renewProductWriterIfExpiring(
+	request: APIRequestContext,
+	storeUrl: string,
+	writer: WriterAuthorization,
+	source: WriterSource = {}
+): Promise<boolean> {
+	const now = source.now ?? Date.now;
+	if (writer.expiresAt - now() >= writerLifeNeededMs()) return false;
+	const fresh = await productWriterAuthorization(request, storeUrl, source);
+	if (!fresh) return false;
+	Object.assign(writer, fresh);
+	return true;
+}
+
+function isOkStatus(status: number | null): boolean {
+	return status !== null && status >= 200 && status < 300;
+}
+
+/** One products read with the writer authorization: its HTTP status, or null when no response came. */
+async function writerReadStatus(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization
+): Promise<number | null> {
+	try {
+		const options = storeRequestOptions(authorization);
+		const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+			...options,
+			params: { ...options.params, per_page: '1' },
+		});
+		return response.status();
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Mint a JWT for any store login through the wcpos-auth flow the app uses, with its transport
+ * resolved per store. `label` names the login in warnings and errors; the token is never logged.
+ * `expiresAt` is estimated from the attempt's start, so it is never later than the server's.
+ */
+export async function storeLoginAuthorization(
+	request: APIRequestContext,
+	storeUrl: string,
+	user: string,
+	pass: string,
+	label = 'product-writer',
+	clock: Pick<WriterClock, 'sleep' | 'random'> = realWriterClock
+): Promise<WriterAuthorization> {
 	// The server keys auth sessions by state + redirect URI, so concurrent workers need distinct states.
 	const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe-${randomUUID()}`;
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		try {
+			const mintedAt = Date.now();
 			const pageResponse = await request.get(authUrl);
 			if (isNetworkishStatus(pageResponse.status())) {
 				throw new WriterAuthenticationFailure('transport', pageResponse.status());
@@ -177,7 +403,10 @@ export async function productWriterAuthorization(
 			const location = submit.headers()['location'] ?? '';
 			const token = /access_token=([^&]+)/.exec(location)?.[1];
 			if (!token) throw new WriterAuthenticationFailure('http', submit.status());
-			return await resolveWriterTransport(request, storeUrl, token);
+			return {
+				...(await resolveWriterTransport(request, storeUrl, token)),
+				expiresAt: mintedAt + WRITER_ACCESS_TOKEN_TTL_MS,
+			};
 		} catch (error) {
 			const failure =
 				error instanceof WriterAuthenticationFailure
@@ -192,19 +421,22 @@ export async function productWriterAuthorization(
 			// valid credentials (observed on dev-next 2026-08-08; an immediate
 			// identical login succeeds). One retry absorbs that flake; a genuine
 			// credential failure still throws below, never skips.
-			if (action === 'retry' || (failure.kind === 'http' && attempt === 0)) continue;
+			if (action === 'retry' || (failure.kind === 'http' && attempt === 0)) {
+				await clock.sleep(writerJitterMs(clock.random));
+				continue;
+			}
 			const status = failure.status === null ? '' : ` (HTTP ${failure.status})`;
 			if (failure.kind === 'transport') {
-				log.warn('[search-probe] configured product-writer login transport failed');
+				log.warn(`[search-probe] configured ${label} login transport failed`);
 				throw new Error(
-					`Configured product-writer authentication transport failed after one retry${status}`
+					`Configured ${label} authentication transport failed after one retry${status}`
 				);
 			}
-			log.warn('[search-probe] configured product-writer login was rejected');
-			throw new Error(`Configured product-writer authentication failed${status}`);
+			log.warn(`[search-probe] configured ${label} login was rejected`);
+			throw new Error(`Configured ${label} authentication failed${status}`);
 		}
 	}
-	throw new Error('Configured product-writer authentication failed');
+	throw new Error(`Configured ${label} authentication failed`);
 }
 
 /**
@@ -1020,6 +1252,124 @@ export async function createOrderArrivalProbe(options: {
 			ok: false,
 			reason: 'Store could not create the orders arrival probe; server write access is required',
 		};
+	}
+}
+
+/**
+ * The lead of every probe category's name. It sorts before any letter or digit, so on a root
+ * term set ordered by `menu_order` then name (and virtualized: a term past the first screen is
+ * not in the DOM) the probe category sits beside All products on every store; the token after
+ * it keeps the name unique. The sweep below recognises orphans by it.
+ */
+export const PROBE_CATEGORY_LEAD = '0000 E2E Browse';
+/**
+ * A wc/v3 category carries no creation date, so the probe stamps its own in the description:
+ * the sweep's age check reads it back, and a category another run made minutes ago is left alone.
+ */
+const PROBE_CATEGORY_STAMP = /^e2e-created-ms=(\d+)$/;
+/** Orphans older than this are swept; a live run is never this long. */
+const PROBE_CATEGORY_ORPHAN_AGE_MS = 2 * 60 * 60 * 1_000;
+
+/**
+ * Create a disposable ROOT product category under the writer credentials, so a browse spec
+ * never assumes a category the store happens to have (CLAUDE.md, E2E store-agnostic policy):
+ * a clean CI store has coverage too. Default display: it shows its products. The writer is
+ * configured by construction here, so a rejected write THROWS — a broken environment, never
+ * a skip.
+ */
+export async function createProbeCategory(options: {
+	request: APIRequestContext;
+	storeUrl: string;
+	authorization: StoreAuthorization;
+	token: string;
+}): Promise<{ id: number; name: string }> {
+	const { request, storeUrl, authorization, token } = options;
+	const name = `${PROBE_CATEGORY_LEAD} ${token}`;
+	const response = await probeRequest(request, 'post', storeUrl, 'products/categories', undefined, {
+		...storeRequestOptions(authorization),
+		data: {
+			name,
+			parent: 0,
+			display: 'default',
+			description: `e2e-created-ms=${Date.now()}`,
+		},
+	});
+	if (!response.ok()) {
+		throw new Error(
+			`products/categories probe creation failed (HTTP ${response.status()}) — the writer credentials are configured, so a rejected write is a broken environment, not a missing fixture`
+		);
+	}
+	const record = unwrapRecord(await response.json().catch(() => null));
+	const id = positiveId(record);
+	if (!record || id === null) {
+		throw new Error('products/categories probe create succeeded without a record id');
+	}
+	return { id, name: typeof record.name === 'string' ? record.name : name };
+}
+
+/** Force-delete a probe category; best effort, as {@link deleteSearchProbe}. */
+export async function deleteProbeCategory(options: {
+	request: APIRequestContext;
+	storeUrl: string;
+	authorization: StoreAuthorization | null;
+	id: number;
+}): Promise<void> {
+	const { request, storeUrl, authorization, id } = options;
+	try {
+		const auth = storeRequestOptions(authorization);
+		const response = await probeRequest(request, 'delete', storeUrl, 'products/categories', id, {
+			...auth,
+			params: { ...auth.params, force: 'true' },
+		});
+		if (!response.ok()) {
+			log.warn(
+				`[search-probe] failed to delete products/categories ${id}: HTTP ${response.status()}`
+			);
+		}
+	} catch {
+		// Do not print the request error: query-auth stores can include the JWT in its URL.
+		log.warn(`[search-probe] delete products/categories ${id} threw`);
+	}
+}
+
+/**
+ * Best-effort cleanup for probe categories left behind when a prior run was interrupted, so
+ * the root term set stays short (every leftover sorts to its front). Never fails a test.
+ */
+export async function sweepOrphanedProbeCategories(
+	options: Pick<CreateSearchProbeOptions, 'request' | 'storeUrl' | 'authorization'>
+): Promise<void> {
+	const { request, storeUrl, authorization } = options;
+	try {
+		const auth = storeRequestOptions(authorization);
+		const response = await probeGet(request, storeUrl, 'products/categories', {
+			...auth,
+			params: { ...auth.params, search: PROBE_CATEGORY_LEAD, per_page: '100' },
+		});
+		if (!response.ok()) throw new Error(`HTTP ${response.status()}`);
+		const body: unknown = await response.json();
+		if (!Array.isArray(body)) throw new Error('response was not a category list');
+		const cutoff = Date.now() - PROBE_CATEGORY_ORPHAN_AGE_MS;
+		for (const value of body) {
+			const category = asRecord(value);
+			const id = positiveId(category);
+			const name = typeof category?.name === 'string' ? category.name : '';
+			const description =
+				typeof category?.description === 'string' ? category.description.trim() : '';
+			const createdMs = Number(PROBE_CATEGORY_STAMP.exec(description)?.[1] ?? NaN);
+			// Only a stamped probe category is ever swept: a merchant's own category that happens
+			// to carry the lead has no stamp, and an unstamped one is not this helper's to delete.
+			if (
+				id !== null &&
+				name.startsWith(PROBE_CATEGORY_LEAD) &&
+				Number.isFinite(createdMs) &&
+				createdMs < cutoff
+			) {
+				await deleteProbeCategory({ request, storeUrl, authorization, id });
+			}
+		}
+	} catch {
+		log.warn('[search-probe] orphan category sweep failed');
 	}
 }
 

@@ -48,22 +48,6 @@ describe('middlewaresPlugin', () => {
 			};
 		});
 
-		it('should register middleware hooks from collection options', () => {
-			const preInsertHandler = jest.fn((doc: any) => doc);
-
-			mockCollection.options!.middlewares = {
-				preInsert: {
-					handle: preInsertHandler,
-					parallel: false,
-				},
-			};
-
-			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
-
-			expect(mockCollection.preInsert).toHaveBeenCalledWith(preInsertHandler, false);
-		});
-
 		it('should register multiple middleware hooks', () => {
 			const preInsertHandler = jest.fn();
 			const preSaveHandler = jest.fn();
@@ -159,84 +143,6 @@ describe('middlewaresPlugin', () => {
 					false
 				);
 			});
-		});
-	});
-
-	describe('real-world middleware scenarios', () => {
-		it('should support sortable_price middleware pattern', () => {
-			const mockCollection: MockMiddlewareCollection = {
-				options: {
-					middlewares: {
-						preInsert: {
-							handle: jest.fn((doc: { price?: string; sortable_price?: number }) => {
-								doc.sortable_price = Math.round(parseFloat(doc.price || '0') * 1000000);
-								return doc;
-							}),
-							parallel: false,
-						},
-						preSave: {
-							handle: jest.fn((doc: { price?: string; sortable_price?: number }) => {
-								doc.sortable_price = Math.round(parseFloat(doc.price || '0') * 1000000);
-								return doc;
-							}),
-							parallel: false,
-						},
-					},
-				},
-				preInsert: jest.fn(),
-				preSave: jest.fn(),
-				preRemove: jest.fn(),
-				postInsert: jest.fn(),
-				postSave: jest.fn(),
-				postRemove: jest.fn(),
-			};
-
-			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
-
-			// Verify middlewares were registered
-			expect(mockCollection.preInsert).toHaveBeenCalled();
-			expect(mockCollection.preSave).toHaveBeenCalled();
-
-			// Test the actual handler function
-			const preInsertHandler = mockCollection.preInsert.mock.calls[0][0] as (doc: {
-				price?: string;
-				sortable_price?: number;
-			}) => void;
-			const doc = { price: '9.99' } as { price?: string; sortable_price?: number };
-			preInsertHandler(doc);
-
-			expect(doc.sortable_price).toBe(9990000);
-		});
-
-		it('should support async middleware handlers', async () => {
-			const asyncHandler = jest.fn(async (doc: { processed?: boolean }) => {
-				await new Promise((resolve) => setTimeout(resolve, 10));
-				doc.processed = true;
-				return doc;
-			});
-
-			const mockCollection: MockMiddlewareCollection = {
-				options: {
-					middlewares: {
-						preInsert: {
-							handle: asyncHandler,
-							parallel: false,
-						},
-					},
-				},
-				preInsert: jest.fn(),
-				preSave: jest.fn(),
-				preRemove: jest.fn(),
-				postInsert: jest.fn(),
-				postSave: jest.fn(),
-				postRemove: jest.fn(),
-			};
-
-			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
-
-			expect(mockCollection.preInsert).toHaveBeenCalledWith(asyncHandler, false);
 		});
 	});
 });

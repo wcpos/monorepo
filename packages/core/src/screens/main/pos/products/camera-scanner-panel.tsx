@@ -203,10 +203,11 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 				) : null}
 				<View className="absolute top-1 right-1">
 					<IconButton
-						name="xmark"
+						name="close"
 						size="sm"
+						accessibilityLabel={t('pos_products.camera_scan_close')}
 						onPress={onClose}
-						className="text-white"
+						iconClassName="text-white"
 						testID="camera-scanner-close"
 					/>
 				</View>
@@ -248,7 +249,7 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 					}}
 					testID="camera-scanner-resize-handle"
 				>
-					<Icon name="gripLines" className="-my-0.5" />
+					<Icon name="dragHandle" className="-my-0.5" />
 				</View>
 			</GestureDetector>
 		</View>

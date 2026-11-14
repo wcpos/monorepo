@@ -14,6 +14,7 @@
  * and maps external error codes to our evidence-backed internal domains.
  */
 
+import { readServerSentence, readWpFatalDetail } from '@wcpos/sync-core';
 import { ERROR_CODES, ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 export interface WpErrorResponse {
@@ -192,13 +193,6 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 		};
 	}
 
-	// Extract the message - prefer the 'message' field
-	let message = fallbackMessage;
-
-	if (data.message && typeof data.message === 'string') {
-		message = data.message;
-	}
-
 	// Extract server code and status
 	const rawServerCode = typeof data.code === 'string' ? data.code : null;
 	const serverCode =
@@ -206,6 +200,8 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 			? rawServerCode
 			: 'invalid_server_code';
 	const status = data.data?.status ?? null;
+
+	const message = readServerSentence(data, status) ?? fallbackMessage;
 
 	// Map to internal code for user-facing display
 	const code = mapToInternalCode(serverCode, status);
@@ -246,6 +242,12 @@ export const extractErrorMessage = (responseData: unknown, fallbackMessage: stri
 		}
 		if (typeof data.error === 'string' && data.error) {
 			return data.error;
+		}
+		// WordPress's own shape for a fatal is an OBJECT under `error`
+		// ({ type, message, file, line }); the string case above never matched it.
+		const fatal = readWpFatalDetail(data);
+		if (fatal !== undefined) {
+			return fatal;
 		}
 		if (typeof data.error_description === 'string' && data.error_description) {
 			return data.error_description;

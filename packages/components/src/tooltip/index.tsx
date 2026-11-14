@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import * as TooltipPrimitive from '@rn-primitives/tooltip';
 import { Slot } from '@rn-primitives/slot';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
+import { OVERLAY_MOTION } from '../lib/overlay';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext } from '../text/context';
 
 import type { TooltipContentProps, TooltipProps, TooltipTriggerProps } from './types';
 
@@ -82,8 +83,8 @@ function TooltipContent({
 				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
 				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
 				<Animated.View
-					entering={FadeIn}
-					exiting={FadeOut}
+					entering={OVERLAY_MOTION.anchored.entering}
+					exiting={OVERLAY_MOTION.anchored.exiting}
 					pointerEvents="box-none"
 					style={StyleSheet.absoluteFill}
 				>
@@ -91,7 +92,7 @@ function TooltipContent({
 						<TooltipPrimitive.Content
 							sideOffset={sideOffset}
 							className={cn(
-								'border-border bg-popover z-50 overflow-hidden rounded-md border px-3 py-1.5 shadow-md',
+								'border-border bg-popover z-50 overflow-hidden rounded-lg border px-3 py-1.5',
 								className
 							)}
 							{...props}
@@ -105,5 +106,13 @@ function TooltipContent({
 	);
 }
 
-export { Tooltip, TooltipContent, TooltipTrigger };
+/**
+ * Web only in effect (see `index.web.tsx`): a native trigger without press handlers is
+ * already a plain View, so there is nothing to scope here.
+ */
+function TooltipPassiveTriggers({ children }: { children: React.ReactNode }) {
+	return <>{children}</>;
+}
+
+export { Tooltip, TooltipContent, TooltipPassiveTriggers, TooltipTrigger };
 export type { TooltipProps, TooltipContentProps, TooltipTriggerProps } from './types';

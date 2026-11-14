@@ -169,10 +169,9 @@ describe('createEngineHarness', () => {
 		await harness.engine.hostTransport().fetcher(probe);
 		await harness.engine.hostTransport().fetcher(post, init);
 		expect(fetch.mock.calls).toEqual([
-			[probe, undefined],
-			[post, init],
+			[probe, { signal: expect.any(AbortSignal) }],
+			[post, { ...init, signal: expect.any(AbortSignal) }],
 		]);
-		expect(fetch.mock.calls[1][1]).toBe(init);
 	});
 
 	it('records selected-handler failures without falling through', async () => {

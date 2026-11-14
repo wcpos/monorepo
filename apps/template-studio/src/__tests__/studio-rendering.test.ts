@@ -56,6 +56,7 @@ describe('template studio rendering harness', () => {
 	it('lists only bundled/gallery templates and excludes database templates', async () => {
 		const templates = await listBundledTemplates({
 			templatesDir: new URL(`file://${process.cwd()}/src/test/fixtures/templates/`),
+			registryPath: `${process.cwd()}/src/test/fixtures/templates/registry.php`,
 		});
 
 		expect(templates.map((template) => template.id)).toEqual([
@@ -68,6 +69,7 @@ describe('template studio rendering harness', () => {
 	it('appends the thermal centering diagnostic template after gallery templates', async () => {
 		const templates = await listBundledTemplates({
 			templatesDir: new URL(`file://${process.cwd()}/src/test/fixtures/templates/`),
+			registryPath: `${process.cwd()}/src/test/fixtures/templates/registry.php`,
 		});
 		const withDiagnostics = appendDiagnosticTemplates(templates);
 

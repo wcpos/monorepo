@@ -1,1 +1,13 @@
-export { DatabaseScreen as default } from '@wcpos/core/screens/main/health/database';
+import * as React from 'react';
+
+import { lazyRest } from '@wcpos/core/screens/main/rest/lazy-screen';
+
+const Screen = lazyRest((m) => m.DatabaseScreen);
+
+export default function DatabaseRoute() {
+	return (
+		<React.Suspense fallback={null}>
+			<Screen />
+		</React.Suspense>
+	);
+}

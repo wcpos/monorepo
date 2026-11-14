@@ -103,8 +103,9 @@ export function ScannerViewfinder({ onScan, onStatusChange }: ScannerViewfinderP
 				stream = await navigator.mediaDevices.getUserMedia(VIDEO_CONSTRAINTS);
 			} catch (error) {
 				const name = error instanceof DOMException ? error.name : 'UnknownError';
-				logger.error('Camera stream unavailable', {
-					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+				// The cashier said no to the camera: the viewfinder already shows camera-denied.
+				// Anything else is a camera problem the viewfinder shows as unavailable.
+				logger[name === 'NotAllowedError' ? 'info' : 'warn']('Camera stream unavailable', {
 					context: { error: String(error), name },
 				});
 				setStatus(name === 'NotAllowedError' ? 'camera-denied' : 'camera-unavailable');
@@ -162,14 +163,18 @@ export function ScannerViewfinder({ onScan, onStatusChange }: ScannerViewfinderP
 					}
 				},
 				onError: (error, stats) => {
+					// Per-frame decode errors are routine while scanning keeps working:
+					// forensic. One row when the decoder is judged broken.
 					if (stats.total <= LOGGED_ERRORS_HEAD || stats.total % LOGGED_ERRORS_EVERY === 0) {
-						logger.error('Barcode decode failed', {
-							code: ERROR_CODES.PRODUCT_UNEXPECTED,
+						logger.debug('Barcode decode failed', {
 							context: { error: String(error), ...stats },
 						});
 					}
 					if (stats.consecutive >= DECODER_ERROR_THRESHOLD && !decoderErrorReported) {
 						decoderErrorReported = true;
+						logger.warn('Barcode decoder keeps failing; scanning paused', {
+							context: { error: String(error), ...stats },
+						});
 						setStatus('decoder-error');
 					}
 				},

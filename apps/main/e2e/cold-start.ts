@@ -42,6 +42,7 @@ import {
 	type StoreAuthorization,
 } from './fixtures';
 import { resolveProbeAuthorization } from './probe-credential';
+import { quarantineGate } from './quarantine';
 
 /**
  * Keep in sync with the same check in `playwright.config.ts` — the config
@@ -234,9 +235,11 @@ export async function probeVariationSearch(
  * `pro-cold-start` project.
  */
 export const coldStartTest = base.extend<{
+	quarantineGate: void;
 	posPage: Page;
 	storeAuthorization: () => StoreAuthorization | null;
 }>({
+	quarantineGate,
 	storeAuthorization: async ({ page }, use) => {
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 		await use(captureStoreAuthorization(page));

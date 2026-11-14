@@ -16,11 +16,12 @@ import type { Page } from '@playwright/test';
 export type OPFSSnapshot = Record<string, string>;
 
 /**
- * Export all OPFS files for the current origin.
+ * Export all OPFS files for the current origin, including the SQLite pool
+ * directory and its opaque file headers/mapping. Never interpret pool filenames.
  *
  * Must be called when no OPFS worker is running (i.e. with JS blocked,
  * or after the page that started the worker has been closed/navigated away).
- * The abstract-filesystem OPFS storage uses createSyncAccessHandle() which
+ * Both SQLite SAHPool and the legacy filesystem use createSyncAccessHandle(), which
  * grants exclusive access; reading files while the handle is held will fail.
  */
 export async function exportOPFS(page: Page): Promise<OPFSSnapshot> {

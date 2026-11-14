@@ -1,4 +1,4 @@
-import { reportCartFailure, reportCartInvariant, reportStaleCartLine } from './cart-failure';
+import { reportCartFailure, reportStaleCartLine } from './cart-failure';
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => {
@@ -17,6 +17,7 @@ jest.mock('@wcpos/utils/logger/generated/error-codes.generated', () => ({
 const logger = {
 	error: jest.fn(),
 	warn: jest.fn(),
+	info: jest.fn(),
 };
 
 describe('cart-failure', () => {
@@ -67,29 +68,17 @@ describe('cart-failure', () => {
 		});
 	});
 
-	it('reports a stale cart line as a warning without an error code', () => {
+	it('reports a stale cart line as info without an error code (another tab removed it)', () => {
 		reportStaleCartLine(logger as never, 'Line is stale', {
 			toastTitle: 'Line no longer exists',
 			context: { uuid: 'line-1' },
 		});
 
-		expect(logger.warn).toHaveBeenCalledWith('Line is stale', {
+		expect(logger.warn).not.toHaveBeenCalled();
+		expect(logger.info).toHaveBeenCalledWith('Line is stale', {
 			showToast: true,
 			toast: { title: 'Line no longer exists' },
 			context: { uuid: 'line-1' },
 		});
-	});
-
-	it('reports an invariant without any toast options', () => {
-		reportCartInvariant(logger as never, 'Impossible cart state', {
-			uuid: 'line-1',
-		});
-
-		expect(logger.error).toHaveBeenCalledWith('Impossible cart state', {
-			code: 'UNEXPECTED_ERROR',
-			context: { uuid: 'line-1' },
-		});
-		expect(logger.error.mock.calls[0][1]).not.toHaveProperty('showToast');
-		expect(logger.error.mock.calls[0][1]).not.toHaveProperty('toast');
 	});
 });

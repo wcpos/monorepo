@@ -2,67 +2,42 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { calculateCartLine } from '@wcpos/order-math';
-import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
-import { isMiscProductLine, MISC_PRODUCT_ID, wooMetaCarrier } from '@wcpos/sync-core';
+import { calculateCartLine, type CartConfig } from '@wcpos/order-math';
+import { type EngineRecord, inOpenOrdersScope, useDocField, useQueryRuntime } from '@wcpos/query';
+import { isMiscProductLine, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { birthOrder, documentRecordId, findBirthState } from '@wcpos/query/mutations';
+import { boundRegisterIdOf } from '@wcpos/query/register-session';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useCartConfig } from './use-cart-config';
-import { useCartStockGuard } from './use-cart-stock-guard';
-import { enqueueOrderMutation } from './order-mutation-queue';
+import { useCartWrite } from '../commands/use-cart-write';
+import { useRegister } from '../../../../services/register/use-register';
+import { scopedRegisterId } from '../../../../services/register/use-register-binding';
+import { useCartConfigReader } from './use-cart-config';
+import './stock-guard-hook';
+import { useActionContext } from './use-action-context';
+import { dispatchAction } from '../../../../extensions/actions';
+import { cartRestartsOnAdd, isCartEmpty, restartStamp } from './cart-restart';
+import { enqueueCartAction } from './enqueue-cart-action';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
-import {
-	documentRecordId,
-	findEngineResident,
-	insertEngineResident,
-	patchEngineResident,
-	useLocalMutation,
-} from '../../hooks/mutations/use-local-mutation';
+import { resolveDayTimezone } from '../../../../hooks/use-store-day';
 import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
-import { removeTemporaryOrder } from '../contexts/current-order/temporary-order';
 
+import type { OrderMutationContext } from './order-mutation-queue';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
-type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type LineItem = NonNullable<EngineRecord<'orders'>['payload']['line_items']>[number];
+type FeeLine = NonNullable<EngineRecord<'orders'>['payload']['fee_lines']>[number];
+type ShippingLine = NonNullable<EngineRecord<'orders'>['payload']['shipping_lines']>[number];
+type CouponLine = NonNullable<EngineRecord<'orders'>['payload']['coupon_lines']>[number];
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
-type EngineResident = NonNullable<Awaited<ReturnType<typeof findEngineResident>>>;
-
-/**
- * The skeleton resident is inserted BEFORE its create is enqueued, so a resident
- * on its own is not proof that the server was ever told about the order. Three
- * signals say it was:
- *
- * - the enqueue marks the record dirty and appends to `local.pendingMutationIds`
- *   (write-intents' dirty-mark) — a create is queued but not yet pushed;
- * - the create ack stamps the server id into `remoteId` (the orders facet's
- *   `remoteIdField`, from the pushed document's `id`) — the server has it;
- * - `sync.revision` only moves for hosts that answer with a
- *   `{ document, currentRevision }` envelope. wc/v3 returns a BARE order, so
- *   `currentRevision` is null and an acked Woo order keeps `revision: ''` for
- *   life — revision alone would read every synced order as an orphan and create
- *   it a second time.
- *
- * With none of them the resident is an orphan from a failed (or interrupted)
- * enqueue, and queueing updates against it would 404 forever.
- */
-function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
-	const record = resident as unknown as {
-		local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
-		sync?: { revision?: unknown };
-		remoteId?: unknown;
-	};
-	if (record.local?.dirty === true) return true;
-	if ((record.local?.pendingMutationIds?.length ?? 0) > 0) return true;
-	if (record.remoteId !== null && record.remoteId !== undefined) return true;
-	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
-}
-
+const kinds = { line_items: 'line_item', fee_lines: 'fee', shipping_lines: 'shipping' } as const;
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+type MetaData = Parameters<typeof inOpenOrdersScope>[0];
 /**
  * Provides the queued mutation used to add a cart line to the current order.
  *
@@ -73,15 +48,48 @@ export const useAddItemToOrder = () => {
 	// render-time subscription re-rendered the whole grid on every cart write.
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
-	const { localPatch } = useLocalMutation();
-	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
-	const cartConfig = useCartConfig();
+	const { settledWrite, settleIntent } = useCartWrite();
+	const { ctx, actor, readCounting } = useActionContext();
+	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
-	const { store, wpCredentials } = useStoreSession();
+	const { store, wpCredentials, site } = useStoreSession();
+	const register = useRegister();
 	const taxBasedOn = useDocField(store, (value) => value.tax_based_on) as string | undefined;
 	const identity = React.useMemo(
-		() => ({ userId: wpCredentials.id!, storeId: store.id!, taxBasedOn }),
-		[store.id, taxBasedOn, wpCredentials.id]
+		() => ({
+			userId: wpCredentials.id!,
+			tillId: register?.id,
+			registerId: boundRegisterIdOf(register, site.uuid!, store.id) ?? undefined,
+			storeId: store.id!,
+			taxBasedOn,
+		}),
+		[store.id, taxBasedOn, wpCredentials.id, register, site.uuid]
+	);
+
+	/**
+	 * A birth or restart rewrites the order's identity; one the cart's own scope cannot match
+	 * would be written out of view (#3358). False (logged, not written) when it would.
+	 */
+	const inCartScope = React.useCallback(
+		(orderId: string | undefined, metaData: MetaData) => {
+			const registerId = scopedRegisterId(site.uuid!, store.id);
+			if (inOpenOrdersScope(metaData, wpCredentials.id!, store.id, registerId)) return true;
+			const stamped = wooMetaCarrier.readIdentity(metaData);
+			cartLogger.error("Cart add refused: the order would fall outside this till's open orders", {
+				code: ERROR_CODES.CART_UPDATE_FAILED,
+				context: {
+					orderId,
+					stampedCashierId: stamped.cashierId,
+					stampedStoreId: stamped.storeId,
+					stampedRegisterId: stamped.registerId ?? null,
+					scopeCashierId: wpCredentials.id,
+					scopeStoreId: store.id ?? null,
+					scopeRegisterId: registerId,
+				},
+			});
+			return false;
+		},
+		[site.uuid, store.id, wpCredentials.id]
 	);
 
 	/**
@@ -100,7 +108,13 @@ export const useAddItemToOrder = () => {
 	 * caller would have made had it seen the current cart.
 	 */
 	const buildCartLines = React.useCallback(
-		(orderId: string | undefined, existing: CartLine[], type: CartLineType, data: CartLine) => {
+		(
+			orderId: string | undefined,
+			existing: CartLine[],
+			type: CartLineType,
+			data: CartLine,
+			cartConfig: CartConfig
+		) => {
 			const lineItem = data as LineItem;
 			// A miscellaneous product (product_id 0) is always its own line, matching
 			// the duplicate check in useAddProduct/useAddVariation.
@@ -126,7 +140,7 @@ export const useAddItemToOrder = () => {
 			reportEngineWarnings(warnings, { orderId, site: 'useAddItemToOrder' });
 			return (existing as LineItem[]).map((item) => (item === match ? (merged as LineItem) : item));
 		},
-		[cartConfig, reportEngineWarnings]
+		[reportEngineWarnings]
 	);
 
 	/**
@@ -139,86 +153,65 @@ export const useAddItemToOrder = () => {
 			order: CurrentOrderRecord,
 			type: CartLineType,
 			data: CartLine,
-			options?: { orphanedSkeleton?: EngineResident | null }
+			options: {
+				orphanedSkeleton: EngineRecord<'orders'> | null;
+				priorPayload: CurrentOrderRecord['payload'];
+			}
 		) => {
 			const date_created_gmt = convertLocalDateToUTCString(new Date());
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('New order is missing its uuid');
 			const orphanedSkeleton = options?.orphanedSkeleton ?? null;
-			let resident: EngineResident;
+			let payload: Record<string, unknown>;
 			if (orphanedSkeleton) {
-				const priorPayload = (orphanedSkeleton.toMutableJSON().payload ?? {}) as Record<
-					string,
-					unknown
-				>;
-				resident = await patchEngineResident({
-					manager: runtime,
-					collection: 'orders',
-					recordId,
-					changes: {
-						[type]: buildCartLines(
-							recordId,
-							(priorPayload[type] as CartLine[] | undefined) ?? [],
-							type,
-							data
-						),
-						meta_data: ensurePosOrderIdentityMeta(
-							priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
-							identity
-						),
-					},
+				const priorPayload = options.priorPayload;
+				payload = settleIntent(orphanedSkeleton, {
+					[type]: buildCartLines(
+						recordId,
+						(priorPayload[type] as CartLine[] | undefined) ?? [],
+						type,
+						data,
+						configForOrder(priorPayload)
+					),
+					meta_data: ensurePosOrderIdentityMeta(
+						priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
+						identity,
+						true
+					),
 				});
 			} else {
-				const orderData = order.toMutableJSON().payload;
+				const orderData = options.priorPayload;
 				const orderJSON: Record<string, unknown> = {
 					...orderData,
-					meta_data: ensurePosOrderIdentityMeta(orderData.meta_data, identity),
+					meta_data: ensurePosOrderIdentityMeta(
+						orderData.meta_data,
+						identity,
+						isCartEmpty(orderData)
+					),
 					date_created_gmt,
 					[type]: [data],
 				};
-				resident = await insertEngineResident({
-					manager: runtime,
-					collection: 'orders',
-					recordId,
-					payload: orderJSON,
-				});
+				payload = settleIntent(order, orderJSON);
 			}
-			const payload = resident.toMutableJSON().payload as Record<string, unknown>;
-			// A guest sale has no email, stored locally as ''. wc/v3 rejects '' with
-			// rest_invalid_email (400), which dead-letters the CREATE and strands the
-			// order (every later update 404s). Absent means "no email" — same strip as
-			// use-push-document's pay path.
-			const billing = payload.billing as Record<string, unknown> | undefined;
-			if (billing?.email === '') delete billing.email;
-			try {
-				await runtime.engine.write({
-					collection: 'orders',
-					operation: 'create',
-					recordId,
-					payload,
-				});
-			} catch (error) {
-				// The resident is inserted before the create is enqueued. Left behind,
-				// it looks to the next add like an order the server already knows about,
-				// so that add queues an update which 404s forever. Only roll back the
-				// resident inserted here — an orphan reused above keeps its lines for
-				// the next retry.
-				if (!orphanedSkeleton) {
-					try {
-						await resident.remove();
-					} catch {
-						// The create failure is the error worth surfacing.
-					}
-				}
-				throw error;
-			}
-			const savedOrder = resident as unknown as EngineRecord<'orders'>;
-			await removeTemporaryOrder(recordId);
+			if (!inCartScope(recordId, payload.meta_data as MetaData)) return null;
+			const savedOrder = await birthOrder(runtime, {
+				recordId,
+				payload,
+				orphan: orphanedSkeleton,
+			});
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},
-		[buildCartLines, identity, runtime, setCurrentOrderID]
+		[
+			buildCartLines,
+			configForOrder,
+			identity,
+			inCartScope,
+			runtime,
+			setCurrentOrderID,
+			settleIntent,
+		]
 	);
 
 	/**
@@ -232,16 +225,15 @@ export const useAddItemToOrder = () => {
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
-			return enqueueOrderMutation(recordId, async (context) => {
-				const temporaryOrder = order.getLatest();
-				let latest = context.order?.getLatest() ?? temporaryOrder;
+			const run = async (target: CurrentOrderRecord, context: OrderMutationContext) => {
+				let latest = target.getLatest();
 				let isNew = Boolean((latest as { isNew?: boolean }).isNew);
-				let orphanedSkeleton: EngineResident | null = null;
+				let orphanedSkeleton: EngineRecord<'orders'> | null = null;
 				if (isNew && !context.order) {
-					const resident = await findEngineResident(runtime, 'orders', recordId);
-					if (resident) {
-						latest = resident as unknown as EngineRecord<'orders'>;
-						if (hasQueuedOrAcknowledgedCreate(resident)) {
+					const birth = await findBirthState(runtime, recordId);
+					if (birth !== 'none') {
+						latest = birth.born ?? birth.orphan;
+						if (birth.born) {
 							context.order = latest;
 							isNew = false;
 							// The line is going into a resident the cart is NOT showing — it is
@@ -253,62 +245,114 @@ export const useAddItemToOrder = () => {
 							// A skeleton whose create never made it to the queue: stay on the
 							// create path so it is retried against this resident, instead of
 							// patching an order the server has never seen.
-							orphanedSkeleton = resident;
+							orphanedSkeleton = birth.orphan;
 						}
 					}
 				}
-				let stockWarningName: string | null = null;
-				if (type === 'line_items' && stockGuardEnabled && !isMiscProductLine(data as LineItem)) {
-					const lineItem = data as LineItem;
-					const stockResult = await checkCartStock({
-						lineItems: latest.payload.line_items ?? [],
-						productId: lineItem.product_id ?? MISC_PRODUCT_ID,
-						variationId: lineItem.variation_id ?? 0,
-						requestedQuantity: lineItem.quantity ?? 1,
-						name: lineItem.name,
-					});
-					if (!stockResult.allowed) return false;
-					if (stockResult.warning === 'backorder') {
-						stockWarningName = stockResult.name;
-					}
-				}
 
-				let result;
-				if (isNew) {
-					const savedOrder = await saveNewOrder(temporaryOrder, type, data, {
-						orphanedSkeleton,
-					});
-					context.order = savedOrder;
-					result = savedOrder;
-				} else {
-					result = await localPatch({
-						document: latest,
-						data: {
-							[type]: buildCartLines(
-								latest.uuid,
-								(latest.payload[type] as CartLine[] | undefined) ?? [],
-								type,
-								data
-							),
-						} as never,
-					});
-				}
-				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
-				return result;
-			});
+				return dispatchAction({
+					event: 'cart.line.add',
+					token: context.dispatchToken,
+					ctx,
+					input: {
+						orderId: recordId,
+						actor,
+						source: 'user',
+						payload: { type, line: data, lineItems: latest.payload.line_items ?? [] },
+					},
+					bottom: async (e) => {
+						latest = latest.getLatest();
+						const incoming = e.payload.line as CartLine;
+						const temporaryOrder = order.getLatest();
+						const priorPayload = isNew ? latest.toMutableJSON().payload : latest.payload;
+						if (isNew)
+							priorPayload.meta_data = [
+								...(priorPayload.meta_data ?? []).filter(
+									({ key }) => key !== POS_META_KEYS.vatExempt
+								),
+								...(temporaryOrder.payload.meta_data ?? []).filter(
+									({ key }) => key === POS_META_KEYS.vatExempt
+								),
+							];
+						const cartConfig = configForOrder(priorPayload);
+
+						const { line: data, warnings } =
+							type === 'coupon_lines'
+								? { line: incoming, warnings: [] }
+								: calculateCartLine(
+										{
+											kind: kinds[type],
+											line: incoming,
+											cartLineItems: priorPayload.line_items ?? [],
+										},
+										cartConfig
+									);
+						reportEngineWarnings(warnings, {
+							orderId: latest.uuid,
+							site: 'useAddItemToOrder',
+						});
+						let result;
+						if (isNew) {
+							const savedOrder = await saveNewOrder(temporaryOrder, type, data, {
+								priorPayload,
+								orphanedSkeleton,
+							});
+							if (!savedOrder) return null;
+							context.order = savedOrder;
+							result = savedOrder;
+						} else {
+							// A line going into an emptied cart RESTARTS it: the creation time is
+							// the start of the sale in front of the cashier, not of the abandoned
+							// cart this record began as (cartRestartsOnAdd, monorepo#2183).
+							const restart = cartRestartsOnAdd(latest.payload)
+								? {
+										...restartStamp(new Date(), resolveDayTimezone(store, site).timezone),
+										meta_data: ensurePosOrderIdentityMeta(latest.payload.meta_data, identity, true),
+									}
+								: {};
+							if (
+								'meta_data' in restart &&
+								!inCartScope(latest.uuid, restart.meta_data as MetaData)
+							)
+								return null;
+							result = await settledWrite({
+								queue: context,
+								document: latest,
+								data: {
+									...restart,
+									[type]: buildCartLines(
+										latest.uuid,
+										(latest.payload[type] as CartLine[] | undefined) ?? [],
+										type,
+										data,
+										cartConfig
+									),
+								} as never,
+							});
+						}
+						return result;
+					},
+				});
+			};
+			return enqueueCartAction(order, run, { ctx, context: { orderId: recordId } });
 		},
 		[
 			buildCartLines,
-			checkCartStock,
+			configForOrder,
+			ctx,
+			actor,
 			getCurrentOrderRecord,
-			localPatch,
+			identity,
+			inCartScope,
+			settledWrite,
 			runtime,
+			reportEngineWarnings,
 			saveNewOrder,
 			setCurrentOrderID,
-			showBackorderWarning,
-			stockGuardEnabled,
+			site,
+			store,
 		]
 	);
 
-	return { addItemToOrder };
+	return { addItemToOrder, readCounting };
 };

@@ -1,3 +1,5 @@
+export { getErrorMessage } from '@wcpos/utils/logger/error-message';
+
 const mockLogger = {
 	error: jest.fn(),
 	warn: jest.fn(),

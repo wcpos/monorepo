@@ -2,18 +2,18 @@ import * as React from 'react';
 
 import { useWatch } from 'react-hook-form';
 
+import { SavedFieldProvider } from '@wcpos/components/form';
 import type { PrinterProfile } from '@wcpos/printer';
 import { usePrinterDiscovery } from '@wcpos/printer';
 import { Text } from '@wcpos/components/text';
 
 import { PrinterSetupDialog } from './setup/printer-setup-dialog';
-import { AdvancedSettings } from './dialog/advanced-settings';
 import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-picker';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { UsbDevicePicker } from './dialog/connection/usb-device-picker';
-import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
+import { usePrinterFooter } from './dialog/use-printer-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { TestPrintError } from './dialog/test-print-error';
 import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
@@ -36,7 +36,7 @@ function deriveVendorDefaults(vendor: PrinterFormValues['vendor']): VendorDefaul
 interface PrinterDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSave: () => void;
+	onClose: () => void;
 	printer?: PrinterProfile;
 	printerCount?: number;
 	prefill?: PrinterDialogPrefill;
@@ -44,14 +44,20 @@ interface PrinterDialogProps {
 
 export function PrinterDialog(props: PrinterDialogProps) {
 	if (!props.printer)
-		return props.open ? <PrinterSetupDialog {...props} platform="native" /> : null;
-	return <EditPrinterDialog {...props} />;
+		return props.open ? (
+			<PrinterSetupDialog {...props} onSave={props.onClose} platform="native" />
+		) : null;
+	return (
+		<SavedFieldProvider>
+			<EditPrinterDialog {...props} />
+		</SavedFieldProvider>
+	);
 }
 
 function EditPrinterDialog({
 	open,
 	onOpenChange,
-	onSave,
+	onClose,
 	printer,
 	printerCount = 0,
 	prefill,
@@ -65,10 +71,8 @@ function EditPrinterDialog({
 	} = usePrinterDiscovery();
 	const {
 		form,
-		isEditing,
 		testLoading,
 		drawerLoading,
-		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
@@ -76,8 +80,7 @@ function EditPrinterDialog({
 		setManualVendor,
 		handleOpenDrawer,
 		handleTestPrint,
-		handleSave,
-		handleSaveAnyway,
+		handleClose,
 	} = usePrinterDialogForm({
 		open,
 		schema: nativePrinterSchema,
@@ -86,7 +89,7 @@ function EditPrinterDialog({
 		printer,
 		prefill,
 		printerCount,
-		onSave,
+		onClose,
 	});
 
 	const connectionType = useWatch({
@@ -138,50 +141,48 @@ function EditPrinterDialog({
 		);
 	}
 
+	const footer = usePrinterFooter({
+		showOpenDrawer: canOpenDrawer,
+		testLoading,
+		drawerLoading,
+		onOpenDrawer: () => void handleOpenDrawer(),
+		onTestPrint: () => void handleTestPrint(),
+	});
+
 	return (
 		<PrinterDialogLayout
 			form={form}
 			open={open}
-			onOpenChange={onOpenChange}
-			isEditing={isEditing}
-			connectionSection={
+			onOpenChange={(next) => {
+				if (!next) void handleClose();
+				else onOpenChange(next);
+			}}
+			connectionRow={
+				<ConnectionTypeSegmented
+					form={form}
+					value={connectionType}
+					onChange={(v) => {
+						form.setValue('connectionType', v);
+						// The old lane's address must not ride into the new one (a network IP would
+						// autosave as a Bluetooth target); the draft is held until a device is picked.
+						form.setValue('address', '', { shouldDirty: true });
+					}}
+				/>
+			}
+			connectionLane={
 				<>
-					<ConnectionTypeSegmented
-						form={form}
-						value={connectionType}
-						onChange={(v) => form.setValue('connectionType', v)}
-					/>
 					{connectionSection}
 					{discoveryError && (
-						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
+						<Text testID="add-printer-discovery-error" variant="help">
 							{formatDiscoveryError(discoveryError, t)}
 						</Text>
 					)}
 				</>
 			}
-			advancedSettings={
-				<AdvancedSettings
-					form={form}
-					showVendor
-					vendorOptions={vendorOptions}
-					defaultOpen={isEditing}
-					onVendorManualChange={setManualVendor}
-				/>
-			}
+			vendorOptions={vendorOptions}
+			onVendorManualChange={setManualVendor}
 			errorSection={<TestPrintError error={testError} />}
-			footer={
-				<PrinterDialogFooter
-					showSaveAnyway={!!testError}
-					showOpenDrawer={canOpenDrawer}
-					testLoading={testLoading}
-					drawerLoading={drawerLoading}
-					saveLoading={saveLoading}
-					onOpenDrawer={handleOpenDrawer}
-					onTestPrint={handleTestPrint}
-					onSave={form.handleSubmit(handleSave)}
-					onSaveAnyway={handleSaveAnyway}
-				/>
-			}
+			footer={footer}
 		/>
 	);
 }

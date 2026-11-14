@@ -1,28 +1,27 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import { DialogBody, DialogFooter, useDialog } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
 	FormInput,
-	FormRadioGroup,
+	FormItem,
+	FormSegmentedControl,
 	FormSelect,
 	FormSwitch,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
+import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { useT } from '../../../../contexts/translations';
-import { CurrencyInput } from '../../components/currency-input';
+import { FormAmountField } from '../../components/amount-field';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
-import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
+import { useOptionLists } from '../../components/option-lists';
 import { useAddShipping } from '../hooks/use-add-shipping';
 
 /**
@@ -48,8 +47,9 @@ type FormValues = z.infer<typeof formSchema>;
  */
 export function AddShipping() {
 	const t = useT();
+	const { taxStatus } = useOptionLists();
 	const { addShipping } = useAddShipping();
-	const { onOpenChange } = useRootContext();
+	const { close: closeDialog } = useDialog();
 
 	/**
 	 *
@@ -76,9 +76,9 @@ export function AddShipping() {
 				tax_status,
 				prices_include_tax: prices_include_tax ?? true,
 			});
-			onOpenChange(false);
+			closeDialog();
 		},
-		[addShipping, onOpenChange, t]
+		[addShipping, closeDialog, t]
 	);
 
 	/**
@@ -91,89 +91,84 @@ export function AddShipping() {
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="method_title"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('pos_cart.shipping_method_title')}
-									placeholder={t('common.shipping')}
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="method_id"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormSelect
-									customComponent={ShippingMethodSelect}
-									label={t('pos_cart.shipping_method')}
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="amount"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('pos_cart.amount')}
-									testID="shipping-amount-input"
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-					<View className="flex-1 justify-center">
+				<PropertyList prefix="shipping">
+					<PropertyRow label={t('pos_cart.shipping_method_title')} id="title">
 						<FormField
 							control={form.control}
-							name="prices_include_tax"
+							name="method_title"
 							render={({ field }) => (
-								<FormSwitch
-									label={t('pos_cart.amount_includes_tax')}
-									testID="shipping-includes-tax-switch"
-									{...field}
-								/>
+								<FormItem nativeID="shipping-title">
+									<FormInput placeholder={t('common.shipping')} {...field} />
+								</FormItem>
 							)}
 						/>
-					</View>
-				</HStack>
-				<FormField
-					control={form.control}
-					name="tax_status"
-					render={({ field }) => (
-						<FormRadioGroup
-							label={t('common.tax_status')}
-							customComponent={TaxStatusRadioGroup}
-							{...field}
+					</PropertyRow>
+					<PropertyRow label={t('pos_cart.shipping_method')} id="method">
+						<FormField
+							control={form.control}
+							name="method_id"
+							render={({ field: { value, onChange, ...rest } }) => (
+								<FormItem nativeID="shipping-method">
+									<FormSelect
+										customComponent={ShippingMethodSelect}
+										value={value ?? ''}
+										onChange={onChange}
+										{...rest}
+									/>
+								</FormItem>
+							)}
 						/>
-					)}
-				/>
-				<DialogFooter className="px-0">
-					<DialogClose>{t('common.cancel')}</DialogClose>
-					<DialogAction
-						disabled={form.formState.isSubmitting}
-						testID="add-to-cart-submit"
-						onPress={onAdd}
-					>
-						{t('common.add_to_cart')}
-					</DialogAction>
-				</DialogFooter>
-			</VStack>
+					</PropertyRow>
+					<PropertyRow label={t('pos_cart.amount')} id="amount">
+						<FormField
+							control={form.control}
+							name="amount"
+							render={({ field }) => (
+								<FormItem nativeID="shipping-amount">
+									<FormAmountField kind="money" live testID="shipping-amount-input" {...field} />
+								</FormItem>
+							)}
+						/>
+					</PropertyRow>
+					<PropertyRow
+						label={t('pos_cart.amount_includes_tax')}
+						id="includes-tax"
+						control={
+							<FormField
+								control={form.control}
+								name="prices_include_tax"
+								render={({ field }) => (
+									<FormItem nativeID="shipping-includes-tax">
+										<FormSwitch testID="shipping-includes-tax-switch" {...field} />
+									</FormItem>
+								)}
+							/>
+						}
+					/>
+					<PropertyRow label={t('common.tax')} id="tax">
+						<FormField
+							control={form.control}
+							name="tax_status"
+							render={({ field }) => (
+								<FormItem nativeID="shipping-tax">
+									<FormSegmentedControl {...field} segments={taxStatus} testID={field.name} />
+								</FormItem>
+							)}
+						/>
+					</PropertyRow>
+				</PropertyList>
+			</DialogBody>
+			<DialogFooter
+				close
+				intent={{
+					label: t('common.add_to_cart'),
+					disabled: form.formState.isSubmitting,
+					testID: 'add-to-cart-submit',
+					onPress: () => void onAdd(),
+				}}
+			/>
 		</Form>
 	);
 }

@@ -77,7 +77,7 @@ describe('useVariationStock / VariationStockBadge', () => {
 			<Probe doc={variation({ manage_stock: true, stock_quantity: 8, stock_status: 'instock' })} />
 		);
 		expect(screen.getByTestId('sellable').textContent).toBe('true');
-		expect(badge()!.getAttribute('data-variant')).toBe('success');
+		expect(badge()!.getAttribute('data-variant')).toBe('ok');
 		expect(badge()!.textContent).toBe('pos_products.in_stock|{"quantity":"8"}');
 	});
 
@@ -97,7 +97,7 @@ describe('useVariationStock / VariationStockBadge', () => {
 			/>
 		);
 		expect(screen.getByTestId('sellable').textContent).toBe('false');
-		expect(badge()!.getAttribute('data-variant')).toBe('error');
+		expect(badge()!.getAttribute('data-variant')).toBe('bad');
 		expect(badge()!.textContent).toBe('common.out_of_stock');
 	});
 
@@ -126,7 +126,7 @@ describe('useVariationStock / VariationStockBadge', () => {
 	it('blocks unmanaged variations flagged outofstock', () => {
 		render(<Probe doc={variation({ manage_stock: false, stock_status: 'outofstock' })} />);
 		expect(screen.getByTestId('sellable').textContent).toBe('false');
-		expect(badge()!.getAttribute('data-variant')).toBe('error');
+		expect(badge()!.getAttribute('data-variant')).toBe('bad');
 	});
 
 	it('follows the child status when neither record manages stock', () => {

@@ -3,10 +3,12 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
-import { useBarcode } from './use-barcode';
+import { barcodeLookupErrorCode, useBarcode } from './use-barcode';
 
 const mockAddProduct = jest.fn();
 const mockAddVariation = jest.fn();
+const mockReadCounting = jest.fn(async () => false);
+const mockShowCountingNotice = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockEngineActive = jest.fn();
 const mockEngineStatus = jest.fn();
@@ -113,6 +115,11 @@ jest.mock('../../hooks/barcodes', () => ({
 
 jest.mock('../hooks/use-add-product', () => ({
 	useAddProduct: () => ({ addProduct: mockAddProduct }),
+	showCountingNotice: (...args: unknown[]) => mockShowCountingNotice(...args),
+}));
+
+jest.mock('../hooks/use-action-context', () => ({
+	useActionContext: () => ({ readCounting: () => mockReadCounting() }),
 }));
 
 jest.mock('../hooks/use-add-variation', () => ({
@@ -137,6 +144,7 @@ let mockSegments: string[] = ['(app)', '(drawer)', '(pos)', '(tabs)', 'index'];
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockRouterPush }),
 	useSegments: () => mockSegments,
+	useGlobalSearchParams: () => ({}),
 }));
 
 // Scan sounds are exercised in play-scan-sound's own tests; here they are no-ops
@@ -190,7 +198,8 @@ function onlineResponse(input?: {
 	return response({
 		code: 'ABC',
 		found: match !== null,
-		match: match === null ? null : { ...match, payload: {} },
+		// The 2.0.0 plugin serves `match` as a bare record; the resolver wraps it client-side.
+		match,
 		ambiguous: input?.ambiguous ?? [],
 	});
 }
@@ -206,6 +215,7 @@ function productDocument(id = 41, barcode = 'ABC'): EngineDocument {
 	const document = {
 		uuid: `product-${id}`,
 		remoteId: String(id),
+		remoteKey: String(String(id) ?? ''),
 		stockStatus: 'instock',
 		payload,
 		collection: { name: 'products' as const },
@@ -229,7 +239,9 @@ function variationDocument(id = 51, parentId = 41, barcode = 'ABC'): EngineDocum
 	const document = {
 		uuid: `variation-${id}`,
 		remoteId: String(id),
+		remoteKey: String(String(id) ?? ''),
 		parentRemoteId: String(parentId),
+		parentRemoteKey: String(String(parentId) ?? ''),
 		stockStatus: 'instock',
 		payload,
 		collection: { name: 'variations' as const },
@@ -330,6 +342,29 @@ describe('useBarcode online escalation', () => {
 		}));
 		mockAddProduct.mockResolvedValue(true);
 		mockAddVariation.mockResolvedValue(true);
+		mockReadCounting.mockReset().mockResolvedValue(false);
+		mockShowCountingNotice.mockReset();
+	});
+
+	it('refuses a scan while the drawer is counted, with the notice and no "not found"', async () => {
+		engineProducts.push(productDocument());
+		mockReadCounting.mockResolvedValue(true);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockShowCountingNotice).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).not.toHaveBeenCalled();
+		expect(mockSetSearch).not.toHaveBeenCalled();
+		// An unknown code during the count is refused the same way, not reported as a miss.
+		await act(async () => scan('UNKNOWN'));
+		expect(mockFetcher).not.toHaveBeenCalled();
+		expect(mockToastShow).not.toHaveBeenCalled();
+
+		mockReadCounting.mockResolvedValue(false);
+		await act(async () => scan());
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockShowCountingNotice).toHaveBeenCalledTimes(2);
 	});
 
 	it.each([
@@ -396,6 +431,28 @@ describe('useBarcode online escalation', () => {
 		}
 	);
 
+	it('routes a local variable parent to search instead of adding it', async () => {
+		const product = productDocument();
+		product.payload.type = 'variable';
+		engineProducts.push(product);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockAddVariation).not.toHaveBeenCalled();
+		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
+		expect(mockClearSearch).not.toHaveBeenCalled();
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenLastCalledWith({
+			id: expect.stringMatching(/^scan:\d+$/),
+			type: 'warning',
+			title: 'pos_products.scan_choose_variation',
+			description: 'Keyboard — ABC',
+			duration: 6000,
+		});
+	});
+
 	it('falls back to resolve/barcode when an old envelope reports no active selectors', async () => {
 		setSelectors('products', []);
 		engineProducts.push(productDocument(41, 'ONLINE-ONLY'));
@@ -424,7 +481,7 @@ describe('useBarcode online escalation', () => {
 			description: 'pos_products.scan_not_found_description:{"code":"ABC"}',
 			duration: 6000,
 		});
-		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
+		expect(mockBarcodeLogger.info).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.not.objectContaining({
 				showToast: expect.anything(),
@@ -523,7 +580,7 @@ describe('useBarcode online escalation', () => {
 			description: 'ABC',
 			duration: 6000,
 		});
-		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
+		expect(mockBarcodeLogger.info).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.not.objectContaining({
 				showToast: expect.anything(),
@@ -699,6 +756,41 @@ describe('useBarcode online escalation', () => {
 		expect(addedProduct.remoteId).toBe('41');
 		expect(addedProduct.payload.name).toBe('Keyboard');
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
+	});
+
+	it('replaces the searching toast when an online lookup resolves to a variable parent', async () => {
+		const product = productDocument();
+		product.payload.barcode = 'STALE';
+		product.payload.type = 'variable';
+		mockFetcher.mockResolvedValue(
+			onlineResponse({ match: { id: 41, type: 'product', parent_id: 0 } })
+		);
+		engineProducts.push(product);
+		mockEngineRequire.mockImplementation(() => {
+			product.payload.barcode = 'ABC';
+			return {
+				ready: Promise.resolve({
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: 'test',
+				}),
+				release: jest.fn(),
+			};
+		});
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
+		const [searching] = mockToastShow.mock.calls[0];
+		expect(searching.title).toBe('common.barcode_searching_online');
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				id: searching.id,
+				title: 'pos_products.scan_choose_variation',
+			})
+		);
 	});
 
 	it('requires a variation and its parent product before adding the hydrated variation', async () => {
@@ -1379,5 +1471,33 @@ describe('useBarcode online escalation', () => {
 		renderBarcodeHook();
 
 		expect(mockUseBarcodeDetection).toHaveBeenLastCalledWith({ isActive: false });
+	});
+});
+
+describe('barcodeLookupErrorCode', () => {
+	it('calls a lookup that never got a reply "store unreachable", not a product fault', () => {
+		expect(barcodeLookupErrorCode('resolve/barcode request failed: Network request failed')).toBe(
+			'SYNC121'
+		);
+	});
+
+	it('codes a reply it could not parse SYNC151, not "unreachable"', () => {
+		expect(
+			barcodeLookupErrorCode(
+				'resolve/barcode request failed: Unexpected token < in JSON at position 0'
+			)
+		).toBe('SYNC151');
+	});
+
+	it('codes a store error SYNC131 and an ended session AUTH101', () => {
+		expect(barcodeLookupErrorCode('resolve/barcode failed: 502 Bad Gateway')).toBe('SYNC131');
+		expect(barcodeLookupErrorCode('resolve/barcode failed: 401 {"code":"jwt"}')).toBe('AUTH101');
+	});
+
+	it('keeps anything else the product code', () => {
+		expect(barcodeLookupErrorCode('resolve/barcode returned found=true without a match')).toBe(
+			'PRODUCT999'
+		);
+		expect(barcodeLookupErrorCode(undefined)).toBe('PRODUCT999');
 	});
 });

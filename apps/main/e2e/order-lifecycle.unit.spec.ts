@@ -1,5 +1,11 @@
 import { expect, test } from './test';
-import { expectRateSetParity, expectTaxParity, posAppliedRateIds } from './order-lifecycle';
+import {
+	cartRecordUuidFromTabId,
+	createPushOrdersResponseMatcher,
+	expectRateSetParity,
+	expectTaxParity,
+	posAppliedRateIds,
+} from './order-lifecycle';
 
 /**
  * Unit-style pins for the money-oracle helpers — no page, no store. These exist
@@ -84,5 +90,73 @@ test.describe('expectTaxParity', () => {
 	test('rejects two microunits and display-money drift', () => {
 		expect(() => expectTaxParity('4.575162', '4.575164', 'two microunits')).toThrow();
 		expect(() => expectTaxParity('1.65', '1.64', 'a whole cent')).toThrow();
+	});
+});
+
+/**
+ * #3372: a session can re-push an older order while a test waits for its own save,
+ * so the matcher takes only the open cart's record, and a stranger's 401 must not
+ * use up the fetcher's one refresh-and-retry cycle.
+ */
+test.describe('createPushOrdersResponseMatcher', () => {
+	const CART = '0b6f6c1e-2f4a-4c1d-9e3b-7a5d8c2f1e04';
+	const OTHER = '9d2c4b7a-1e3f-4a5b-8c6d-0e1f2a3b4c5d';
+	const PRETTY = 'https://store.test/wp-json/wcpos/v2/push/orders?store_id=1';
+	const PLAIN = 'https://store.test/?rest_route=/wcpos/v2/push/orders';
+
+	function push(recordId: string, status: number, url = PRETTY, method = 'POST') {
+		return {
+			url: () => url,
+			request: () => ({ method: () => method, postDataJSON: () => ({ recordId, payload: {} }) }),
+			status: () => status,
+		};
+	}
+
+	test("matches a 201 push for the cart's record", () => {
+		expect(createPushOrdersResponseMatcher(CART)(push(CART, 201))).toBe(true);
+	});
+
+	test('skips a 200 push for another record', () => {
+		expect(createPushOrdersResponseMatcher(CART)(push(OTHER, 200))).toBe(false);
+	});
+
+	test("matches the plain-permalink form for the cart's record", () => {
+		expect(createPushOrdersResponseMatcher(CART)(push(CART, 201, PLAIN))).toBe(true);
+	});
+
+	test('skips a GET and a different route', () => {
+		const matches = createPushOrdersResponseMatcher(CART);
+		expect(matches(push(CART, 200, PRETTY, 'GET'))).toBe(false);
+		expect(matches(push(CART, 200, 'https://store.test/wp-json/wcpos/v2/push/products'))).toBe(
+			false
+		);
+	});
+
+	test("for the cart's record, the first 401 is skipped and the second matches", () => {
+		const matches = createPushOrdersResponseMatcher(CART);
+		expect(matches(push(CART, 401))).toBe(false);
+		expect(matches(push(CART, 401))).toBe(true);
+	});
+
+	test("another record's 401 does not use up the cart's retry cycle", () => {
+		const matches = createPushOrdersResponseMatcher(CART);
+		expect(matches(push(OTHER, 401))).toBe(false);
+		expect(matches(push(CART, 401))).toBe(false);
+		expect(matches(push(CART, 401))).toBe(true);
+	});
+});
+
+test.describe('cartRecordUuidFromTabId', () => {
+	const UUID = '0b6f6c1e-2f4a-4c1d-9e3b-7a5d8c2f1e04';
+
+	test('reads the uuid from open-order-tab-<uuid>', () => {
+		expect(cartRecordUuidFromTabId(`open-order-tab-${UUID}`)).toBe(UUID);
+	});
+
+	test("is null for the blank cart's tab, a tab's sub-element, a bare prefix and no id", () => {
+		expect(cartRecordUuidFromTabId('new-order-tab')).toBeNull();
+		expect(cartRecordUuidFromTabId(`open-order-tab-${UUID}-amount`)).toBeNull();
+		expect(cartRecordUuidFromTabId('open-order-tab-')).toBeNull();
+		expect(cartRecordUuidFromTabId(null)).toBeNull();
 	});
 });

@@ -17,7 +17,12 @@ export function OnlineStatusLogger() {
 	const t = useT();
 	const prevStatusRef = React.useRef<OnlineStatus | null>(status);
 	const lastLoggedStatusRef = React.useRef<OnlineStatus>(status);
-	const translate = React.useEffectEvent(t);
+	// Literal calls, read when the toast fires: the string extractor reads only `t('…')`.
+	const titles = React.useEffectEvent(() => ({
+		offline: t('common.device_went_offline'),
+		unreachable: t('common.website_is_unreachable'),
+		restored: t('common.connection_restored'),
+	}));
 
 	// External connectivity transitions must settle before this app-level mount
 	// point alerts the cashier; cleanup restarts the verdict on every transition.
@@ -43,29 +48,30 @@ export function OnlineStatusLogger() {
 				// is the `warn` promise. The level also reaches `console.*` on native:
 				// at `error` the expo dev client draws a full-screen redbox over the app
 				// on every transient blip (class 13; run 33487044969 iOS phone flow 05,
-				// where it swallowed the drawer tap). The toast and the SYNC_UNEXPECTED
-				// help link are unchanged.
+				// where it swallowed the drawer tap). The code is SYNC_UNREACHABLE: its
+				// "keep selling, changes send when the connection returns" is the truth;
+				// SYNC_UNEXPECTED told the cashier to re-enter and save.
 				case 'offline':
 					logger.warn('Device went offline', {
-						code: ERROR_CODES.SYNC_UNEXPECTED,
+						code: ERROR_CODES.SYNC_UNREACHABLE,
 						context: { type: 'connectivity.device-offline' },
 						showToast: true,
-						toast: { title: translate('common.device_went_offline') },
+						toast: { title: titles().offline },
 					});
 					break;
 				case 'online-website-unavailable':
 					logger.warn('Website is unreachable', {
-						code: ERROR_CODES.SYNC_UNEXPECTED,
+						code: ERROR_CODES.SYNC_UNREACHABLE,
 						context: { type: 'connectivity.website-unreachable' },
 						showToast: true,
-						toast: { title: translate('common.website_is_unreachable') },
+						toast: { title: titles().unreachable },
 					});
 					break;
 				case 'online-website-available':
 					logger.success('Connection restored', {
 						context: { type: 'connectivity.restored' },
 						showToast: true,
-						toast: { title: translate('common.connection_restored') },
+						toast: { title: titles().restored },
 					});
 					break;
 			}

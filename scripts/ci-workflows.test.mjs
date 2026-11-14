@@ -18,11 +18,52 @@ import test from 'node:test';
 import { parse, parseAllDocuments } from 'yaml';
 
 import { classify } from './ci-plan.mjs';
+import { QUEUE_STEP_NAME, QUEUE_WORKFLOWS } from './wait-devnext-free.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function readWorkflow(filename) {
 	return parse(readFileSync(path.join(ROOT, '.github', 'workflows', filename), 'utf8'));
+}
+
+function evaluateGuard(expression, { event_name, ref_name, quarantine_only, target }) {
+	const values = {
+		'github.event_name': event_name,
+		'github.ref_name': ref_name,
+		'inputs.quarantine_only': quarantine_only,
+		'inputs.target': target,
+	};
+	const rewritten = expression
+		.replace(
+			/github\.event_name|github\.ref_name|inputs\.quarantine_only|inputs\.target/g,
+			(reference) => JSON.stringify(values[reference])
+		)
+		.replace(/==|!=/g, (operator) => (operator === '==' ? '===' : '!=='));
+	const withoutStrings = rewritten.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '');
+	const identifiers = withoutStrings.match(/[A-Za-z_$][\w$]*/g) ?? [];
+	assert.deepEqual(
+		identifiers.filter((identifier) => !['true', 'false', 'null'].includes(identifier)),
+		[]
+	);
+	return new Function(`return (${rewritten});`)();
+}
+
+/**
+ * Evaluates a `${{ }}` expression for the given context. Every github./inputs.
+ * reference must be supplied, so a new reference cannot silently read as null.
+ */
+function evaluateExpression(expression, context) {
+	const body = expression.replace(/^\$\{\{\s*/, '').replace(/\s*\}\}$/, '');
+	const rewritten = body
+		.replace(/\b(?:github|inputs)\.[\w.]+/g, (reference) => {
+			assert.ok(reference in context, `no value for ${reference}`);
+			return JSON.stringify(context[reference]);
+		})
+		.replace(/\bformat\(/g, '__format(')
+		.replace(/==|!=/g, (operator) => (operator === '==' ? '===' : '!=='));
+	const format = (template, ...args) =>
+		template.replace(/\{(\d+)\}/g, (_, index) => String(args[Number(index)]));
+	return new Function('__format', `return (${rewritten});`)(format);
 }
 
 function readAction(filename) {
@@ -140,6 +181,28 @@ test('the shared setup action uses a Node version supported by jsdom 30', () => 
 	assert.equal(setup.inputs['node-version'].default, '22.22.2');
 });
 
+test('setup action keeps the licensed rxdb-premium dist out of every cache', () => {
+	const setup = readAction('setup-monorepo/action.yml');
+	const node = setup.runs.steps.find((step) => step.uses?.startsWith('actions/setup-node'));
+	assert.ok(node, 'no setup-node step');
+	assert.equal(node.with['package-manager-cache'], false);
+	assert.equal('cache' in node.with, false);
+
+	const names = setup.runs.steps.map((step) => step.name);
+	const disable = names.indexOf('🔒 Disable the pnpm side-effects cache');
+	const install = names.indexOf('📦 Install dependencies');
+	const assertion = names.indexOf('🔒 Assert licensed dist stays out of every cache');
+	assert.ok(install >= 0, 'no install step');
+	assert.ok(
+		disable >= 0 && disable < install,
+		'the side-effects cache must be disabled before the install'
+	);
+	assert.match(setup.runs.steps[disable].run, /pnpm_config_side_effects_cache=false/);
+	assert.match(setup.runs.steps[disable].run, /GITHUB_ENV/);
+	assert.ok(assertion > install, 'the licensed dist assertion must exist after the install');
+	assert.match(setup.runs.steps[assertion].run, /pnpm config get side-effects-cache/);
+});
+
 test('the shared setup action initialises the apps/web workspace submodule BEFORE it installs', () => {
 	// apps/web is both a submodule and a pnpm workspace member. Initialised by
 	// the root preinstall script mid-install, the tree pnpm left behind never
@@ -211,6 +274,27 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
 });
 
+test('every job lists each job whose needs context it reads', () => {
+	// A needs.<job> reference to an unlisted job evaluates to '' without any
+	// error: main-ledger read needs.deploy.result that way, so a cancelled
+	// deploy could never count as superseded.
+	const dir = path.join(ROOT, '.github', 'workflows');
+	const files = readdirSync(dir).filter((file) => /\.ya?ml$/.test(file));
+	assert.ok(files.length > 0);
+	for (const file of files) {
+		for (const [jobName, job] of Object.entries(readWorkflow(file).jobs ?? {})) {
+			const { needs, ...rest } = job;
+			const listed = [needs ?? []].flat();
+			for (const [, referenced] of JSON.stringify(rest).matchAll(/needs\.([\w-]+)\./g)) {
+				assert.ok(
+					listed.includes(referenced),
+					`${file}: ${jobName} reads needs.${referenced} without listing it in needs`
+				);
+			}
+		}
+	}
+});
+
 test('the main verification ledger maintains one issue and ignores superseded runs', () => {
 	const ledger = readWorkflow('deploy.yml').jobs['main-ledger'];
 	assert.match(ledger.if, /github\.event_name == 'push'/);
@@ -232,7 +316,6 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 	// The job has no checkout, so gh must be told the repo explicitly.
 	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
 	assert.ok([ledger.needs].flat().includes('cold-start'), 'ledger must see cold-start too');
-
 	const run = ({ gate, deploy = 'success', e2e = 'success', cold = 'success', issues }) => {
 		writeFileSync(trace, '');
 		const result = runShell(ledger.steps[0].run, {
@@ -474,6 +557,65 @@ test('release workflows require green main with an explicit typed override', () 
 	);
 });
 
+test('the web-bundle retention keeps the previous build inventory; a root file the build does not carry is dropped', () => {
+	const publish = readWorkflow('publish-web-bundle.yml');
+	const step = publish.jobs.publish.steps.find(({ name }) =>
+		String(name).startsWith('🚀 Publish to web-bundle')
+	);
+	assert.ok(step, 'publish step');
+	// Both lanes publish to the same branch. Hashed _expo/ files the previous
+	// build emitted (its publish-inventory.txt) stay for edges still serving its
+	// metadata.json; a root file the new build does not carry (another lane's
+	// worker or wasm) must go at once, or the lane tag script refuses the bundle
+	// (1.11.11, 2026-11-06).
+	const run = step.run;
+	const readInventory = run.indexOf('git show "HEAD:$INVENTORY"');
+	assert.match(run, /INVENTORY=build\/publish-inventory\.txt/);
+	const loopStart = run.indexOf('git ls-files build | while read');
+	assert.ok(readInventory > 0 && readInventory < loopStart, 'the previous inventory is read before the loop');
+	const loop = run.slice(loopStart, run.indexOf('\ndone', loopStart));
+	const drop = loop.indexOf('*) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;');
+	const listed = loop.indexOf('grep -Fxq -- "${path#build/}" <<< "$previous_inventory"');
+	assert.ok(drop > 0, 'root files this build does not carry are dropped');
+	assert.ok(loop.indexOf('*/*) ;;') > 0 && loop.indexOf('*/*) ;;') < drop, 'hashed _expo/ files fall through to the inventory check');
+	assert.ok(listed > drop, 'the drop runs before the inventory check; listed files are kept');
+	// The new inventory comes from the fresh build, after the loop, never into
+	// $BUILD_DIR (the CDN job uploads it), and before git add -A publishes it.
+	const write = run.indexOf('(cd "$BUILD_DIR" && find _expo -type f | LC_ALL=C sort) > "$INVENTORY"');
+	assert.ok(write > loopStart + loop.length, 'the inventory is written after the retention loop');
+	assert.ok(write < run.indexOf('git add -A'), 'the inventory is written before git add -A');
+});
+
+test('a main-branch web bundle is gated on its worker RXDB_VERSION against its lane', () => {
+	const publish = readWorkflow('publish-web-bundle.yml');
+	const steps = publish.jobs.publish.steps.map(({ name }) => name);
+	const stage = findStep(
+		publish,
+		'publish',
+		'📌 Stage the worker/lane gate from the workflow revision'
+	);
+	const gate = findStep(
+		publish,
+		'publish',
+		"🧬 Gate the worker's RXDB_VERSION against its bundle lane"
+	);
+	for (const step of [stage, gate]) assert.match(step.if, /bundle_branch != 'next'/);
+	// Staged from THIS workflow revision: an older monorepo_ref has no gate script.
+	assert.ok(steps.indexOf(stage.name) < steps.indexOf('📥 Check out monorepo'));
+	assert.ok(steps.indexOf('🔨 Build web bundle') < steps.indexOf(gate.name));
+	assert.ok(steps.indexOf(gate.name) < steps.findIndex((name) => name.startsWith('🚀 Publish')));
+	// The whole build directory: every worker the plugin vendors (sqlite, indexeddb, opfs).
+	assert.match(gate.run, /check-worker-rxdb-lane\.sh" apps\/web\/build "\$APP_VERSION"/);
+	assert.match(gate.run, /args=\(--bundle-rxdb "\$BUNDLE_RXDB"\)/);
+	// A bundle with no worker at all is a broken build, not a vacuous pass.
+	assert.doesNotMatch(gate.run, /--worker-optional/);
+	// The frozen-lane override is opt-in per dispatch, never the default.
+	assert.equal(publish.on.workflow_dispatch.inputs.allow_frozen_lane.default, false);
+	// tag-web-bundle.sh reads the app version at the SHA in the commit message.
+	const checkout = findStep(publish, 'publish', '📥 Check out monorepo');
+	assert.match(checkout.with.ref, /steps\.monorepo-sha\.outputs\.sha/);
+});
+
 test('the release gate requires the push verification of the SHA and fails closed', () => {
 	const action = readAction('require-green-main/action.yml');
 	assert.equal(action.runs.using, 'composite');
@@ -624,10 +766,37 @@ test('PRs targeting next skip both E2E suites and their gates accept the skip', 
 test('native E2E routes next-target PRs to the next store', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 
+	// A PR is routed by its base, a push by its ref, a manual dispatch by the
+	// `ref` INPUT (what the build job checks out — github.ref_name on a
+	// dispatch is only where the workflow file came from), and a run that
+	// belongs to neither trunk gets NO store (the seed refuses an empty one)
+	// rather than the old default of dev-pro — see the deploy.yml lane test.
 	assert.equal(
 		workflow.env.E2E_STORE_URL,
-		"${{ github.event_name == 'pull_request' && github.base_ref == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
+		"${{ (github.base_ref == 'next' || (github.event_name == 'push' && github.ref_name == 'next') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'next')) && 'https://dev-next.wcpos.com' || (github.base_ref == 'main' || (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'main')) && 'https://dev-pro.wcpos.com' || '' }}"
 	);
+	const checkout = workflow.jobs.build.steps.find((step) => step.with && 'ref' in step.with);
+	assert.equal(
+		checkout && checkout.with.ref,
+		'${{ github.event.inputs.ref || github.sha }}',
+		'the dispatch checkout ref changed; the store expression above must route by the same input'
+	);
+	const emptyStore = spawnSync(
+		process.execPath,
+		['--input-type=module', '--eval', "await import('./scripts/e2e-native-seed.mjs');"],
+		{
+			cwd: ROOT,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				E2E_STORE_URL: '',
+				E2E_PRODUCT_WRITER_USER: 'writer',
+				E2E_PRODUCT_WRITER_PASS: 'password',
+			},
+		}
+	);
+	assert.notEqual(emptyStore.status, 0, 'the native seed accepted an EMPTY store URL');
+	assert.match(emptyStore.stderr, /E2E_STORE_URL is empty/);
 
 	// A 404, not a 503: the seed retries transient statuses for a minute
 	// (store-transient-retry.mjs), and this test is about routing, not retries.
@@ -710,6 +879,78 @@ test('native E2E concurrency isolates pull requests and supersedes stale main pu
 	// the next merge four minutes in).
 	assert.equal(concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}");
 	assert.notEqual(concurrency.group, '${{ github.workflow }}');
+});
+
+test('native E2E Metro serves a non-lazy bundle on both platforms', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	// A production-mode lazy bundle throws on native when import() fetches a chunk.
+	const metroSteps = Object.values(workflow.jobs)
+		.flatMap((job) => job.steps ?? [])
+		.filter((step) => typeof step.run === 'string' && step.run.includes('expo start'));
+
+	assert.equal(metroSteps.length, 2);
+	for (const step of metroSteps) {
+		assert.equal(step.env?.EXPO_NO_METRO_LAZY, '1', step.name);
+	}
+});
+
+test("native E2E pre-warm requests the device's bundle URL on both platforms", () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	// The bundle cache keys on the URL's host: warm the one the dev client asks for (#3345).
+	const runs = Object.values(workflow.jobs)
+		.flatMap((job) => (job.steps ?? []).map((step) => step.run ?? ''))
+		.join('\n');
+
+	for (const platform of ['android', 'ios']) {
+		assert.ok(
+			runs.includes(
+				`BUNDLE_URL=$(curl -sf -H "expo-platform: ${platform}" -H 'Forwarded: host="localhost:8081";proto=http' http://localhost:8081/ | jq -r '.launchAsset.url')`
+			),
+			platform
+		);
+	}
+	const relativeUrl =
+		'case "$BUNDLE_URL" in http*) ;; *) BUNDLE_URL="http://localhost:8081/$BUNDLE_URL" ;; esac';
+	assert.equal(runs.split(relativeUrl).length - 1, 2);
+});
+
+test('native E2E flows 01 and 02 connect to the store the main lane seeds', () => {
+	// A flow's env wins over `-e`, so the store is pinned in the flow file. It has to be
+	// the one e2e-native.yml seeds for main (dev-pro), or the seeded product belongs to
+	// another store and the run fails on data that was never there. dev-next is the
+	// retired `next` lane and still runs its frozen plugin (#3206).
+	const workflow = readWorkflow('e2e-native.yml');
+	assert.match(workflow.env.E2E_STORE_URL, /'https:\/\/dev-pro\.wcpos\.com'/);
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const documents = parseAllDocuments(
+			readFileSync(path.join(ROOT, 'apps', 'main', '.maestro', 'flows', filename), 'utf8')
+		);
+		const { env } = documents[0].toJS();
+		assert.equal(env.STORE_URL, 'https://dev-pro.wcpos.com', filename);
+	}
+});
+
+test('native E2E probes the store before the flows and after a failure on both platforms', () => {
+	// A cart add is a local write that queues behind the engine's catalogue applies, which
+	// stretch with the store's response times: on 2026-11-08 flow 04 waited 30 s for
+	// `cart-subtotal` on both phones while dev-pro answered in 4–8 s, and the red read as an
+	// app regression for a day. deploy.yml has carried this probe since August; the native
+	// lane says the same thing in the same voice, and never gates on it (#3206).
+	const workflow = readWorkflow('e2e-native.yml');
+	for (const jobName of ['android', 'ios']) {
+		const steps = workflow.jobs[jobName].steps;
+		const before = steps.find(({ name }) => name === '🩺 Probe store health before the flows');
+		const after = steps.find(({ name }) => name === '🩺 Probe store health after a failure');
+		assert.ok(before, `${jobName}: no pre-flow probe`);
+		assert.ok(after, `${jobName}: no post-failure probe`);
+		for (const step of [before, after]) {
+			assert.match(step.run, /probe-store-health\.mjs "\$E2E_STORE_URL"/, jobName);
+			assert.equal(step['continue-on-error'], true, `${jobName}: the probe reports, never gates`);
+		}
+		assert.equal(after.if, 'failure()', jobName);
+		const maestro = steps.findIndex(({ name }) => /Run Maestro suite/.test(name ?? ''));
+		assert.ok(steps.indexOf(before) < maestro && maestro < steps.indexOf(after), jobName);
+	}
 });
 
 test('native E2E reports logger and direct console errors on both platforms', () => {
@@ -1263,7 +1504,9 @@ test('the shared setup action saves one turbo cache entry per OS per day, from m
 			}
 		}
 	}
-	assert.deepEqual(savers, ["deploy.yml:deploy=${{ github.ref == 'refs/heads/main' }}"]);
+	assert.deepEqual(savers, [
+		"deploy.yml:deploy=${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' }}",
+	]);
 });
 
 test('the native spend guard charges the builds a run will queue and fails closed on bad data', () => {
@@ -1283,15 +1526,25 @@ test('the native spend guard charges the builds a run will queue and fails close
 		'build',
 		'💸 Refuse an unrequested EAS build'
 	);
-	const month = new Date().toISOString().slice(0, 7);
+	const now = new Date();
+	const periodStart = Date.UTC(
+		now.getUTCFullYear(),
+		now.getUTCMonth() - (now.getUTCDate() < 22 ? 1 : 0),
+		22
+	);
 	const builds = (n) =>
-		JSON.stringify(Array.from({ length: n }, () => ({ createdAt: `${month}-02T00:00:00Z` })));
+		JSON.stringify(
+			Array.from({ length: n }, () => ({
+				createdAt: new Date(periodStart + 60 * 60 * 1000).toISOString(),
+			}))
+		);
 	const run = (env) =>
 		runShell(step.run, {
 			cwd: workspace,
 			env: {
 				PATH: `${binDir}:${process.env.PATH}`,
 				GITHUB_STEP_SUMMARY: path.join(workspace, 'summary.md'),
+				GITHUB_OUTPUT: path.join(workspace, 'output'),
 				PLATFORM: 'all',
 				CACHE_KEY: 'e2e-native-devclient-test',
 				NATIVE_PLAN: 'rebuild',
@@ -1320,6 +1573,23 @@ test('the native spend guard charges the builds a run will queue and fails close
 		assert.equal(evicted.status, 0, evicted.stdout + evicted.stderr);
 		assert.match(evicted.stdout, /::warning::.*evicted/);
 
+		const refused = run({ NATIVE_PLAN: 'cachehit', EAS_MOCK_BUILDS: builds(19) });
+		assert.equal(refused.status, 0, refused.stdout + refused.stderr);
+		assert.match(readFileSync(path.join(workspace, 'output'), 'utf8'), /^refused=true$/m);
+		assert.match(
+			refused.stdout,
+			/::warning::.*this EAS billing period \(since .*\).*skipped, not failed/
+		);
+
+		const beforePeriod = run({
+			EAS_MOCK_BUILDS: JSON.stringify(
+				Array.from({ length: 30 }, () => ({
+					createdAt: new Date(periodStart - 60 * 60 * 1000).toISOString(),
+				}))
+			),
+		});
+		assert.equal(beforePeriod.status, 0, beforePeriod.stdout + beforePeriod.stderr);
+
 		// Fail closed: eas unavailable, or a build without createdAt.
 		assert.notEqual(run({ EAS_MOCK_FAIL: '1' }).status, 0);
 		assert.notEqual(run({ EAS_MOCK_BUILDS: '[{"id":"x"}]' }).status, 0);
@@ -1336,6 +1606,56 @@ test('the native spend guard charges the builds a run will queue and fails close
 	}
 });
 
+test('native budget refusal skips build work and devices and passes the gate', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const build = workflow.jobs.build;
+	assert.equal(build.outputs.refused, '${{ steps.refuse.outputs.refused }}');
+	const refuse = build.steps.find(({ id }) => id === 'refuse');
+	assert.ok(refuse, 'missing refuse step');
+	for (const name of [
+		'🌱 Seed test store',
+		'🛠 Build dev client on EAS (native fingerprint changed)',
+		'🏷 Stamp the builds with their cache key',
+		'⬆️ Share builds with test jobs',
+	]) {
+		assert.match(findStep(workflow, 'build', name).if, /steps\.refuse\.outputs\.refused != 'true'/);
+	}
+	for (const platform of ['android', 'ios']) {
+		assert.match(workflow.jobs[platform].if, /needs\.build\.outputs\.refused != 'true'/);
+	}
+	// The queue step keeps its bare condition (the test jobs' refuse step mirrors it) and
+	// skips inside the script instead, so a refused build never holds dev-next.
+	const queue = findStep(workflow, 'build', QUEUE_STEP_NAME);
+	assert.equal(queue.env.REFUSED, '${{ steps.refuse.outputs.refused }}');
+	const skipped = spawnSync(process.execPath, [path.join(ROOT, 'scripts/wait-devnext-free.mjs')], {
+		env: {
+			...process.env,
+			REFUSED: 'true',
+			GH_TOKEN: '',
+			GITHUB_RUN_ID: '',
+			GITHUB_REPOSITORY: '',
+		},
+		encoding: 'utf8',
+	});
+	assert.equal(skipped.status, 0, skipped.stdout + skipped.stderr);
+	assert.match(skipped.stdout, /queue is skipped/);
+	const gate = workflow.jobs['native-gate'].steps[0];
+	assert.equal(gate.env.REFUSED, '${{ needs.build.outputs.refused }}');
+	assert.match(
+		gate.run,
+		/if \[ "\$BUILD_RESULT" = "success" \] && \[ "\$\{REFUSED:-\}" = "true" \]; then\n\s+echo "::notice::[^\n]+\n\s+exit 0\n\s*fi/
+	);
+	assert.match(gate.run, /Native dev-client resolution did not succeed/);
+	assert.match(refuse.run, /-22T00:00:00Z/);
+	assert.doesNotMatch(refuse.run, /%Y-%m-01T00:00:00Z/);
+	assert.match(
+		refuse.run,
+		/if \[ "\$NATIVE_PLAN" != "rebuild" \]; then\n[^]*?exit 0\n\s+fi\n\s+echo "::error::[^\n]+\n\s+exit 1/
+	);
+	assert.match(refuse.run, /Could not read[^\n]+\n\s+exit 1/);
+	assert.match(refuse.run, /Could not parse[^\n]+\n\s+exit 1/);
+});
+
 test('the native E2E aggregator exists under the name the merge gate will require', () => {
 	// The check name is the contract: when the five-consecutive-greens bar is
 	// met, adding it to MERGE_GATE_REQUIRED_CHECKS is a one-line change and
@@ -1348,18 +1668,36 @@ test('the native E2E aggregator exists under the name the merge gate will requir
 	const gateStep = workflow.jobs['merge-gate'].steps.find(
 		({ name }) => name === 'Evaluate merge policy'
 	);
-	const required = gateStep.env.MERGE_GATE_REQUIRED_CHECKS.split('|');
-	assert.deepEqual(required, ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests']);
+	// 'Gallery' is test.yml's aggregator over the read-only shoot and the label-driven
+	// baseline update (roadmap#355): SKIPPED when the gallery path filter did not fire.
+	// The 1.11.x lane has no gallery job, and pull_request_target evaluates main's copy
+	// of this file for a PR based on 1.11.x (#3281 timed out on it), so the list is
+	// chosen by the PR's base.
+	const requiredFor = (baseRef) =>
+		evaluateExpression(gateStep.env.MERGE_GATE_REQUIRED_CHECKS, {
+			'github.event.pull_request.base.ref': baseRef,
+		}).split('|');
+	assert.deepEqual(requiredFor('main'), ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests', 'Gallery']);
+	assert.deepEqual(requiredFor('1.11.x'), ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests']);
+	assert.equal(readWorkflow('test.yml').jobs.gallery.name, 'Gallery');
+});
+
+test('the web E2E test step stops before the job limit so the reports still upload', () => {
+	const job = readWorkflow('deploy.yml').jobs.e2e;
+	const step = job.steps.find(({ name }) => name?.startsWith('🧪 Run E2E tests'));
+	assert.equal(typeof step['timeout-minutes'], 'number');
+	assert.equal(job['timeout-minutes'], 60);
+	assert.ok(step['timeout-minutes'] < job['timeout-minutes']);
 });
 
 test('the shared-store queue stays removed', () => {
-	// The queue job (2026-08-12 → 2026-08-18) starved every merge gate once
-	// 2+ PRs were active: holders kept the store 25–45 min, the gate polls a
-	// bounded window, and agent evenings queued PRs for hours (#1265). Cross-
-	// run safety is the SPECS' job (run-private probe records, relative count
-	// assertions, CI retries). If contention flakes reappear, fix that spec's
-	// isolation — do not resurrect a cross-run mutex; these pins are the
-	// tripwire that makes reintroduction a deliberate, reviewed act.
+	// A queue JOB that held the whole store for a run stays removed: the
+	// 2026-08-12 → 2026-08-18 one starved every merge gate under a 40-, then
+	// 70-minute poll (#1265). Since 2026-11-13 the shards queue instead: dev-pro
+	// hit pm.max_children=32 58 times in one day whenever two or more web E2E
+	// runs overlapped, so each shard now queues per lane and shard index
+	// through `concurrency.queue: max` (pinned in the main-lane test below).
+	// These pins are the tripwire that keeps a whole-run queue job out.
 	const workflow = readWorkflow('deploy.yml');
 
 	assert.ok(!('queue' in workflow.jobs), 'deploy.yml grew a queue job again');
@@ -1375,18 +1713,65 @@ test('the shared-store queue stays removed', () => {
 	assert.ok(!('QUEUE_RESULT' in gate.steps[0].env), 'e2e-gate re-grew QUEUE_RESULT');
 	assert.doesNotMatch(gate.steps[0].run, /QUEUE_RESULT/);
 
-	// The merge gate must out-wait a full E2E phase: deploy (~6 min) plus a
-	// shard running to its 60-minute timeout. 140 × 30s ≈ 70 min. The old
-	// 40-minute default timed out on runs that were still legitimately in
-	// flight — that, multiplied by the queue, was the doom loop.
+	// Queued runs pipeline shard by shard instead of holding the store whole,
+	// so the merge gate must out-wait the runs ahead of it: 300 × 30s ≈ 150 min,
+	// sized for four queued runs. A gate must wait, not go red and need a rerun.
 	const mergeGate = readWorkflow('merge-gate.yml');
 	const gateStep = mergeGate.jobs['merge-gate'].steps.find(
 		({ name }) => name === 'Evaluate merge policy'
 	);
-	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '140');
+	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '300');
 });
 
-test('both lanes run four E2E shards', () => {
+test('main-lane web E2E shards queue across runs per dev store', () => {
+	const { concurrency } = readWorkflow('deploy.yml').jobs.e2e;
+	assert.equal(concurrency.queue, 'max');
+	assert.equal(concurrency['cancel-in-progress'], false);
+	assert.ok(
+		concurrency.group.includes(
+			"format('e2e-store-{0}-shard-{1}', needs.changes.outputs.lane, matrix.shardIndex)"
+		)
+	);
+	assert.match(concurrency.group, /github\.event_name == 'schedule'/);
+	assert.match(concurrency.group, /inputs\.quarantine_only/);
+	assert.match(concurrency.group, /needs\.changes\.outputs\.lane == ''/);
+});
+
+test('main web E2E tests its own production deploy, never the alias', () => {
+	const workflow = readWorkflow('deploy.yml');
+	assert.match(findStep(workflow, 'deploy', '🚀 Deploy production').run, /DEPLOY_JSON=\$\(eas deploy --export-dir \.\/build --production --json\)\n[\s\S]*deploy_url=\$\(echo "\$DEPLOY_JSON" \| jq -r '\.url \/\/ empty'/);
+	assert.match(findStep(workflow, 'deploy', '📝 Get deployment URL').run, /else\n\s+echo "url=\$\{\{ steps\.deploy-production\.outputs\.deploy_url \}\}"/);
+	assert.match(findStep(workflow, 'e2e-gate', 'Check shard results').run, /\[ -n "\$DEPLOY_URL" \] \|\| \{ echo "::error::Production deployed, but its own URL was not captured/);
+});
+
+test('a failed shared login fails e2e-setup and the shards refuse to start', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const setup = workflow.jobs['e2e-setup'];
+	assert.equal(setup.outputs.login, '${{ steps.setup.outcome }}');
+	const login = setup.steps.find(({ id }) => id === 'setup');
+	assert.equal(login['continue-on-error'], true);
+	assert.equal(login.if, "steps.key.outputs.present == 'true'");
+
+	const fail = findStep(workflow, 'e2e-setup', '🛑 Fail when the shared login failed');
+	assert.equal(fail.if, "steps.setup.outcome == 'failure'");
+	for (const name of ['🔐 Encrypt the shared auth state', '📤 Upload the encrypted auth state']) {
+		assert.ok(setup.steps.indexOf(fail) > setup.steps.indexOf(findStep(workflow, 'e2e-setup', name)));
+	}
+
+	const refuse = findStep(workflow, 'e2e', '🛑 Refuse without the shared login');
+	assert.equal(refuse.if, "needs.e2e-setup.outputs.login == 'failure'");
+	const shardSteps = workflow.jobs.e2e.steps;
+	assert.ok(
+		shardSteps.indexOf(refuse) < shardSteps.indexOf(findStep(workflow, 'e2e', '🏗 Setup repository'))
+	);
+	for (const step of [fail, refuse]) {
+		const result = runShell(step.run);
+		assert.equal(result.status, 1, result.stderr);
+		assert.match(result.stdout, /^::error/m);
+	}
+});
+
+test('both lanes run six E2E shards', () => {
 	// The two-shard main cap (2026-08-18) guarded dev-pro write capacity, but
 	// the feared load was the per-test catalogue re-sync removed in #1288.
 	// Shard count divides the same test list — it can never change coverage.
@@ -1394,8 +1779,55 @@ test('both lanes run four E2E shards', () => {
 
 	// The DEFAULT arm — what an ordinary PR runs. (A spec-only PR deliberately
 	// narrows to one shard; that arm is pinned in the scope-narrowing test.)
-	assert.match(matrix.shardIndex, /\|\| '\[1, 2, 3, 4\]'/);
-	assert.match(matrix.shardTotal, /\|\| '\[4\]'/);
+	assert.match(matrix.shardIndex, /\|\| '\[1, 2, 3, 4, 5, 6\]'/);
+	assert.match(matrix.shardTotal, /\|\| '\[6\]'/);
+});
+
+test('lane next runs web E2E on dev-next for the pro variant only, with no tailnet or mini store', () => {
+	// Owner ruling 2026-10-19: three dev stores and no fourth. The Mac mini
+	// store (ops/e2e-store, reached over Tailscale) is gone. Same day: lane next
+	// runs pro only on dev-next; free runs on dev-free once work reaches main.
+	const workflow = readWorkflow('deploy.yml');
+	const text = readFileSync(path.join(ROOT, '.github', 'workflows', 'deploy.yml'), 'utf8');
+	assert.doesNotMatch(
+		text,
+		/claudes-mac-mini|tailscale|TS_OAUTH|E2E_MINI_|E2E_ALLOW_LOCAL_NETWORK|wait-mini-store-reset/i
+	);
+	assert.equal(workflow.jobs['e2e-web-mini'], undefined);
+	assert.equal(existsSync(path.join(ROOT, 'scripts', 'wait-mini-store-reset.mjs')), false);
+	assert.equal(existsSync(path.join(ROOT, 'ops', 'e2e-store')), false);
+	assert.equal(existsSync(path.join(ROOT, 'apps', 'main', 'e2e', 'local-network.ts')), false);
+
+	const lane = 'needs.changes.outputs.lane';
+	let storeSteps = 0;
+	for (const jobName of ['e2e-setup', 'e2e']) {
+		for (const step of workflow.jobs[jobName].steps) {
+			assert.ok(!step.uses?.startsWith('tailscale/'), `${jobName}: ${step.name}`);
+			if (step.env?.E2E_STORE_URL_PRO === undefined) continue;
+			storeSteps += 1;
+			assert.equal(
+				step.env.E2E_STORE_URL_PRO,
+				`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-pro.wcpos.com' || '' }}`,
+				`${jobName}: ${step.name}`
+			);
+			assert.equal(
+				step.env.E2E_STORE_URL_FREE,
+				`\${{ ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`,
+				`${jobName}: ${step.name}`
+			);
+		}
+	}
+	// e2e-setup's login, the pre-flight probe, the test run and the post-failure probe.
+	assert.equal(storeSteps, 4);
+
+	// One credential set on every lane: the dev stores share it.
+	const setup = workflow.jobs['e2e-setup'].steps.find((step) => step.id === 'setup');
+	const run = workflow.jobs.e2e.steps.find((step) => step.id === 'e2e-tests');
+	for (const step of [setup, run]) {
+		assert.equal(step.env.E2E_CASHIER_PASS, '${{ secrets.E2E_CASHIER_PASS }}');
+	}
+	assert.equal(run.env.E2E_PRODUCT_WRITER_USER, '${{ secrets.E2E_PRODUCT_WRITER_USER }}');
+	assert.equal(run.env.E2E_PRODUCT_WRITER_PASS, '${{ secrets.E2E_PRODUCT_WRITER_PASS }}');
 });
 
 test('cold-start verifies the deployed main artifact and participates in the gate', () => {
@@ -1473,41 +1905,223 @@ test('cold-start verifies the deployed main artifact and participates in the gat
 	);
 });
 
-test('the E2E auth-state cache is shard- and lane-scoped', () => {
-	// Reused auth states are validated at boot in globalSetup (stale falls back
-	// to full auth), but a state restored for the WRONG shard or lane would
-	// validate fine and then run every spec against the wrong cashier slot or
-	// store. The key must therefore carry both dimensions.
-	const steps = readWorkflow('deploy.yml').jobs.e2e.steps;
-	const step = steps.find(
-		(candidate) => candidate.with && candidate.with.path === 'apps/main/e2e/auth-state.enc'
+test('one e2e-setup job logs in for the whole run and hands shards only ciphertext', () => {
+	// Six shards each logging in and syncing saturated dev-next (#2321), so the
+	// setup runs ONCE. Its state embeds cashier tokens and the repo is public.
+	const { jobs } = readWorkflow('deploy.yml');
+	const setup = jobs['e2e-setup'];
+	assert.ok(setup, 'deploy.yml lost the e2e-setup job');
+	assert.equal(setup.strategy, undefined, 'e2e-setup must run once, not as a matrix');
+	assert.ok([jobs.e2e.needs].flat().includes('e2e-setup'), 'e2e no longer waits for e2e-setup');
+	assert.ok(
+		jobs.e2e.if
+			.slice(4, -3)
+			.startsWith(
+				"!cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && "
+			)
 	);
+	const run = setup.steps.find(({ id }) => id === 'setup');
+	assert.equal(run['timeout-minutes'], 20);
+	assert.ok(run['timeout-minutes'] < 30);
+	assert.match(setup['timeout-minutes'], /\|\| 30 \}\}$/);
+	assert.match(run.env.E2E_SHARED_SETUP_SHARDS, /only_specs != ''.*'1' \|\| '6'/);
 
-	assert.ok(step, 'deploy.yml e2e job no longer caches the auth state');
-	assert.match(step.with.key, /shard\$\{\{ matrix\.shardIndex \}\}/);
-	assert.match(step.with.key, /'next' \|\| 'main'/);
-	assert.match(step.with['restore-keys'], /shard\$\{\{ matrix\.shardIndex \}\}/);
-	assert.match(step.with['restore-keys'], /'next' \|\| 'main'/);
-
-	// The snapshot embeds cashier access+refresh tokens and the repo is public:
-	// ONLY ciphertext may be cached. Pin that no step caches the plaintext dir
-	// and that both crypto steps are secret-gated.
+	// ONLY ciphertext may leave a runner: no cache or artifact step names the plaintext.
+	const steps = [...setup.steps, ...jobs.e2e.steps];
 	assert.ok(
 		!steps.some(
 			(candidate) => candidate.with && String(candidate.with.path ?? '').includes('.auth-state')
 		),
-		'a cache step points at the PLAINTEXT auth state — credentials would reach the Actions cache'
+		'a cache or artifact step points at the PLAINTEXT auth state — credentials would leave the runner'
 	);
-	const decrypt = steps.find((candidate) => /Decrypt cached auth state/.test(candidate.name ?? ''));
-	const encrypt = steps.find((candidate) =>
-		/Encrypt auth state for cache/.test(candidate.name ?? '')
-	);
-	assert.ok(decrypt && encrypt, 'auth-state crypto steps missing');
-	for (const crypto of [decrypt, encrypt]) {
-		assert.match(crypto.if ?? '', /E2E_AUTH_CACHE_KEY/);
-		assert.match(crypto.run, /openssl enc/);
-	}
+	const upload = setup.steps.find(({ uses }) => uses?.startsWith('actions/upload-artifact@'));
+	assert.equal(upload['continue-on-error'], true);
+	assert.equal(upload.with.path, 'apps/main/e2e/auth-state.enc');
+	const encrypt = setup.steps.find(({ name }) => /Encrypt the shared auth state/.test(name ?? ''));
+	assert.match(encrypt.run, /openssl enc -aes-256-cbc -pbkdf2 -k "\$E2E_AUTH_CACHE_KEY"/);
 	assert.match(encrypt.run, /rm -rf e2e\/\.auth-state/);
+	// The per-day cache is gone, not left as a second mechanism that disagrees.
+	assert.ok(!steps.some((candidate) => candidate.with?.key?.includes('e2e-auth')));
+
+	// Without the key (forks) nothing logs in here and the shards set up alone.
+	assert.equal(run.if, "steps.key.outputs.present == 'true'");
+	assert.equal(upload.if, "steps.setup.outcome == 'success'");
+	assert.equal(setup.outputs.state, "${{ steps.upload.outcome == 'success' && 'ready' || '' }}");
+	const shardSteps = jobs.e2e.steps.filter(({ name }) => /shared auth state/.test(name ?? ''));
+	assert.equal(shardSteps.length, 2);
+	for (const step of shardSteps) {
+		assert.match(step.if, /^needs\.e2e-setup\.outputs\.state == 'ready'/);
+	}
+});
+
+test('lane-next web setup waits in the dev-next queue before every store request', () => {
+	// Ruling B (2026-10-01), restored 2026-10-19 when lane next came back to
+	// dev-next: web and native E2E share one queue for the store.
+	const workflow = readWorkflow('deploy.yml');
+	const setup = workflow.jobs['e2e-setup'];
+	const queue = findStep(workflow, 'e2e-setup', QUEUE_STEP_NAME);
+	assert.equal(queue.id, 'queue');
+	assert.equal(queue.if, "needs.changes.outputs.lane == 'next'");
+	assert.equal(queue.run, 'node scripts/wait-devnext-free.mjs');
+	assert.equal(queue.env.GH_TOKEN, '${{ github.token }}');
+	assert.equal(typeof queue['timeout-minutes'], 'number');
+	const queueIndex = setup.steps.indexOf(queue);
+	assert.ok(queueIndex < setup.steps.findIndex(({ id }) => id === 'setup'));
+	for (const [index, step] of setup.steps.entries()) {
+		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(queueIndex < index);
+	}
+	assert.equal(setup.permissions.actions, 'read');
+	assert.equal(setup.outputs.queue, '${{ steps.queue.outcome }}');
+	assert.equal(
+		setup.outputs.queue_attempt,
+		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}"
+	);
+	assert.match(setup['timeout-minutes'], /lane == 'next' && 290 \|\| 30/);
+	assert.ok(queue['timeout-minutes'] < 290);
+});
+
+test('lane-next web shards refuse dev-next without queue admission as their second step', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const steps = workflow.jobs.e2e.steps;
+	const refuse = findStep(workflow, 'e2e', '🚦 Refuse dev-next without the queue');
+	assert.equal(steps.indexOf(refuse), 1);
+	assert.equal(
+		refuse.if,
+		"needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))"
+	);
+	assert.equal(refuse.env.QUEUE_ATTEMPT, '${{ needs.e2e-setup.outputs.queue_attempt }}');
+	assert.equal(refuse.env.RUN_ATTEMPT, '${{ github.run_attempt }}');
+	assert.match(refuse.run, /Re-run all jobs/);
+	assert.match(refuse.run, /exit 1/);
+	for (const [index, step] of steps.entries()) {
+		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(steps.indexOf(refuse) < index);
+	}
+	// The shards themselves never poll: one queue step per run holds the store.
+	for (const step of steps) assert.doesNotMatch(step.run ?? '', /wait-devnext-free/);
+});
+
+for (const [runAttempt, queueAttempt, expected] of [
+	[1, '1', false],
+	[2, '1', true],
+	[2, '2', false],
+]) {
+	test(`deploy.yml queue admission for attempt ${runAttempt} with admitted attempt ${queueAttempt}`, () => {
+		const refuse = findStep(
+			readWorkflow('deploy.yml'),
+			'e2e',
+			'🚦 Refuse dev-next without the queue'
+		);
+		const expression = refuse.if
+			.replace(/needs\.changes\.outputs\.lane/g, "'next'")
+			.replace(/needs\.e2e-setup\.outputs\.queue_attempt/g, JSON.stringify(queueAttempt))
+			.replace(/needs\.e2e-setup\.outputs\.queue/g, "'success'")
+			.replace(/format\('\{0\}', github\.run_attempt\)/g, JSON.stringify(String(runAttempt)));
+		assert.equal(evaluateGuard(expression, {}), expected);
+	});
+}
+
+test('the main lane is not queued for dev-next', () => {
+	const deploy = readWorkflow('deploy.yml');
+	const queue = findStep(deploy, 'e2e-setup', QUEUE_STEP_NAME);
+	assert.equal(queue.if, "needs.changes.outputs.lane == 'next'");
+	assert.doesNotMatch(queue.if, /\|\|/);
+	const native = readWorkflow('e2e-native.yml');
+	assert.equal(
+		findStep(native, 'build', QUEUE_STEP_NAME).if,
+		"env.E2E_STORE_URL == 'https://dev-next.wcpos.com'"
+	);
+	assert.match(
+		native.env.E2E_STORE_URL,
+		/github\.base_ref == 'main'.*github\.ref_name == 'main'.*inputs\.ref == 'main'\)\) && 'https:\/\/dev-pro\.wcpos\.com'/
+	);
+});
+
+test('e2e-native.yml queues immediately before seeding the store', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const build = workflow.jobs.build;
+	const queue = findStep(workflow, 'build', QUEUE_STEP_NAME);
+	assert.equal(queue.id, 'queue');
+	assert.equal(queue.run, 'node scripts/wait-devnext-free.mjs');
+	assert.equal(queue.env.GH_TOKEN, '${{ github.token }}');
+	assert.equal(typeof queue['timeout-minutes'], 'number');
+	assert.equal(
+		build.steps.indexOf(queue) + 1,
+		build.steps.indexOf(findStep(workflow, 'build', '🌱 Seed test store'))
+	);
+	assert.equal(build.permissions.actions, 'read');
+	assert.equal(
+		build.outputs.queue_attempt,
+		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}"
+	);
+});
+
+for (const jobName of ['android', 'ios']) {
+	test(`e2e-native.yml ${jobName} refuses stale queue admission before checkout`, () => {
+		const workflow = readWorkflow('e2e-native.yml');
+		const refuse = findStep(workflow, jobName, '🚦 Refuse dev-next without the queue');
+		assert.equal(workflow.jobs[jobName].steps.indexOf(refuse), 0);
+		assert.equal(
+			refuse.if,
+			`${findStep(workflow, 'build', QUEUE_STEP_NAME).if} && needs.build.outputs.queue_attempt != format('{0}', github.run_attempt)`
+		);
+		assert.equal(refuse.env.QUEUE_ATTEMPT, '${{ needs.build.outputs.queue_attempt }}');
+		assert.equal(refuse.env.RUN_ATTEMPT, '${{ github.run_attempt }}');
+		assert.match(refuse.run, /Re-run all jobs/);
+		assert.match(refuse.run, /exit 1/);
+	});
+}
+
+test('both workflows push only on main, so the queue scan may skip push runs', () => {
+	assert.deepEqual(readWorkflow('deploy.yml').on.push.branches, ['main']);
+	assert.deepEqual(readWorkflow('e2e-native.yml').on.push.branches, ['main']);
+});
+
+test('the dev-next queue never uses concurrency groups or serialises web shards', () => {
+	const deploy = readWorkflow('deploy.yml');
+	assert.match(deploy.jobs.e2e.concurrency.group, /matrix\.shardIndex/);
+	assert.match(deploy.jobs.e2e.concurrency.group, /github\.run_id/);
+	for (const workflow of [deploy, readWorkflow('e2e-native.yml')]) {
+		for (const { concurrency } of [workflow, ...Object.values(workflow.jobs)]) {
+			if (concurrency) assert.doesNotMatch(concurrency.group, /dev-next|devnext|next-store|queue/i);
+		}
+	}
+});
+
+test('no cancelling concurrency group spans the web and native workflows', () => {
+	for (const filename of QUEUE_WORKFLOWS) {
+		const workflow = readWorkflow(filename);
+		const prefix = filename === 'deploy.yml' ? 'deploy-' : 'native-';
+		for (const { concurrency } of [workflow, ...Object.values(workflow.jobs)]) {
+			if (!concurrency) continue;
+			const { group } = concurrency;
+			const literals = group.includes('${{')
+				? [...group.matchAll(/'((?:deploy|native)[-\w{}]*)'/g)].map((match) => match[1])
+				: [group];
+			assert.ok(literals.length > 0, `${filename}: no group-name literal in ${group}`);
+			assert.ok(
+				literals.every((literal) => literal.startsWith(prefix)),
+				`${filename}: ${group}`
+			);
+		}
+	}
+});
+
+test('both workflows share the queue step name and workflow list', () => {
+	assert.deepEqual(QUEUE_WORKFLOWS, ['deploy.yml', 'e2e-native.yml']);
+	assert.equal(
+		findStep(readWorkflow('deploy.yml'), 'e2e-setup', QUEUE_STEP_NAME).name,
+		QUEUE_STEP_NAME
+	);
+	assert.equal(
+		findStep(readWorkflow('e2e-native.yml'), 'build', QUEUE_STEP_NAME).name,
+		QUEUE_STEP_NAME
+	);
+});
+
+test('shards stagger their first store request by 30s in CI', () => {
+	// 10s apart (#2303) still saturated dev-next; the #2321 ruling is 30s.
+	const source = readFileSync(path.join(ROOT, 'apps/main/e2e/store-login-retry.ts'), 'utf8');
+	assert.match(source, /return ci \? normalizedShardIndex \* 30_000 : 0;/);
 });
 
 test('the shared CI planner controls both change jobs without workflow path filters', () => {
@@ -1534,7 +2148,7 @@ test('the shared CI planner controls both change jobs without workflow path filt
 	const matrix = workflow.jobs.e2e.strategy.matrix;
 	assert.match(matrix.shardIndex, /only_specs != '' && '\[1\]'/);
 	assert.match(matrix.shardTotal, /only_specs != '' && '\[1\]'/);
-	assert.deepEqual([...workflow.jobs.e2e.needs].sort(), ['changes', 'deploy']);
+	assert.deepEqual([...workflow.jobs.e2e.needs].sort(), ['changes', 'deploy', 'e2e-setup']);
 });
 
 test('every direct script path has an explicit planner rule', () => {
@@ -1598,7 +2212,7 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	// never fire (review on #1687): the workflow group is run-unique on main.
 	assert.match(workflow.concurrency.group, /deploy-main-run-\{0\}', github\.run_id/);
 
-	for (const jobName of ['e2e', 'e2e-report', 'cold-start']) {
+	for (const jobName of ['e2e-report', 'cold-start']) {
 		const concurrency = workflow.jobs[jobName].concurrency;
 		assert.ok(concurrency, `${jobName} is missing job-level concurrency`);
 		assert.match(concurrency.group, /github\.ref == 'refs\/heads\/main'/);
@@ -1610,6 +2224,89 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	assert.ok(deployConcurrency, 'deploy must serialise on main');
 	assert.match(deployConcurrency.group, /'deploy-main-deploy'/);
 	assert.equal(deployConcurrency['cancel-in-progress'], false);
+});
+
+test('lane-next E2E runs never share or cancel a workflow concurrency group', () => {
+	// Two dispatches from `next` once shared `deploy-refs/heads/next` with
+	// cancel-in-progress, so the newer one killed the run holding the dev-next
+	// queue (Codex P1 on #2761). The queue alone must order lane-next runs.
+	const { concurrency } = readWorkflow('deploy.yml');
+	const resolve = (overrides) => {
+		const context = {
+			'github.event_name': 'workflow_dispatch',
+			'github.ref': 'refs/heads/next',
+			'github.ref_name': 'next',
+			'github.run_id': 101,
+			'github.run_attempt': '1',
+			'github.event.pull_request.number': null,
+			'inputs.skip_e2e': false,
+			'inputs.quarantine_only': false,
+			'inputs.lane': 'next',
+			...overrides,
+		};
+		return {
+			group: evaluateExpression(concurrency.group, context),
+			cancel: evaluateExpression(concurrency['cancel-in-progress'], context),
+		};
+	};
+
+	for (const [caseName, overrides] of [
+		['lane next dispatch from next', {}],
+		['auto-lane dispatch from next', { 'inputs.lane': '' }],
+		['lane next dispatch from a branch', { 'github.ref': 'refs/heads/x', 'github.ref_name': 'x' }],
+		['quarantine-only dispatch', { 'inputs.quarantine_only': true, 'inputs.lane': '' }],
+		[
+			'schedule',
+			{
+				'github.event_name': 'schedule',
+				'github.ref': 'refs/heads/main',
+				'github.ref_name': 'main',
+				'inputs.skip_e2e': null,
+				'inputs.quarantine_only': null,
+				'inputs.lane': null,
+			},
+		],
+	]) {
+		const first = resolve(overrides);
+		const second = resolve({ ...overrides, 'github.run_id': 102 });
+		assert.equal(first.group, 'deploy-next-dispatch-101', caseName);
+		assert.notEqual(first.group, second.group, caseName);
+		assert.equal(first.cancel, false, caseName);
+		assert.equal(second.cancel, false, caseName);
+	}
+
+	// Every other run keeps the pre-mini groups.
+	assert.deepEqual(resolve({ 'inputs.skip_e2e': true }), {
+		group: 'deploy-refs/heads/next',
+		cancel: true,
+	});
+	assert.deepEqual(
+		resolve({
+			'inputs.lane': 'main',
+			'github.ref': 'refs/heads/main',
+			'github.ref_name': 'main',
+		}),
+		{ group: 'deploy-main-run-101', cancel: false }
+	);
+	assert.deepEqual(
+		resolve({
+			'github.event_name': 'pull_request',
+			'github.ref': 'refs/pull/7/merge',
+			'github.ref_name': '7/merge',
+			'github.event.pull_request.number': 7,
+			'inputs.lane': null,
+		}),
+		{ group: 'deploy-pr-7-current', cancel: true }
+	);
+	assert.deepEqual(
+		resolve({
+			'github.event_name': 'push',
+			'github.ref': 'refs/heads/main',
+			'github.ref_name': 'main',
+			'inputs.lane': null,
+		}),
+		{ group: 'deploy-main-run-101', cancel: false }
+	);
 });
 
 test('deploy emits the required E2E check whenever the merge gate runs', () => {
@@ -1754,15 +2451,19 @@ test('order-math coverage includes an unimported source module', () => {
 	}
 });
 
-test('deploy.yml names BOTH lane stores for the E2E job', () => {
+test('deploy.yml names both stores on lane main and only the pro store on lane next', () => {
 	// The free matrix is opt-in: playwright.config enables it only when a free
 	// store is named (it cannot ask which projects `--project=` selected —
 	// FullConfig.projects is the full configured list either way). That keeps a
 	// pro-only run, like nightly cold-start, from demanding a store it never
 	// opens — but it also means a lane that forgets E2E_STORE_URL_FREE loses its
 	// free coverage in silence. That is exactly how dev-free coverage vanished
-	// for weeks. This pin is where that risk is closed.
-	const runStep = readWorkflow('deploy.yml').jobs.e2e.steps.find(
+	// for weeks. This pin is where that risk is closed: lane main names both
+	// stores; lane next names pro only (owner ruling 2026-10-19 — both variants
+	// on six shards saturated dev-next, run 39248125270). The empty free store on
+	// lane next is the explicit switch, pinned here, not an accident.
+	const workflow = readWorkflow('deploy.yml');
+	const runStep = workflow.jobs.e2e.steps.find(
 		(step) => step.env && 'E2E_STORE_URL_PRO' in step.env
 	);
 
@@ -1777,20 +2478,237 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	);
 
 	// Each lane maps to its own allowed stores (owner ruling 2026-08-18): main
-	// may use dev-free + dev-pro and nothing else; next has only dev-next.
+	// may use dev-free + dev-pro and nothing else; next has only dev-next (owner
+	// ruling 2026-10-19: no fourth store) and runs only the pro matrix there.
 	// Pin the EXACT expressions, arm order included — hostname-presence checks
 	// would pass with the lanes swapped, silently gating each lane against the
-	// other's store (greptile catch on #1289).
-	const nextLane =
-		"(inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next')))";
+	// other's store (greptile catch on #1289). A third arm, EMPTY, is what a
+	// run outside both trunks gets: the config refuses an empty store in CI.
+	const lane = 'needs.changes.outputs.lane';
 	assert.equal(
 		runStep.env.E2E_STORE_URL_PRO,
-		'${{ ' + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
+		`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-pro.wcpos.com' || '' }}`
 	);
 	assert.equal(
 		runStep.env.E2E_STORE_URL_FREE,
-		'${{ ' + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}"
+		`\${{ ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`
 	);
+
+	// The shared-setup login and both store probes must name the SAME free store
+	// as the run step, or setup would bootstrap (and the probes would load) a
+	// store the shards never test — or skip one they do.
+	const setup = workflow.jobs['e2e-setup'].steps.find((step) => step.id === 'setup');
+	const probes = workflow.jobs.e2e.steps.filter((step) =>
+		/Probe store health/.test(step.name ?? '')
+	);
+	assert.equal(probes.length, 2);
+	for (const step of [setup, ...probes]) {
+		assert.equal(step.env.E2E_STORE_URL_FREE, runStep.env.E2E_STORE_URL_FREE, step.name);
+		assert.equal(step.env.E2E_STORE_URL_PRO, runStep.env.E2E_STORE_URL_PRO, step.name);
+	}
+});
+
+test('the E2E test step tells playwright.config its lane (next retries once)', () => {
+	const runStep = findStep(
+		readWorkflow('deploy.yml'),
+		'e2e',
+		'🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})'
+	);
+	assert.equal(runStep.env.E2E_LANE, '${{ needs.changes.outputs.lane }}');
+});
+
+test('a quarantine-only dispatch refuses off main or not preview', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const refuse = workflow.jobs.changes.steps[0];
+	assert.equal(refuse.name, '🛑 Refuse a quarantine-only dispatch off main or not preview');
+	for (const [caseName, values, expected] of [
+		[
+			'wrong target',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'main',
+				quarantine_only: true,
+				target: 'production',
+			},
+			true,
+		],
+		[
+			'wrong ref',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'next',
+				quarantine_only: true,
+				target: 'preview',
+			},
+			true,
+		],
+		[
+			'both wrong',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'next',
+				quarantine_only: true,
+				target: 'production',
+			},
+			true,
+		],
+		[
+			'allowed',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'main',
+				quarantine_only: true,
+				target: 'preview',
+			},
+			false,
+		],
+		[
+			'not quarantine',
+			{
+				event_name: 'workflow_dispatch',
+				ref_name: 'main',
+				quarantine_only: false,
+				target: 'production',
+			},
+			false,
+		],
+		[
+			'schedule',
+			{ event_name: 'schedule', ref_name: 'main', quarantine_only: null, target: null },
+			false,
+		],
+		['push', { event_name: 'push', ref_name: 'main', quarantine_only: null, target: null }, false],
+	]) {
+		assert.equal(evaluateGuard(refuse.if, values), expected, caseName);
+	}
+	assert.ok(refuse.run.includes('exit 1'));
+	assert.ok([workflow.jobs.deploy.needs].flat().includes('changes'));
+});
+
+test('the weekly quarantine-only run (#2284) tests main in one shard and reports to the issue', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const quarantine = "(github.event_name == 'schedule' || inputs.quarantine_only)";
+	assert.deepEqual(workflow.on.schedule, [{ cron: '17 22 * * 0' }]);
+	assert.equal(workflow.on.workflow_dispatch.inputs.quarantine_only.type, 'boolean');
+	const lane = findStep(workflow, 'changes', '🛤 Resolve E2E lane').env.INPUT_LANE;
+	assert.equal(lane, `\${{ ${quarantine} && 'main' || inputs.lane }}`);
+	const { env } = workflow.jobs.e2e.steps.find(({ name }) => name?.startsWith('🧪 Run E2E'));
+	assert.equal(env.E2E_QUARANTINE, `\${{ ${quarantine} && 'only' || '' }}`);
+	for (const axis of Object.values(workflow.jobs.e2e.strategy.matrix)) {
+		assert.ok(axis.includes(`|| ${quarantine} && '[1]' ||`), axis);
+	}
+	// Schedules run from the default branch and test it: no checkout pin (until #3192 they pinned
+	// `next`; #3218 deleted it until the GA re-cut), a preview deploy, and none of main's groups,
+	// for the schedule AND a quarantine-only dispatch, which now also runs on main (e2e's own queue guards: the main-lane queue test).
+	for (const job of ['deploy', 'e2e', 'quarantine-report']) {
+		const checkout = workflow.jobs[job].steps.find(({ uses }) => uses?.includes('checkout@'));
+		assert.equal(checkout.with?.ref, undefined, job);
+	}
+	for (const job of ['deploy', 'e2e-report']) {
+		assert.match(
+			workflow.jobs[job].concurrency.group,
+			/main' && github\.event_name != 'schedule' && !inputs\.quarantine_only &&/,
+			job
+		);
+	}
+	assert.match(findStep(workflow, 'deploy', '🚀 Deploy preview').if, /event_name == 'schedule'/);
+	// Only the commenting job may write issues.
+	const report = workflow.jobs['quarantine-report'];
+	assert.deepEqual(report.permissions, { contents: 'read', issues: 'write' });
+	assert.equal(report.if, `always() && needs.e2e-report.result == 'success' && ${quarantine}`);
+});
+
+test('the E2E lane is resolved once and a run outside both trunks gets no store', () => {
+	// The old inline expression defaulted every run it did not recognise to the
+	// main-lane stores. A PR whose base was a feature branch stacked on `next`
+	// (#1997 on `codex/tender-pane-surface`) therefore ran a 1.11 app against
+	// the 1.10 plugin on dev-free/dev-pro: 126 cases passed against the wrong
+	// store and the one 1.11-only server feature it hit was filed as a plugin
+	// bug (roadmap#277). The lane is now one output of the `changes` job, and
+	// an unresolved lane fails the e2e job before it spends a runner.
+	const workflow = readWorkflow('deploy.yml');
+	assert.equal(workflow.jobs.changes.outputs.lane, '${{ steps.lane.outputs.lane }}');
+	const resolve = findStep(workflow, 'changes', '🛤 Resolve E2E lane');
+	assert.ok(resolve, 'deploy.yml changes job no longer resolves the lane');
+
+	const laneFor = (env) => {
+		const out = mkdtempSync(path.join(tmpdir(), 'wcpos-lane-'));
+		const outputFile = path.join(out, 'output');
+		const result = runShell(resolve.run, {
+			env: {
+				INPUT_LANE: '',
+				EVENT_NAME: '',
+				BASE_REF: '',
+				REF_NAME: '',
+				...env,
+				GITHUB_OUTPUT: outputFile,
+			},
+		});
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		const written = readFileSync(outputFile, 'utf8').trim();
+		rmSync(out, { recursive: true, force: true });
+		return written.replace(/^lane=/, '');
+	};
+	// A PR is routed by its base…
+	assert.equal(
+		laneFor({ EVENT_NAME: 'pull_request', BASE_REF: 'main', REF_NAME: '12/merge' }),
+		'main'
+	);
+	assert.equal(
+		laneFor({ EVENT_NAME: 'pull_request', BASE_REF: 'next', REF_NAME: '12/merge' }),
+		'next'
+	);
+	// …a push or dispatch by its ref…
+	assert.equal(laneFor({ EVENT_NAME: 'push', REF_NAME: 'main' }), 'main');
+	assert.equal(laneFor({ EVENT_NAME: 'workflow_dispatch', REF_NAME: 'next' }), 'next');
+	// …an explicit dispatch input wins over both…
+	assert.equal(
+		laneFor({ EVENT_NAME: 'workflow_dispatch', REF_NAME: 'feat/anything', INPUT_LANE: 'next' }),
+		'next'
+	);
+	// …and anything else resolves to NOTHING: no guessing a trunk.
+	assert.equal(
+		laneFor({
+			EVENT_NAME: 'pull_request',
+			BASE_REF: 'codex/tender-pane-surface',
+			REF_NAME: '12/merge',
+		}),
+		''
+	);
+	assert.equal(laneFor({ EVENT_NAME: 'workflow_dispatch', REF_NAME: 'feat/anything' }), '');
+	assert.equal(
+		laneFor({ EVENT_NAME: 'workflow_dispatch', REF_NAME: 'feat/anything', INPUT_LANE: 'auto' }),
+		''
+	);
+
+	// The refusal is the e2e job's FIRST step, before checkout or setup.
+	const refuse = workflow.jobs.e2e.steps[0];
+	assert.equal(refuse.name, '🛤 Refuse an unresolved lane');
+	assert.equal(refuse.if, "needs.changes.outputs.lane == ''");
+	const refused = runShell(refuse.run, {
+		env: {
+			EVENT_NAME: 'pull_request',
+			BASE_REF: 'codex/tender-pane-surface',
+			REF_NAME: '12/merge',
+		},
+	});
+	assert.notEqual(refused.status, 0);
+	assert.match(refused.stdout, /::error::No E2E lane/);
+
+	// Nothing else in the workflow may pick a store from base_ref / ref_name:
+	// every store expression reads the one resolved lane.
+	const raw = readFileSync(path.join(ROOT, '.github', 'workflows', 'deploy.yml'), 'utf8');
+	const storeLines = raw.split('\n').filter((line) => /^\s*E2E_STORE_URL_(PRO|FREE):/.test(line));
+	assert.ok(
+		storeLines.length >= 6,
+		`expected the six routed store lines, found ${storeLines.length}`
+	);
+	for (const line of storeLines) {
+		if (line.includes('${{')) {
+			assert.match(line, /needs\.changes\.outputs\.lane/, line);
+			assert.doesNotMatch(line, /base_ref|ref_name|inputs\.lane/, line);
+		}
+	}
 });
 
 test('a failing Maestro flow fails the iOS job', () => {
@@ -2287,9 +3205,19 @@ test('relaunch recovery retries one launch and preserves each caller readiness t
 // store-url-input NOT being visible — so a healthy run never pays a second
 // uninstall+reinstall and cold-start deep link (PR #1760). Both shapes must
 // carry the identical wrapper; this finds it wherever it lives.
+// The leg's launch link sits behind a `notVisible` scheme-prompt gate (run
+// 38464219303): this returns that gated link command, or undefined.
+const SCHEME_PROMPT = 'Open in .*WCPOS.*';
+function gatedLaunchLink(commands = []) {
+	return commands.find(
+		(command) =>
+			command.runFlow?.when?.notVisible === SCHEME_PROMPT &&
+			String(command.runFlow.commands?.[0]?.openLink ?? '').startsWith('wcpos-dev://')
+	)?.runFlow.commands[0];
+}
+
 function coldStartRetry(flow, filename) {
-	const issuesLink = (command) =>
-		String(command.retry?.commands?.[0]?.openLink ?? '').startsWith('wcpos-dev://');
+	const issuesLink = (command) => Boolean(gatedLaunchLink(command.retry?.commands));
 	const topLevel = flow.find(issuesLink)?.retry;
 	if (topLevel) return topLevel;
 	const recovery = flow.find(
@@ -2333,8 +3261,28 @@ test('clean-start flows re-issue a dropped openLink, gated on the connect screen
 		const wrapper = coldStartRetry(readMaestroFlow(filename), filename);
 		assert.ok(wrapper, `${filename} lost its openLink retry wrapper`);
 		assert.equal(wrapper.maxRetries, 1, `${filename}: one re-issue of the link`);
+		// A leg starts by answering a still-pending prompt from the previous leg
+		// (logged) or, with none up, (re-)issuing the launch link — never both,
+		// or SpringBoard delivers two links and the dev launcher loads the app
+		// twice (run 38464219303: flow 02 crashed on the discarded instance).
+		const [pendingPrompt, gatedLink] = wrapper.commands;
+		assert.equal(
+			pendingPrompt.runFlow?.when?.visible,
+			SCHEME_PROMPT,
+			`${filename}: the leg must first check for the previous leg's scheme prompt`
+		);
 		assert.match(
-			String(wrapper.commands[0].openLink ?? ''),
+			String(pendingPrompt.runFlow.commands?.[0]?.evalScript ?? ''),
+			/WCPOS_E2E scheme prompt from the previous launch leg/,
+			`${filename}: answering a pending prompt instead of re-linking must be logged`
+		);
+		assert.equal(
+			gatedLink.runFlow?.when?.notVisible,
+			SCHEME_PROMPT,
+			`${filename}: the launch link must be gated on no pending scheme prompt`
+		);
+		assert.match(
+			String(gatedLaunchLink([gatedLink])?.openLink ?? ''),
 			/^wcpos-dev:\/\/expo-development-client\//,
 			`${filename}: the wrapper must START by (re-)issuing the launch link`
 		);
@@ -2498,7 +3446,8 @@ test('native device jobs never queue behind another run (owner ruling 2026-09-03
 		// Both classes of a platform run at once (owner rulings 2026-09-01/02).
 		assert.equal(job.strategy['max-parallel'], 2);
 		assert.equal(job.name, `${emoji} ${platform} (\${{ matrix.device.name }})`);
-		const [workflowCheckout, targetCheckout] = job.steps;
+		const [queueRefuse, workflowCheckout, targetCheckout] = job.steps;
+		assert.equal(queueRefuse.name, '🚦 Refuse dev-next without the queue');
 		assert.equal(workflowCheckout.name, '🏗 Setup repository (workflow revision)');
 		assert.equal(workflowCheckout.with.ref, '${{ github.sha }}');
 		assert.equal(targetCheckout.name, '🏗 Checkout revision under test');
@@ -2537,6 +3486,58 @@ test('the Android suite keeps adb reverse alive for the life of the run', () => 
 	// The emulator-runner action executes the script LINE BY LINE: one line, no
 	// continuation backslash.
 	assert.doesNotMatch(lines[refresher], /\\$/);
+});
+
+test('the Android suite samples emulator load and the app view tree for the life of the run', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const lines = (step.with?.script ?? step.run).split('\n');
+	const refresher = lines.findIndex(
+		(line) => line.startsWith('nohup sh -c') && line.includes('adb reverse tcp:8081 tcp:8081')
+	);
+	const sampler = lines.findIndex(
+		(line) => line.startsWith('nohup sh -c') && line.includes('android-sampler.log')
+	);
+	const suite = lines.findIndex((line) => line.startsWith('{ maestro test'));
+	assert.ok(sampler >= 0, 'missing the Android load sampler loop');
+	assert.ok(sampler > refresher, 'the sampler starts after the adb reverse refresher');
+	assert.ok(sampler < suite, 'the sampler must start before the suite');
+	// FINDINGS e2e-native-red-2026-11-11 §Harness: 5–12 s hierarchy dumps on the
+	// POS screen; the log tells tree size (app) from emulator CPU (runner).
+	assert.match(lines[sampler], /top -b -n 1 -m 8/);
+	assert.match(lines[sampler], /dumpsys activity top/);
+	assert.match(lines[sampler], /stop-screenrecord/);
+	// Maestro's driver holds the one UiAutomation connection; a second client
+	// is refused or disturbs it mid-flow.
+	assert.doesNotMatch(lines[sampler], /uiautomator/);
+	// ONE line, no continuation backslash (the action runs the script line by line).
+	assert.doesNotMatch(lines[sampler], /\\$/);
+});
+
+test('flow 10 switches to the cart tab with a retried tap on phones', () => {
+	const flow = readMaestroFlow('10-cart-add-burst.yml');
+	const tapped = flow.findIndex(
+		(step) => typeof step?.evalScript === 'string' && step.evalScript.includes('burstTappedAt')
+	);
+	assert.ok(tapped >= 0, 'missing the burstTappedAt evalScript');
+	// Runs 43074681482 and 43086880258 (iOS phone): all twenty adds landed, but
+	// a single `when visible` look SKIPPED the tab switch on the busy screen.
+	const { runFlow } = flow[tapped + 1];
+	assert.ok(runFlow, 'the step after burstTappedAt must be a runFlow');
+	assert.match(runFlow.when.true, /DEVICE_CLASS === 'phone'/);
+	assert.equal(runFlow.when.visible, undefined);
+	const { retry } = runFlow.commands[0];
+	assert.equal(retry.maxRetries, 2);
+	assert.deepEqual(retry.commands[0], { tapOn: { id: 'pos-tab-cart' } });
+	assert.equal(retry.commands[1].extendedWaitUntil?.visible?.id, 'cart-quantity-input');
+	// An undeclared DEVICE_CLASS (local run) keeps the layout look (Codex r4544040095).
+	const fallback = flow[tapped + 2].runFlow;
+	assert.match(fallback.when.true, /typeof DEVICE_CLASS === 'undefined'/);
+	assert.equal(fallback.when.visible.id, 'pos-tab-cart');
+	assert.deepEqual(fallback.commands, [{ tapOn: { id: 'pos-tab-cart' } }]);
 });
 
 test('the Android emulator resolves DNS through public resolvers and proves connectivity before the suite', () => {
@@ -2894,4 +3895,161 @@ test('pnpm never installs on its own before a script (verifyDepsBeforeRun lives 
 	// A dead .npmrc copy would read as the setting and hide a future regression.
 	const npmrc = path.join(ROOT, '.npmrc');
 	if (existsSync(npmrc)) assert.doesNotMatch(readFileSync(npmrc, 'utf8'), /verify-deps-before-run/);
+});
+
+test('sync packages publish from a verified trunk commit to GitHub Packages', () => {
+	const workflow = readWorkflow('publish-sync-packages.yml');
+	assert.deepEqual(Object.keys(workflow.on).sort(), ['push', 'workflow_dispatch']);
+	assert.deepEqual(workflow.on.push.tags, ['sync-packages-v*']);
+	assert.deepEqual(workflow.permissions, {});
+	assert.deepEqual(workflow.jobs.build.permissions, { contents: 'read' });
+	assert.deepEqual(workflow.jobs.publish.permissions, {
+		packages: 'write',
+		'id-token': 'write',
+		attestations: 'write',
+	});
+	assert.equal(workflow.jobs.publish.needs, 'build');
+	const checkout = findStep(workflow, 'build', '🏗 Setup repository');
+	assert.equal(checkout.with['persist-credentials'], false);
+
+	const buildSteps = workflow.jobs.build.steps;
+	const buildOrder = [
+		'🛡 Require a merged trunk commit',
+		'🏗 Setup monorepo',
+		'✏️ Stamp version',
+		'🧪 Verify packages',
+		'📦 Pack tarballs',
+		'📤 Upload tarballs',
+	].map((name) => findStep(workflow, 'build', name));
+	for (let i = 1; i < buildOrder.length; i++) {
+		assert.ok(buildSteps.indexOf(buildOrder[i - 1]) < buildSteps.indexOf(buildOrder[i]));
+	}
+	const publishSteps = workflow.jobs.publish.steps;
+	const publishOrder = [
+		'📥 Download tarballs',
+		'🔏 Attest build provenance',
+		'🚀 Publish @wcpos/sync-core',
+		'🚀 Publish @wcpos/sync-engine',
+	].map((name) => findStep(workflow, 'publish', name));
+	for (let i = 1; i < publishOrder.length; i++) {
+		assert.ok(publishSteps.indexOf(publishOrder[i - 1]) < publishSteps.indexOf(publishOrder[i]));
+	}
+	for (const step of publishSteps) {
+		assert.doesNotMatch(
+			step.uses ?? '',
+			/^(actions\/checkout@|\.\/\.github\/actions\/setup-monorepo$)/
+		);
+		if (step.name !== '📝 Summary') {
+			assert.doesNotMatch(step.run ?? '', /\bpnpm\s+(install|i|add|rebuild|exec|run|pack)\b/);
+			assert.doesNotMatch(step.run ?? '', /npm install|npm ci|npm rebuild/);
+		}
+	}
+
+	const setup = findStep(workflow, 'build', '🏗 Setup monorepo');
+	assert.ok(!Object.hasOwn(setup.with, 'expo-token'));
+	const verify = findStep(workflow, 'build', '🧪 Verify packages');
+	assert.equal(verify.run, 'node scripts/check-sync-packages-publish.mjs');
+	assert.equal(verify.env.RXDB_PREMIUM, '${{ secrets.RXDB_LICENSE_KEY }}');
+	for (const name of ['🚀 Publish @wcpos/sync-core', '🚀 Publish @wcpos/sync-engine']) {
+		const publish = findStep(workflow, 'publish', name);
+		assert.match(publish.run, /--registry https:\/\/npm\.pkg\.github\.com/);
+		assert.equal(publish.env.NODE_AUTH_TOKEN, '${{ secrets.GITHUB_TOKEN }}');
+	}
+	for (const step of Object.values(workflow.jobs).flatMap((job) => job.steps)) {
+		assert.doesNotMatch(JSON.stringify(step), /registry\.npmjs\.org|--provenance/);
+	}
+});
+
+test('native E2E dispatches accept only commits on main or next', () => {
+	const step = findStep(readWorkflow('e2e-native.yml'), 'build', '🔒 Validate trusted ref');
+	assert.equal(step.if, "github.event_name != 'pull_request'");
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-trusted-ref-'));
+	const clone = path.join(workspace, 'clone');
+	try {
+		const setup = runShell(
+			`set -e
+git init --bare --initial-branch=main origin.git
+git clone origin.git clone
+cd clone
+git -c user.name=t -c user.email=t@t commit --allow-empty -m main
+git checkout -b next
+git -c user.name=t -c user.email=t@t commit --allow-empty -m next
+git checkout main
+git -c user.name=t -c user.email=t@t commit --allow-empty -m main-only
+git checkout -b stray main
+git -c user.name=t -c user.email=t@t commit --allow-empty -m stray
+git push origin main next`,
+			{ cwd: workspace }
+		);
+		assert.equal(setup.status, 0, setup.stdout + setup.stderr);
+
+		for (const branch of ['main', 'next', 'stray']) {
+			const checkout = runShell(`git checkout ${branch}`, { cwd: clone });
+			assert.equal(checkout.status, 0, checkout.stdout + checkout.stderr);
+			const result = runShell(step.run, { cwd: clone });
+			if (branch === 'stray') {
+				assert.notEqual(result.status, 0, result.stdout + result.stderr);
+				assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
+			} else {
+				assert.equal(result.status, 0, `${branch}: ${result.stdout}${result.stderr}`);
+			}
+		}
+
+		const spoof = runShell('git tag origin/next stray && git checkout stray', { cwd: clone });
+		assert.equal(spoof.status, 0, spoof.stdout + spoof.stderr);
+		const result = runShell(step.run, { cwd: clone });
+		assert.notEqual(result.status, 0, result.stdout + result.stderr);
+		assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('native E2E trusted-ref guard still works while next does not exist', () => {
+	const step = findStep(readWorkflow('e2e-native.yml'), 'build', '🔒 Validate trusted ref');
+	// Actions runs `run:` under `bash -e`; without it a failed fetch would be ignored.
+	const script = `set -e\n${step.run}`;
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-trusted-ref-no-next-'));
+	const clone = path.join(workspace, 'clone');
+	try {
+		const setup = runShell(
+			`set -e
+git init --bare --initial-branch=main origin.git
+git clone origin.git clone
+cd clone
+git -c user.name=t -c user.email=t@t commit --allow-empty -m main
+git checkout -b stray main
+git -c user.name=t -c user.email=t@t commit --allow-empty -m stray
+git checkout main
+git push origin main`,
+			{ cwd: workspace }
+		);
+		assert.equal(setup.status, 0, setup.stdout + setup.stderr);
+
+		for (const branch of ['main', 'stray']) {
+			const checkout = runShell(`git checkout ${branch}`, { cwd: clone });
+			assert.equal(checkout.status, 0, checkout.stdout + checkout.stderr);
+			const result = runShell(script, { cwd: clone });
+			if (branch === 'stray') {
+				assert.notEqual(result.status, 0, result.stdout + result.stderr);
+				assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
+			} else {
+				assert.equal(result.status, 0, `${branch}: ${result.stdout}${result.stderr}`);
+			}
+		}
+
+		const spoof = runShell('git tag origin/next stray && git checkout stray', { cwd: clone });
+		assert.equal(spoof.status, 0, spoof.stdout + spoof.stderr);
+		const result = runShell(script, { cwd: clone });
+		assert.notEqual(result.status, 0, result.stdout + result.stderr);
+		assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('the development profile builds Android on the large worker', () => {
+	// The default worker's Gradle daemon dies on the 2.0 tree (#3206).
+	const eas = JSON.parse(readFileSync(path.join(ROOT, 'apps/main/eas.json'), 'utf8'));
+	assert.equal(eas.build.development.android.resourceClass, 'large');
 });

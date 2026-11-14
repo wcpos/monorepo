@@ -1,8 +1,13 @@
 'use dom';
 
-import JsonView, { JsonViewProps } from '@uiw/react-json-view';
+import * as React from 'react';
 
+import { retryableLazy } from '../lib/retryable-lazy';
+
+import type { JsonViewProps } from '@uiw/react-json-view';
 import type { DOMProps } from 'expo/dom';
+
+const JsonView = retryableLazy(() => import('@uiw/react-json-view'));
 
 interface TreeDOMProps<T extends object> extends JsonViewProps<T> {
 	dom?: DOMProps;
@@ -16,5 +21,9 @@ export default function TreeDOM<T extends object>({
 	height: _height,
 	...props
 }: TreeDOMProps<T>) {
-	return <JsonView displayDataTypes={false} collapsed={1} {...(props as JsonViewProps<object>)} />;
+	return (
+		<React.Suspense fallback={null}>
+			<JsonView displayDataTypes={false} collapsed={1} {...(props as JsonViewProps<object>)} />
+		</React.Suspense>
+	);
 }

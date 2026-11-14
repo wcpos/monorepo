@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { useObservableCallback, useObservableState } from 'observable-hooks';
 
-import type { ScannerProfileDocument } from '@wcpos/database';
+import { observeScannerProfiles, type ScannerProfile } from '@wcpos/query/store-local';
 import {
 	type BurstAssembler,
 	createBurstAssembler,
@@ -16,7 +16,6 @@ import { useDocField } from '@wcpos/query';
 import { showTooShortFeedback } from './too-short-feedback';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useCollection } from '../use-collection';
 
 export interface WedgeKeyPayload {
 	key: string;
@@ -48,7 +47,7 @@ export const wedgeKeyEventsModule: WedgeKeyEventsNativeModule | null =
 		? requireOptionalNativeModule<WedgeKeyEventsNativeModule>('WedgeKeyEvents')
 		: null;
 
-const NO_PROFILES: ScannerProfileDocument[] = [];
+const NO_PROFILES: ScannerProfile[] = [];
 let capturedDeviceConsumers = 0;
 
 /**
@@ -58,19 +57,15 @@ let capturedDeviceConsumers = 0;
  */
 export const useAttributedWedge = (enabled = true) => {
 	const t = useT();
-	const { store } = useAppState();
-	const { collection } = useCollection('scanner_profiles');
+	const { store, storeDB } = useAppState();
 	// Only keyboard-mode profiles belong to this source. An unfiltered find()
 	// also returned the serial/BLE profiles, whose vendorId/productId are
 	// undefined — they registered as device 0:0 with the native interceptor,
 	// which is the identity Android reports for the on-screen keyboard.
 	const profiles = useObservableState(
-		React.useMemo(
-			() => collection.find({ selector: { connectionType: 'keyboard' } }).$,
-			[collection]
-		),
+		React.useMemo(() => observeScannerProfiles(storeDB, ['keyboard']), [storeDB]),
 		NO_PROFILES
-	) as ScannerProfileDocument[];
+	);
 
 	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
 	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;

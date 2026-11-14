@@ -5,6 +5,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useSiteInfo } from './use-site-info';
 
+jest.mock('@wcpos/query/user-db', () => jest.requireActual('../../../query/src/user-db/sites'));
+
 const mockGet = jest.fn();
 const mockIncrementalPatch = jest.fn();
 const mockError = jest.fn();
@@ -14,6 +16,7 @@ const mockSite = {
 	wp_api_url: 'https://store.example.test/wp-json/',
 	url: 'https://store.example.test',
 	incrementalPatch: mockIncrementalPatch,
+	getLatest: () => ({ deleted: false }),
 };
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
@@ -63,12 +66,43 @@ describe('useSiteInfo', () => {
 		mockIncrementalPatch.mockResolvedValue(undefined);
 	});
 
+	it('cache-busts the site-info GET, so a cached 1.x index answer cannot be written back (AUTH331)', async () => {
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+
+		const params = mockGet.mock.calls[0]?.[1]?.params;
+		expect(params).toMatchObject({ wcpos: 1 });
+		expect(typeof params._wcpos_nocache).toBe('string');
+		expect(params._wcpos_nocache).not.toBe('');
+	});
+
 	it('preserves the saved license when the site-info response omits it', async () => {
 		renderHook(() => useSiteInfo({ site: mockSite as never }));
 
 		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
 
 		expect(mockIncrementalPatch.mock.calls[0]?.[0]).not.toHaveProperty('license');
+	});
+
+	it('patches search_meta_keys when the index carries them, and leaves them alone when it does not', async () => {
+		mockGet.mockResolvedValueOnce({
+			status: 200,
+			data: {
+				wcpos_version: '2.0.0',
+				search_meta_keys: { customers: ['loyalty_number'], orders: [] },
+			},
+		});
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
+		expect(mockIncrementalPatch.mock.calls[0]?.[0]).toMatchObject({
+			search_meta_keys: { customers: ['loyalty_number'], orders: [] },
+		});
+
+		mockIncrementalPatch.mockClear();
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
+		expect(mockIncrementalPatch.mock.calls[0]?.[0]).not.toHaveProperty('search_meta_keys');
 	});
 
 	it('does not report an error when the request is blocked by the asleep pre-flight check', async () => {
@@ -88,14 +122,20 @@ describe('useSiteInfo', () => {
 	it('still reports a genuine fetch failure', async () => {
 		// The silence above must be specific to the sleep block: a real failure
 		// still has to reach the log, or this guard hides outages.
-		mockGet.mockRejectedValue(new Error('Network Error'));
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 500'), {
+				isAxiosError: true,
+				response: { status: 500 },
+			})
+		);
 
 		const { result } = renderHook(() => useSiteInfo({ site: mockSite as never }));
 
-		await waitFor(() => expect(result.current.error).toBe('Network Error'));
+		await waitFor(() => expect(result.current.error).toBe('Request failed with status code 500'));
+		// The code of what the store did (SYNC131), not SYNC999's "re-enter and save".
 		expect(mockError).toHaveBeenCalledWith(
 			'Failed to fetch site info',
-			expect.objectContaining({ code: 'SYNC999' })
+			expect.objectContaining({ code: 'SYNC131' })
 		);
 	});
 
@@ -141,4 +181,15 @@ describe('useSiteInfo', () => {
 		});
 		expect(mockGet).toHaveBeenCalledTimes(callsAfterRetry);
 	});
+});
+
+it('reports a site removed while its info request was in flight', async () => {
+	mockGet.mockResolvedValue({ status: 200, data: { wcpos_version: 'new' } });
+	const latest = jest.spyOn(mockSite, 'getLatest').mockReturnValue({ deleted: true });
+	mockError.mockClear();
+	const { result } = renderHook(() => useSiteInfo({ site: mockSite as never }));
+	await waitFor(() => expect(result.current.isLoading).toBe(false));
+	expect(result.current.error).toBe('Cannot update a removed site');
+	expect(mockError).toHaveBeenCalled();
+	latest.mockRestore();
 });

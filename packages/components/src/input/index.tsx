@@ -1,12 +1,22 @@
 import * as React from 'react';
-import { TextInput as RNTextInput, TextInputProps as RNTextInputProps, View } from 'react-native';
+import {
+	Pressable,
+	TextInput as RNTextInput,
+	type TextInputProps as RNTextInputProps,
+	type TextInputInstance,
+	View,
+} from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 
+import { FieldBox } from '../field-box';
+import { Icon, type IconName } from '../icon';
 import { IconButton } from '../icon-button';
+import { MAX_FONT_SCALE } from '../lib/scale';
 import { cn } from '../lib/utils';
+import { TextClassContext } from '../text/context';
 
 interface InputContextValue {
 	isFocused: boolean;
@@ -24,36 +34,34 @@ function useInputContext() {
 }
 
 interface RootProps {
+	figure?: boolean;
 	children: React.ReactNode;
 	className?: string;
 	disabled?: boolean;
 }
 
-function Root({ children, className, disabled = false }: RootProps) {
+function Root({ children, className, disabled = false, figure }: RootProps) {
 	const [isFocused, setIsFocused] = React.useState(false);
 
 	return (
 		<InputContext.Provider value={{ isFocused, setIsFocused }}>
-			<View
-				className={cn(
-					'border-border bg-input web:ring-offset-background h-10 w-full flex-row items-center rounded-md border',
-					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
-					disabled && 'web:cursor-not-allowed opacity-50',
-					className
-				)}
+			<FieldBox
+				figure={figure}
+				state={disabled ? 'disabled' : isFocused ? 'open' : 'rest'}
+				className={cn('w-full', className)}
 			>
 				{children}
-			</View>
+			</FieldBox>
 		</InputContext.Provider>
 	);
 }
 
 function Left({ children, className }: { children: React.ReactNode; className?: string }) {
-	return <View className={cn('py-2 pl-2', className)}>{children}</View>;
+	return <View className={cn('justify-center pl-3', className)}>{children}</View>;
 }
 
 interface InputFieldProps extends RNTextInputProps {
-	ref?: React.Ref<RNTextInput>;
+	ref?: React.Ref<TextInputInstance>;
 	type?:
 		| 'text'
 		| 'numeric'
@@ -75,10 +83,15 @@ function InputField({
 	placeholderTextColor,
 	type = 'text',
 	editable = true,
+	// Field type is capped at 1.3x for the same reason `Text` is: a larger OS
+	// text size must not break a form row. A caller's prop still wins.
+	maxFontSizeMultiplier = MAX_FONT_SCALE,
 	...props
 }: InputFieldProps) {
 	const { setIsFocused } = useInputContext();
-	const inputRef = React.useRef<RNTextInput>(null);
+	// The box's text tone: a TextInput's colour does not inherit from the View around it.
+	const fieldText = React.useContext(TextClassContext);
+	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	let keyboardType: RNTextInputProps['keyboardType'] = 'default';
@@ -151,13 +164,22 @@ function InputField({
 			ref={mergedRef}
 			editable={editable}
 			className={cn(
-				'text-foreground placeholder:text-muted-foreground web:focus-visible:outline-none w-full flex-1 bg-transparent px-3 py-2 text-base leading-none outline-none',
-				!editable && 'web:cursor-not-allowed opacity-50',
+				fieldText,
+				// iOS places a single line's glyphs inside the line box by the font's own metrics: a
+				// 1em box draws them high, a taller one puts the spare leading above them. 1.2em is
+				// SF's ascent + descent, so the glyphs sit centred. Browsers centre input text
+				// themselves, so web keeps the tight box. The web class stays bare (`leading-none`, not
+				// `web:`): a caller's `text-amt` carries its own line-height, and only the bare utility
+				// outranks it in the cascade (the gallery's figure cell moved under the variant).
+				'native:leading-[1.2] w-full flex-1 bg-transparent px-3 py-2 leading-none outline-none',
+				// The root carries the disabled opacity; a second one here would compound to 20 %.
+				!editable && 'web:cursor-not-allowed',
 				className
 			)}
 			// placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}
 			keyboardType={keyboardType}
 			inputMode={inputMode}
+			maxFontSizeMultiplier={maxFontSizeMultiplier}
 			{...props}
 			onFocus={(e) => {
 				setIsFocused(true);
@@ -172,7 +194,7 @@ function InputField({
 }
 
 function Right({ children, className }: { children: React.ReactNode; className?: string }) {
-	return <View className={cn('py-2 pr-2', className)}>{children}</View>;
+	return <View className={cn('justify-center pr-1', className)}>{children}</View>;
 }
 
 interface InputProps
@@ -180,6 +202,8 @@ interface InputProps
 	clearable?: boolean;
 	/** testID for the clear (×) button — E2E flows clear a filled field through it. */
 	clearTestID?: string;
+	/** A glyph at the field's leading edge that says what the field is for (a search field's lens). */
+	leftIcon?: IconName;
 	defaultValue?: string;
 	inputClassName?: string;
 }
@@ -192,6 +216,7 @@ function Input({
 	type,
 	clearable = false,
 	clearTestID,
+	leftIcon,
 	value: valueProp,
 	defaultValue,
 	onChangeText,
@@ -204,7 +229,7 @@ function Input({
 		onChange: onChangeText,
 	});
 	const isDisabled = disabled || !editable;
-	const inputRef = React.useRef<RNTextInput>(null);
+	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	/**
@@ -226,19 +251,32 @@ function Input({
 
 	return (
 		<Root className={className} disabled={isDisabled}>
+			{leftIcon && (
+				// The glyph sits inside the field's border, so a tap on it is a tap on the field:
+				// it focuses the input rather than being a dead strip (Codex review on #2396).
+				<Pressable
+					className="justify-center pl-3"
+					accessible={false}
+					tabIndex={-1}
+					onPress={() => inputRef.current?.focus()}
+					testID={props.testID ? `${props.testID}-icon` : undefined}
+				>
+					<Icon name={leftIcon} className="text-muted-foreground" />
+				</Pressable>
+			)}
 			<InputField
 				ref={mergedRef}
 				type={type}
 				editable={!isDisabled}
 				value={value}
 				onChangeText={setValue}
-				className={inputClassName}
+				className={cn(leftIcon && 'pl-2', inputClassName)}
 				{...props}
 			/>
 			{clearable && value !== undefined && value.length > 0 && (
 				<Right>
 					<IconButton
-						name="xmark"
+						name="close"
 						size="sm"
 						onPress={handleClear}
 						accessibilityLabel="Clear text"

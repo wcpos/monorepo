@@ -1,5 +1,6 @@
 import { assertBulkSuccess, type RemoteId, wooIdOf } from '@wcpos/sync-core';
 
+import { findAllUncached } from '../collections/find-all-uncached';
 import { forEachYielding } from '../event-loop-yield';
 import { chunk } from '../scheduler';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
@@ -274,9 +275,9 @@ export async function primeExistenceManifest(
 	}
 
 	const [manifestDocs, productDocs, variationDocs] = await Promise.all([
-		db.existenceManifest.find().exec(),
-		db.products.find().exec(),
-		db.variations.find().exec(),
+		findAllUncached(db.existenceManifest),
+		findAllUncached(db.products),
+		findAllUncached(db.variations),
 	]);
 	// One chunked classification pass replaces the two full filter/map passes this used to make
 	// over productDocs: a product is either an unpublished removal CANDIDATE or a candidate id —
@@ -336,8 +337,8 @@ export async function primeExistenceManifest(
 	});
 	const strandedManifestIds = (
 		await revalidateStranded(strandedWooIds, [
-			async () => residentWooIdSet(await db.products.find().exec(), (doc) => doc.remoteId),
-			async () => residentWooIdSet(await db.variations.find().exec(), (doc) => doc.remoteId),
+			async () => residentWooIdSet(await findAllUncached(db.products), (doc) => doc.remoteId),
+			async () => residentWooIdSet(await findAllUncached(db.variations), (doc) => doc.remoteId),
 		])
 	).map(String);
 	if (strandedManifestIds.length > 0) {
@@ -466,8 +467,8 @@ export async function primeExistenceManifestCustomers(
 	}
 
 	const [manifestDocs, customerDocs] = await Promise.all([
-		db.existenceManifestCustomers.find().exec(),
-		db.customers.find().exec(),
+		findAllUncached(db.existenceManifestCustomers),
+		findAllUncached(db.customers),
 	]);
 	const customerWooIds: number[] = [];
 	await forEachYielding(customerDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
@@ -484,7 +485,7 @@ export async function primeExistenceManifestCustomers(
 	});
 	const strandedManifestIds = (
 		await revalidateStranded(strandedWooIds, [
-			async () => residentWooIdSet(await db.customers.find().exec(), (doc) => doc.remoteId),
+			async () => residentWooIdSet(await findAllUncached(db.customers), (doc) => doc.remoteId),
 		])
 	).map(String);
 	if (strandedManifestIds.length > 0) {
@@ -547,8 +548,8 @@ export async function primeExistenceManifestOrders(
 	}
 
 	const [manifestDocs, orderDocs] = await Promise.all([
-		db.existenceManifestOrders.find().exec(),
-		db.orders.find().exec(),
+		findAllUncached(db.existenceManifestOrders),
+		findAllUncached(db.orders),
 	]);
 	const orderWooIds: number[] = [];
 	await forEachYielding(orderDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
@@ -568,7 +569,7 @@ export async function primeExistenceManifestOrders(
 		await revalidateStranded(strandedWooIds, [
 			async () =>
 				residentWooIdSet(
-					await db.orders.find().exec(),
+					await findAllUncached(db.orders),
 					(doc) => (doc.toJSON() as { remoteId?: RemoteId | null }).remoteId
 				),
 		])

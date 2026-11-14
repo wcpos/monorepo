@@ -45,19 +45,15 @@ authenticatedTest.describe('Drawer Navigation', () => {
 			// overflows the viewport, so the drawer must scroll for the bottom group
 			// (health/settings/support) to be clickable at all.
 			await page.setViewportSize({ width: 700, height: 360 });
-			await page.getByTestId('drawer-open-button').click();
+			// 700×360 is a phone window (one boundary at 768×480), where the products pane and the
+			// cart are BOTH mounted with a register bar each (the hidden one keeps barcode scanning
+			// alive, #1438), so two drawer buttons exist and strict mode sees both: click the one
+			// on screen, as checkout-tender.spec.ts does.
+			await page.getByTestId('pos-drawer-open-button').filter({ visible: true }).click();
 			await page.getByTestId('drawer-item-health').click();
 			await expect(page.getByTestId('health-nav-logs')).toBeVisible({ timeout: 30_000 });
 		}
 	);
-
-	authenticatedTest('should navigate to Logs inside Store health', async ({ posPage: page }) => {
-		await navigateToPage(page, 'health');
-		await page.getByTestId('health-nav-logs').click();
-		await expect(page.getByTestId('screen-logs').getByTestId('search-logs')).toBeVisible({
-			timeout: 30_000,
-		});
-	});
 
 	authenticatedTest('should navigate to Support page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'support');

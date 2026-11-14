@@ -19,23 +19,32 @@ jest.mock('observable-hooks', () => ({
 	...jest.requireActual('observable-hooks'),
 	useObservableSuspense: (resource: { value?: unknown }) => resource.value ?? null,
 }));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({
-		children,
+jest.mock('@wcpos/components/chip', () => ({
+	Chip: ({
+		label,
+		on,
 		onPress,
-		onRemove,
+		onClear,
+		testID,
+		clearTestID,
 	}: {
-		children: React.ReactNode;
+		label: string;
+		on?: boolean;
 		onPress?: () => void;
-		onRemove?: () => void;
+		onClear?: () => void;
+		testID?: string;
+		clearTestID?: string;
 	}) => (
-		<div>
-			<button data-testid="activate-filter" onClick={onPress} />
-			{children}
-			<button data-testid="clear-filter" onClick={onRemove} />
+		<div data-testid="filter-pill" data-on={!!on}>
+			<button data-testid="activate-filter" onClick={onPress}>
+				{label}
+			</button>
+			{onClear && (
+				<button data-testid="clear-filter" data-clear-id={clearTestID} onClick={onClear} />
+			)}
+			<span data-testid="chip-id">{testID}</span>
 		</div>
 	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/combobox', () => ({
 	Combobox: ({
@@ -112,12 +121,11 @@ jest.mock('../../../hooks/use-stock-status-label', () => ({
 		],
 	}),
 }));
-jest.mock('../../../hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordsByWooId: () => ({ value: [] }),
 }));
-jest.mock('../brand-select', () => ({ BrandSearch: () => null }));
+jest.mock('../collection-search', () => ({ CollectionSearch: () => null }));
 jest.mock('../category-select', () => ({ CategoryTreeLoader: () => null }));
-jest.mock('../tag-select', () => ({ TagSearch: () => null }));
 
 function ProductFilterProbe() {
 	const filters = useQueryState<'products', FiltersOf<'products'>>((state) => state.filters);
@@ -172,9 +180,14 @@ describe('product filter pills', () => {
 
 	it('sets and clears the stock-status filter through query-state actions', () => {
 		renderPill(storePill(StockStatusPill));
+		expect(screen.getByTestId('filter-pill').getAttribute('data-on')).toBe('false');
 
 		fireEvent.click(screen.getByTestId('choose-stock-status'));
 		expect(filters()).toMatchObject({ stock_status: 'outofstock' });
+		expect(screen.getByTestId('filter-pill').getAttribute('data-on')).toBe('true');
+		expect(screen.getByTestId('clear-filter').getAttribute('data-clear-id')).toBe(
+			'filter-pill-remove-stock_status'
+		);
 		fireEvent.click(screen.getByTestId('clear-filter'));
 		expect(filters()).not.toHaveProperty('stock_status');
 	});
@@ -189,7 +202,7 @@ describe('product filter pills', () => {
 	});
 
 	it('sets and clears the tag id-array filter through query-state actions', () => {
-		renderPill(storePill(TagPill, { resource: { value: null }, selectedID: undefined }));
+		renderPill(storePill(TagPill, { resource: { value: null }, selectedID: 42 }), { tags: [42] });
 
 		fireEvent.click(screen.getByTestId('choose-combobox'));
 		expect(filters().tags).toEqual([42]);
@@ -198,7 +211,9 @@ describe('product filter pills', () => {
 	});
 
 	it('sets and clears the brand id-array filter through query-state actions', () => {
-		renderPill(storePill(BrandsPill, { resource: { value: null }, selectedID: undefined }));
+		renderPill(storePill(BrandsPill, { resource: { value: null }, selectedID: 42 }), {
+			brands: [42],
+		});
 
 		fireEvent.click(screen.getByTestId('choose-combobox'));
 		expect(filters().brands).toEqual([42]);

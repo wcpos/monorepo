@@ -1,15 +1,28 @@
 import * as React from 'react';
-import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'react-native';
+import { Platform, TextInputKeyPressEvent } from 'react-native';
 
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useLayoutObservable, useObservableCallback } from 'observable-hooks';
 import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
-import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/scanner';
+import {
+	createWedgeDetector,
+	dedupeScans,
+	SCAN_DEDUP_WINDOW_MS,
+	type ScanEvent,
+	type WedgeDetector,
+} from '@wcpos/scanner';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 import { useDocField } from '@wcpos/query';
 
+import {
+	claimScanOwner,
+	createScanConsumerToken,
+	isScanOwner,
+	releaseScanOwner,
+	scanOwner$,
+} from './scan-owner';
 import { showHeuristicTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
 import { useScanHub } from './scan-hub-context';
@@ -17,15 +30,21 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
 // Runs at scan time (not render): wraps a detected code in the normalized event.
-function toWedgeScanEvent(code: unknown): ScanEvent {
-	return { code: String(code), source: { kind: 'wedge' }, timestamp: Date.now() };
+function toWedgeScanEvent(scan: { code: string; startedAtMs: number }): ScanEvent {
+	return { code: scan.code, source: { kind: 'wedge' }, timestamp: scan.startedAtMs };
 }
+
+// A wedge copy is timed from its burst's first key (the physical scan); every
+// other source is timed at receipt, because sources stamp on different clocks (#2263).
+const scanTimeOf = (event: ScanEvent) =>
+	event.source.kind === 'wedge' ? event.timestamp : Date.now();
 
 type BarcodeScanEvent = {
 	barcode: string;
 	callback: (barcode: string) => void;
 	/** The burst ended with an Enter/Tab terminator (see WedgeScanMeta). */
 	terminated: boolean;
+	startedAtMs: number;
 };
 
 const noopBarcodeCallback = () => {};
@@ -44,6 +63,7 @@ export const useBarcodeDetection = (
 	const callback = options.callback ?? noopBarcodeCallback;
 	const leafFocused = useIsFocused();
 	const isActive = options.isActive ?? leafFocused;
+	const [token] = React.useState(() => createScanConsumerToken());
 	const { store } = useStoreSession();
 	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
 	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
@@ -54,9 +74,9 @@ export const useBarcodeDetection = (
 
 	// Subject to emit detected barcodes
 	const [onBarcodeScan, wedgeBarcode$] = useObservableCallback<
-		string,
+		{ code: string; startedAtMs: number },
 		BarcodeScanEvent,
-		[string, (barcode: string) => void, boolean]
+		[string, (barcode: string) => void, boolean, number]
 	>(
 		(event$) =>
 			event$.pipe(
@@ -73,12 +93,18 @@ export const useBarcodeDetection = (
 					});
 					return false;
 				}),
+				// options.callback runs per wedge burst, before the cross-source de-dup below (review nit on #2272).
 				tap(([event]) => {
 					event.callback(event.barcode);
 				}),
-				map(([event]) => event.barcode)
+				map(([event]) => ({ code: event.barcode, startedAtMs: event.startedAtMs }))
 			),
-		([barcode, eventCallback, terminated]) => ({ barcode, callback: eventCallback, terminated })
+		([barcode, callback, terminated, startedAtMs]) => ({
+			barcode,
+			callback,
+			terminated,
+			startedAtMs,
+		})
 	);
 
 	// Active scope as a stream for event-time gating below (a ref read inside
@@ -97,14 +123,16 @@ export const useBarcodeDetection = (
 	// latest settings and emitter without being recreated per render. Refs may
 	// not be written during render, so a sync effect keeps them fresh.
 	const settingsRef = React.useRef({ threshold: avgTimeInputThreshold, prefix, suffix });
-	const emitRef = React.useRef<(code: string, terminated: boolean) => void>(() => {});
+	const emitRef = React.useRef<(code: string, terminated: boolean, startedAtMs: number) => void>(
+		() => {}
+	);
 	// Ref-sync effect: mirrors the latest reactive values for event-time reads.
 	React.useEffect(() => {
 		settingsRef.current = { threshold: avgTimeInputThreshold, prefix, suffix };
 	}, [avgTimeInputThreshold, prefix, suffix]);
 	React.useEffect(() => {
-		emitRef.current = (code: string, terminated: boolean) =>
-			onBarcodeScan(code, callback, terminated);
+		emitRef.current = (code: string, terminated: boolean, startedAtMs: number) =>
+			onBarcodeScan(code, callback, terminated, startedAtMs);
 	}, [onBarcodeScan, callback]);
 
 	const detectorRef = React.useRef<WedgeDetector | null>(null);
@@ -117,10 +145,10 @@ export const useBarcodeDetection = (
 		if (detectorRef.current === null) {
 			detectorRef.current = createWedgeDetector({
 				getSettings: () => settingsRef.current,
-				onScan: (code, meta) => emitRef.current(code, meta.terminated),
+				onScan: (code, meta) => emitRef.current(code, meta.terminated, meta.startedAtMs),
 			});
 		}
-		detectorRef.current.handleKey(key);
+		return detectorRef.current.handleKey(key);
 	}, []);
 
 	/**
@@ -128,6 +156,7 @@ export const useBarcodeDetection = (
 	 */
 	const onKeyUp = React.useCallback(
 		(e: KeyboardEvent) => {
+			if (!isScanOwner(token)) return;
 			const target = e.target as HTMLElement | null;
 			const ignoreInput = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
 			if (ignoreInput) {
@@ -135,24 +164,47 @@ export const useBarcodeDetection = (
 				detectorRef.current?.dispose();
 				detectorRef.current = null;
 			} else {
-				handleKeyInput(e.key);
+				if (handleKeyInput(e.key)) {
+					e.preventDefault();
+					e.stopPropagation();
+				}
 			}
 		},
-		[handleKeyInput]
+		[handleKeyInput, token]
 	);
 
 	/**
 	 * Event handler for React Native's onKeyPress event.
 	 */
 	const onKeyPress = React.useCallback(
-		(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+		(e: TextInputKeyPressEvent) => {
+			if (!isScanOwner(token)) return;
 			// On web/Electron a focused text field belongs to the typist, regardless
 			// of speed. The document listener still handles wedges outside inputs;
 			// device-identified scans arrive independently through the scan hub.
 			if (Platform.OS !== 'web') handleKeyInput(e.nativeEvent.key);
 		},
-		[handleKeyInput]
+		[handleKeyInput, token]
 	);
+
+	// Claim before attaching listeners: overlapping tills must never consume the same scan.
+	React.useEffect(() => {
+		if (!isActive) return;
+		claimScanOwner(token);
+		return () => releaseScanOwner(token);
+	}, [isActive, token]);
+
+	// Losing ownership mid-burst drops the partial burst, as a scope change does: the settle
+	// timer must not run this consumer's callback after another consumer has claimed the scan.
+	React.useEffect(() => {
+		const subscription = scanOwner$.subscribe((owner) => {
+			if (owner !== token) {
+				detectorRef.current?.dispose();
+				detectorRef.current = null;
+			}
+		});
+		return () => subscription.unsubscribe();
+	}, [token]);
 
 	/**
 	 * Enable/Disable web barcode detection for the active scan scope.
@@ -160,17 +212,22 @@ export const useBarcodeDetection = (
 	 * A user was experiencing an issue where keyup events were only giving the lowercase, even
 	 * though the barcode was uppercase. They recommend to not use keydown events, but it should
 	 * still work on almost all browsers.
+	 * Keys of a latched scanner burst, including the Enter/Tab terminator, must not
+	 * act on the focused element: the cart quantity numpad reopened for the wrong
+	 * row, and any last-clicked button could be re-pressed. The detector decides,
+	 * bounded to its settle window. A typist's keys outside a burst and every key
+	 * inside a text field pass through untouched.
 	 */
 	// Platform listener lifecycle follows the consumer-selected scan scope.
 	React.useEffect(() => {
 		const listenOnWeb = Platform.OS === 'web' && isActive;
 		if (listenOnWeb) {
 			// reverted to keydown, because keyup was only giving lowercase
-			document.addEventListener('keydown', onKeyUp);
+			document.addEventListener('keydown', onKeyUp, { capture: true });
 		}
 		return () => {
 			if (listenOnWeb) {
-				document.removeEventListener('keydown', onKeyUp);
+				document.removeEventListener('keydown', onKeyUp, { capture: true });
 			}
 			// Drop the detector with its latched state on EVERY platform — native
 			// onKeyPress feeds the same detector, so a partial burst must not
@@ -188,30 +245,22 @@ export const useBarcodeDetection = (
 	 */
 	const attributed = useAttributedWedge(isActive);
 	const hub = useScanHub();
-	const barcode$ = React.useMemo(
-		() =>
-			merge(
-				wedgeBarcode$,
-				attributed.scanEvents$.pipe(map((event) => event.code)),
-				hub.events$.pipe(map((event) => event.code))
-			).pipe(
-				// Blurred drawer consumers stay mounted/subscribed while the app-scoped
-				// hub is shared; drop events here (#1409).
-				withLatestFrom(isActive$),
-				filter(([, active]) => active),
-				map(([code]) => code)
-			),
-		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
-	);
-	const scanEvents$ = React.useMemo(
+	const gatedScans$ = React.useMemo(
 		() =>
 			merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, hub.events$).pipe(
-				withLatestFrom(isActive$),
-				filter(([, active]) => active),
+				// Blurred drawer consumers stay mounted/subscribed while the app-scoped
+				// hub is shared; drop events here (#1409).
+				withLatestFrom(isActive$, scanOwner$),
+				filter(([, active, owner]) => active && owner === token),
 				map(([event]) => event),
-				tap(() => markUserActivity())
+				dedupeScans(SCAN_DEDUP_WINDOW_MS, scanTimeOf)
 			),
-		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
+		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$, token]
+	);
+	const barcode$ = React.useMemo(() => gatedScans$.pipe(map((event) => event.code)), [gatedScans$]);
+	const scanEvents$ = React.useMemo(
+		() => gatedScans$.pipe(tap(() => markUserActivity())),
+		[gatedScans$]
 	);
 
 	/**

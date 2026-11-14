@@ -13,6 +13,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
+import { awaitWriteOutcome } from '../../query/src/await-write-outcome';
 import {
 	createEngineHarness,
 	memoryEngineStorage,
@@ -26,7 +27,9 @@ import {
 } from './create-rxdb-sync-engine';
 import { writeFacetFor } from './collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
+import { discardConsequence } from './write-path/conflict-resolution';
 import { heldOpenCartMutations } from './write-path/open-cart-hold';
+import * as refundChildren from './write-path/refund-children';
 
 import type { RxStorage } from 'rxdb';
 
@@ -37,6 +40,8 @@ const UUID_A = '22222222-2222-4222-8222-222222222222';
 const UUID_MINT = '33333333-3333-4333-8333-333333333333';
 const UUID_CLAIM = '44444444-4444-4444-8444-444444444444';
 const UUID_FOLLOW_UP = '55555555-5555-4555-8555-555555555555';
+const UUID_B = '66666666-6666-4666-8666-666666666666';
+const UUID_C = '77777777-7777-4777-8777-777777777777';
 
 let uniqueScope = 0;
 function freshIdentity(): StoreScopeIdentity {
@@ -96,8 +101,11 @@ async function insertBornLocalOrder(
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
 	await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: id,
 		remoteId: null,
+		remoteKey: '',
 		number: '',
 		dateCreatedGmt: '2026-07-10T00:00:00',
 		status: promotedStatus,
@@ -155,8 +163,11 @@ async function insertServerBornOrder(
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
 	await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: id,
 		remoteId: remoteId(over.wooOrderId),
+		remoteKey: String(remoteId(over.wooOrderId) ?? ''),
 		number: String(1000 + over.wooOrderId),
 		dateCreatedGmt: '2026-07-10T00:00:00',
 		status: over.status ?? 'processing',
@@ -254,7 +265,9 @@ async function productJson(engine: RxdbSyncEngine): Promise<Record<string, unkno
 	return doc?.toJSON() ?? null;
 }
 
-function rejectedProductFetch(options: { failPull?: boolean } = {}) {
+function rejectedProductFetch(
+	options: { failPull?: boolean; pullAnswer?: Promise<Response> } = {}
+) {
 	const pulls: number[][] = [];
 	const fetch = async (url: string): Promise<Response> => {
 		const parsed = new URL(url);
@@ -272,6 +285,7 @@ function rejectedProductFetch(options: { failPull?: boolean } = {}) {
 			(parsed.searchParams.get('include') ?? '').split(',').map(Number).filter(Number.isSafeInteger)
 		);
 		if (options.failPull) return new Response('unavailable', { status: 503 });
+		if (options.pullAnswer) return options.pullAnswer;
 		return Response.json([productPayload(9)]);
 	};
 	return { pulls, fetch };
@@ -296,6 +310,75 @@ function withAckDocument(
 }
 
 describe('write() + sync("write-drain") through the public handle', () => {
+	it.each([false, true])(
+		'settles A before unrelated B completes only after durable acknowledgement (ack fails: %s)',
+		async (ackFails) => {
+			const server = createFakeWriteServer();
+			let releaseB!: () => void;
+			const blockedB = new Promise<void>((resolve) => {
+				releaseB = resolve;
+			});
+			let startedB!: () => void;
+			const pushingB = new Promise<void>((resolve) => {
+				startedB = resolve;
+			});
+			let pushes = 0;
+			const engine = engineWith({
+				fetch: async (url, init) => {
+					if (url.includes('/push/') && ++pushes === 2) {
+						startedB();
+						await blockedB;
+					}
+					return server.fetch(url, init as never);
+				},
+			});
+			const events: EngineEvent[] = [];
+			let drain: ReturnType<typeof engine.sync> | undefined;
+			let ackSpy: ReturnType<typeof vi.spyOn> | undefined;
+			try {
+				await engine.ready;
+				engine.events((event) => events.push(event));
+				await insertBornLocalOrder(engine, UUID_A);
+				await insertBornLocalOrder(engine, UUID_MINT);
+				const a = await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pending' },
+					explicit: true,
+				});
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_MINT,
+					payload: { status: 'pending' },
+					explicit: true,
+				});
+				const queue = queueFor(engine.active()!.database as never);
+				if (ackFails)
+					ackSpy = vi.spyOn(queue, 'acknowledge').mockRejectedValueOnce(new Error('storage down'));
+				drain = engine.sync('write-drain');
+				await pushingB;
+				const acks = () =>
+					events.filter(
+						(event) => event.type === 'write-acknowledged' && event.mutationId === a.mutationId
+					);
+				expect(acks()).toHaveLength(ackFails ? 0 : 1);
+				expect((await queue.pending()).some((row) => row.mutationId === a.mutationId)).toBe(
+					ackFails
+				);
+				releaseB();
+				expect(await drain).toMatchObject({ pushed: ackFails ? 1 : 2, failed: ackFails ? 1 : 0 });
+				expect(acks()).toHaveLength(ackFails ? 0 : 1);
+			} finally {
+				releaseB();
+				await drain;
+				ackSpy?.mockRestore();
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('holds a non-explicit pos-open create without touching retry bookkeeping', async () => {
 		const server = createFakeWriteServer();
 		const events: SyncEvent[] = [];
@@ -383,102 +466,6 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			const pushes = () => server.received.filter((env) => env.mutationId !== undefined);
 			expect(pushes()).toHaveLength(0);
 			await vi.waitFor(() => expect(pushes()).toHaveLength(1), { timeout: 3_000 });
-		} finally {
-			await engine.dispose();
-		}
-	});
-
-	it('a follower enqueue forwards the drain nudge to the elected leader', async () => {
-		// A follower's own drain tick is a no-op (leader gate in write-plane.ts),
-		// so the enqueue must cross the bridge or the shared queue waits out the
-		// leader's interval (Codex P1).
-		const server = createFakeWriteServer();
-		const publishDrainNudge = vi.fn();
-		const bridge = {
-			publish: vi.fn(),
-			subscribe: () => () => undefined,
-			publishDrainNudge,
-			subscribeDrainNudge: () => () => undefined,
-		};
-		const engine = engineWith({
-			fetch: (url, init) => server.fetch(url, init as never),
-			mode: 'auto',
-			ports: { writePlaneOwner: () => false, writeOutcomeBridge: bridge },
-		});
-		try {
-			await engine.ready;
-			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
-			await engine.write({
-				collection: 'orders',
-				operation: 'create',
-				recordId: UUID_A,
-				payload: { status: 'pos-open' },
-				explicit: true,
-			} as never);
-			expect(publishDrainNudge).toHaveBeenCalledTimes(1);
-		} finally {
-			await engine.dispose();
-		}
-	});
-
-	it('a manual-mode follower enqueue does not forward a drain nudge', async () => {
-		const server = createFakeWriteServer();
-		const publishDrainNudge = vi.fn();
-		const bridge = {
-			publish: vi.fn(),
-			subscribe: () => () => undefined,
-			publishDrainNudge,
-			subscribeDrainNudge: () => () => undefined,
-		};
-		const engine = engineWith({
-			fetch: (url, init) => server.fetch(url, init as never),
-			mode: 'manual',
-			ports: { writePlaneOwner: () => false, writeOutcomeBridge: bridge },
-		});
-		try {
-			await engine.ready;
-			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
-			await engine.write({
-				collection: 'orders',
-				operation: 'create',
-				recordId: UUID_A,
-				payload: { status: 'pos-open' },
-				explicit: true,
-			} as never);
-			expect(publishDrainNudge).not.toHaveBeenCalled();
-		} finally {
-			await engine.dispose();
-		}
-	});
-
-	it('a peer drain nudge makes the leader run the drain lane', async () => {
-		const server = createFakeWriteServer();
-		let bridgedNudge: (() => void) | null = null;
-		const bridge = {
-			publish: vi.fn(),
-			subscribe: () => () => undefined,
-			publishDrainNudge: vi.fn(),
-			subscribeDrainNudge: (listener: () => void) => {
-				bridgedNudge = listener;
-				return () => undefined;
-			},
-		};
-		const engine = engineWith({
-			fetch: (url, init) => server.fetch(url, init as never),
-			mode: 'auto',
-			// The interval alone could never fire inside this test.
-			writeDrainPollMs: 600_000,
-			ports: { writeOutcomeBridge: bridge },
-		});
-		try {
-			await engine.ready;
-			const drainRuns: number[] = [];
-			engine.events((event) => {
-				if (event.type === 'lane-start' && event.lane === 'write-drain') drainRuns.push(1);
-			});
-			expect(bridgedNudge).not.toBeNull();
-			bridgedNudge!();
-			await vi.waitFor(() => expect(drainRuns.length).toBeGreaterThan(0), { timeout: 3_000 });
 		} finally {
 			await engine.dispose();
 		}
@@ -732,7 +719,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				explicit: true,
 			} as never);
 			expect((await engine.sync('write-drain')).pushed).toBe(1);
@@ -1092,8 +1079,10 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				});
 				await engine.sync('write-drain');
 				const pushed = server.received.find((envelope) => envelope.operation === operation);
+				// The push-time strip (ADR 0040) also drops the server-authored aggregate.
+				const { tax_lines: _aggregate, ...wire } = payload;
 				expect(pushed?.payload).toEqual({
-					...payload,
+					...wire,
 					...Object.fromEntries(
 						fields.map((field) => [
 							field,
@@ -1337,11 +1326,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			// the push carries no aggregate, so this fake — which stores what it is
 			// given rather than recalculating from the lines the way WooCommerce
 			// does — answers with the money it was SEEDED with. What the POS asserts,
-			// and what has to survive the round trip, is the status and the line.
+			// and what has to survive the round trip, is the line. The discarded create's
+			// status is not re-asserted (ADR 0040): the server's stands.
 			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
 			expect(await orderJson(engine, UUID_A)).toMatchObject({
 				payload: {
-					status: 'pos-open',
+					status: 'processing',
 					line_items: [{ product_id: 123, quantity: 1, total: '52.00' }],
 				},
 				sync: { revision: server.applied.get(UUID_A)?.revision },
@@ -1487,6 +1477,186 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('after a 401 the write drain holds the session and probes once per interval', async () => {
+		const server = createFakeWriteServer();
+		let posts = 0;
+		let refused = true;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (init?.method === 'POST') {
+				posts += 1;
+				if (refused) {
+					return new Response(JSON.stringify({ code: 'woocommerce_pos_rest_unauthorized' }), {
+						status: 401,
+					});
+				}
+			}
+			return server.fetch(url, init as never);
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch,
+			now: () => nowMs,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		const refusals = () =>
+			diagnostics.filter((event) => event.type === 'queue.write.session-refused');
+		try {
+			await engine.ready;
+			for (const recordId of [UUID_A, UUID_B]) {
+				await insertBornLocalOrder(engine, recordId);
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId,
+					payload: {
+						status: 'pos-open',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: recordId }],
+					},
+				});
+			}
+
+			expect(engine.status().writeSessionHeld).toBe(false);
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({
+				status: 'ran',
+				sessionExpired: true,
+			});
+			expect(engine.status().writeSessionHeld).toBe(true);
+			expect(posts).toBe(1);
+			expect(refusals()).toHaveLength(1);
+			expect(refusals()[0]).toMatchObject({ level: 'error', fields: { status: 401 } });
+			nowMs += 10_000;
+			await engine.sync('write-drain');
+			expect(posts).toBe(1);
+			nowMs += 21_000;
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ sessionExpired: true });
+			expect(posts).toBe(2);
+			nowMs += 59_000;
+			await engine.sync('write-drain');
+			expect(posts).toBe(2);
+			nowMs += 2_000;
+			await engine.sync('write-drain');
+			expect(posts).toBe(3);
+			expect(refusals()).toHaveLength(1);
+			expect(engine.status().writeSessionHeld).toBe(true);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each([false, true])('session restoration bypasses probeAt (inFlight=%s)', async (inFlight) => {
+		const server = createFakeWriteServer();
+		let refused = true;
+		const engine = engineWith({
+			now: () => 1_700_000_000_000,
+			fetch: (url, init) => {
+				if (refused && init?.method === 'POST' && inFlight) engine.sessionRestored();
+				return refused && init?.method === 'POST'
+					? Promise.resolve(new Response('{}', { status: 401 }))
+					: server.fetch(url, init as never);
+			},
+		});
+		try {
+			await engine.ready;
+			const payload = {
+				status: 'cancelled',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			};
+			await insertBornLocalOrder(engine, UUID_A, payload, 'cancelled');
+			await engine.write({ collection: 'orders', operation: 'create', recordId: UUID_A, payload });
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ sessionExpired: true });
+			expect(engine.status().writeSessionHeld).toBe(!inFlight);
+			refused = false;
+			if (!inFlight) await engine.sync('write-drain');
+			expect(engine.status().queueDepth).toBe(1);
+			if (!inFlight) engine.sessionRestored();
+			expect(engine.status().writeSessionHeld).toBe(false);
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ pushed: 1 });
+			expect(engine.status().queueDepth).toBe(0);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('a successful push clears the session hold', async () => {
+		const server = createFakeWriteServer();
+		let posts = 0;
+		let refused = true;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (init?.method === 'POST') {
+				posts += 1;
+				if (refused) {
+					return new Response(JSON.stringify({ code: 'woocommerce_pos_rest_unauthorized' }), {
+						status: 401,
+					});
+				}
+			}
+			return server.fetch(url, init as never);
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch,
+			now: () => nowMs,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		const refusals = () =>
+			diagnostics.filter((event) => event.type === 'queue.write.session-refused');
+		try {
+			await engine.ready;
+			for (const recordId of [UUID_A, UUID_B]) {
+				await insertBornLocalOrder(engine, recordId);
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId,
+					payload: {
+						status: 'pos-open',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: recordId }],
+					},
+				});
+			}
+
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ sessionExpired: true });
+			expect(engine.status().writeSessionHeld).toBe(true);
+			expect(posts).toBe(1);
+			refused = false;
+			nowMs += 31_000;
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ status: 'ran', pushed: 2 });
+			expect(engine.status().writeSessionHeld).toBe(false);
+			expect(engine.status().queueDepth).toBe(0);
+			await insertBornLocalOrder(engine, UUID_C);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_C,
+				payload: {
+					status: 'pos-open',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_C }],
+				},
+			});
+			nowMs += 1_000;
+			await expect(engine.sync('write-drain')).resolves.toMatchObject({ pushed: 1 });
+			refused = true;
+			await insertBornLocalOrder(engine, UUID_FOLLOW_UP);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_FOLLOW_UP,
+				payload: {
+					status: 'pos-open',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_FOLLOW_UP }],
+				},
+			});
+			nowMs += 1_000;
+			await engine.sync('write-drain');
+			expect(refusals()).toHaveLength(2);
+			expect(engine.status().writeSessionHeld).toBe(true);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('a permanent 4xx dead-letters: write-rejected event, queue drained of it', async () => {
 		const server = createFakeWriteServer();
 		server.script(() => ({ kind: 'identity_ambiguous' as const }));
@@ -1547,6 +1717,68 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					}),
 				})
 			);
+			// The revert is the one verdict: the dead letter about the same refusal is
+			// stamped revertPending (an uncoded attempt in the log) and no
+			// revertFailed verdict follows.
+			const rejections = diagnostics.filter((event) => event.type === 'push.rejected');
+			expect(rejections.map((event) => event.fields?.revertPending)).toEqual([true]);
+			expect(rejections.some((event) => event.fields?.revertFailed === true)).toBe(false);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each([
+		{ id: 0, outcome: 'born-local: revertSkipped, the only copy kept' },
+		{ id: PRODUCT_ID, outcome: 'a server identity: auto-reverted' },
+	])('judges a rejected catalogue create whose ids are $id as $outcome', async ({ id }) => {
+		// A zero id is no server identity (the #2693 class): counting it would
+		// auto-discard the only local copy of a born-local record.
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			const resident = await engine.active()?.database.collections.products.findOne(UUID_A).exec();
+			await resident?.incrementalModify((data: Record<string, unknown>) => ({
+				...data,
+				remoteId: String(id), // the column holds decimal strings
+			}));
+			const receipt = await engine.write({
+				collection: 'products',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { ...productPayload(2), id },
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+
+			const rejections = () =>
+				diagnostics
+					.filter((event) => event.type === 'push.rejected')
+					.map((event) => [event.fields?.revertPending, event.fields?.revertSkipped]);
+			if (id === 0) {
+				await vi.waitFor(() => expect(rejections()).toHaveLength(2));
+				await new Promise((resolve) => setTimeout(resolve, 25));
+				expect(rejections()).toEqual([
+					[true, undefined],
+					[undefined, true],
+				]);
+				expect(route.pulls).toEqual([]);
+				expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+				expect(await productJson(engine)).not.toBeNull();
+				expect(await engine.conflicts()).toEqual([
+					expect.objectContaining({ mutationId: receipt.mutationId, status: 'rejected' }),
+				]);
+			} else {
+				await vi.waitFor(() =>
+					expect(diagnostics.map((event) => event.type)).toContain('queue.write.auto-reverted')
+				);
+				expect(rejections()).toEqual([[true, undefined]]);
+			}
 		} finally {
 			await engine.dispose();
 		}
@@ -1613,16 +1845,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			fetch: async (url) => {
 				const parsed = new URL(url);
 				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
-				// The REAL wire shape (Write_Controller::document_for): the variation
-				// ack document is the pull-envelope WRAPPER — identity and REST
-				// fields nested under `payload`, id/parent_id on the wrapper.
 				const flat: Record<string, unknown> = {
 					...variationPayload(0),
 					stock_status: 'outofstock',
 				};
-				const { id, parent_id, ...inner } = flat;
 				return Response.json({
-					document: { id, parent_id, payload: inner },
+					document: flat,
 					currentRevision: 'sha256:variation-after-stock-edit',
 				});
 			},
@@ -1831,6 +2059,118 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('owes the verdict when the drain itself throws after the dead letter is durable', async () => {
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			// A second row, queued behind the catalogue change, so the SAME drain
+			// keeps going after the dead letter.
+			await insertBornLocalOrder(engine, UUID_B, { status: 'pending' }, 'pending');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_B,
+				payload: { status: 'pending' },
+			});
+			// Claiming the next row fails once, after the dead letter is durable — the
+			// drain throws before it can return its rejected list.
+			const queue = queueFor(engine.active()!.database as never);
+			const replace = queue.replace.bind(queue);
+			const claim = queue.claim.bind(queue);
+			let deadLettered = false;
+			let failed = false;
+			vi.spyOn(queue, 'replace').mockImplementation(async (row) => {
+				await replace(row);
+				if (row.status === 'rejected') deadLettered = true;
+			});
+			vi.spyOn(queue, 'claim').mockImplementation(async (row, nowMs) => {
+				if (deadLettered && !failed) {
+					failed = true;
+					throw new Error('queue claim failed');
+				}
+				return claim(row, nowMs);
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'error' });
+			expect(failed).toBe(true);
+			// A later healthy drain must not add a second verdict.
+			await engine.sync('write-drain');
+
+			const rejections = diagnostics.filter(
+				(event) => event.type === 'push.rejected' && event.collection === 'products'
+			);
+			// The stamped attempt, then exactly ONE coded verdict, emitted by the drain.
+			expect(
+				rejections.map((event) => {
+					const fields = event.fields as Record<string, unknown> | undefined;
+					return [event.level, fields?.revertPending, fields?.revertSkipped, fields?.status];
+				})
+			).toEqual([
+				['warn', true, undefined, 403],
+				['error', undefined, true, 403],
+			]);
+			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+		} finally {
+			vi.restoreAllMocks();
+			await engine.dispose();
+		}
+	});
+
+	it("treats a revert cut short by a scope switch as stale, never as the incoming scope's verdict", async () => {
+		let answerPull!: (response: Response) => void;
+		const route = rejectedProductFetch({
+			pullAnswer: new Promise<Response>((resolve) => {
+				answerPull = resolve;
+			}),
+		});
+		const diagnostics: SyncEvent[] = [];
+		const a = freshIdentity();
+		const engine = engineWith({
+			fetch: route.fetch,
+			identity: a,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+			await vi.waitFor(() => expect(route.pulls).toEqual([[PRODUCT_ID]]));
+
+			// The cashier switches while the revert's pull is in flight; it then fails.
+			await engine.scope.switch({ ...a, cashierId: `${a.cashierId}-b` });
+			answerPull(new Response('unavailable', { status: 503 }));
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			// No revertFailed verdict lands in the incoming scope's log.
+			expect(
+				diagnostics.some(
+					(event) => event.type === 'push.rejected' && event.fields?.revertFailed === true
+				)
+			).toBe(false);
+		} finally {
+			answerPull(new Response('unavailable', { status: 503 }));
+			await engine.dispose();
+		}
+	});
+
 	it('never auto-reverts a rejected order mutation', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
@@ -1848,7 +2188,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
@@ -1857,6 +2197,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			]);
 			expect(state.orderPulls).toEqual([]);
 			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+			// No revert follows an order, so its dead letter is the verdict, unstamped.
+			expect(
+				diagnostics
+					.filter((event) => event.type === 'push.rejected')
+					.map((event) => [event.level, event.fields?.revertPending])
+			).toEqual([['warn', undefined]]);
 		} finally {
 			await engine.dispose();
 		}
@@ -1886,8 +2232,450 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			]);
 			expect((await productJson(engine))?.stockQuantity).toBe(2);
 			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+			// The revert failed, so the verdict is emitted where that is known: a
+			// push.rejected at error, marked revertFailed, after the stamped attempt.
+			await vi.waitFor(() =>
+				expect(
+					diagnostics
+						.filter((event) => event.type === 'push.rejected')
+						.map((event) => [
+							event.level,
+							event.fields?.revertPending,
+							event.fields?.revertFailed,
+							event.fields?.status,
+						])
+				).toEqual([
+					['warn', true, undefined, 403],
+					['error', undefined, true, 403],
+				])
+			);
 		} finally {
 			await engine.dispose();
+		}
+	});
+
+	it.each(['abort', 'cleanup failure', 'queue cleanup failure', 'fence'])(
+		'drain annihilation preserves the removal outcome on %s',
+		async (fault) => {
+			const events: SyncEvent[] = [];
+			const server = createFakeWriteServer();
+			const aborted = fault === 'abort';
+			const engine = engineWith({
+				fetch: server.fetch,
+				diagnostics: (e) => events.push(e),
+			});
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				const queue = queueFor(engine.active()!.database);
+				for (const operation of ['create', 'delete'] as const) {
+					await queue.enqueue({
+						mutationId: operation,
+						collectionName: 'orders',
+						operation,
+						recordId: UUID_A,
+						origin: 'minted',
+						payload: {},
+						baseRevision: null,
+						queuedAt: new Date().toISOString(),
+					});
+				}
+				const facet = writeFacetFor('orders')!;
+				const ack = facet.onDeleteAck;
+				vi.spyOn(facet, 'onDeleteAck').mockImplementationOnce((db, mutation, signal, ...rest) => {
+					if (aborted) vi.spyOn(signal!, 'aborted', 'get').mockReturnValue(true);
+					return ack(db, mutation, signal, ...rest);
+				});
+				vi.spyOn(refundChildren, 'removeRefundChildren').mockRejectedValueOnce(
+					new Error('cleanup failed')
+				);
+				const outcomes: EngineEvent[] = [];
+				engine.events((event) => outcomes.push(event));
+				if (fault === 'queue cleanup failure')
+					vi.spyOn(queue, 'removeMarked').mockRejectedValueOnce(new Error('disk'));
+				if (fault === 'fence')
+					vi.spyOn(queue, 'releaseVoidFence').mockRejectedValueOnce(new Error('disk'));
+				await engine.sync('write-drain');
+				if (fault === 'fence' || fault.includes('cleanup failure')) {
+					const cancelled = () =>
+						outcomes.filter((e) => e.type === 'write-annihilated').map((e) => e.mutationId);
+					expect(cancelled()).toEqual(['create', 'delete']);
+					await queue.clearExpiredAnnihilation(Date.now() + 120_001);
+					await engine.sync('write-drain');
+					expect(cancelled()).toEqual(['create', 'delete']);
+					expect(await engine.active()!.database.recordMutations.find().exec()).toEqual([]);
+				}
+				expect(
+					(await queue.pending()).filter((row) => !row.supersededBy).map((row) => row.operation)
+				).toEqual(aborted ? ['create', 'delete'] : []);
+				expect(Boolean(await orderJson(engine, UUID_A))).toBe(aborted);
+				expect(server.received).toEqual([]);
+				if (fault === 'cleanup failure') {
+					expect(events).toContainEqual(
+						expect.objectContaining({ type: 'void.cleanup-failed', message: 'cleanup failed' })
+					);
+				}
+			} finally {
+				vi.restoreAllMocks();
+				await engine.dispose();
+			}
+		}
+	);
+
+	it.each([false, true])(
+		'recovered void emits every receipt outcome (earlier sweep=%s)',
+		async (swept) => {
+			let now = Date.now();
+			const server = createFakeWriteServer();
+			const engine = engineWith({ fetch: server.fetch, now: () => now });
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				const queue = queueFor(engine.active()!.database);
+				for (const operation of ['create', 'delete'] as const) {
+					await queue.enqueue({
+						mutationId: operation,
+						collectionName: 'orders',
+						operation,
+						recordId: UUID_A,
+						origin: 'minted',
+						payload: {},
+						baseRevision: null,
+						queuedAt: new Date(now).toISOString(),
+					});
+				}
+				await queue.fenceForVoid('orders', UUID_A, 'crashed-leader', now);
+				for (const id of ['create', 'delete'])
+					await queue.markForAnnihilation(id, 'crashed-leader', now);
+				await queue.setVoidPhase('orders', UUID_A, 'crashed-leader', 'committed');
+				const outcomes: EngineEvent[] = [];
+				engine.events((event) => outcomes.push(event));
+				now += 120_001;
+				if (swept) await queue.clearExpiredAnnihilation(now);
+				await engine.sync('write-drain');
+				expect(
+					outcomes
+						.filter((event) => event.type === 'write-annihilated')
+						.map((event) => event.mutationId)
+				).toEqual(['create', 'delete']);
+				expect(await orderJson(engine, UUID_A)).toBeNull();
+				expect(await queue.all()).toEqual([]);
+				expect(server.received).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
+	it('internal admission rows are invisible to checkout and health selectors', async () => {
+		const engine = engineWith({ fetch: createFakeWriteServer().fetch });
+		try {
+			await engine.ready;
+			const db = engine.active()!.database;
+			const queue = queueFor(db);
+			await queue.admitWriter('orders', UUID_A, 'writer', Date.now());
+			for (const statuses of [['rejected', 'conflicted', 'needs-revision'], ['rejected']]) {
+				expect(
+					await db.collections.recordMutations
+						.find({
+							selector: {
+								status: { $in: statuses },
+								collectionName: { $eq: 'orders' },
+							},
+						})
+						.exec()
+				).toEqual([]);
+			}
+			expect(await queue.all()).toEqual([]);
+			expect(await queue.pending()).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('admission release failure preserves a committed write receipt', async () => {
+		const events: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: createFakeWriteServer().fetch,
+			diagnostics: (e) => events.push(e),
+		});
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A);
+			const queue = queueFor(engine.active()!.database);
+			vi.spyOn(queue, 'releaseWriter').mockRejectedValue(new Error('disk release failed'));
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pending' },
+			});
+			expect(await queue.all()).toEqual([
+				expect.objectContaining({ mutationId: receipt.mutationId }),
+			]);
+			expect(events.filter((e) => e.type === 'write.admission-release-failed')).toEqual([
+				expect.objectContaining({
+					fields: expect.objectContaining({ mutationId: receipt.mutationId }),
+				}),
+			]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each([
+		{ status: 'pending', step: 'removeMarked' },
+		{ status: 'rejected', step: 'removeMarked' },
+		{ status: 'pending', step: 'releaseVoidFence' },
+		{ status: 'rejected', step: 'releaseVoidFence' },
+	] as const)(
+		'committed void survives $step failure for a $status create',
+		async ({ status, step }) => {
+			let now = Date.parse('2026-09-18T00:00:00.000Z');
+			const events: SyncEvent[] = [];
+			const engineEvents: EngineEvent[] = [];
+			const server = createFakeWriteServer();
+			const engine = engineWith({
+				fetch: server.fetch,
+				now: () => now,
+				diagnostics: (event) => events.push(event),
+			});
+			try {
+				await engine.ready;
+				engine.events((event) => engineEvents.push(event));
+				await insertBornLocalOrder(engine, UUID_A);
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pending' },
+				});
+				const db = engine.active()!.database;
+				const queue = queueFor(db);
+				const [create] = await queue.all();
+				if (status === 'rejected') await queue.replace({ ...create, status });
+				const failure = vi.spyOn(queue, step).mockRejectedValue(new Error('disk cleanup failed'));
+				const result = engine.write({
+					collection: 'orders',
+					operation: 'delete',
+					recordId: UUID_A,
+				});
+				await expect(result).resolves.toMatchObject({ annihilated: true });
+				const receipt = await result;
+				expect(await orderJson(engine, UUID_A)).toBeNull();
+				const fence = await db.collections.recordMutations.findOne(`orders/${UUID_A}`).exec();
+				expect(fence?.toJSON()).toMatchObject({ payload: { phase: 'committed' } });
+				expect(events.filter((event) => event.type === 'void.cleanup-failed')).toEqual([
+					expect.objectContaining({
+						fields: {
+							token: fence!.toJSON().supersededBy,
+							step,
+							error: 'Error: disk cleanup failed',
+						},
+					}),
+				]);
+				expect(engineEvents).toContainEqual({
+					type: 'write-annihilated',
+					collection: 'orders',
+					recordId: UUID_A,
+					mutationId: receipt.mutationId,
+				});
+				if (step === 'removeMarked')
+					expect(await queue.all()).toEqual([
+						expect.objectContaining({
+							mutationId: create.mutationId,
+							supersededBy: fence!.toJSON().supersededBy,
+						}),
+					]);
+				failure.mockRestore();
+				now += 120_001;
+				expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0 });
+				expect(await db.collections.recordMutations.find().exec()).toEqual([]);
+				expect(server.received).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
+	it.each(['drain', 'writer', 'identity'] as const)(
+		'live recovery via %s without reopening scope',
+		async (path) => {
+			let now = Date.parse('2026-09-18T00:00:00.000Z');
+			const events: SyncEvent[] = [];
+			const engine = engineWith({
+				fetch: createFakeWriteServer().fetch,
+				now: () => now,
+				diagnostics: (e) => events.push(e),
+			});
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				const db = engine.active()!.database;
+				const queue = queueFor(db);
+				const receipt = await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pending' },
+				});
+				await queue.fenceForVoid('orders', UUID_A, 'crashed', now);
+				await queue.markForAnnihilation(receipt.mutationId, 'crashed', now);
+				if (path !== 'drain') await queue.setVoidPhase('orders', UUID_A, 'crashed', 'committed');
+				if (path === 'writer') await (await db.collections.orders.findOne(UUID_A).exec())!.remove();
+				if (path === 'identity')
+					await (await db.collections.orders.findOne(UUID_A).exec())!.incrementalPatch({
+						remoteId: '123',
+					});
+				now += 120_001;
+				if (path === 'drain') {
+					expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1 });
+				} else if (path === 'writer') {
+					// The real create contract inserts the born-local row before enqueue.
+					// Recover first through a write attempt against the absent resident.
+					await expect(
+						engine.write({
+							collection: 'orders',
+							operation: 'update',
+							recordId: UUID_A,
+							payload: {},
+						})
+					).rejects.not.toMatchObject({ reason: 'void-in-progress' });
+					expect(await queue.all()).toEqual([]);
+					await insertBornLocalOrder(engine, UUID_A);
+					await expect(
+						engine.write({
+							collection: 'orders',
+							operation: 'create',
+							recordId: UUID_A,
+							payload: { status: 'pending' },
+						})
+					).resolves.toHaveProperty('mutationId');
+				} else {
+					await queue.hasVoidFence('orders', UUID_A, now);
+					expect((await orderJson(engine, UUID_A))?.remoteId).toBe('123');
+					expect(events.filter((e) => e.type === 'void.recovery.identity-appeared')).toHaveLength(
+						1
+					);
+					expect(await queue.hasVoidFence('orders', UUID_A, now)).toBe(false);
+				}
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
+	it('reset requires confirmation for a live writer admission', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await queueFor(engine.active()!.database).admitWriter('orders', UUID_A, 'writer', Date.now());
+			expect(await engine.scope.resetCollection('mutations')).toBe('needs-confirmation');
+			expect(
+				await engine.active()!.database.collections.recordMutations.find().exec()
+			).toHaveLength(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each([
+		[false, false, false, null],
+		[true, false, false, null],
+		[true, true, false, null],
+		[true, true, true, null],
+		[true, true, false, 'remoteId'],
+		[true, true, false, 'revision'],
+	] as const)('void recovery: %s/%s/%s/%s', async (expired, committed, removed, identity) => {
+		const server = createFakeWriteServer({ firstId: 900_000_200 });
+		const events: SyncEvent[] = [];
+		const options = {
+			diagnostics: (event: SyncEvent) => events.push(event),
+			fetch: (url: string, init?: RequestInit) => server.fetch(url, init as never),
+			identity: freshIdentity(),
+			storage: memoryEngineStorage(),
+			now: () => Date.parse('2026-09-18T00:00:00.000Z'),
+		};
+		const before = engineWith(options);
+		try {
+			await before.ready;
+			await insertBornLocalOrder(before, UUID_A);
+			const receipt = await before.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pending' },
+			});
+			expect(
+				await queueFor(before.active()!.database).markForAnnihilation(
+					receipt.mutationId,
+					'abandoned-void',
+					options.now()
+				)
+			).toBe(true);
+			expect(
+				await queueFor(before.active()!.database).fenceForVoid(
+					'orders',
+					UUID_A,
+					'abandoned-void',
+					options.now()
+				)
+			).toBe(true);
+			if (identity)
+				await (await before
+					.active()!
+					.database.collections.orders.findOne(UUID_A)
+					.exec())!.incrementalPatch(
+					identity === 'remoteId' ? { remoteId: '123' } : { sync: { revision: 'sha256:appeared' } }
+				);
+
+			if (committed) {
+				const db = before.active()!.database;
+				const fence = await db.collections.recordMutations.findOne(`orders/${UUID_A}`).exec();
+				await fence!.incrementalPatch({ payload: { phase: 'committed' } });
+				if (removed) await (await db.collections.orders.findOne(UUID_A).exec())!.remove();
+			}
+		} finally {
+			await before.dispose();
+		}
+		const reopened = engineWith({
+			...options,
+			now: () => options.now() + (expired ? 120_001 : 1),
+		});
+		try {
+			await reopened.ready;
+			expect(
+				await queueFor(reopened.active()!.database).hasVoidFence('orders', UUID_A, options.now())
+			).toBe(!expired);
+			const rows = await queueFor(reopened.active()!.database).all();
+			if (identity) {
+				expect(await orderJson(reopened, UUID_A)).not.toBeNull();
+				expect(rows).toHaveLength(1);
+				expect(rows[0]).not.toHaveProperty('supersededBy');
+				expect(
+					events.filter((event) => event.type === 'void.recovery.identity-appeared')
+				).toHaveLength(1);
+				return;
+			}
+			if (committed) {
+				expect(rows).toEqual([]);
+				expect(await orderJson(reopened, UUID_A)).toBeNull();
+				expect(await reopened.sync('write-drain')).toMatchObject({ pushed: 0 });
+				return;
+			}
+			expect(rows).toHaveLength(1);
+			if (!expired) {
+				expect(rows[0]).toHaveProperty('supersededBy', 'abandoned-void');
+				expect(await reopened.sync('write-drain')).toMatchObject({ pushed: 0 });
+				return;
+			}
+			expect(rows[0]).not.toHaveProperty('supersededBy');
+			expect(await reopened.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+			expect(await queueRows(reopened)).toEqual([]);
+			expect((await orderJson(reopened, UUID_A))?.remoteId).toBe(remoteId(900_000_200));
+		} finally {
+			await reopened.dispose();
 		}
 	});
 
@@ -1921,8 +2709,8 @@ describe('write() + sync("write-drain") through the public handle', () => {
 
 	it('transient failure backs off durably, then succeeds once the window elapses', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_300 });
-		let failures = 1;
-		// One raw 500 (transient server error) before the fake server answers —
+		let failures = 2;
+		// Two raw 500s (transient server errors) before the fake server answers —
 		// the drain must back off durably, then land the re-push.
 		const flakyFetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			if (failures > 0) {
@@ -1932,7 +2720,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			return server.fetch(url, init as never);
 		};
 		let nowMs = 1_700_000_000_000;
-		const engine = engineWith({ fetch: flakyFetch, now: () => nowMs });
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: flakyFetch,
+			now: () => nowMs,
+			diagnostics: (event) => diagnostics.push(event),
+		});
 		await engine.ready;
 		await insertBornLocalOrder(engine, UUID_A);
 		await engine.write({
@@ -1949,10 +2742,148 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			deferred: 1,
 			pushed: 0,
 		});
-		// …and once the window elapses the re-push lands.
+		// …and once the window elapses the re-push fails again…
+		nowMs += 5 * 60_000;
+		expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 0 });
+		// …then lands.
 		nowMs += 5 * 60_000;
 		expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+		// Each push.error names its attempt, so the log can tell a first failure
+		// the drain retries from one that has persisted.
+		expect(
+			diagnostics
+				.filter((event) => event.type === 'push.error')
+				.map((event) => [event.fields?.attempt, event.fields?.retryable])
+		).toEqual([
+			[1, true],
+			[2, true],
+		]);
 		await engine.dispose();
+	});
+
+	it("numbers push.error by consecutive PUSH failures, not the ack failures' backoff", async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_400 });
+		let failPush = false;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (failPush && url.includes('/push/')) return new Response('upstream boom', { status: 500 });
+			return server.fetch(url, init as never);
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		await engine.ready;
+		await insertBornLocalOrder(engine, UUID_A);
+		await engine.write({
+			collection: 'orders',
+			operation: 'create',
+			recordId: UUID_A,
+			payload: { status: 'pending' },
+			explicit: true,
+		});
+		const queue = queueFor(engine.active()!.database as never);
+		const ackSpy = vi
+			.spyOn(queue, 'acknowledge')
+			.mockRejectedValueOnce(new Error('storage down'))
+			.mockRejectedValueOnce(new Error('storage down'));
+		try {
+			// Two sends land but cannot be recorded: the queue row's backoff counter climbs.
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+			nowMs += 10 * 60_000;
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+			nowMs += 10 * 60_000;
+			// Now the push itself fails, for the first time.
+			failPush = true;
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 0, failed: 1 });
+
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1]);
+		} finally {
+			ackSpy.mockRestore();
+			await engine.dispose();
+		}
+	});
+
+	it('keeps the push streak across a 409 the drain re-anchors past', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		let pushes = 0;
+		// Every drain: the push 409s, the drain re-anchors and re-pushes, and that 503s.
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (!url.includes('/push/')) return server.fetch(url, init as never);
+			pushes += 1;
+			return pushes % 2 === 1
+				? Response.json(
+						{ current: { id: 42 }, currentRevision: 'sha256:server-r2' },
+						{ status: 409 }
+					)
+				: new Response('upstream boom', { status: 503 });
+		};
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'cancelled' },
+			});
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+
+			// The 409 is not the end of the sequence, so it must not clear the streak.
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1, 2]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('starts a fresh push streak after a parked conflict is retried on the server base', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		let mode: 'fail' | 'server' = 'fail';
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> =>
+			mode === 'fail' && url.includes('/push/')
+				? new Response('upstream boom', { status: 503 })
+				: server.fetch(url, init as never);
+		let nowMs = 1_700_000_000_000;
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, now: () => nowMs, diagnostics: (e) => diagnostics.push(e) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'cancelled' },
+			});
+			// Two failed pushes, then the clash parks (two 409s outlive the recovery).
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+			nowMs += 10 * 60_000;
+			mode = 'server';
+			conflictPastAutoRecovery(server, 'sha256:server-r2');
+			expect(await engine.sync('write-drain')).toMatchObject({ conflicts: 1 });
+			// Retried on the server base: a NEW push sequence, so its first failure is attempt 1.
+			await engine.resolveConflict(receipt.mutationId, 'retry-with-server-base');
+			mode = 'fail';
+			nowMs += 10 * 60_000;
+			await engine.sync('write-drain');
+
+			expect(
+				diagnostics.filter((e) => e.type === 'push.error').map((e) => e.fields?.attempt)
+			).toEqual([1, 2, 1]);
+		} finally {
+			await engine.dispose();
+		}
 	});
 
 	it('write() on a collection without a push/ack contract is caller misuse', async () => {
@@ -1991,11 +2922,25 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			expect(second.mutationId).not.toBe(first.mutationId); // a coalesced entry NEVER reuses a mutationId with a different payload
 			expect(engine.status().queueDepth).toBe(1); // coalesced, not stacked
 			expect(events.some((event) => event.type === 'queue.write.coalesce')).toBe(true);
+			// The orphaned id is announced (and replayable) so a waiter can follow the replacement.
+			const superseded = {
+				type: 'write-superseded',
+				collection: 'orders',
+				recordId: UUID_A,
+				mutationId: first.mutationId,
+				replacedBy: second.mutationId,
+			};
+			expect(second.supersededMutationId).toBe(first.mutationId);
+			const replayed: EngineEvent[] = [];
+			engine.events((event) => replayed.push(event), {
+				replayWriteOutcomeFor: first.mutationId,
+			})();
+			expect(replayed).toEqual([superseded]);
 
 			connectivity.set('online');
 			expect(await engine.sync('write-drain')).toMatchObject({
@@ -2011,7 +2956,7 @@ describe('#507 offline write flows through the public handle', () => {
 				mutationId: second.mutationId,
 				baseRevision: 'sha256:base-r1',
 			});
-			expect((server.received[0].payload as { status?: string }).status).toBe('completed');
+			expect((server.received[0].payload as { status?: string }).status).toBe('cancelled');
 			// Ack re-anchored the record to the server's advanced revision; nothing dirty remains.
 			const order = await orderJson(engine, UUID_A);
 			expect((order?.sync as { revision?: string }).revision).toBe(
@@ -2055,7 +3000,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			expect((await queueRows(engine)).length).toBe(2);
 			gateOpen!();
@@ -2096,7 +3041,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({
@@ -2141,7 +3086,7 @@ describe('#507 offline write flows through the public handle', () => {
 				conflicts: 0,
 			});
 			expect(await engine.conflicts()).toEqual([]);
-			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('completed');
+			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('cancelled');
 			const order = await orderJson(engine, UUID_A);
 			expect((order?.sync as { revision?: string }).revision).toBe(
 				server.applied.get(UUID_A)?.revision
@@ -2173,7 +3118,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.sync('write-drain');
 			expect(await engine.conflicts()).toHaveLength(1);
@@ -2211,7 +3156,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
@@ -2309,7 +3254,7 @@ describe('#507 offline write flows through the public handle', () => {
 			// The order as it stands on this device TODAY: a guest sale (email stored
 			// locally as ''), edited to 25.00 after the create was rejected.
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				customer_note: 'edited after the rejection',
 				billing: { first_name: 'Guest', email: '' },
@@ -2327,7 +3272,7 @@ describe('#507 offline write flows through the public handle', () => {
 				recordId: UUID_A,
 				origin: 'minted',
 				payload: {
-					status: 'pos-paid',
+					status: 'pending',
 					total: '10.00',
 					customer_note: 'as it stood when the create was refused',
 					billing: { first_name: 'Guest', email: '' },
@@ -2410,7 +3355,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -2418,7 +3363,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'create',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 			});
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
 
@@ -2479,7 +3424,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.sync('write-drain');
 			expect(await engine.conflicts()).toHaveLength(1);
@@ -2499,7 +3444,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_MINT,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -2529,7 +3474,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -2557,7 +3502,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -2600,8 +3545,9 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
 			expect(server.received).toHaveLength(1);
 			expect(server.received[0].operation).toBe('create');
+			// The status is the dead letter's own (ADR 0040), never the resident's.
 			expect(server.received[0].payload).toMatchObject({
-				status: 'pos-paid',
+				status: 'pos-open',
 				customer_note: 'gift wrap',
 			});
 			// The readonly aggregate never reaches the wire (#1507), whichever layer
@@ -2644,7 +3590,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -2692,7 +3638,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -2770,7 +3716,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed', customer_note: 'gift wrap' },
+				payload: { status: 'cancelled', customer_note: 'gift wrap' },
 			});
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
 
@@ -2801,7 +3747,7 @@ describe('#507 offline write flows through the public handle', () => {
 				requeueCount: 1,
 			});
 			expect(requeued.payload).toMatchObject({
-				status: 'completed',
+				status: 'cancelled',
 				customer_note: 'gift wrap',
 				number: '1042',
 			});
@@ -2823,7 +3769,7 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
 			const sent = server.received.at(-1)?.payload as Record<string, unknown>;
 			expect(sent).toMatchObject({
-				status: 'completed',
+				status: 'cancelled',
 				customer_note: 'gift wrap',
 				number: '1042',
 			});
@@ -2849,7 +3795,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed', customer_note: 'refused note' },
+				payload: { status: 'cancelled', customer_note: 'refused note' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -2875,7 +3821,7 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(survivor?.payload).toMatchObject({ customer_note: 'newer edit' });
 			expect(recovery).toBeDefined();
 			// The recovery carries the field the live row does NOT own…
-			expect(recovery?.payload).toMatchObject({ status: 'completed' });
+			expect(recovery?.payload).toMatchObject({ status: 'cancelled' });
 			// …and none that it does — keeping 'refused note' would overwrite the live
 			// edit, because the recovery is ordered behind it.
 			expect(recovery?.payload).not.toHaveProperty('customer_note');
@@ -2919,7 +3865,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed', customer_note: 'refused note' },
+				payload: { status: 'cancelled', customer_note: 'refused note' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:01.000Z',
 			});
@@ -2931,7 +3877,7 @@ describe('#507 offline write flows through the public handle', () => {
 			const recovery = (await queueRows(engine)).find(
 				(row) => row.requeuedFrom === 'refused-update'
 			);
-			expect(recovery?.payload).toMatchObject({ status: 'completed' });
+			expect(recovery?.payload).toMatchObject({ status: 'cancelled' });
 			expect(recovery?.payload).not.toHaveProperty('customer_note');
 		} finally {
 			await engine.dispose();
@@ -2960,7 +3906,7 @@ describe('#507 offline write flows through the public handle', () => {
 				recordId: UUID_A,
 				origin: 'existing',
 				payload: {
-					status: 'completed',
+					status: 'cancelled',
 					meta_data: [
 						{ key: '_woocommerce_pos_uuid', value: UUID_A },
 						{ key: '_pos_stale', value: 'from the refused push' },
@@ -2974,7 +3920,7 @@ describe('#507 offline write flows through the public handle', () => {
 			await engine.resolveConflict('refused-update', 'requeue-rebuilt');
 
 			const [recovery] = await queueRows(engine);
-			expect(recovery.payload).toMatchObject({ status: 'completed' });
+			expect(recovery.payload).toMatchObject({ status: 'cancelled' });
 			const meta = (recovery.payload as { meta_data?: { key: string }[] }).meta_data ?? [];
 			expect(meta.some((item) => item.key === '_pos_stale')).toBe(false);
 			expect(meta.some((item) => item.key === '_woocommerce_pos_uuid')).toBe(true);
@@ -2996,7 +3942,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3009,7 +3955,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid', total: '25.00' },
+				payload: { status: 'pending', total: '25.00' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3052,7 +3998,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3086,7 +4032,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3099,7 +4045,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3141,7 +4087,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3189,7 +4135,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				origin: 'existing',
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 				baseRevision: 'sha256:server-r1',
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3231,46 +4177,60 @@ describe('#507 offline write flows through the public handle', () => {
 	 * matching orders. Destroying there deletes a real sale on an inference the
 	 * client is not entitled to make.
 	 */
-	it('#832 R7b: a create rejected as identity-ambiguous is NOT born-local — discard keeps the order', async () => {
-		const server = createFakeWriteServer();
-		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
-		try {
-			await engine.ready;
-			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
-				total: '25.00',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
-			});
-			const scope = engine.active();
-			if (!scope) throw new Error('no active scope');
-			const queue = queueFor(scope.database);
-			const stale = await queue.enqueue({
-				mutationId: 'ambiguous-create',
-				collectionName: 'orders',
-				operation: 'create',
-				recordId: UUID_A,
-				origin: 'minted',
-				payload: { status: 'pos-paid', total: '25.00' },
-				baseRevision: null,
-				queuedAt: '2026-01-05T00:00:00.000Z',
-			});
-			await queue.replace({
-				...stale,
-				status: 'rejected',
-				rejectedStatus: 409,
-				rejectedReason: 'identity-ambiguous',
-				rejectedMessage: 'This record matches more than one order.',
-			});
+	it.each([null, '123'])(
+		'#832 R7b: a create rejected as identity-ambiguous is NOT born-local — discard keeps the order',
+		async (remoteId) => {
+			const server = createFakeWriteServer();
+			const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A, {
+					status: 'pending',
+					total: '25.00',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+				});
+				const scope = engine.active();
+				if (!scope) throw new Error('no active scope');
+				const queue = queueFor(scope.database);
+				const stale = await queue.enqueue({
+					mutationId: 'ambiguous-create',
+					collectionName: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					origin: 'minted',
+					payload: { status: 'pending', total: '25.00' },
+					baseRevision: null,
+					queuedAt: '2026-01-05T00:00:00.000Z',
+				});
+				await queue.replace({
+					...stale,
+					status: 'rejected',
+					rejectedStatus: 409,
+					rejectedReason: remoteId ? 'rest_invalid_param' : 'identity-ambiguous',
+					rejectedMessage: 'This record matches more than one order.',
+				});
 
-			await engine.resolveConflict('ambiguous-create', 'discard');
+				if (remoteId) {
+					const resident = await scope.database.collections.orders.findOne(UUID_A).exec();
+					await resident.incrementalPatch({ remoteId });
+				}
+				expect(
+					discardConsequence({
+						row: (await engine.conflicts())[0],
+						resident: await orderJson(engine, UUID_A),
+						remoteIdField: 'remoteId',
+					})
+				).toBe('keeps-record');
+				await engine.resolveConflict('ambiguous-create', 'discard');
 
-			// The order survives: the server may hold it, and a pull can reconcile.
-			expect(await orderJson(engine, UUID_A)).not.toBeNull();
-			expect(await engine.conflicts()).toEqual([]);
-		} finally {
-			await engine.dispose();
+				// The order survives: the server may hold it, and a pull can reconcile.
+				expect(await orderJson(engine, UUID_A)).not.toBeNull();
+				expect(await engine.conflicts()).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
 		}
-	});
+	);
 
 	it('#832 R7b: a destructive discard refuses while anything is still queued to send for the record', async () => {
 		const server = createFakeWriteServer();
@@ -3278,7 +4238,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3291,7 +4251,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3340,7 +4300,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3353,7 +4313,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3423,7 +4383,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3436,7 +4396,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3481,7 +4441,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3494,7 +4454,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3539,7 +4499,7 @@ describe('#507 offline write flows through the public handle', () => {
 		try {
 			await engine.ready;
 			await insertBornLocalOrder(engine, UUID_A, {
-				status: 'pos-paid',
+				status: 'pending',
 				total: '25.00',
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -3552,7 +4512,7 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				recordId: UUID_A,
 				origin: 'minted',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
@@ -3614,7 +4574,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({
@@ -3630,10 +4590,39 @@ describe('#507 offline write flows through the public handle', () => {
 				operation: 'create',
 				mutationId: second.mutationId,
 			});
-			expect((server.received[0].payload as { status?: string }).status).toBe('pos-paid');
+			expect((server.received[0].payload as { status?: string }).status).toBe('pending');
 			const order = await orderJson(engine, UUID_A);
 			expect(order?.remoteId).toBe(remoteId(900_000_500));
 			expect(order?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it.each(['pending', 'rejected'] as const)('enqueue void settles the %s chain', async (status) => {
+		const engine = engineWith({ fetch: vi.fn() });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A);
+			const intent = {
+				collection: 'orders',
+				recordId: UUID_A,
+				payload: {},
+				explicit: true,
+			} as const;
+			const create = await engine.write({ ...intent, operation: 'create' });
+			const update = await engine.write({ ...intent, operation: 'update' });
+			if (status === 'rejected') {
+				const queue = queueFor(engine.active()!.database);
+				await queue.replace({ ...(await queue.all())[0]!, status });
+			}
+			const ids: string[] = [];
+			engine.events((event) => {
+				if (event.type === 'write-annihilated') ids.push(event.mutationId);
+			});
+			const receipt = await engine.write({ ...intent, operation: 'delete' });
+			expect(ids).toEqual([create.mutationId, update.mutationId, receipt.mutationId]);
+			await expect(awaitWriteOutcome(engine, create.mutationId)).resolves.toBe('success-local');
 		} finally {
 			await engine.dispose();
 		}
@@ -3697,7 +4686,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			const del = await engine.write({
 				collection: 'orders',
@@ -3820,7 +4809,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.write({
 				collection: 'orders',
@@ -3840,7 +4829,7 @@ describe('#507 offline write flows through the public handle', () => {
 				status?: string;
 				customer_note?: string;
 			};
-			expect(pushedPayload.status).toBe('completed'); // the FIRST edit survives the coalesce
+			expect(pushedPayload.status).toBe('cancelled'); // the FIRST edit survives the coalesce
 			expect(pushedPayload.customer_note).toBe('ring twice'); // and the second lands with it
 		} finally {
 			await engine.dispose();
@@ -3865,7 +4854,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 			});
 
 			expect(await engine.sync('write-drain')).toMatchObject({
@@ -3877,7 +4866,7 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(server.received).toHaveLength(1);
 			expect(server.received[0].operation).toBe('create');
 			const pushedPayload = server.received[0].payload as { status?: string; currency?: string };
-			expect(pushedPayload.status).toBe('pos-paid');
+			expect(pushedPayload.status).toBe('pending');
 			expect(pushedPayload.currency).toBe('AUD'); // the create's own field is NOT dropped
 		} finally {
 			await engine.dispose();
@@ -3955,7 +4944,7 @@ describe('#507 offline write flows through the public handle', () => {
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			// Two racing writes read the SAME pending row: the CAS lets exactly one
 			// consume it; the loser re-reads and coalesces onto the winner's replacement.
@@ -3970,7 +4959,7 @@ describe('#507 offline write flows through the public handle', () => {
 					collection: 'orders',
 					operation: 'update',
 					recordId: UUID_A,
-					payload: { transaction_id: 'txn-7' },
+					payload: { currency: 'NZD' },
 				}),
 			]);
 
@@ -3993,12 +4982,12 @@ describe('#507 offline write flows through the public handle', () => {
 			const pushedPayload = server.received[0].payload as {
 				status?: string;
 				customer_note?: string;
-				transaction_id?: string;
+				currency?: string;
 			};
 			expect(pushedPayload).toMatchObject({
-				status: 'completed',
+				status: 'cancelled',
 				customer_note: 'ring twice',
-				transaction_id: 'txn-7',
+				currency: 'NZD',
 			}); // every edit kept
 		} finally {
 			await engine.dispose();
@@ -4075,18 +5064,21 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'create',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending', customer_note: 'gift wrap' },
 			});
 			expect((await engine.sync('write-drain')).failed).toBe(1);
 			nowMs = 120_000;
 			expect((await engine.sync('write-drain')).pushed).toBe(1);
 			expect(events.some((event) => event.type === 'queue.write.born-twice-requeue')).toBe(true);
-			expect(await queueRows(engine)).toEqual([
+			const rows = await queueRows(engine);
+			expect(rows).toEqual([
 				expect.objectContaining({
 					operation: 'update',
-					payload: expect.objectContaining({ status: 'pos-paid' }),
+					payload: expect.objectContaining({ customer_note: 'gift wrap' }),
 				}),
 			]);
+			// The create's status never becomes an update intent (ADR 0040).
+			expect(rows[0]!.payload).not.toHaveProperty('status');
 		} finally {
 			await engine.dispose();
 		}
@@ -4123,14 +5115,14 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 
 			// The user edits. Pre-fix this coalesced INTO the pending create under a
 			// FRESH mutationId — the replay then hit the born-twice guard, which
-			// returned the EXISTING document and silently discarded 'pos-paid'.
+			// returned the EXISTING document and silently discarded 'pending'.
 			// Post-fix: the ever-pushed row (attempts > 0) never coalesces; the edit
 			// queues BEHIND as a separate update.
 			const edit = await engine.write({
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 			});
 			const rows = (await queueRows(engine)).sort((a, b) => (a.seq as number) - (b.seq as number));
 			expect(rows.map((row) => [row.operation, row.mutationId])).toEqual([
@@ -4153,8 +5145,8 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				['create', create.mutationId], // the replay — same id, not a fresh one
 				['update', edit.mutationId],
 			]);
-			// The truth the executed repro proved lost: the server DID apply 'pos-paid'.
-			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('pos-paid');
+			// The truth the executed repro proved lost: the server DID apply 'pending'.
+			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('pending');
 			const order = await orderJson(engine, UUID_A);
 			expect((order?.sync as { revision?: string }).revision).toBe(
 				server.applied.get(UUID_A)?.revision
@@ -4237,7 +5229,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'create',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid', currency: 'AUD' },
+				payload: { status: 'pending', currency: 'AUD' },
 			});
 
 			// Drain 1: the create acks (200 returned-existing) — pre-fix the client
@@ -4254,10 +5246,9 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			expect(rows).toHaveLength(1);
 			expect(rows[0]).toMatchObject({ operation: 'update', baseRevision: 'sha256:existing-r1' });
 			expect(rows[0]?.mutationId).not.toBe(create.mutationId);
-			expect(rows[0]?.payload as { status?: string; currency?: string }).toMatchObject({
-				status: 'pos-paid',
-				currency: 'AUD',
-			});
+			// The snapshot re-lands without the create's status (ADR 0040: never an update intent).
+			expect(rows[0]?.payload).toMatchObject({ currency: 'AUD' });
+			expect(rows[0]?.payload).not.toHaveProperty('status');
 			const afterAck = await orderJson(engine, UUID_A);
 			expect(afterAck?.remoteId).toBe(remoteId(900_120_777)); // the existing server identity was adopted
 			expect((afterAck?.local as { dirty?: boolean }).dirty).toBe(true); // NOT posing as synced
@@ -4270,7 +5261,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				rejected: 0,
 			});
 			expect(server.received.map((env) => env.operation)).toEqual(['create', 'update']);
-			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('pos-paid');
+			expect((server.received.at(-1)?.payload as { currency?: string }).currency).toBe('AUD');
 			expect(server.applied.get(UUID_A)?.revision).not.toBe('sha256:existing-r1'); // the edit really landed
 			expect((await orderJson(engine, UUID_A))?.local).toMatchObject({
 				dirty: false,
@@ -4296,7 +5287,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				operation: 'create' as const,
 				recordId: UUID_A,
 				origin: 'minted' as const,
-				payload: { status: 'pos-paid', currency: 'AUD' },
+				payload: { status: 'pending', currency: 'AUD' },
 				baseRevision: null,
 				queuedAt: '2026-07-10T00:00:00.000Z',
 			};
@@ -4311,7 +5302,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 					operation: 'update',
 					recordId: UUID_A,
 					origin: 'existing',
-					payload: { status: 'completed' }, // the NEWER edit — it must win
+					payload: { status: 'cancelled' }, // the NEWER edit — it must win
 					baseRevision: null,
 					queuedAt: '2026-07-10T00:00:01.000Z',
 				});
@@ -4329,14 +5320,14 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 
 			// Pre-fix: the tail append was unconditional, so the OLDER snapshot
 			// slotted at a HIGHER seq than the concurrent edit (and without its
-			// fields) — 'completed' was overwritten server-side. Post-fix: the
+			// fields) — 'cancelled' was overwritten server-side. Post-fix: the
 			// conditional append refuses, the decision re-runs, and the snapshot
 			// merges UNDER the newer edit.
 			expect(result).not.toBeNull();
 			const rows = await queueRows(engine);
 			expect(rows).toHaveLength(1);
 			expect(rows[0]?.mutationId).toBe(result?.mutationId);
-			expect(rows[0]?.payload).toMatchObject({ status: 'completed', currency: 'AUD' }); // newer edit wins on overlap; snapshot fields kept
+			expect(rows[0]?.payload).toMatchObject({ status: 'cancelled', currency: 'AUD' }); // newer edit wins on overlap; snapshot fields kept
 		} finally {
 			await engine.dispose();
 		}
@@ -4359,7 +5350,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'create',
 				recordId: UUID_A,
-				payload: { status: 'pos-paid', currency: 'AUD' },
+				payload: { status: 'pending', currency: 'AUD' },
 			});
 
 			// The hot writer: every queue read while hot is immediately followed by a
@@ -4441,7 +5432,6 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			expect(await queueRows(engine)).toEqual([]);
 			expect(server.received.at(-1)?.operation).toBe('update');
 			expect(server.received.at(-1)?.payload).toMatchObject({
-				status: 'pos-paid',
 				currency: 'AUD',
 				note: 'hot',
 			}); // both the snapshot and the hot edit landed
@@ -4502,7 +5492,6 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				operation: 'update',
 				recordId: UUID_A,
 				payload: { note: 'U2', discount: '5.00' },
-				explicit: true,
 			});
 			gate!();
 			expect((await drain1).failed).toBe(1);
@@ -4566,8 +5555,11 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			await (
 				scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }
 			).insert({
+				posUserId: '',
+				posStoreId: '',
 				uuid: UUID_A,
 				remoteId: null,
+				remoteKey: '',
 				number: '',
 				dateCreatedGmt: '2026-07-10T00:00:00',
 				status: 'pos-open',
@@ -4598,7 +5590,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collectionName: 'orders',
 				operation: 'update',
 				origin: 'existing',
-				payload: { status: 'pos-paid' },
+				payload: { status: 'pending' },
 				baseRevision: null,
 				queuedAt: '2026-07-10T00:00:01.000Z',
 				seq: 2,
@@ -4634,7 +5626,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 		}
 	});
 
-	it('#526: failed resident removal restores ahead of a concurrent same-record newcomer', async () => {
+	it('#526: failed resident removal preserves work and refuses a concurrent newcomer', async () => {
 		const engine = engineWith({ fetch: createFakeWriteServer().fetch });
 		try {
 			await engine.ready;
@@ -4658,23 +5650,34 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				queuedAt: '2026-07-11T00:00:00.000Z',
 			});
 			const resident = await scope.database.collections.orders.findOne(UUID_A).exec();
-			vi.spyOn(resident!, 'remove').mockImplementationOnce(async () => {
-				await engine.write({
-					collection: 'orders',
-					operation: 'update',
-					recordId: UUID_A,
-					payload: { status: 'newcomer' },
-				});
+			const remove = vi.spyOn(resident!, 'remove', 'get').mockReturnValueOnce(async () => {
+				await expect(
+					engine.write({
+						collection: 'orders',
+						operation: 'update',
+						recordId: UUID_A,
+						payload: { status: 'newcomer' },
+					})
+				).rejects.toMatchObject({ status: 428, reason: 'void-in-progress' });
 				throw new Error('scripted resident remove failure');
 			});
 			await expect(
 				engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A })
 			).rejects.toThrow('scripted resident remove failure');
 			const rows = (await queueRows(engine)).sort((a, b) => Number(a.seq) - Number(b.seq));
-			expect(rows.map((row) => row.seq)).toEqual([1, 2, 3]);
-			expect(rows.map((row) => row.operation)).toEqual(['create', 'update', 'update']);
+			expect(rows.map((row) => row.seq)).toEqual([1, 2]);
+			expect(rows.map((row) => row.operation)).toEqual(['create', 'update']);
 			expect((rows[1]?.payload as { status?: string }).status).toBe('chain');
-			expect((rows[2]?.payload as { status?: string }).status).toBe('newcomer');
+			remove.mockRestore();
+			await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+			await insertBornLocalOrder(engine, UUID_A);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { id: 0 },
+			});
+			expect(await queue.pending()).toMatchObject([{ operation: 'create' }]);
 		} finally {
 			await engine.dispose();
 		}
@@ -4753,7 +5756,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 
 			// The refresh finds nothing (server returns an empty pull) → the honest
@@ -4787,7 +5790,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				conflicts: 0,
 				rejected: 0,
 			});
-			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('completed');
+			expect((server.received.at(-1)?.payload as { status?: string }).status).toBe('cancelled');
 			expect(await engine.conflicts()).toEqual([]);
 			expect((await orderJson(engine, UUID_A))?.local).toMatchObject({
 				dirty: false,
@@ -4910,7 +5913,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
-				payload: { status: 'completed' },
+				payload: { status: 'cancelled' },
 			});
 			await engine.sync('write-drain');
 			expect(await engine.conflicts()).toHaveLength(1);

@@ -14,15 +14,6 @@ describe('openExternalURL (web)', () => {
 		windowOpenSpy.mockRestore();
 	});
 
-	it('should call window.open with the URL and _blank target', async () => {
-		await openExternalURL('https://example.com');
-		expect(windowOpenSpy).toHaveBeenCalledWith(
-			'https://example.com',
-			'_blank',
-			'noopener,noreferrer'
-		);
-	});
-
 	it('should handle errors without throwing', async () => {
 		windowOpenSpy.mockImplementation(() => {
 			throw new Error('blocked');

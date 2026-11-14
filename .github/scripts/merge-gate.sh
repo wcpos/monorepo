@@ -168,8 +168,8 @@ trailer_block_has_tested() {
 
 check_bucket() {
   local check_name="$1"
-  gh pr checks "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json name,bucket,state \
-    --jq ".[] | select(.name == \"${check_name}\") | [.bucket, .state] | @tsv" 2>/dev/null | head -n 1 || true
+  gh pr checks "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json name,bucket,state,startedAt \
+    --jq "[.[] | select(.name == \"${check_name}\")] | sort_by(.startedAt // \"\") | last | select(. != null) | [.bucket, .state] | @tsv" 2>/dev/null || true
 }
 
 bucket_is_pass() {
@@ -183,7 +183,12 @@ bucket_is_pass() {
 
 bucket_is_failure() {
   local bucket="$1" state="$2"
-  [[ "$bucket" == "fail" || "$bucket" == "cancel" || "$state" == "FAILURE" || "$state" == "ERROR" || "$state" == "failure" || "$state" == "error" || "$state" == "CANCELLED" || "$state" == "cancelled" ]]
+  [[ "$bucket" == "fail" || "$state" == "FAILURE" || "$state" == "ERROR" || "$state" == "failure" || "$state" == "error" ]]
+}
+
+bucket_is_cancelled() {
+  local bucket="$1" state="$2"
+  [[ "$bucket" == "cancel" || "$state" == "CANCELLED" || "$state" == "cancelled" ]]
 }
 
 wait_for_checks() {
@@ -210,6 +215,14 @@ wait_for_checks() {
         log "✗ $check failed ($bucket/$state)"
         any_failed=true
         all_pass=false
+      elif bucket_is_cancelled "$bucket" "$state"; then
+        all_pass=false
+        if [[ "$attempt" -eq "$MAX_ATTEMPTS" ]]; then
+          log "✗ $check cancelled with no newer run"
+          any_failed=true
+        else
+          log "… $check cancelled (superseded?), waiting"
+        fi
       else
         log "… $check pending ($bucket/$state)"
         all_pass=false

@@ -38,6 +38,12 @@ export interface WcposAuthResult {
 	type: 'success' | 'error' | 'dismiss' | 'cancel' | 'locked';
 	params?: WcposAuthParams;
 	error?: string;
+	/**
+	 * True when the hook that produced this error result already wrote its coded
+	 * row (state mismatch, IPC failure, a thrown prompt), so the consumer shows the
+	 * toast without logging the same failure a second time.
+	 */
+	reported?: boolean;
 	errorCode?: string;
 }
 

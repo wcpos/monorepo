@@ -70,7 +70,11 @@ for (let index = 0; index < SAMPLES; index += 1) {
 
 const timings = results.map((result) => result.ms).sort((a, b) => a - b);
 const median = timings[Math.floor(timings.length / 2)];
-const failures = results.filter((result) => result.status === 0).length;
+// A 404 after the plain-permalink fallback means the host answered but the store is not
+// there (wrong host, hijacked port, plugin inactive): a failure, never health. Two days of a
+// hijacked :8443 read as healthy before this (2026-10-19).
+const notFound = results.filter((result) => result.status === 404).length;
+const failures = results.filter((result) => result.status === 0).length + notFound;
 const summary = results
 	.map((result) =>
 		result.status === 0 ? `timeout(${result.ms}ms)` : `${result.status}/${result.ms}ms`
@@ -80,11 +84,18 @@ const summary = results
 console.log(`[store-health] ${label} ${endpoint}`);
 console.log(`[store-health] samples: ${summary} — median ${median}ms`);
 
-if (failures > 0 || median >= SATURATED_MS) {
+if (notFound === results.length) {
+	annotate(
+		'error',
+		'E2E store not found',
+		`${label} answered 404 on both REST route forms ${phase}: the host is up but the store is not ` +
+			`there (wrong host or port, or the plugin is inactive). Nothing in this run tested the diff.`
+	);
+} else if (failures > 0 || median >= SATURATED_MS) {
 	annotate(
 		'error',
 		'E2E store saturated',
-		`${label} responded in ${median}ms median (${failures} timeout(s)) ${phase}. ` +
+		`${label} responded in ${median}ms median (${failures} failed sample(s)) ${phase}. ` +
 			`Failures in this run are very likely environmental — the store could not serve the run, ` +
 			`whatever the diff does. Re-run when the queue drains rather than debugging the diff.`
 	);

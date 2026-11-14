@@ -129,6 +129,55 @@ appId: com.wcpos.main.dev
 # 33662941896 died in flow 04 at 36 s exactly that way. The keyboard's tell
 # on a phone is the tab bar pushed off screen while the search box stays:
 # dismiss only then, and only on phones (tablets have no tab bar to read).
+# Set the persisted variation alternative once per Maestro run.
+- runFlow:
+    when:
+      true: ${!output.variationsStyleInline}
+      visible:
+        id: "products-settings-button"
+    commands:
+      - tapOn:
+          id: "products-settings-button"
+      - tapOn:
+          id: "products-variations-style-inline"
+      - tapOn:
+          id: "ui-settings-close"
+      - evalScript: ${output.variationsStyleInline = true}
+# Two registers on the store: a cleared device is unbound and the cart is the picker
+# (run 43121066541). Pill = tell; phones peek at the Cart tab. Late: free when healthy.
+# A row reads "<name>, <status>" on both platforms (iOS hides the child Texts).
+- runFlow:
+    when:
+      visible:
+        id: "register-bar-pill"
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: "pos-tab-cart"
+          commands:
+            - tapOn:
+                id: "pos-tab-cart"
+      - runFlow:
+          when:
+            visible:
+              id: "register-picker-row-.*"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E register picker shown, picking the suite register')}"
+            - tapOn:
+                id: "register-picker-row-.*"
+                text: "Register, .*"
+            - extendedWaitUntil:
+                notVisible:
+                  id: "register-picker-row-.*"
+                timeout: 15000
+      - runFlow:
+          when:
+            visible:
+              id: "pos-tab-products"
+          commands:
+            - tapOn:
+                id: "pos-tab-products"
 - runFlow:
     when:
       true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"

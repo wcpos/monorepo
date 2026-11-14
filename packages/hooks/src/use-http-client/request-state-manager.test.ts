@@ -80,6 +80,55 @@ describe('RequestStateManager', () => {
 		});
 	});
 
+	describe('auth failure notifications', () => {
+		it('notifies transitions only and supports unsubscribe', () => {
+			const callback = jest.fn();
+			const cleanup = requestStateManager.onAuthFailed(callback);
+			requestStateManager.setAuthFailed(true);
+			requestStateManager.setAuthFailed(true);
+			requestStateManager.setAuthFailed(false);
+			expect(callback.mock.calls).toEqual([[true], [false]]);
+			cleanup();
+			requestStateManager.setAuthFailed(true);
+			expect(callback).toHaveBeenCalledTimes(2);
+		});
+
+		it('continues notifying when a listener throws', () => {
+			const cleanupThrowing = requestStateManager.onAuthFailed(() => {
+				throw new Error('listener failed');
+			});
+			const callback = jest.fn();
+			const cleanup = requestStateManager.onAuthFailed(callback);
+			requestStateManager.setAuthFailed(true);
+			expect(callback).toHaveBeenCalledWith(true);
+			cleanupThrowing();
+			cleanup();
+		});
+
+		it('clears the latch and stale token before notifying recovery', () => {
+			requestStateManager.setAuthFailed(true);
+			requestStateManager.setRefreshedToken('old');
+			const callback = jest.fn(() => requestStateManager.getRefreshedToken());
+			const cleanup = requestStateManager.onAuthFailed(callback);
+			requestStateManager.clearAuthFailure();
+			expect(requestStateManager.isAuthFailed()).toBe(false);
+			expect(requestStateManager.getRefreshedToken()).toBeNull();
+			expect(callback.mock.calls).toEqual([[false]]);
+			expect(callback).toHaveReturnedWith(null);
+			cleanup();
+		});
+
+		it('notifies false on reset only when the latch was set', () => {
+			requestStateManager.setAuthFailed(true);
+			const callback = jest.fn();
+			const cleanup = requestStateManager.onAuthFailed(callback);
+			requestStateManager.reset();
+			requestStateManager.reset();
+			expect(callback.mock.calls).toEqual([[false]]);
+			cleanup();
+		});
+	});
+
 	describe('state getters', () => {
 		it('isOffline defaults to false', () => {
 			expect(requestStateManager.isOffline()).toBe(false);
@@ -127,8 +176,12 @@ describe('RequestStateManager', () => {
 
 		it('should clear authFailed on successful refresh', async () => {
 			requestStateManager.setAuthFailed(true);
+			const callback = jest.fn();
+			const cleanup = requestStateManager.onAuthFailed(callback);
 			await requestStateManager.startTokenRefresh(async () => 'token');
+			cleanup();
 			expect(requestStateManager.isAuthFailed()).toBe(false);
+			expect(callback.mock.calls).toEqual([[false]]);
 		});
 
 		it('should handle refresh failure', async () => {
@@ -162,13 +215,6 @@ describe('RequestStateManager', () => {
 	});
 
 	describe('onWake', () => {
-		it('should register and call wake callback', () => {
-			const cb = jest.fn();
-			requestStateManager.onWake(cb);
-			// We can't easily trigger visibility change in jsdom, but we can verify registration
-			expect(typeof requestStateManager.onWake).toBe('function');
-		});
-
 		it('should return cleanup function', () => {
 			const cb = jest.fn();
 			const cleanup = requestStateManager.onWake(cb);

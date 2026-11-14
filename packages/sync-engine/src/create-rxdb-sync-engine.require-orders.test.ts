@@ -64,6 +64,7 @@ const EMPTY_DRAIN_RESULT = {
 	succeeded: 0,
 	coalescedReruns: 0,
 	failed: 0,
+	failedUnreported: 0,
 	failureLost: 0,
 	renewalLost: 0,
 	totalDocuments: 0,
@@ -124,6 +125,9 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 			orderId: id,
 			revision: `revision-${id}`,
 			sequence: id,
+			epoch: 'scripted-epoch',
+			head: batchCount,
+			horizon: 0,
 		};
 		return new Response(
 			JSON.stringify({
@@ -131,6 +135,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 					{
 						uuid: `77777777-7777-4777-8777-${String(id).padStart(12, '0')}`,
 						remoteId: remoteId(id),
+						remoteKey: String(remoteId(id) ?? ''),
 						payload: {
 							id,
 							date_modified_gmt: checkpoint.updatedAtGmt,
@@ -151,7 +156,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 					},
 				],
 				checkpoint,
-				hasMore: state.pulls < batchCount,
+				complete: state.pulls >= batchCount,
 			}),
 			{ status: 200, headers: { 'content-type': 'application/json' } }
 		);
@@ -290,6 +295,7 @@ describe('require() for orders (the durable path)', () => {
 			manager: {
 				runGuarded: async (operation: (captured: typeof bound) => Promise<unknown>) =>
 					operation(bound),
+				onEvent: () => () => undefined,
 			} as never,
 			databaseFor: () => database as never,
 			coverageFor: () =>
@@ -700,6 +706,14 @@ describe('require() for orders (the durable path)', () => {
 				message: 'require: scheduler drain failed 1 task(s)',
 			})
 		);
+		// The declarer's failure is the ONE error-level report of this task failure
+		// (Sentry captures error level only); nothing else reports it a second time.
+		expect(
+			harness.diagnostics.mock.calls
+				.map(([event]) => event as { type: string; level: string })
+				.filter((event) => event.level === 'error')
+				.map((event) => event.type)
+		).toEqual(['coverage.require.error']);
 	});
 
 	it('carries the detail of a foreign error, not just its name', async () => {

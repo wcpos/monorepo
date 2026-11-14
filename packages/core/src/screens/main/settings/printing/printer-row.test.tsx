@@ -9,7 +9,14 @@ import type { PrinterProfile } from '@wcpos/printer';
 import { PrinterRow } from './printer-row';
 
 // The real row: a saved printer was tested and saved, so it must not carry the wizard entry.
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/progress', () => ({ Progress: () => null }));
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
 jest.mock('react-native', () => ({
+	// DeviceRow reads the layout boundary; a wide pane.
+	useWindowDimensions: () => ({ width: 1024, height: 768 }),
 	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>
 	),
@@ -30,6 +37,7 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 }));
 jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 	DropdownMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -77,6 +85,8 @@ it('renders a saved printer without the wizard entry, even when the wizard is av
 	expect(screen.getByText('TM-m30III')).toBeInTheDocument();
 	expect(screen.getByTestId('printer-row-p1-test')).toBeInTheDocument();
 	expect(screen.queryByText('settings.having_trouble')).toBeNull();
+	// Delete is the menu's last row, set apart by a separator (CODING_STANDARDS, overlay table).
+	expect(screen.getByTestId('menu-separator')).toBeInTheDocument();
 });
 
 it.each(['generic', 'epson', 'star'] as const)(

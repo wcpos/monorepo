@@ -5,7 +5,7 @@ import { serialize as structuredSerialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, WriteOutcomeError, WriteOutcomeTimeoutError } from '@wcpos/query';
 
 import { useMutation } from './use-mutation';
 
@@ -16,16 +16,21 @@ const mockAwaitWriteOutcome = jest.fn();
 const mockFindEngineResident = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
+const mockLoggerDebug = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
-jest.mock('uuid', () => ({
-	v4: () => 'born-local-uuid',
+jest.mock('../../../../../../query/src/mint-uuid', () => ({
+	mintUuid: () => 'born-local-uuid',
 }));
 
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({ engine: { write: mockWrite, status: mockStatus } }),
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
+	WriteDeferredError: jest.requireActual('@wcpos/query').WriteDeferredError,
+	WriteOutcomeError: jest.requireActual('@wcpos/query').WriteOutcomeError,
+	WriteOutcomeTimeoutError: jest.requireActual('@wcpos/query').WriteOutcomeTimeoutError,
 }));
 
 jest.mock('./use-local-mutation', () => ({
@@ -35,12 +40,25 @@ jest.mock('./use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 
+jest.mock('../../../../../../query/src/mutations/resident', () => ({
+	...jest.requireActual('../../../../../../query/src/mutations/resident'),
+	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
+	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
+}));
+jest.mock('../../../../../../query/src/await-write-outcome', () => ({
+	...jest.requireActual('../../../../../../query/src/await-write-outcome'),
+	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
+}));
+
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockLoggerError(...args),
+		warn: (...args: unknown[]) => mockLoggerWarn(...args),
+		debug: (...args: unknown[]) => mockLoggerDebug(...args),
 		success: (...args: unknown[]) => mockLoggerSuccess(...args),
 	}),
+	markErrorReported: jest.fn(),
 }));
 
 jest.mock('../../../../contexts/translations', () => ({
@@ -49,10 +67,6 @@ jest.mock('../../../../contexts/translations', () => ({
 
 jest.mock('../../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: () => '2026-07-14T00:00:00',
-}));
-
-jest.mock('../use-collection', () => ({
-	useCollection: () => ({ collectionLabel: 'Order' }),
 }));
 
 /**
@@ -182,6 +196,16 @@ describe('useMutation', () => {
 		);
 	});
 
+	it('names the collection, not "#undefined", when a queued create has no store id yet', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ first_name: 'Ada' }));
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledWith('common.saved', expect.anything());
+		expect(mockLoggerSuccess).not.toHaveBeenCalledWith('common.saved_2', expect.anything());
+	});
+
 	it('preserves an engine record UUID when a customer patch does not update', async () => {
 		const customer = {
 			uuid: 'customer-local-uuid',
@@ -191,18 +215,19 @@ describe('useMutation', () => {
 		mockLocalPatch.mockResolvedValueOnce(undefined);
 		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
 
-		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: customer,
 			data: { first_name: 'Ada' },
 		});
-		expect(mockLoggerError).toHaveBeenCalledWith(
-			'common.not_updated',
-			expect.objectContaining({
-				context: expect.objectContaining({ documentId: 'customer-local-uuid' }),
-			})
-		);
+		// localPatch already logged and toasted its own failure: no second report.
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+		expect(mockLoggerDebug).not.toHaveBeenCalled();
+		expect(mockLoggerSuccess).not.toHaveBeenCalled();
 	});
 
 	it('logs the payload id from a record-shaped patch result', async () => {
@@ -214,7 +239,9 @@ describe('useMutation', () => {
 		mockLocalPatch.mockResolvedValueOnce({ changes: {}, document: customer });
 		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
 
-		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
 
 		expect(mockLoggerSuccess).toHaveBeenCalledWith(
 			'common.saved_2',
@@ -222,6 +249,43 @@ describe('useMutation', () => {
 				context: expect.objectContaining({ documentId: 42 }),
 			})
 		);
+	});
+
+	it('toasts its generic success by default', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ id: 7, first_name: 'Ada' }));
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledWith(
+			'common.saved_2',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+
+	// A caller that toasts its own, more specific "Saved {name}" turns the generic
+	// "Customer #id saved" off, or the cashier sees two success toasts for one save.
+	it('logs but does not toast its generic success when the caller owns the toast', async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ id: 7, first_name: 'Ada' }));
+		const customer = {
+			uuid: 'customer-local-uuid',
+			collection: { name: 'customers' },
+			payload: { id: 42, first_name: 'Ada' },
+		} as unknown as EngineRecord<'customers'>;
+		mockLocalPatch.mockResolvedValueOnce({ changes: {}, document: customer });
+		const { result } = renderHook(() =>
+			useMutation({ collectionName: 'customers', showSuccessToast: false })
+		);
+
+		await act(() => result.current.create({ data: { first_name: 'Ada' } }));
+		await act(() =>
+			result.current.patchRecord({ document: customer, data: { first_name: 'Ada' } })
+		);
+
+		expect(mockLoggerSuccess).toHaveBeenCalledTimes(2);
+		for (const [, options] of mockLoggerSuccess.mock.calls) {
+			expect(options).toEqual(expect.objectContaining({ showToast: false }));
+		}
 	});
 
 	it('hands the engine a structured-cloneable customer payload', async () => {
@@ -260,5 +324,67 @@ describe('useMutation', () => {
 			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
 		).rejects.toThrow('write-rejected for mutation "mutation-1"');
 		expect(resident.remove).not.toHaveBeenCalled();
+	});
+
+	it("toasts the server's own sentence when a create is rejected", async () => {
+		mockInsertEngineResident.mockResolvedValue(residentStub({ first_name: 'Ada' }));
+		mockAwaitWriteOutcome.mockRejectedValueOnce(
+			new WriteOutcomeError(
+				'write-rejected',
+				'mutation-1',
+				400,
+				'registration-error-email-exists',
+				'An account is already registered with your email address. Please log in.'
+			)
+		);
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await expect(
+			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
+		).rejects.toBeInstanceOf(WriteOutcomeError);
+		// The sync observer already wrote the SYNC201 row for this rejection, so the
+		// caller's report is forensic (debug) and owes the cashier only the toast.
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerDebug).toHaveBeenCalledWith(
+			'write-rejected (registration-error-email-exists)',
+			expect.objectContaining({
+				showToast: true,
+				code: 'SYNC201',
+				toast: {
+					type: 'error',
+					title: 'An account is already registered with your email address. Please log in.',
+				},
+				context: expect.objectContaining({
+					error:
+						'write-rejected for mutation "mutation-1": An account is already registered with your email address. Please log in.',
+					reason: 'registration-error-email-exists',
+				}),
+			})
+		);
+	});
+
+	it('warns that a timed-out create is still sending, never "re-enter and save"', async () => {
+		const resident = residentStub({ first_name: 'Ada' });
+		mockInsertEngineResident.mockResolvedValue(resident);
+		mockAwaitWriteOutcome.mockRejectedValueOnce(
+			new WriteOutcomeTimeoutError('mutation-1', { queueDepth: 1 })
+		);
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await expect(
+			result.current.create({ data: { first_name: 'Ada' }, awaitRemoteId: true })
+		).rejects.toBeInstanceOf(WriteOutcomeTimeoutError);
+		// The create is still queued and may yet land; re-entering it is a duplicate.
+		expect(resident.remove).not.toHaveBeenCalled();
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).toHaveBeenCalledWith(
+			'customers create failed',
+			expect.objectContaining({
+				showToast: true,
+				code: 'SYNC191',
+				toast: { title: 'common.still_sending' },
+				context: expect.objectContaining({ pushState: { queueDepth: 1 } }),
+			})
+		);
 	});
 });

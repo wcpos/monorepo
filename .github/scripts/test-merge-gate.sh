@@ -52,6 +52,19 @@ if [[ "$args" == pr\ checks* ]]; then
     printf 'fail\tFAILURE\n'
     exit 0
   fi
+  if [[ "${MOCK_CANCEL_CHECK:-}" == "$check_name" ]]; then
+    count_file="${BASH_SOURCE[0]%/*}/cancel-count"
+    if [[ -f "$count_file" ]]; then
+      read -r count < "$count_file"
+      echo "$((count + 1))" > "$count_file"
+      if [[ "$count" -gt 0 ]]; then
+        printf 'pass\tSUCCESS\n'
+        exit 0
+      fi
+    fi
+    printf 'cancel\tCANCELLED\n'
+    exit 0
+  fi
   if [[ "${MOCK_SKIP_CHECK:-}" == "$check_name" ]]; then
     printf 'skipping\tSKIPPED\n'
     exit 0
@@ -137,6 +150,21 @@ run_case "skipped required checks count as pass (paths-filter)" pass \
 run_case "failed required check fails the gate" fail \
   MOCK_PR_COMMITS="" \
   MOCK_FAIL_CHECK="🧹 Lint"
+
+run_case "a cancelled required check alone fails only after the retries" fail \
+  MOCK_PR_COMMITS="" \
+  MOCK_CANCEL_CHECK="🧪 Unit Tests"
+
+echo 0 > "$tmpdir/cancel-count"
+run_case "a cancelled required check does not fail before the last attempt" pass \
+  MOCK_PR_COMMITS="" \
+  MOCK_CANCEL_CHECK="🧪 Unit Tests" \
+  MERGE_GATE_MAX_ATTEMPTS="2"
+if [[ "$(cat "$tmpdir/cancel-count")" != "2" ]]; then
+  echo "Expected the cancelled check to be polled twice" >&2
+  exit 1
+fi
+rm "$tmpdir/cancel-count"
 
 run_case "fix-bot Tested line outside the trailer block fails" fail \
   MOCK_PR_COMMITS="$bot_commits" \

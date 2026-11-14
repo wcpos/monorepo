@@ -12,10 +12,11 @@ interface CalculateTotalsProps {
 
 /** Aggregates order values into the totals used by the POS report. */
 export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsProps) => {
-	const paymentMethodTotals: Record<string, { total: number; title: string }> = {};
 	const taxTotals: Record<number, { label: string; total: number }> = {};
 	const shippingTotals: Record<string, { total: number; total_tax: number }> = {};
 	const userStoreTotals: Record<string, { totalOrders: number; totalAmount: number }> = {};
+
+	const registerTotals: Record<string, { totalOrders: number; totalAmount: number }> = {};
 
 	let total = 0;
 	let discountTotal = 0;
@@ -38,30 +39,6 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 
 		// Total tax
 		totalTax += toNumber(order.total_tax || 0);
-
-		// Determine the payment method key
-		let paymentMethodKey = order.payment_method;
-		let paymentMethodTitle = order.payment_method_title || '';
-
-		if (!paymentMethodKey) {
-			if (order.needs_payment) {
-				paymentMethodKey = 'unpaid';
-				paymentMethodTitle = '';
-			} else {
-				paymentMethodKey = 'unknown';
-				paymentMethodTitle = '';
-			}
-		}
-
-		// Update payment method totals
-		if (!paymentMethodTotals[paymentMethodKey]) {
-			paymentMethodTotals[paymentMethodKey] = {
-				total: 0,
-				title: paymentMethodTitle,
-			};
-		}
-
-		paymentMethodTotals[paymentMethodKey].total += toNumber(order.total || '0');
 
 		/**
 		 * NOTE: The tax_lines are to 6 decimal places, but the actual tax collected will be
@@ -110,6 +87,11 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 
 		// Cashier and store totals
 		const identity = wooMetaCarrier.readIdentity(order.meta_data);
+		if (identity.registerId) {
+			const totals = (registerTotals[identity.registerId] ??= { totalOrders: 0, totalAmount: 0 });
+			totals.totalOrders += 1;
+			totals.totalAmount += toNumber(order.total || '0');
+		}
 		const cashierId = identity.cashierId ?? '';
 		const storeId = identity.storeId ?? '';
 		const key = `${cashierId}-${storeId}`;
@@ -132,12 +114,6 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 	});
 
 	// Convert totals to arrays for easier usage
-	const paymentMethodsArray = Object.entries(paymentMethodTotals).map(([method, data]) => ({
-		payment_method: method,
-		payment_method_title: data.title,
-		total: data.total,
-	}));
-
 	const taxTotalsArray = Object.entries(taxTotals).map(([rate_id, data]) => ({
 		rate_id: parseInt(rate_id, 10),
 		label: data.label,
@@ -165,9 +141,12 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 	}
 
 	return {
+		registerArray: Object.entries(registerTotals).map(([registerId, totals]) => ({
+			registerId,
+			...totals,
+		})),
 		total,
 		refundTotal,
-		paymentMethodsArray,
 		taxTotalsArray,
 		totalTax,
 		discountTotal,

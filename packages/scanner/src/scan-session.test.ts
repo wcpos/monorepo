@@ -81,7 +81,7 @@ describe('createScanSession', () => {
 		return { accepted, instance, tick: (ms: number) => (clock += ms) };
 	}
 
-	it('accepts the first read and suppresses repeats within the cooldown', () => {
+	it('a trigger source measures the cooldown from the last accepted read: a repeat inside it does not extend it', () => {
 		const { accepted, instance, tick } = session({ cooldownMs: 1000 });
 		expect(instance.offer('4006381333931').accepted).toBe(true);
 		tick(500);
@@ -89,6 +89,40 @@ describe('createScanSession', () => {
 		tick(600); // now 1100 > 1000
 		expect(instance.offer('4006381333931').accepted).toBe(true);
 		expect(accepted).toEqual(['4006381333931', '4006381333931']);
+	});
+
+	it('a continuous source extends the cooldown on every repeat: a barcode held in view is accepted once', () => {
+		// The camera re-reports the same code every frame. Resting on one product
+		// for longer than the cooldown must not add it again (a merchant report
+		// of one product reaching the cart several times before the phone moved).
+		const { accepted, instance, tick } = session({ cooldownMs: 1000, continuous: true });
+		expect(instance.offer('4006381333931').accepted).toBe(true);
+		for (let frame = 0; frame < 30; frame += 1) {
+			tick(100); // 3 s of frames, each inside the window the previous one extended
+			expect(instance.offer('4006381333931')).toEqual({ accepted: false, reason: 'cooldown' });
+		}
+		expect(accepted).toEqual(['4006381333931']);
+	});
+
+	it('a continuous source accepts the code again once it has been out of view for the cooldown', () => {
+		const { accepted, instance, tick } = session({ cooldownMs: 1000, continuous: true });
+		instance.offer('4006381333931');
+		tick(500);
+		instance.offer('4006381333931'); // last sighting at 500
+		tick(999); // 1499: out of view, but not yet for a full cooldown
+		expect(instance.offer('4006381333931')).toEqual({ accepted: false, reason: 'cooldown' });
+		tick(1000); // 2499: 1000 ms after the last sighting at 1499
+		expect(instance.offer('4006381333931').accepted).toBe(true);
+		expect(accepted).toEqual(['4006381333931', '4006381333931']);
+	});
+
+	it('a continuous source still accepts a different code at once', () => {
+		const { accepted, instance, tick } = session({ cooldownMs: 1000, continuous: true });
+		instance.offer('4006381333931');
+		tick(100);
+		instance.offer('4006381333931');
+		expect(instance.offer('96385074').accepted).toBe(true);
+		expect(accepted).toEqual(['4006381333931', '96385074']);
 	});
 
 	it('accepts a different code during another code cooldown', () => {

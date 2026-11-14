@@ -7,12 +7,12 @@ export const AUTO_VALUE = '__auto__';
 
 /**
  * Icon for a printer profile row — `desktop` for the built-in System Print Dialog,
- * `printer` for every hardware connection type (network / bluetooth / usb).
+ * `print` for every hardware connection type (network / bluetooth / usb).
  */
 export function printerIconName(
 	profile: Pick<PrinterProfile, 'connectionType'> & { address?: string }
 ): IconName {
-	return usesSystemPrintDialog(profile) ? 'desktop' : 'printer';
+	return usesSystemPrintDialog(profile) ? 'desktop' : 'print';
 }
 
 /**

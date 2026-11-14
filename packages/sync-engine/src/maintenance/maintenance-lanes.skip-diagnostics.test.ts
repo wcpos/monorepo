@@ -24,7 +24,7 @@ async function skipHarness(overrides?: {
 	const database = {
 		listCollections: () => [],
 		resetCollection: async () => undefined,
-		pendingMutationCount: async () => 0,
+		pendingMutationIds: async () => [],
 		close: async () => undefined,
 	};
 	const manager = new StoreScopeManager({ createDatabase: async () => database });
@@ -49,7 +49,6 @@ async function skipHarness(overrides?: {
 		variationPrefetchStateFor: () => ({ get: async () => null, set: async () => undefined }),
 		variationCensusTotal: async () => null,
 		hasPendingInteractiveWork: overrides?.hasPendingInteractiveWork ?? (() => false),
-		isWritePlaneOwner: () => true,
 		emitEvent: () => undefined,
 		now: () => 1_000,
 	});

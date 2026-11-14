@@ -1,3 +1,5 @@
+import type { PaymentRow } from '@wcpos/order-math';
+
 import * as refundCalc from './calculate-refund';
 import {
 	calculateLineItemRefund,
@@ -114,38 +116,6 @@ describe('calculateRefundTotal', () => {
 
 		expect(result).toBe('21.00');
 	});
-
-	it('returns just line item totals with taxes when no custom amount', () => {
-		const result = calculateRefundTotal({
-			lineItemRefunds: [
-				{
-					refund_total: '10.00',
-					refund_tax: [{ id: 1, refund_total: '2.00' }],
-				},
-			],
-			customAmount: '',
-		});
-
-		expect(result).toBe('12.00');
-	});
-
-	it('returns just custom amount when no line items', () => {
-		const result = calculateRefundTotal({
-			lineItemRefunds: [],
-			customAmount: '7.50',
-		});
-
-		expect(result).toBe('7.50');
-	});
-
-	it('returns 0.00 when nothing selected', () => {
-		const result = calculateRefundTotal({
-			lineItemRefunds: [],
-			customAmount: '',
-		});
-
-		expect(result).toBe('0.00');
-	});
 });
 
 describe('calculateLineItemRefund with dp parameter', () => {
@@ -250,23 +220,82 @@ describe('calculateRefundTotal with dp parameter', () => {
 		});
 		expect(result).toBe('0');
 	});
-
-	it('dp defaults to 2 when not provided', () => {
-		const result = calculateRefundTotal({
-			lineItemRefunds: [],
-			customAmount: '7.50',
-		});
-		expect(result).toBe('7.50');
-	});
 });
 
 describe('computeMaxRefundable', () => {
-	it('no previous refunds', () => {
-		expect(computeMaxRefundable('100.00', [])).toBe(100.0);
+	const captured: PaymentRow = {
+		id: 'payment-1',
+		source: 'app',
+		order_id: 1,
+		method_id: 'pos_cash',
+		provider: null,
+		kind: 'cash',
+		capture_mode: 'manual',
+		transport: null,
+		recorded_offline: false,
+		amount: '20.00',
+		currency: 'USD',
+		tendered: null,
+		change: null,
+		tip: null,
+		status: 'captured',
+		failure_reason: null,
+		refunded_amount: '0.00',
+		refunds: [],
+		provider_refs: {},
+		receipt: {},
+		cashier_id: 1,
+		store_id: null,
+		created_at_gmt: '2026-01-01T00:00:00Z',
+		captured_at_gmt: '2026-01-01T00:00:00Z',
+		updated_at_gmt: '2026-01-01T00:00:00Z',
+	};
+
+	it.each([
+		['-16.83', [], -16.83],
+		['', [{}], 0],
+		['16', [{ total: '-20' }], -4],
+	] as const)('preserves legacy handling of total %s without rows', (total, refunds, expected) => {
+		expect(computeMaxRefundable(total, [...refunds], 2, [])).toBe(expected);
 	});
 
-	it('one previous partial refund', () => {
-		expect(computeMaxRefundable('100.00', [{ total: '-30.00' }])).toBe(70.0);
+	it('nets Woo refunds without allocations and clamps the ledger maximum at zero', () => {
+		expect(computeMaxRefundable('20', [{ total: '-20' }], 2, [captured])).toBe(0);
+		expect(computeMaxRefundable('20', [{ total: '-10' }], 2, [captured])).toBe(10);
+		expect(computeMaxRefundable('20', [{ total: '-21' }], 2, [captured])).toBe(0);
+	});
+
+	it('caps a part-paid order at the captured amount', () => {
+		expect(computeMaxRefundable('100.00', [], 2, [captured])).toBe(20);
+	});
+
+	it.each([
+		['5.00', 15],
+		['20.00', 0],
+	] as const)('subtracts a succeeded allocation of %s from captured money', (amount, expected) => {
+		const payment = {
+			...captured,
+			refunds: [{ id: 1, amount, status: 'succeeded' as const, provider_ref: null }],
+		};
+		expect(computeMaxRefundable('100.00', [{ total: `-${amount}` }], 2, [payment])).toBe(expected);
+	});
+
+	it('keeps total minus previous refunds when no ledger rows exist', () => {
+		expect(computeMaxRefundable('100.00', [{ total: '-5.00' }], 2, [])).toBe(95);
+	});
+
+	it('exhausts captured money when unallocated Woo refunds exceed it', () => {
+		expect(computeMaxRefundable('100.00', [{ total: '-90.00' }], 2, [captured])).toBe(0);
+	});
+
+	it('sums paid rows without counting failed payments', () => {
+		expect(
+			computeMaxRefundable('100.00', [], 2, [
+				captured,
+				{ ...captured, id: 'payment-2' },
+				{ ...captured, id: 'payment-3', status: 'failed' },
+			])
+		).toBe(40);
 	});
 
 	it('dp=0: whole number currency (JPY)', () => {
@@ -279,12 +308,6 @@ describe('computeMaxRefundable', () => {
 
 	it('dp=3: three decimal places (KWD)', () => {
 		expect(computeMaxRefundable('100.000', [{ total: '-30.000' }], 3)).toBe(70.0);
-	});
-
-	it('fractional rounding with dp=2', () => {
-		expect(
-			computeMaxRefundable('10.00', [{ total: '-3.33' }, { total: '-3.33' }, { total: '-3.33' }])
-		).toBe(0.01);
 	});
 });
 

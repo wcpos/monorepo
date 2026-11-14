@@ -12,6 +12,7 @@ const names: SyncCollectionName[] = [
 	'brands',
 	'tags',
 	'coupons',
+	'refunds',
 ];
 
 it('shares one engine status subscription and publishes distinct collection activity', () => {

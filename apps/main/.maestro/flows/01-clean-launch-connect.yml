@@ -1,5 +1,6 @@
 appId: com.wcpos.main.dev
 env:
+  # The lane's store: see flow 02.
   STORE_URL: https://dev-pro.wcpos.com
   INVALID_URL: https://not-a-real-store.invalid
 ---
@@ -37,7 +38,24 @@ env:
 - retry:
     maxRetries: 1
     commands:
-      - openLink: "wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+      # Re-issue the link only when the PREVIOUS leg's scheme prompt is not still
+      # pending. That prompt can surface more than 60 s late, after leg 1's last
+      # prompt check, during the required wait that cannot answer it (run
+      # 38464219303, iOS phone): leg 2 re-issued the link while it was up,
+      # both prompts got "Open", SpringBoard delivered BOTH links when the app
+      # finally started 3 min later, the dev launcher loaded the app twice, and
+      # flow 02 crashed on the discarded instance ("ExpoFabricView: The app context
+      # has been lost"). With a prompt up, answer it below instead; one link, one load.
+      - runFlow:
+          when:
+            visible: "Open in .*WCPOS.*"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E scheme prompt from the previous launch leg still up, answering it instead of re-issuing the link')}"
+      - runFlow:
+          when:
+            notVisible: "Open in .*WCPOS.*"
+          commands:
+            - openLink: "wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
       # Launch blockers. The dev client's own overlays (floating dev-menu button,
       # menu-at-launch, onboarding card) are switched OFF by default in the
       # development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
@@ -157,15 +175,21 @@ env:
       # not localized UI copy — the selector policy's composite-string carve-out.
       - assertVisible:
           text: '${INVALID_URL.replace(/\./g, "\\.")}'
-# optional: hideKeyboard is unreliable on iOS (this file already says so at
-# the two Android-gated uses below, but this one was left ungated and failed
-# a local iOS suite run 2026-08-29 at exactly this step, having passed the
-# same step minutes earlier). Dismissing the keyboard is housekeeping — if it
-# genuinely covers the next target, THAT tap fails and names the real problem.
-# Failing here instead just reports "Hide Keyboard" and hides which element
-# was blocked.
-- hideKeyboard:
-    optional: true
+# Android only. On iOS, Maestro's hideKeyboard is a 27-point flick at the
+# centre of the screen (driver log: `Swipe (v2) from (201.0, 437.0) to
+# (201.0, 410.0)` on an iPhone 16 Pro), and with the keyboard up the connect
+# screen's "Try the demo store" link sits under exactly that point: the flick
+# registered as a press, the demo store connected, its sign-in consent alert
+# came up and the Connect button was gone before the tap (local run
+# 2026-09-30, first execution of this flow on `next`). The Connect button is
+# above the keyboard on iOS, so nothing needs dismissing there; on Android
+# the keyboard is up inside a focused form, where Back is the right key.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard:
+          optional: true
 - tapOn:
     id: "connect-store-button"
 # The button disables while the discovery request is in flight; waiting for it

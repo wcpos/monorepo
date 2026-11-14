@@ -6,6 +6,9 @@ import { useTaxSettings } from '../../contexts/tax-rates';
 
 type Totals = ReturnType<typeof calculateOrderTotals>;
 
+// Coupon replay writes in stages; wait for the intermediate totals to settle before displaying them.
+export const COUPON_TOTALS_DEBOUNCE_MS = 50;
+
 /**
  *
  */
@@ -54,7 +57,8 @@ export const useOrderTotals = () => {
 		// When coupons are active, debounce (50ms) so transient values don't flash.
 		// When they're not, sync immediately (delay 0). Either way the update goes
 		// through the timer callback so it never runs synchronously in the effect.
-		const timer = setTimeout(() => setStableTotals(totals), hasCoupons ? 50 : 0);
+		const delay = hasCoupons ? COUPON_TOTALS_DEBOUNCE_MS : 0;
+		const timer = setTimeout(() => setStableTotals(totals), delay);
 		return () => clearTimeout(timer);
 	}, [totals, hasCoupons]);
 

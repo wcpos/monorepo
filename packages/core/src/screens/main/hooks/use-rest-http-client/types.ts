@@ -18,7 +18,6 @@ export interface WPCredentials {
 	id?: number;
 	refresh_token?: string;
 	expires_in?: number;
-	incrementalPatch: (data: { access_token: string; expires_at: number }) => Promise<any>;
 }
 
 // Duck type for the SiteDocument fields this module reads. Every field is
@@ -31,6 +30,6 @@ export interface Site {
 	wp_api_url?: string;
 	use_jwt_as_param?: boolean;
 	use_rest_route_param?: boolean;
+	use_cache_buster?: boolean;
 	use_protocol_headers?: boolean;
-	incrementalPatch: (data: any) => void;
 }

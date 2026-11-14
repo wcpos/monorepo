@@ -9,6 +9,7 @@ export type WooCustomerPayload = Record<string, unknown> & {
 export type LocalCustomerDocument = {
 	uuid: string;
 	remoteId: RemoteId | null;
+	remoteKey: string;
 	payload: WooCustomerPayload;
 	sync: {
 		revision: string;
@@ -34,9 +35,11 @@ export const customerSchema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'remoteKey', 'payload', 'sync', 'local'],
+	indexes: ['remoteKey'],
 } as const;

@@ -1,8 +1,29 @@
+/* eslint-disable import/first */
+
 import * as React from 'react';
+
+// The cap lives on the field's own props, and react-native-web does not forward
+// maxFontSizeMultiplier to the DOM — record the props the field is handed.
+const fieldProps: Record<string, unknown>[] = [];
+
+jest.mock('react-native', () => {
+	const actual = jest.requireActual('react-native');
+	const react = jest.requireActual('react');
+
+	return {
+		...actual,
+		TextInput: (props: Record<string, unknown>) => {
+			fieldProps.push(props);
+
+			return react.createElement(actual.TextInput, props);
+		},
+	};
+});
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { Input } from './index';
+import { MAX_FONT_SCALE } from '../lib/scale';
 
 jest.mock(
 	'@wcpos/hooks/use-merged-ref',
@@ -12,6 +33,7 @@ jest.mock(
 	{ virtual: true }
 );
 
+jest.mock('../icon', () => ({ Icon: () => null }));
 jest.mock('../icon-button', () => ({
 	IconButton: ({
 		testID,
@@ -41,5 +63,37 @@ describe('Input clear control', () => {
 		fireEvent.click(screen.getByTestId('store-url-clear'));
 
 		expect(onChangeText).toHaveBeenCalledWith('');
+	});
+});
+
+/**
+ * A class assertion has to read the source: `react-native` is mapped to
+ * `react-native-web` here, whose `View` drops `className` before it reaches the
+ * DOM, so the rendered tree cannot be asked what the field box's classes are.
+ */
+describe('Input text cap', () => {
+	beforeEach(() => {
+		fieldProps.length = 0;
+	});
+
+	it('caps the OS text multiplier at 1.3 by default', () => {
+		render(<Input value="x" />);
+
+		expect(fieldProps.at(-1)?.maxFontSizeMultiplier).toBe(MAX_FONT_SCALE);
+	});
+
+	it('one tight line box on web, SF ascent + descent on native, so the text sits centred', () => {
+		render(<Input value="x" />);
+
+		const classes = String(fieldProps.at(-1)?.className).split(' ');
+		expect(classes).toEqual(expect.arrayContaining(['leading-none', 'native:leading-[1.2]']));
+		// Bare on web on purpose: a `web:` variant loses to a caller's `text-amt` line-height.
+		expect(classes).not.toContain('web:leading-none');
+	});
+
+	it("lets a caller's prop win", () => {
+		render(<Input value="x" maxFontSizeMultiplier={2} />);
+
+		expect(fieldProps.at(-1)?.maxFontSizeMultiplier).toBe(2);
 	});
 });

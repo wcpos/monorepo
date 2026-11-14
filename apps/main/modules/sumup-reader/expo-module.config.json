@@ -1,0 +1,5 @@
+{
+	"platforms": ["ios", "android"],
+	"ios": { "modules": ["SumUpReaderModule"] },
+	"android": { "modules": ["expo.modules.sumupreader.SumUpReaderModule"] }
+}

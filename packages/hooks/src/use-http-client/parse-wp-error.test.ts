@@ -273,6 +273,110 @@ describe('parse-wp-error', () => {
 		});
 	});
 
+	describe('parseWpError', () => {
+		it('names each invalid param and its reason for rest_invalid_param', () => {
+			const parsed = parseWpError(
+				{
+					code: 'rest_invalid_param',
+					message: 'Invalid parameter(s): billing, email',
+					data: {
+						status: 400,
+						params: {
+							billing: 'billing[country] is not a valid country.',
+							email: '<strong>Invalid email address.</strong>',
+							ignored: 123,
+						},
+					},
+				},
+				'fallback'
+			);
+			expect(parsed.message).toBe(
+				'billing: billing[country] is not a valid country.; email: Invalid email address.'
+			);
+			expect(parsed.status).toBe(400);
+			expect(parsed.serverCode).toBe('rest_invalid_param');
+			expect(parsed.code).toBe('SYNC211');
+		});
+	});
+
+	// WordPress wraps a PHP fatal in `internal_server_error` whose `message` is the
+	// localized "critical error" boilerplate; the error itself — the sentence that
+	// names the cause — is `data.error` ({ type, message, file, line }), present
+	// only when the site exposes error details (#2439, plugin #2157).
+	describe('WordPress fatal detail', () => {
+		const fatalBody = {
+			code: 'internal_server_error',
+			message: '<p>Er heeft zich een kritieke fout voorgedaan op deze site.</p>',
+			data: {
+				status: 500,
+				error: {
+					type: 1,
+					message:
+						'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes)',
+					file: '/srv/www/wp-includes/class-wpdb.php',
+					line: 2324,
+				},
+			},
+		};
+		const fatalSentence =
+			'Allowed memory size of 134217728 bytes exhausted (tried to allocate 16384 bytes) in wp-includes/class-wpdb.php:2324';
+
+		it('prefers the PHP error over the critical-error boilerplate, keeping code and status', () => {
+			const parsed = parseWpError(fatalBody, 'fallback');
+
+			expect(parsed.message).toBe(fatalSentence);
+			expect(parsed.serverCode).toBe('internal_server_error');
+			expect(parsed.status).toBe(500);
+			expect(parsed.code).toBe('SYNC131');
+		});
+
+		it('keeps the boilerplate, stripped of its HTML, when the site hides error details', () => {
+			const parsed = parseWpError(
+				{
+					...fatalBody,
+					message:
+						'<p>There has been a critical error on this website.</p><p><a href="https://wordpress.org/documentation/article/faq-troubleshooting/">Learn more about troubleshooting WordPress.</a></p>',
+					data: { status: 500 },
+				},
+				'fallback'
+			);
+
+			expect(parsed.message).toBe(
+				'There has been a critical error on this website. Learn more about troubleshooting WordPress.'
+			);
+		});
+
+		it('leaves entities for the renderer and falls back when the message is only markup', () => {
+			expect(
+				parseWpError({ code: 'x', message: 'D&eacute;sol&eacute;.' }, 'fallback').message
+			).toBe('D&eacute;sol&eacute;.');
+			expect(parseWpError({ code: 'x', message: '<p></p>' }, 'fallback').message).toBe('fallback');
+		});
+
+		it('surfaces the sentence through extractErrorMessage', () => {
+			expect(extractErrorMessage(fatalBody, 'fallback')).toBe(fatalSentence);
+		});
+
+		it('reads an object `error` on a non-WP body, which the string case never matched', () => {
+			expect(
+				extractErrorMessage({ error: { type: 1, message: 'Out of memory' } }, 'fallback')
+			).toBe('Out of memory');
+		});
+
+		it('leaves a 4xx body’s own `data.error` object alone — the top-level message was written for the cashier', () => {
+			const parsed = parseWpError(
+				{
+					code: 'rest_invalid_param',
+					message: 'Invalid parameter(s): billing',
+					data: { status: 400, error: { message: 'gateway: card_declined', file: 'x.php' } },
+				},
+				'fallback'
+			);
+
+			expect(parsed.message).toBe('Invalid parameter(s): billing');
+		});
+	});
+
 	describe('extractWpErrorCode', () => {
 		it('should extract code from WP error', () => {
 			expect(extractWpErrorCode({ code: 'woocommerce_rest_error', message: 'Error' })).toBe(

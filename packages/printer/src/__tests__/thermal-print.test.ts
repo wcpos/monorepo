@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildDiagnosticTemplate } from '../encoder/diagnostic-template';
 import {
+	buildDiagnosticMarkupJob,
 	discoverThermalAssetRequests,
+	encodeDiagnosticTemplateForPrint,
 	encodeThermalTemplateForPrint,
 	maxDotsForColumns,
 	maxDotsForPaperWidth,
 	prepareThermalPrintAssets,
 	renderThermalBarcodeAsset,
 } from '../encoder/thermal-print';
+import { encodeThermalTemplate } from '../renderer';
 import { sampleReceiptData } from '../encoder/__tests__/fixtures';
 
 const { debug, warn } = vi.hoisted(() => ({ debug: vi.fn(), warn: vi.fn() }));
@@ -379,5 +383,98 @@ describe('logo width when the template names no paper width', () => {
 	it('still trusts the template when it does name a paper width', () => {
 		expect(maxDotsForPaperWidth('58mm')).toBe(384);
 		expect(maxDotsForPaperWidth('80mm')).toBe(576);
+	});
+});
+
+describe('the printer diagnostic page', () => {
+	function diagnosticInput(overrides: Record<string, unknown> = {}) {
+		return {
+			template: buildDiagnosticTemplate(42),
+			data: { printerName: 'Front Counter', date: '21/09/2026, 14:02' },
+			maxWidthDots: maxDotsForColumns(42),
+			encodeOptions: { columns: 42, language: 'esc-pos' as const },
+			...overrides,
+		};
+	}
+
+	it('prepares a raster for the logo and for all three codes', async () => {
+		mockImageAndCanvas(192, 192);
+
+		const job = await buildDiagnosticMarkupJob(diagnosticInput());
+
+		// The bundled WCPOS mark.
+		expect(Object.keys(job.options.imageAssets ?? {})).toHaveLength(1);
+		// QR code, Code 128 and EAN-13.
+		expect(Object.keys(job.options.barcodeImages ?? {})).toHaveLength(3);
+	});
+
+	it('encodes every code as a raster rather than a native barcode command', async () => {
+		mockImageAndCanvas(192, 192);
+
+		const bytes = await encodeDiagnosticTemplateForPrint(diagnosticInput());
+
+		// GS k is the printer's own barcode command — the fallback taken when no prepared
+		// raster exists. Its absence is what proves the assets reached the encoder.
+		expect(countSequence(bytes, [0x1d, 0x6b])).toBe(0);
+		expect(countSequence(bytes, [0x1d, 0x76, 0x30])).toBeGreaterThanOrEqual(4);
+	});
+
+	it('prints nothing for the logo when the template is encoded without asset preparation', async () => {
+		mockImageAndCanvas(192, 192);
+
+		// The path `testPrint` used to take. Guards the actual regression: an <image> with
+		// no prepared asset is skipped silently, so the page printed with a blank logo and
+		// no error anywhere. If this ever stops differing from the case above, the fix has
+		// been undone.
+		const unprepared = encodeThermalTemplate(
+			buildDiagnosticTemplate(42),
+			{ printerName: 'Front Counter', date: '21/09/2026, 14:02' },
+			{ columns: 42, language: 'esc-pos' }
+		);
+
+		expect(countSequence(unprepared, [0x1d, 0x76, 0x30])).toBe(0);
+	});
+
+	it('keeps the printer name and date, which receipt canonicalisation would discard', async () => {
+		mockImageAndCanvas(192, 192);
+
+		const bytes = await encodeDiagnosticTemplateForPrint(diagnosticInput());
+
+		const text = new TextDecoder().decode(bytes);
+		expect(text).toContain('Front Counter');
+		expect(text).toContain('21/09/2026');
+	});
+
+	it('forwards the profile code page, so the character section tests what is configured', async () => {
+		mockImageAndCanvas(192, 192);
+
+		const job = await buildDiagnosticMarkupJob(diagnosticInput({ codePage: 'cp858' }));
+
+		expect(job.options.codePage).toBe('cp858');
+	});
+
+	it('forces Font A, which is what the column ruler claims to measure', async () => {
+		mockImageAndCanvas(192, 192);
+
+		const bytes = await encodeDiagnosticTemplateForPrint(diagnosticInput());
+
+		expect(countSequence(bytes, [0x1b, 0x4d, 0x00])).toBeGreaterThanOrEqual(1);
+	});
+
+	it('sizes the logo to narrow paper when the profile says 32 columns', async () => {
+		mockImageAndCanvas(800, 800);
+
+		const job = await buildDiagnosticMarkupJob(
+			diagnosticInput({
+				template: buildDiagnosticTemplate(32),
+				maxWidthDots: maxDotsForColumns(32),
+				encodeOptions: { columns: 32, language: 'esc-pos' as const },
+			})
+		);
+
+		const [logo] = Object.values(job.options.imageAssets ?? {});
+		expect(logo).toBeDefined();
+		// 58 mm paper prints 384 dots; 576 would crop the mark off the edge.
+		expect(logo?.width).toBeLessThanOrEqual(384);
 	});
 });

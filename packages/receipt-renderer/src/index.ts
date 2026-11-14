@@ -8,6 +8,8 @@ import type { EposRenderOptions } from './render-epos-xml';
 import type { EscposRenderOptions, ThermalLayoutDiagnostics } from './render-escpos';
 
 export { parseXml } from './parse-xml';
+export { getBarcodeLibrary, loadBarcodeLibrary } from './barcode-library';
+export type { BarcodeLibrary } from './barcode-library';
 export { renderBarcode, renderHtml, renderQrCode } from './render-html';
 export { renderEposXml, thermalRasterToBase64 } from './render-epos-xml';
 export {

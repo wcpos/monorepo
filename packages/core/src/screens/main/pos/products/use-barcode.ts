@@ -1,28 +1,59 @@
 import * as React from 'react';
 
-import { useSegments } from 'expo-router';
 import { useSubscription } from 'observable-hooks';
 
-import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
+import {
+	fetchFreshRecords,
+	isStorageWorkerFailure,
+	isVariationRecord,
+	useDocField,
+	useQueryRuntime,
+} from '@wcpos/query';
 import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 import { type ScanEvent } from '@wcpos/scanner';
-import { type BarcodeResolveFetcher, remoteIdOrNull, resolveScan, wooIdOf } from '@wcpos/sync-core';
+import { type BarcodeResolveFetcher, resolveScan, wooIdOf } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useBarcodeDetection } from '../../hooks/barcodes';
 import { useBarcodeSearch } from '../../hooks/barcodes/use-barcode-search';
-import { useAddProduct } from '../hooks/use-add-product';
+import { useActionContext } from '../hooks/use-action-context';
+import { showCountingNotice, useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
+import { useTillLocation } from '../use-till-location';
 import { resolveStock } from '../../components/product/resolve-stock';
 import { useScanFeedback } from './use-scan-feedback';
 
 import type { ScanFeedbackHandle } from './use-scan-feedback';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
+
+/**
+ * The online lookup's failure, from its message (the resolver reports no status
+ * field): the store not answering is SYNC121, a store error SYNC131, an ended
+ * session AUTH101 — not "loading products hit an unexpected problem".
+ */
+export function barcodeLookupErrorCode(message: string | undefined): ErrorCode {
+	if (!message) return ERROR_CODES.PRODUCT_UNEXPECTED;
+	if (message.startsWith('resolve/barcode request failed:')) {
+		// The resolver wraps a reply it could not parse in the same prefix: the store
+		// answered, with a malformed body (SYNC151), so it is not "unreachable".
+		return /JSON|Unexpected token|SyntaxError/i.test(message)
+			? ERROR_CODES.STORE_RESPONSE_MALFORMED
+			: ERROR_CODES.SYNC_UNREACHABLE;
+	}
+	const status = /^resolve\/barcode failed: (\d{3})/.exec(message)?.[1];
+	if (status === '401') return ERROR_CODES.SESSION_EXPIRED;
+	if (status !== undefined && status.startsWith('5')) return ERROR_CODES.STORE_SERVER_ERROR;
+	return ERROR_CODES.PRODUCT_UNEXPECTED;
+}
+
 const BARCODE_LOOKUP_TIMEOUT_MS = 10_000;
 const AMBIGUOUS_HYDRATION_LIMIT = 10;
 
@@ -80,20 +111,14 @@ function withBarcodeLookupDeadline(fetcher: BarcodeResolveFetcher): BarcodeResol
 	};
 }
 
-function isVariationDocument(
-	document: EngineRecord<'products'> | EngineRecord<'variations'>
-): document is EngineRecord<'variations'> {
-	return document.collection.name === 'variations';
-}
-
 export const useBarcode = (setSearch: (search: string) => void, clearSearch: () => void) => {
-	const segments: string[] = useSegments();
 	// The POS section owns scans (#1438 ruling): Cart and checkout still add products to the cart.
-	const posSectionActive = segments.includes('(pos)');
+	const { inPos: posSectionActive } = useTillLocation();
 	const { scanEvents$, onKeyPress } = useBarcodeDetection({ isActive: posSectionActive });
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
+	const { readCounting } = useActionContext();
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
@@ -145,6 +170,11 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const guardedClearSearch = () => {
 			if (scanTicketRef.current === scanTicket) clearSearch();
 		};
+		// Refused before the lookup, so a scan during a count never reads as "not found" (#2001).
+		if (await readCounting()) {
+			showCountingNotice(t);
+			return;
+		}
 		let results = await barcodeSearch(barcodeStr, event.symbology);
 		let onlineParentRequired = false;
 		// The online lookup shows a persistent "Searching store…" toast; track it so a
@@ -168,7 +198,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const showNotFound = () => {
 			scan.notFound(barcodeStr);
-			barcodeLogger.warn('Barcode scan did not match a product', {
+			// A routine miss (PRODUCT301 is info); the scan toast already says so.
+			barcodeLogger.info('Barcode scan did not match a product', {
 				code: ERROR_CODES.SEARCH_NO_RESULTS_REASON,
 				context: {
 					barcode: barcodeStr,
@@ -179,21 +210,24 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const showLookupError = (errorCode: ErrorCode, error?: string) => {
 			scan.error(barcodeStr);
-			barcodeLogger.error('Barcode lookup failed', {
-				code: errorCode,
-				context: {
-					barcode: barcodeStr,
-					...(error ? { error } : {}),
-				},
-			});
+			barcodeLogger[ERROR_CATALOGUE[errorCode].severity === 'error' ? 'error' : 'warn'](
+				'Barcode lookup failed',
+				{
+					code: errorCode,
+					context: {
+						barcode: barcodeStr,
+						...(error ? { error } : {}),
+					},
+				}
+			);
 			guardedSetSearch(barcodeStr);
 		};
 
 		/**
 		 * Hydration failures are reported as connection errors, but a lost storage
 		 * worker is not a connection problem and needs the reload-the-app message —
-		 * rethrow so the outer handler owns it. Note the `finally` blocks at these
-		 * call sites still release their engine handles.
+		 * rethrow so the outer handler owns it. The refresh demand releases its engine
+		 * handles in `finally` before propagating the failure.
 		 */
 		const reportHydrationFailure = (error: unknown): never | void => {
 			if (isStorageWorkerFailure(error)) {
@@ -214,6 +248,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			if (engineStatus.connectivity === 'offline') {
 				scan.unavailable(barcodeStr);
 				barcodeLogger.warn('Barcode online lookup skipped because the sync engine is offline', {
+					code: ERROR_CODES.SYNC_UNREACHABLE,
 					context: {
 						barcode: barcodeStr,
 						connectivity: engineStatus.connectivity,
@@ -251,7 +286,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			}
 
 			if (resolution.outcome === 'error') {
-				showLookupError(ERROR_CODES.PRODUCT_UNEXPECTED, resolution.message);
+				showLookupError(barcodeLookupErrorCode(resolution.message), resolution.message);
 				return;
 			}
 
@@ -286,40 +321,22 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 								.map((candidate) => candidate.id)
 						),
 					];
-					const handles = [];
 					try {
-						if (productIds.length > 0) {
-							handles.push(
-								runtime.engine.require({
-									id: `barcode:${barcodeStr}:ambiguous:products`,
-									collection: 'products',
-									kind: 'targeted-records',
-									remoteIds: productIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-									forceRefresh: true,
-								})
-							);
-						}
-						if (variationIds.length > 0) {
-							handles.push(
-								runtime.engine.require({
-									id: `barcode:${barcodeStr}:ambiguous:variations`,
-									collection: 'variations',
-									kind: 'targeted-records',
-									remoteIds: variationIds
-										.map(remoteIdOrNull)
-										.filter((remoteId) => remoteId !== null),
-									forceRefresh: true,
-								})
-							);
-						}
-						await Promise.all(handles.map((handle) => handle.ready));
+						await fetchFreshRecords(runtime.engine, [
+							{
+								id: `barcode:${barcodeStr}:ambiguous:products`,
+								collection: 'products',
+								wooIds: productIds,
+							},
+							{
+								id: `barcode:${barcodeStr}:ambiguous:variations`,
+								collection: 'variations',
+								wooIds: variationIds,
+							},
+						]);
 					} catch (error) {
 						reportHydrationFailure(error);
 						return;
-					} finally {
-						for (const handle of handles) {
-							handle.release();
-						}
 					}
 
 					results = await barcodeSearch(barcodeStr, event.symbology);
@@ -338,8 +355,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					resolution.ambiguous.length > 0
 						? {
 								id: visibleMatch.remoteId === null ? 0 : wooIdOf(visibleMatch.remoteId),
-								type: isVariationDocument(visibleMatch) ? 'variation' : 'product',
-								parent_id: isVariationDocument(visibleMatch)
+								type: isVariationRecord(visibleMatch) ? 'variation' : 'product',
+								parent_id: isVariationRecord(visibleMatch)
 									? visibleMatch.payload.parent_id
 									: undefined,
 							}
@@ -352,39 +369,29 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					return;
 				}
 
-				const handles = [];
 				try {
-					handles.push(
-						runtime.engine.require({
+					await fetchFreshRecords(runtime.engine, [
+						{
 							id: `barcode:${barcodeStr}:${match.type}:${match.id}`,
 							collection: match.type === 'variation' ? 'variations' : 'products',
-							kind: 'targeted-records',
-							remoteIds: [match.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-							forceRefresh: true,
-						})
-					);
+							wooIds: [match.id],
+						},
+						...(match.type === 'variation'
+							? [
+									{
+										id: `barcode:${barcodeStr}:product:${match.parent_id}`,
+										collection: 'products' as const,
+										wooIds: [match.parent_id!],
+									},
+								]
+							: []),
+					]);
 					if (match.type === 'variation') {
-						handles.push(
-							runtime.engine.require({
-								id: `barcode:${barcodeStr}:product:${match.parent_id}`,
-								collection: 'products',
-								kind: 'targeted-records',
-								remoteIds: [match.parent_id]
-									.map(remoteIdOrNull)
-									.filter((remoteId) => remoteId !== null),
-								forceRefresh: true,
-							})
-						);
 						onlineParentRequired = true;
 					}
-					await Promise.all(handles.map((handle) => handle.ready));
 				} catch (error) {
 					reportHydrationFailure(error);
 					return;
-				} finally {
-					for (const handle of handles) {
-						handle.release();
-					}
 				}
 
 				results = await barcodeSearch(barcodeStr, event.symbology);
@@ -408,7 +415,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const outOfStock = !resolveStock(product.payload).sellable;
 		if (!showOutOfStock && outOfStock) {
 			scan.outOfStock(product.payload.name ?? '', barcodeStr);
-			barcodeLogger.warn('Barcode scan matched an out-of-stock product', {
+			// The store's stock rule doing its job; the scan toast explains it.
+			barcodeLogger.info('Barcode scan matched an out-of-stock product', {
 				context: {
 					barcode: barcodeStr,
 					productId: product.remoteId === null ? undefined : wooIdOf(product.remoteId),
@@ -420,7 +428,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		}
 
 		let added: boolean;
-		if (isVariationDocument(product)) {
+		if (isVariationRecord(product)) {
 			/**
 			 * Hack: we need to get the parent product
 			 * - parent_id was added recently to the variation schema, so older variations don't have it
@@ -434,19 +442,14 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			let parent = await findProductById(parent_id);
 			if (!parent && !onlineParentRequired) {
 				try {
-					const handle = runtime.engine.require({
-						id: `barcode:${barcodeStr}:product:${parent_id}`,
-						collection: 'products',
-						kind: 'targeted-records',
-						remoteIds: [parent_id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-						forceRefresh: true,
-					});
-					try {
-						await handle.ready;
-						parent = await findProductById(parent_id);
-					} finally {
-						handle.release();
-					}
+					await fetchFreshRecords(runtime.engine, [
+						{
+							id: `barcode:${barcodeStr}:product:${parent_id}`,
+							collection: 'products',
+							wooIds: [parent_id],
+						},
+					]);
+					parent = await findProductById(parent_id);
 				} catch (error) {
 					reportHydrationFailure(error);
 					return;
@@ -476,6 +479,18 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			// The scan toast owns success feedback; silence the add-hook's own toast so
 			// a scan produces exactly one notification (fixes the double popup per scan).
 			added = await addVariation(product, parent, metaData, { silent: true });
+			// A variable parent is never a cart line; the cashier picks the variation from search (#2413).
+		} else if (product.payload.type === 'variable') {
+			scan.chooseVariation(product.payload.name ?? '', barcodeStr);
+			barcodeLogger.warn('Barcode scan matched a variable product', {
+				context: {
+					barcode: barcodeStr,
+					productId: product.remoteId === null ? undefined : wooIdOf(product.remoteId),
+					productName: product.payload.name,
+				},
+			});
+			guardedSetSearch(barcodeStr);
+			return;
 		} else {
 			added = await addProduct(product, { silent: true });
 		}

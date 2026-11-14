@@ -6,10 +6,12 @@ import type { EngineRecord } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
 import { useDocField } from '@wcpos/query';
 
+import { showAddedToCartToast } from './added-to-cart-toast';
 import { reportCartFailure } from './cart-failure';
+import { showCountingNotice } from './use-add-product';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
-import { useUpdateLineItem } from './use-update-line-item';
+import { useUpdateCartLine } from './use-update-cart-line';
 import {
 	convertVariationToLineItemWithoutTax,
 	findByProductVariationID,
@@ -22,8 +24,8 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'variation']);
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
+type ProductDocument = import('@wcpos/query').ProductPayload;
+type ProductVariationDocument = import('@wcpos/query').VariationPayload;
 interface MetaData {
 	key?: string;
 	value?: string;
@@ -33,10 +35,10 @@ interface MetaData {
 }
 
 export const useAddVariation = () => {
-	const { addItemToOrder } = useAddItemToOrder();
+	const { addItemToOrder, readCounting } = useAddItemToOrder();
 	// Event-time resolution — every variable product tile mounts this hook.
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
-	const { incrementLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateCartLine();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useDocField(uiSettings, (value) => value.metaDataKeys);
@@ -53,6 +55,11 @@ export const useAddVariation = () => {
 			metaData?: MetaData[],
 			options?: { silent?: boolean }
 		) => {
+			// The drawer is being counted: nothing joins the cart until the count ends (#2001).
+			if (await readCounting()) {
+				showCountingNotice(t);
+				return false;
+			}
 			let success;
 
 			// always make sure we have the latest product document
@@ -102,8 +109,6 @@ export const useAddVariation = () => {
 			// returned success should be the updated order
 			if (success) {
 				cartLogger.success(t('common.added_to_cart', { name: parent.name }), {
-					// Scan-driven adds toast via the scan-feedback module instead.
-					showToast: !options?.silent,
 					context: {
 						variationId: variation.id,
 						productId: parent.id,
@@ -111,6 +116,8 @@ export const useAddVariation = () => {
 						orderId: currentOrderRecord.payload.id,
 					},
 				});
+				// Scan-driven adds toast via the scan-feedback module instead.
+				if (!options?.silent) showAddedToCartToast(t, parent.name);
 				return true;
 			} else {
 				reportCartFailure(cartLogger, 'Failed to add product to cart', {
@@ -126,6 +133,7 @@ export const useAddVariation = () => {
 			}
 		},
 		[
+			readCounting,
 			getCurrentOrderRecord,
 			incrementLineItem,
 			metaDataKeys,

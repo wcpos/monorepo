@@ -1,0 +1,43 @@
+name: Spike 2144 crash harness
+# workflow_dispatch only resolves for files on the default branch. To re-run from a branch,
+# add a temporary `push: { branches: [<branch>] }` trigger (as spike 2143 did).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+      - run: bash spikes/2144-crash-harness/run.sh --build-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spike-2144-bundles
+          include-hidden-files: true
+          path: |
+            spikes/2144-crash-harness/.build/
+            spikes/2144-crash-harness/drive.mjs
+  crash-windows:
+    runs-on: windows-latest
+    needs: bundle
+    timeout-minutes: 120
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: spike-2144-bundles
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Same Playwright pin as 2143 and the locally installed package.
+      - run: npm install --no-save playwright@1.62.1
+      - run: node drive.mjs --browser chrome --bundles .build --out results.windows-chrome.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spike-2144-results-windows
+          path: results.windows-chrome.json

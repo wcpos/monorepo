@@ -62,7 +62,7 @@ describe('OnlineStatusLogger', () => {
 
 		expect(logger.warn).toHaveBeenCalledTimes(1);
 		expect(logger.warn).toHaveBeenCalledWith('Device went offline', {
-			code: 'SYNC999',
+			code: 'SYNC121',
 			context: { type: 'connectivity.device-offline' },
 			showToast: true,
 			toast: { title: 'common.device_went_offline' },

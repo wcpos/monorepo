@@ -12,7 +12,17 @@ function resolveDisplayValueSide(data: ReceiptData): 'incl' | 'excl' {
 	return hints?.prices_entered_with_tax === false ? 'excl' : 'incl';
 }
 
-const DEFAULT_I18N = {
+export const DEFAULT_I18N = {
+	copy: 'COPY',
+	corrects: 'Corrects',
+	refunded_to: 'Refunded to',
+	reprint: 'Reprint',
+	register: 'Register',
+	sale_time: 'Sale time',
+	document_refund: 'Refund',
+	document_void: 'Void',
+	document_cancellation: 'Cancellation',
+	software: 'Software',
 	order: 'Order',
 	date: 'Date',
 	cashier: 'Cashier',
@@ -134,7 +144,7 @@ export function formatReceiptData(
 	};
 
 	const fmt = (value: number): string =>
-		formatMoney(value, currency, locale, undefined, options.isSymbolEncodable);
+		formatMoney(value, currency, locale, data.store.price_decimals, options.isSymbolEncodable);
 	const perUnit = (total: number | undefined, qty: number): number | undefined => {
 		if (total == null || qty === 0) return undefined;
 		return total / qty;

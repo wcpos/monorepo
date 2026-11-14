@@ -29,20 +29,15 @@ function wrapper(id: number, parentId = 10, payload: Record<string, unknown> = {
 	return {
 		id,
 		parent_id: parentId,
-		payload: {
-			id,
-			date_modified_gmt: '2026-08-01T10:00:00',
-			meta_data: posMeta(id),
-			...payload,
-		},
+		date_modified_gmt: '2026-08-01T10:00:00',
+		_rxdb_revision: `revision-${id}`,
+		meta_data: posMeta(id),
+		...payload,
 	};
 }
 
-function response(documents: unknown[], meta: Record<string, unknown> = {}): Response {
-	return Response.json({
-		documents,
-		meta: { total: documents.length, page: 1, per_page: 10, ...meta },
-	});
+function response(documents: unknown[]): Response {
+	return Response.json(documents);
 }
 
 function repository() {
@@ -106,6 +101,44 @@ describe('createVariationsSchedulerFetcher', () => {
 		]);
 		expect(repo.upsertMany.mock.calls[0]?.[0]).toHaveLength(WOO_REST_MAX_PER_PAGE + 1);
 		expect(result).toMatchObject({ documentCount: WOO_REST_MAX_PER_PAGE + 1, completed: true });
+	});
+
+	it.each([
+		['more than 10 words', 'a b c d e f g h i j k'],
+		['more than 256 characters', 'x'.repeat(257)],
+	])('sends no remote search for a term with %s', async (_label, term) => {
+		const repo = repository();
+		const fetcher = vi.fn(async () => new Response(null, { status: 400 }));
+		const schedulerFetcher = createVariationsSchedulerFetcher({
+			baseUrl: BASE_URL,
+			repository: repo,
+			fetcher,
+		});
+		const queryKey = `variations:search:${encodeURIComponent(term)}`;
+
+		const result = await schedulerFetcher(variationTask({ id: `${queryKey}:windowed`, queryKey }));
+
+		expect(fetcher).not.toHaveBeenCalled();
+		expect(result).toMatchObject({ documentCount: 0, requestCount: 0, completed: true });
+	});
+
+	it.each([
+		['10 words', 'a b c d e f g h i j'],
+		// 256 code points, 512 UTF-16 units: the plugin counts characters, not units.
+		['256 astral characters', '😀'.repeat(256)],
+	])('still searches remotely at exactly the plugin limits (%s)', async (_label, term) => {
+		const fetcher = vi.fn(async () => response([]));
+		const schedulerFetcher = createVariationsSchedulerFetcher({
+			baseUrl: BASE_URL,
+			repository: repository(),
+			fetcher,
+			exactSkuLeg: () => false,
+		});
+		const queryKey = `variations:search:${encodeURIComponent(term)}`;
+
+		await schedulerFetcher(variationTask({ id: `${queryKey}:windowed`, queryKey }));
+
+		expect(fetcher).toHaveBeenCalledTimes(1);
 	});
 
 	it('runs both legs for a two-character search', async () => {
@@ -260,23 +293,20 @@ describe('createVariationsSchedulerFetcher', () => {
 		expect(result.completed).toBe(false);
 	});
 
-	it('tolerates envelope metadata and projects wrapper identity, parent, and digest like targeted pulls', async () => {
+	it('projects bare identity, parent, and digest like targeted pulls', async () => {
 		const repo = {
 			upsertMany: vi.fn(async (documents: StoredVariationDocument[]) => documents.slice(0, 1)),
 		};
 		const manifestSink = vi.fn(async () => undefined);
 		const fetcher = vi.fn(async (url: string) => {
 			if (url.includes('sku=')) return response([]);
-			return response(
-				[
-					{
-						...wrapper(7, 3, { id: 999, parent_id: 999, price: '12.50' }),
-						_rxdb_digest: 'digest-7',
-					},
-					{ ...wrapper(8, 3), _rxdb_digest: 'digest-8' },
-				],
-				{ total: 2, extra: 'ignored' }
-			);
+			return response([
+				{
+					...wrapper(7, 3, { price: '12.50' }),
+					_rxdb_digest: 'digest-7',
+				},
+				{ ...wrapper(8, 3), _rxdb_digest: 'digest-8' },
+			]);
 		});
 		const schedulerFetcher = createVariationsSchedulerFetcher({
 			baseUrl: BASE_URL,
@@ -291,7 +321,9 @@ describe('createVariationsSchedulerFetcher', () => {
 		expect(stored).toMatchObject({
 			uuid: uuidFor(7),
 			remoteId: remoteId(7),
+			remoteKey: String(remoteId(7) ?? ''),
 			parentRemoteId: remoteId(3),
+			parentRemoteKey: String(remoteId(3) ?? ''),
 			price: 12.5,
 			payload: { id: 7, parent_id: 3 },
 		});

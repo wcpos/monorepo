@@ -3,32 +3,67 @@ import * as React from 'react';
 import get from 'lodash/get';
 import merge from 'lodash/merge';
 
+import { credentialsTokenOwner, migrateSiteApiUrl } from '@wcpos/query/user-db';
 import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { AppInfo } from '@wcpos/utils/app-info';
+import { getInstanceId } from '@wcpos/utils/get-instance-id';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
-import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
+import { INSTANCE_HEADER, sendsInstanceHeader } from '@wcpos/utils/sync-protocol';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { useReportUpdateRequired } from '../../../../hooks/use-update-required';
 import { useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
 
 const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 
-/**
- *
- * @param responseString
- * @returns
- */
-function extractValidJSON(responseString: string) {
-	// Find the index where the actual JSON starts
-	const indexOfJsonStart = responseString.search(/[{[]/);
+function tryParse(text: string): { value: unknown } | null {
+	try {
+		return { value: JSON.parse(text) };
+	} catch {
+		return null;
+	}
+}
 
-	if (indexOfJsonStart === -1) {
+/** Index of the bracket that closes the one at `start`, skipping JSON strings; -1 if none. */
+function closingBracket(text: string, start: number): number {
+	let depth = 0;
+	let inString = false;
+	for (let i = start; i < text.length; i++) {
+		const char = text[i];
+		if (inString) {
+			if (char === '\\') i++;
+			else if (char === '"') inString = false;
+		} else if (char === '"') inString = true;
+		else if (char === '{' || char === '[') depth++;
+		else if ((char === '}' || char === ']') && --depth === 0) return i;
+	}
+	return -1;
+}
+
+/**
+ * Reads the store's JSON out of a body that another plugin polluted with stray text.
+ *
+ * Each `{`/`[` is matched to its own closing bracket (brackets inside JSON strings
+ * ignored) and that one span is parsed, so the work is one parse per opening bracket.
+ * The LONGEST span wins: the store's body is bigger than a `[400]` in a stray prefix
+ * or a `{}` footer after it. The old code returned the first start's longest prefix,
+ * so a bracket in the stray text won: `[400]` out of a Xero exception, and the
+ * payment's answer was lost (POS-30P).
+ */
+export function extractValidJSON(responseString: string) {
+	const starts: number[] = [];
+	for (let i = 0; i < responseString.length; i++) {
+		if (responseString[i] === '{' || responseString[i] === '[') starts.push(i);
+	}
+
+	if (starts.length === 0) {
 		httpLogger.error('Server returned invalid response - no JSON found', {
 			code: ERROR_CODES.STORE_SERVER_ERROR,
 			context: {
@@ -38,17 +73,22 @@ function extractValidJSON(responseString: string) {
 		return null;
 	}
 
-	// Extracting up to where we suspect the JSON ends
-	const possibleJson = responseString.substring(indexOfJsonStart);
+	const whole = tryParse(responseString.trim());
+	if (whole) return whole.value;
 
-	// Trying to find a valid JSON object
-	for (let i = possibleJson.length; i > 0; i--) {
-		try {
-			return JSON.parse(possibleJson.substring(0, i));
-		} catch {
-			// Not a valid JSON yet, continue trimming
-		}
+	let best: { length: number; value: unknown } | null = null;
+	let parsedUpTo = -1; // end of the last span that parsed; starts inside it are skipped
+	for (const start of starts) {
+		if (start <= parsedUpTo) continue;
+		const end = closingBracket(responseString, start);
+		if (end === -1) continue;
+		const span = tryParse(responseString.slice(start, end + 1));
+		if (!span) continue;
+		parsedUpTo = end;
+		const length = end + 1 - start;
+		if (!best || length > best.length) best = { length, value: span.value };
 	}
+	if (best) return best.value;
 
 	httpLogger.error('Unable to parse server response', {
 		code: ERROR_CODES.STORE_SERVER_ERROR,
@@ -159,7 +199,7 @@ export const useRestHttpClient = (endpoint = '') => {
 		() =>
 			createTokenRefreshHandler({
 				site,
-				wpUser: wpCredentials,
+				wpUser: credentialsTokenOwner(wpCredentials),
 				getHttpClient,
 				sessionRenewedMessage: t('auth.session_renewed_automatically'),
 			}),
@@ -179,11 +219,7 @@ export const useRestHttpClient = (endpoint = '') => {
 		() => [tokenRefreshHandler, fallbackAuthHandler],
 		[tokenRefreshHandler, fallbackAuthHandler]
 	);
-	const onUpdateRequired = React.useCallback(
-		(details: Exclude<UpdateRequiredState, null>) =>
-			reportUpdateRequired(site.wp_api_url!, details),
-		[site.wp_api_url]
-	);
+	const onUpdateRequired = useReportUpdateRequired(site.wp_api_url);
 
 	/**
 	 * Sync online status with the request state manager
@@ -197,7 +233,7 @@ export const useRestHttpClient = (endpoint = '') => {
 	/**
 	 *
 	 */
-	const httpClient = useHttpClient(errorHandlers, onUpdateRequired);
+	const httpClient = useHttpClient(errorHandlers, onUpdateRequired, site.wp_api_url);
 
 	/**
 	 * Main request function.
@@ -244,7 +280,7 @@ export const useRestHttpClient = (endpoint = '') => {
 			// Migrate missing and persisted v1 service bases to v2.
 			if (!apiURL || /\/wcpos\/v1\/?$/.test(apiURL)) {
 				apiURL = wpApiURL + 'wcpos/v2';
-				await site.incrementalPatch({ wcpos_api_url: apiURL });
+				await migrateSiteApiUrl(site, apiURL);
 			}
 
 			// Discovery stores wcpos_api_url WITH a trailing slash; strip it before
@@ -272,6 +308,18 @@ export const useRestHttpClient = (endpoint = '') => {
 			}
 
 			const config = merge({}, defaultConfig, reqConfig);
+			config.headers = Object.fromEntries(
+				Object.entries(config.headers ?? {}).filter(
+					([key]) => key.toLowerCase() !== 'x-wcpos-instance'
+				)
+			);
+			const installId = await getInstanceId();
+			if (
+				installId !== undefined &&
+				sendsInstanceHeader(AppInfo.platform, site.use_instance_header)
+			) {
+				config.headers[INSTANCE_HEADER] = installId;
+			}
 
 			try {
 				const response = await httpClient.request(config);
@@ -280,19 +328,22 @@ export const useRestHttpClient = (endpoint = '') => {
 				 * Some servers return invalid JSON, so we try to recover from it
 				 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
 				 */
-				if (typeof response?.data === 'string') {
-					httpLogger.warn('Server returned text instead of JSON - attempting recovery', {
-						code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
-						context: {
-							endpoint,
-							url: config.url,
-							responsePreview: response.data.substring(0, 200),
-						},
-					});
-					response.data = extractValidJSON(response?.data);
+				// An empty body (a 204) is not stray text. One row per response: SYNC151 when
+				// the stray text was cleaned up, or extractValidJSON's own SYNC131 when it
+				// could not be — never both.
+				if (typeof response?.data === 'string' && response.data !== '') {
+					const raw = response.data;
+					response.data = extractValidJSON(raw);
 
 					if (response.data) {
-						httpLogger.debug('Successfully recovered valid JSON from response');
+						httpLogger.warn('Server returned text instead of JSON - recovered', {
+							code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
+							context: {
+								endpoint,
+								url: config.url,
+								responsePreview: raw.substring(0, 200),
+							},
+						});
 					}
 				}
 				return unwrapResponseEnvelope(response);

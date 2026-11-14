@@ -1,0 +1,21 @@
+import * as React from 'react';
+
+import Svg, { G, Path } from 'react-native-svg';
+
+import type { SvgProps } from 'react-native-svg';
+export function SvgWarning(props: SvgProps) {
+	return (
+		<Svg {...props} viewBox="0 0 24 24">
+			<G
+				fill="none"
+				stroke="currentColor"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={1.5}
+			>
+				<Path d="M13.925 21h-3.85c-4.63 0-6.945 0-7.799-1.506-.853-1.506.331-3.503 2.7-7.495L6.9 8.753C9.176 4.918 10.313 3 12 3s2.824 1.918 5.1 5.753L19.023 12c2.369 3.992 3.553 5.989 2.7 7.495C20.87 21 18.555 21 13.924 21M12 9v4" />
+				<Path d="M12.125 16.75H12m.25 0a.25.25 0 1 1-.5 0 .25.25 0 0 1 .5 0" />
+			</G>
+		</Svg>
+	);
+}

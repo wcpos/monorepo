@@ -122,7 +122,10 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 			},
 			deps
 		);
-		await expect(push(server, update)).rejects.toMatchObject({ status: 404 });
+		await expect(push(server, update)).rejects.toMatchObject({
+			status: 404,
+			reason: 'woo_rxdb_sync_record_not_found',
+		});
 	});
 
 	it('409s an update whose baseRevision is stale, and succeeds once seeded with the matching revision', async () => {

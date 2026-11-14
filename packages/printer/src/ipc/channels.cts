@@ -89,6 +89,12 @@ export type NovuBridgeEvent =
 export type TelemetryConsent = 'undecided' | 'allowed' | 'denied';
 
 /**
+ * Whether the app theme's top strip is light or dark — every theme but `light`
+ * has a dark rail. The desktop shell colours its window-control glyphs from it.
+ */
+export type WindowColorScheme = 'light' | 'dark';
+
+/**
  * invoke = render→main→render (Promise); send = render→main (fire-and-forget);
  * on = main→render push (renderer subscribes).
  */
@@ -131,6 +137,7 @@ export interface IpcSendChannels {
 	'bluetooth-device-selected': string;
 	'serial-port-selected': string;
 	'hid-device-selected': string;
+	'window-color-scheme': WindowColorScheme;
 }
 
 export interface IpcOnChannels {
@@ -164,6 +171,7 @@ export const SEND_CHANNELS = [
 	'bluetooth-device-selected',
 	'serial-port-selected',
 	'hid-device-selected',
+	'window-color-scheme',
 ] as const satisfies readonly (keyof IpcSendChannels)[];
 
 export const ON_CHANNELS = [

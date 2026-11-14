@@ -4,7 +4,6 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
 
 import { DataTableFooter } from './footer';
 import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../../query';
@@ -26,7 +25,9 @@ jest.mock('../../hooks/use-collection-reset', () => ({
 	useCollectionReset: (collectionName: string) => mockUseCollectionReset(collectionName),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	HStack: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
@@ -52,19 +53,18 @@ jest.mock('../../../../contexts/translations', () => ({
 		values ? `${key}:${values.shown}/${values.total}` : key,
 }));
 
-function renderBindingFooter() {
-	const BindingFooter = DataTableFooter as unknown as React.ComponentType<Record<string, unknown>>;
+function renderFooter() {
 	return render(
 		<QueryStateProvider
 			collection="coupons"
 			initialPageSize={10}
 			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
 		>
-			<BindingFooter
+			<DataTableFooter
 				collectionName="coupons"
-				count={10}
-				total$={of(27)}
-				active$={of(false)}
+				drawnCount={10}
+				total={27}
+				active={false}
 				sync={mockSync}
 			/>
 		</QueryStateProvider>
@@ -95,11 +95,11 @@ function currentCouponQueryState(): QueryStateOf<'coupons'> {
 	return JSON.parse(screen.getByTestId('query-state').textContent ?? '') as QueryStateOf<'coupons'>;
 }
 
-describe('DataTableFooter binding projections', () => {
+describe('DataTableFooter', () => {
 	beforeEach(() => jest.clearAllMocks());
 
 	it('shows the plain showing-of total — never an at-least suffix', () => {
-		renderBindingFooter();
+		renderFooter();
 
 		expect(screen.getByTestId('data-table-count').textContent).toBe('common.showing_of:10/27');
 		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('10');
@@ -107,8 +107,57 @@ describe('DataTableFooter binding projections', () => {
 		expect(mockUseCollectionReset).toHaveBeenCalledWith('coupons');
 	});
 
+	it('names no denominator for a null total: nothing vouches for one', () => {
+		render(
+			<QueryStateProvider
+				collection="coupons"
+				initialPageSize={10}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<DataTableFooter
+					collectionName="coupons"
+					drawnCount={10}
+					total={null}
+					active={false}
+					sync={mockSync}
+				/>
+			</QueryStateProvider>
+		);
+		expect(screen.getByTestId('data-table-count').textContent).toBe(
+			'common.showing_n:10/undefined'
+		);
+		expect(screen.getByTestId('data-table-total-count').textContent).toBe('');
+	});
+
+	it('takes a label for the sentence and a caption child, in the one caption row', () => {
+		render(
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+			>
+				<DataTableFooter
+					collectionName="products"
+					drawnCount={16}
+					total={16}
+					label="16 products"
+					active={false}
+					sync={mockSync}
+				>
+					<span data-testid="caption">Tax based on store</span>
+				</DataTableFooter>
+			</QueryStateProvider>
+		);
+		const row = screen.getByTestId('data-table-caption-row');
+		expect(row.contains(screen.getByTestId('caption'))).toBe(true);
+		expect(screen.getByTestId('data-table-count').textContent).toBe('16 products');
+		// The raw markers stay the numbers, whatever the sentence says.
+		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('16');
+		expect(screen.getByTestId('data-table-total-count').textContent).toBe('16');
+	});
+
 	it('retains sync/reset actions', () => {
-		renderBindingFooter();
+		renderFooter();
 
 		fireEvent.click(screen.getByTestId('sync'));
 		fireEvent.click(screen.getByTestId('clear-and-sync'));
@@ -117,9 +166,6 @@ describe('DataTableFooter binding projections', () => {
 	});
 
 	it('restores provider search and filter initials before clearing and syncing', () => {
-		const BindingFooter = DataTableFooter as unknown as React.ComponentType<
-			Record<string, unknown>
-		>;
 		render(
 			<QueryStateProvider
 				collection="coupons"
@@ -128,11 +174,11 @@ describe('DataTableFooter binding projections', () => {
 				initialFilters={{ status: 'future' }}
 			>
 				<CouponQueryStateProbe />
-				<BindingFooter
+				<DataTableFooter
 					collectionName="coupons"
-					count={0}
-					total$={of(27)}
-					active$={of(false)}
+					drawnCount={0}
+					total={27}
+					active={false}
 					sync={mockSync}
 				/>
 			</QueryStateProvider>

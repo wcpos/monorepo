@@ -1,18 +1,16 @@
 import * as React from 'react';
 
-import { Circle, Line as SkiaLine, useFont, vec } from '@shopify/react-native-skia';
-import { Gesture } from 'react-native-gesture-handler';
+import {
+	type ComposedGesture,
+	Gesture,
+	type LegacyComposedGesture,
+} from 'react-native-gesture-handler';
 import { useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useCSSVariable } from 'uniwind';
-import {
-	Area,
-	type CartesianActionsHandle,
-	CartesianChart,
-	Line,
-	useChartPressState,
-} from 'victory-native';
 
+import { type CartesianActionsHandle, loadCharts } from '@wcpos/components/charts/lazy';
+import { retryableLazy } from '@wcpos/components/lib/retryable-lazy';
 import { useLocalDate } from '@wcpos/core/hooks/use-local-date';
 
 import { TrendFrame, type TrendPoint } from './trend-frame';
@@ -42,7 +40,7 @@ export type { TrendPoint };
  * put in it, so a fresh till sees the chart's footprint and a quiet "not
  * enough data yet" line instead of a collapsed header row.
  */
-export function TrendLineChart({
+function TrendLineChartImpl({
 	points,
 	label,
 	tone,
@@ -55,7 +53,8 @@ export function TrendLineChart({
 	testID: string;
 	formatValue?: (value: number) => string;
 }) {
-	const font = useFont(require('../../assets/fonts/Inter-Medium.ttf'), 11);
+	const { Circle, SkiaLine, vec, Area, CartesianChart, Line } = charts;
+	const font = charts.useFont(require('../../assets/fonts/Inter-Medium.ttf'), 11);
 	const { formatDate } = useLocalDate();
 	const [accent, neutral, border, mutedForeground, surface] = useCSSVariable([
 		'--color-primary',
@@ -71,7 +70,7 @@ export function TrendLineChart({
 	const domainTop = niceCeil(Math.max(...points.map((point) => point.y)));
 	const xTicks = xTickValues(points);
 
-	const { state: press, isActive: pressing } = useChartPressState({ x: 0, y: { y: 0 } });
+	const { state: press, isActive: pressing } = charts.useChartPressState({ x: 0, y: { y: 0 } });
 	// The SharedValue flavour of the actions ref, because the gesture callbacks
 	// below are worklets — `handleTouch` has to be readable on the UI thread.
 	const actions = useSharedValue<CartesianActionsHandle<typeof press> | null>(null);
@@ -87,10 +86,10 @@ export function TrendLineChart({
 		}
 	);
 
-	// Raced so it satisfies `customGestures`' ComposedGesture type; victory races
+	// Raced with the builder API; victory races
 	// it against its own press gesture either way. Both feed the SAME
 	// `handleTouch`, so hover and touch land on the same datum.
-	const hover = React.useMemo(
+	const hover = React.useMemo<LegacyComposedGesture>(
 		() =>
 			Gesture.Race(
 				Gesture.Hover()
@@ -136,7 +135,8 @@ export function TrendLineChart({
 				padding={{ top: 6, right: 10 }}
 				chartPressState={press}
 				actionsRef={actions}
-				customGestures={hover}
+				// victory-native types customGestures with gesture-handler 3's hook-API ComposedGesture but composes it with the builder API at runtime; our LegacyComposedGesture is what it actually consumes.
+				customGestures={hover as unknown as ComposedGesture}
 				xAxis={{
 					font,
 					tickValues: xTicks,
@@ -192,5 +192,31 @@ export function TrendLineChart({
 				}}
 			</CartesianChart>
 		</TrendFrame>
+	);
+}
+
+let charts: Awaited<ReturnType<typeof loadCharts>>;
+const LazyChart = retryableLazy(async () => {
+	charts = await loadCharts();
+	return { default: TrendLineChartImpl };
+});
+
+export function TrendLineChart(props: React.ComponentProps<typeof LazyChart>) {
+	const { formatDate } = useLocalDate();
+	// The frame holds the chart's footprint while its code loads, so the page does not collapse.
+	return (
+		<React.Suspense
+			fallback={
+				<TrendFrame
+					points={props.points}
+					label={props.label}
+					testID={props.testID}
+					formatValue={props.formatValue}
+					formatTime={(x) => formatDate(new Date(x), 'p')}
+				/>
+			}
+		>
+			<LazyChart {...props} />
+		</React.Suspense>
 	);
 }

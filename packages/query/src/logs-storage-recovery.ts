@@ -2,6 +2,8 @@ import type { RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
 
 const RECOVERY_SESSION_KEY = 'wcpos_logs_storage_recovery_attempted';
 const ENGINE_RECOVERY_SESSION_KEY_PREFIX = 'wcpos_engine_storage_recovery_attempted_';
+// Once-only guard where sessionStorage is unavailable (native).
+let logsRecoveryAttemptedInMemory = false;
 
 type RemovableCollection = {
 	name?: string;
@@ -40,18 +42,28 @@ function reloadPage(): void {
 }
 
 /**
- * Detects the OPFS/RxDB failure seen when a local collection file contains
- * malformed JSON. The worker wraps the SyntaxError in a requestRemote error.
+ * Detects RxDB storage failures caused by malformed document JSON. The worker wraps the SyntaxError in a requestRemote error.
  */
 export function isRecoverableLogsStorageError(error: unknown): boolean {
 	const text = stringifyError(error);
-	const hasRemoteStorageSignal =
-		text.includes('requestRemote') || text.includes('opfs.worker') || text.includes('JSON.parse');
+	const hasRemoteStorageSignal = text.includes('requestRemote') || text.includes('JSON.parse');
 	const hasJsonParseSignal =
 		text.includes('SyntaxError') &&
 		(text.includes('Expected') || text.includes('JSON') || text.includes('property name'));
 
 	return hasRemoteStorageSignal && hasJsonParseSignal;
+}
+
+/**
+ * The targeted storage recovery appends "targeted recovery failed|refused" to the error it
+ * rethrows. Hermes words a parse failure "JSON Parse error" with no requestRemote marker, so the
+ * shared check above misses it. Logs only: a logs row is disposable, an engine collection is not.
+ */
+function isTargetedRecoveryJsonError(error: unknown): boolean {
+	const text = stringifyError(error);
+	return (
+		text.includes('targeted recovery') && text.includes('SyntaxError') && text.includes('JSON')
+	);
 }
 
 /**
@@ -68,17 +80,30 @@ export async function recoverLogsCollectionStorage(
 		return false;
 	}
 
-	if (!isRecoverableLogsStorageError(error)) {
+	if (!isRecoverableLogsStorageError(error) && !isTargetedRecoveryJsonError(error)) {
 		return false;
 	}
 
 	const sessionStorage = getSessionStorage();
-	if (sessionStorage?.getItem(RECOVERY_SESSION_KEY) === '1') {
+	if (logsRecoveryAttemptedInMemory || sessionStorage?.getItem(RECOVERY_SESSION_KEY) === '1') {
 		return false;
 	}
 
-	await collection.remove();
-	sessionStorage?.setItem(RECOVERY_SESSION_KEY, '1');
+	// Claim synchronously so concurrent query failures cannot both remove the collection.
+	try {
+		if (sessionStorage) sessionStorage.setItem(RECOVERY_SESSION_KEY, '1');
+		else logsRecoveryAttemptedInMemory = true;
+	} catch {
+		// Quota/blocked writes must not prevent recovery; keep the claim in this process.
+		logsRecoveryAttemptedInMemory = true;
+	}
+	try {
+		await collection.remove();
+	} catch (removeError) {
+		logsRecoveryAttemptedInMemory = false;
+		sessionStorage?.removeItem(RECOVERY_SESSION_KEY);
+		throw removeError;
+	}
 	(options.reload ?? reloadPage)();
 	return true;
 }

@@ -6,10 +6,11 @@ import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
 
-import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
-import { compileQuery } from './query-state-translator';
+import { compileQuery } from '@wcpos/query/query-state';
+import type { QueryStateActions, QueryStateOf } from '@wcpos/query/query-state';
 
-import type { QueryStateActions, QueryStateOf } from './query-state-types';
+import { PersistedStateProvider } from '../contexts/persisted-state';
+import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
 
 describe('QueryStateProvider', () => {
 	function wrapper(children: React.ReactNode) {
@@ -78,6 +79,27 @@ describe('QueryStateProvider', () => {
 		act(() => probe.actions.setPageSize(20));
 
 		expect(probe.getRenders()).toBe(renders);
+	});
+
+	// A browse level paged past its first window records that window when a child covers it, and
+	// restores it on the way back — in the same batch as the filter that reset it.
+	it('restores a recorded result window after a result change, never below the page size', () => {
+		const probe = renderProbe();
+		act(() => {
+			probe.actions.extendLimit();
+			probe.actions.extendLimit();
+		});
+		expect(probe.getState()?.limit).toBe(60);
+
+		act(() => {
+			probe.actions.setFilter('categories', [1]);
+			probe.actions.setLimit(60);
+		});
+		expect(probe.getState()).toMatchObject({ filters: { categories: [1] }, limit: 60 });
+
+		act(() => probe.actions.setLimit(5));
+		expect(probe.getState()?.limit).toBe(20);
+		expect(() => probe.actions.setLimit(0)).toThrow('limit must be a positive integer');
 	});
 
 	it('rejects page sizes that are not positive integers', () => {
@@ -463,5 +485,85 @@ describe('QueryStateProvider', () => {
 		expect(state?.filters).toEqual({
 			level: ['error', 'warn', 'info', 'success'],
 		});
+	});
+});
+
+// A provider the host unmounts and mounts again (the register's layout swapping trees at the
+// phone boundary) keeps its store under a PersistedStateProvider when given a key.
+describe('QueryStateProvider persistKey', () => {
+	function Probe({
+		onState,
+	}: {
+		onState: (state: QueryStateOf<'products'>, actions: QueryStateActions<'products'>) => void;
+	}) {
+		onState(useQueryState<'products'>(), useQueryStateActions<'products'>());
+		return null;
+	}
+	function Host({
+		mounted,
+		onState,
+	}: {
+		mounted: boolean;
+		onState: Parameters<typeof Probe>[0]['onState'];
+	}) {
+		return (
+			<PersistedStateProvider>
+				{mounted && (
+					<QueryStateProvider
+						collection="products"
+						initialPageSize={20}
+						initialSort={{ field: 'name', direction: 'asc' }}
+						persistKey="pos-products:scope"
+					>
+						<Probe onState={onState} />
+					</QueryStateProvider>
+				)}
+			</PersistedStateProvider>
+		);
+	}
+
+	it('keeps search, filters and sort across a remount of the provider', () => {
+		let latest: { state: QueryStateOf<'products'>; actions: QueryStateActions<'products'> } | null =
+			null;
+		const onState = (state: QueryStateOf<'products'>, actions: QueryStateActions<'products'>) => {
+			latest = { state, actions };
+		};
+		const { rerender } = render(<Host mounted onState={onState} />);
+		act(() => {
+			latest!.actions.setSearch('latte');
+			latest!.actions.setFilter('categories', [3]);
+			latest!.actions.setSort('sortable_price', 'desc');
+		});
+		rerender(<Host mounted={false} onState={onState} />);
+		rerender(<Host mounted onState={onState} />);
+		expect(latest!.state.search).toBe('latte');
+		expect(latest!.state.filters.categories).toEqual([3]);
+		expect(latest!.state.sort).toEqual({ field: 'sortable_price', direction: 'desc' });
+	});
+
+	it('is ordinary component state without a provider above', () => {
+		let latest: { state: QueryStateOf<'products'>; actions: QueryStateActions<'products'> } | null =
+			null;
+		const onState = (state: QueryStateOf<'products'>, actions: QueryStateActions<'products'>) => {
+			latest = { state, actions };
+		};
+		const tree = (mounted: boolean) =>
+			mounted ? (
+				<QueryStateProvider
+					collection="products"
+					initialPageSize={20}
+					initialSort={{ field: 'name', direction: 'asc' }}
+					persistKey="pos-products:scope"
+				>
+					<Probe onState={onState} />
+				</QueryStateProvider>
+			) : (
+				<div />
+			);
+		const { rerender } = render(tree(true));
+		act(() => latest!.actions.setSearch('latte'));
+		rerender(tree(false));
+		rerender(tree(true));
+		expect(latest!.state.search).toBe('');
 	});
 });

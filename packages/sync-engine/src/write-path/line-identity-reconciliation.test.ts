@@ -142,3 +142,59 @@ describe('checkout line identity', () => {
 		}
 	});
 });
+
+it.each([true, false])(
+	'pending successor adopts server money keys (stamp=%s), not editable fields',
+	async (stamped) => {
+		const { engine } = await createEngineHarness({ mode: 'manual' });
+		try {
+			await engine.ready;
+			const db = engine.active()!.database;
+			const facet = writeFacetFor('orders')!;
+			const previous = stamped ? 'old' : 'server';
+			const keys = ['_wcpos_completed_at', '_wcpos_completions'];
+			await facet.upsertServerDocument(
+				db,
+				facet.documentFromServerPayload({
+					...truth,
+					customer_note: 'successor',
+					meta_data: [...meta_data, ...keys.map((key) => ({ key, value: previous }))],
+				})
+			);
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID,
+				payload: { customer_note: 'successor' },
+			});
+			const serverMeta = stamped ? keys.map((key) => ({ key, value: '2' })) : [];
+			// A whole document: its server-owned set replaces the resident's, deletions included
+			// (a trimmed acknowledgement replaces only the keys it carries).
+			const server = {
+				...truth,
+				total: '0.00',
+				currency: 'USD',
+				status: 'pos-open',
+				date_paid: null,
+				payment_method: '',
+				customer_note: 'old note',
+				meta_data: [...meta_data, ...serverMeta],
+			};
+			await facet.reconcile(db, {
+				recordId: UUID,
+				remoteId: remoteId(900),
+				currentRevision: 'r2',
+				mutation: { mutationId: 'previous', operation: 'update', recordId: UUID },
+				document: server,
+				identityDocument: server,
+			});
+			const doc = await db.collections.orders.findOne(UUID).exec();
+			expect(doc!.toJSON().payload).toMatchObject({
+				customer_note: 'successor',
+				meta_data: [...meta_data, ...serverMeta],
+			});
+		} finally {
+			await engine.dispose();
+		}
+	}
+);

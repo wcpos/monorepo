@@ -101,6 +101,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			expect.objectContaining({
 				uuid: uuidFor(12),
 				remoteId: remoteId(12),
+				remoteKey: String(remoteId(12) ?? ''),
 				payload: expect.objectContaining({ email: 'ada@example.test' }),
 				sync: expect.objectContaining({
 					revision: '2026-05-28T10:00:00',
@@ -111,6 +112,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			expect.objectContaining({
 				uuid: uuidFor(34),
 				remoteId: remoteId(34),
+				remoteKey: String(remoteId(34) ?? ''),
 				payload: expect.objectContaining({ email: 'grace@example.test' }),
 				sync: expect.objectContaining({
 					revision: '2026-05-28T10:05:00',
@@ -230,6 +232,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			expect.objectContaining({
 				uuid: 'customer:default',
 				remoteId: null,
+				remoteKey: '',
 				payload: {},
 				sync: expect.objectContaining({
 					revision: '',

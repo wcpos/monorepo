@@ -72,19 +72,7 @@ export const OTHER_LANES = [
  * checkout initialized it, and a check that reports different packages
  * depending on that is a check nobody can trust.
  */
-export const ALLOWLIST = [
-	{
-		dir: 'apps/template-studio',
-		// TODO(#1017): 15 of the 17 files are CI-ready and pass today. The other two
-		// (thermal-gallery-columns, studio-paths) read gallery templates from a
-		// SIBLING woocommerce-pos plugin checkout, which this repo's CI never checks
-		// out — and thermal-gallery-columns is red even with that checkout present
-		// (its `engine === 'thermal'` filter matches nothing, so the CPL-overflow
-		// matrix it exists to check has not run in a long time). #1017 decides
-		// whether the gallery specs get an opt-in guard or CI gets the templates.
-		reason: 'gallery specs need the sibling woocommerce-pos checkout — TODO(#1017)',
-	},
-];
+export const ALLOWLIST = [];
 
 /** Submodule paths from .gitmodules — separate repositories with their own CI. */
 export function readSubmodulePaths(root = repoRoot) {
@@ -292,7 +280,7 @@ export function readLaneSources(root = repoRoot) {
 	return [...sources, ...invoked.map(([name, body]) => [`package.json#${name}`, body])];
 }
 
-export function checkCiTestMatrix(root = repoRoot) {
+export function checkCiTestMatrix(root = repoRoot, allowlist = ALLOWLIST) {
 	const packages = surveyPackages(root);
 	const sources = readLaneSources(root);
 	const sourceText = new Map(sources);
@@ -307,7 +295,7 @@ export function checkCiTestMatrix(root = repoRoot) {
 		);
 	}
 	const lanes = detectLanes(sources, packages);
-	const allowed = new Map(ALLOWLIST.map((entry) => [entry.dir, entry]));
+	const allowed = new Map(allowlist.map((entry) => [entry.dir, entry]));
 	const submodules = readSubmodulePaths(root);
 
 	const dark = [];
@@ -340,7 +328,7 @@ export function checkCiTestMatrix(root = repoRoot) {
 	// An allowlist entry that is no longer needed is rot — the exclusion outlives
 	// the reason and the next reader believes it.
 	const byDir = new Map(packages.map((entry) => [entry.dir, entry]));
-	const stale = ALLOWLIST.flatMap((entry) => {
+	const stale = allowlist.flatMap((entry) => {
 		const workspacePackage = byDir.get(entry.dir);
 		const reason = !workspacePackage
 			? 'package is gone'

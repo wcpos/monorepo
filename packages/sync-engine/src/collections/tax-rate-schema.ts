@@ -7,6 +7,7 @@ export type WooTaxRatePayload = Record<string, unknown> & {
 export type LocalTaxRateDocument = {
 	uuid: string;
 	remoteId: RemoteId | null;
+	remoteKey: string;
 	payload: WooTaxRatePayload;
 	sync: {
 		revision: string;
@@ -23,8 +24,10 @@ export const taxRateSchema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 	},
-	required: ['uuid', 'remoteId', 'payload', 'sync'],
+	required: ['uuid', 'remoteId', 'remoteKey', 'payload', 'sync'],
+	indexes: ['remoteKey'],
 } as const;

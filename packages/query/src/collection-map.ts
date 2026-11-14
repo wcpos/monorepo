@@ -1,15 +1,1 @@
-export {
-	collectionMap,
-	COLLECTION_VOCABULARY,
-	engineCollectionNameFor,
-	LEGACY_SEARCH_FIELDS,
-	readEnginePath,
-	resolveLegacyField,
-	sanitizeVariationAttributesRead,
-	sortAliasFor,
-	sortTiebreakFor,
-	wooOrderbyFor,
-	type EngineDocument,
-	type FieldMapEntry,
-	type LegacyCollectionName,
-} from './engine-adapter/collection-map';
+export { sanitizeVariationAttributesRead } from './engine-adapter/collection-map';

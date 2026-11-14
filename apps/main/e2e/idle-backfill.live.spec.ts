@@ -126,9 +126,8 @@ function watchWire(page: import('@playwright/test').Page): WireLog {
 		log.allStoreRequests.push(`${Date.now()} ${request.method()} ${url.toString()}`);
 		const path = url.pathname + (url.searchParams.get('rest_route') ?? '');
 		const params = url.searchParams;
-		// Census probes ride the collection vocabulary's censusRoute — wc/v3 for
-		// most collections, wcpos/v1 for variations — so match the probe SHAPE
-		// (page=1&per_page=1 against the store origin), not a route prefix.
+		// Census probes ride the collection vocabulary's censusRoute, so match the probe
+		// SHAPE (page=1&per_page=1 against the store origin), not a route prefix.
 		if (params.get('per_page') === '1' && params.get('page') === '1') {
 			log.censusProbes.push(url.toString());
 		}

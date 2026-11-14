@@ -24,6 +24,9 @@
  * collections (the web app's createDatabase recipe) open identically.
  */
 
+import { addRxPlugin } from 'rxdb';
+import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+
 import {
 	MUTATION_QUEUE_COLLECTION,
 	recordMutationQueueMigrationStrategies,
@@ -35,6 +38,7 @@ import { productSchema } from './product-schema';
 import { variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
+import { refundSchema } from './refund-schema';
 import {
 	brandSchema,
 	categorySchema,
@@ -54,6 +58,8 @@ import { changeSignalStateSchema } from '../change-signal/change-signal-state-sc
 
 import type { RxDatabase } from 'rxdb';
 
+addRxPlugin(RxDBLocalDocumentsPlugin);
+
 /** The syncable collections a host can reset through the public handle. */
 export const SYNC_COLLECTION_NAMES = [
 	'orders',
@@ -65,6 +71,7 @@ export const SYNC_COLLECTION_NAMES = [
 	'brands',
 	'tags',
 	'coupons',
+	'refunds',
 ] as const;
 
 export type SyncCollectionName = (typeof SYNC_COLLECTION_NAMES)[number];
@@ -100,11 +107,12 @@ export const engineKvSchema = {
 export type CollectionCreator = {
 	schema: unknown;
 	migrationStrategies?: unknown;
+	localDocuments?: boolean;
 	options?: Record<string, unknown>;
 };
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
-	orders: { schema: orderSchema },
+	orders: { schema: orderSchema, localDocuments: true },
 	// #2073: full-token indexes used 143 MiB at 20k rows; catalogue search uses a folded blob.
 	products: { schema: productSchema, options: { searchIndex: false } },
 	variations: { schema: variationSchema, options: { searchIndex: false } },
@@ -114,6 +122,7 @@ const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = 
 	brands: { schema: brandSchema },
 	tags: { schema: tagSchema },
 	coupons: { schema: couponSchema },
+	refunds: { schema: refundSchema },
 };
 
 /** Deliberate `/testing` seam for hosts that open schema-canary databases. */

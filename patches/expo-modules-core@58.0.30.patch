@@ -1,0 +1,41 @@
+diff --git a/android/src/main/java/expo/modules/kotlin/sharedobjects/SharedObjectRegistry.kt b/android/src/main/java/expo/modules/kotlin/sharedobjects/SharedObjectRegistry.kt
+index 1640cff..7feb12f 100644
+--- a/android/src/main/java/expo/modules/kotlin/sharedobjects/SharedObjectRegistry.kt
++++ b/android/src/main/java/expo/modules/kotlin/sharedobjects/SharedObjectRegistry.kt
+@@ -108,8 +108,10 @@ class SharedObjectRegistry(runtime: Runtime) {
+   }
+ 
+   internal fun toNativeObject(id: SharedObjectId): SharedObject {
+-    val native = pairs[id.ensureWasNotRelease()]?.first
+-    return native ?: throw InvalidSharedObjectIdException()
++    return synchronized(this) {
++      val native = pairs[id.ensureWasNotRelease()]?.first
++      native ?: throw InvalidSharedObjectIdException()
++    }
+   }
+ 
+   internal fun toNativeObjectOrNull(id: SharedObjectId): SharedObject? {
+@@ -124,7 +126,9 @@ class SharedObjectRegistry(runtime: Runtime) {
+     }
+ 
+     val id = SharedObjectId(js.getProperty(sharedObjectIdPropertyName).getInt())
+-    return pairs[id]?.first
++    return synchronized(this) {
++      pairs[id]?.first
++    }
+   }
+ 
+   internal fun toJavaScriptObjectOrNull(native: SharedObject): JavaScriptObject? {
+@@ -140,8 +144,10 @@ class SharedObjectRegistry(runtime: Runtime) {
+   }
+ 
+   private fun SharedObjectId.ensureWasNotRelease() = apply {
+-    if (!pairs.contains(this) && value != 0 && value < currentId.value) {
+-      throw UsingReleasedSharedObjectException()
++    synchronized(this@SharedObjectRegistry) {
++      if (!pairs.contains(this) && value != 0 && value < currentId.value) {
++        throw UsingReleasedSharedObjectException()
++      }
+     }
+   }
+ }

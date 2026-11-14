@@ -1,8 +1,11 @@
 import { getLogger } from '@wcpos/utils/logger';
 
-import { getVariablePrices } from './get-variable-prices';
+import { getVariablePrices, resetVariablePriceReports } from './get-variable-prices';
 
 describe('getVariablePrices', () => {
+	// The reader reports each record's problem once; each test starts fresh.
+	beforeEach(() => resetVariablePriceReports());
+
 	it('returns parsed variable prices from metadata', () => {
 		const metaData = [
 			{
@@ -61,7 +64,7 @@ describe('getVariablePrices', () => {
 		const metaData = [{ key: 'some_other_key', value: 'foo' }];
 
 		expect(getVariablePrices(metaData)).toBeNull();
-		expect(getLogger([]).error).toHaveBeenCalledWith(
+		expect(getLogger([]).warn).toHaveBeenCalledWith(
 			"No '_woocommerce_pos_variable_prices' key found in metaData",
 			expect.objectContaining({ code: 'PRODUCT421' })
 		);
@@ -85,7 +88,7 @@ describe('getVariablePrices', () => {
 				salePrice: '',
 			})
 		).toBeNull();
-		expect(getLogger([]).error).not.toHaveBeenCalled();
+		expect(getLogger([]).warn).not.toHaveBeenCalled();
 	});
 
 	it('logs, naming the record, when the key is absent but a parent price survives', () => {
@@ -105,7 +108,7 @@ describe('getVariablePrices', () => {
 				salePrice: '',
 			})
 		).toBeNull();
-		expect(getLogger([]).error).toHaveBeenCalledWith(
+		expect(getLogger([]).warn).toHaveBeenCalledWith(
 			"No '_woocommerce_pos_variable_prices' key found in metaData",
 			expect.objectContaining({
 				code: 'PRODUCT421',
@@ -142,7 +145,7 @@ describe('getVariablePrices', () => {
 			expect(
 				getVariablePrices(missing, { ...owner, price: '', regularPrice: '', salePrice: '' })
 			).toBeNull();
-			expect(getLogger([]).error).not.toHaveBeenCalled();
+			expect(getLogger([]).warn).not.toHaveBeenCalled();
 		});
 
 		it('reports the product when a parent price survived — the augmentation never ran', () => {
@@ -151,7 +154,7 @@ describe('getVariablePrices', () => {
 			expect(
 				getVariablePrices(missing, { ...owner, price: '19.99', regularPrice: '', salePrice: '' })
 			).toBeNull();
-			expect(getLogger([]).error).toHaveBeenCalledWith(
+			expect(getLogger([]).warn).toHaveBeenCalledWith(
 				"No '_woocommerce_pos_variable_prices' key found in metaData",
 				expect.objectContaining({
 					code: 'PRODUCT421',
@@ -169,7 +172,7 @@ describe('getVariablePrices', () => {
 			jest.clearAllMocks();
 
 			expect(getVariablePrices(missing, owner)).toBeNull();
-			expect(getLogger([]).error).toHaveBeenCalledWith(
+			expect(getLogger([]).warn).toHaveBeenCalledWith(
 				"No '_woocommerce_pos_variable_prices' key found in metaData",
 				expect.objectContaining({ code: 'PRODUCT421' })
 			);
@@ -211,7 +214,7 @@ describe('getVariablePrices', () => {
 		const metaData = [{ key: '_woocommerce_pos_variable_prices' }];
 
 		expect(getVariablePrices(metaData)).toBeNull();
-		expect(getLogger([]).error).toHaveBeenCalledWith(
+		expect(getLogger([]).warn).toHaveBeenCalledWith(
 			"'_woocommerce_pos_variable_prices' has invalid structure",
 			expect.objectContaining({
 				code: 'PRODUCT421',
@@ -270,5 +273,45 @@ describe('getVariablePrices', () => {
 			regular_price: { min: '10', max: '20' },
 			sale_price: { min: '', max: '' },
 		});
+	});
+});
+
+describe('getVariablePrices reporting', () => {
+	beforeEach(() => {
+		resetVariablePriceReports();
+		jest.clearAllMocks();
+	});
+
+	it('reports one record’s bad price data once, at warn, however many cells read it', () => {
+		const owner = { recordId: 'uuid-9', remoteId: 9, name: 'Tee', sku: 'T' };
+		const meta = [{ key: '_woocommerce_pos_variable_prices', value: 'not json {' }];
+
+		getVariablePrices(meta, owner);
+		getVariablePrices(meta, owner);
+		getVariablePrices(meta, owner);
+
+		expect(getLogger([]).error).not.toHaveBeenCalled();
+		expect(getLogger([]).warn).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps remembering recent records when the cap is reached (evicts only the oldest)', () => {
+		const meta = [{ key: '_woocommerce_pos_variable_prices', value: 'not json {' }];
+		for (let index = 0; index < 501; index += 1) {
+			getVariablePrices(meta, { recordId: `uuid-${index}` });
+		}
+		jest.clearAllMocks();
+
+		getVariablePrices(meta, { recordId: 'uuid-500' });
+
+		expect(getLogger([]).warn).not.toHaveBeenCalled();
+	});
+
+	it('reports the same record id again in another store (uuids repeat across stores)', () => {
+		const meta = [{ key: '_woocommerce_pos_variable_prices', value: 'not json {' }];
+
+		getVariablePrices(meta, { recordId: 'uuid-shared', scope: 'store-a' });
+		getVariablePrices(meta, { recordId: 'uuid-shared', scope: 'store-b' });
+
+		expect(getLogger([]).warn).toHaveBeenCalledTimes(2);
 	});
 });

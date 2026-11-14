@@ -311,6 +311,7 @@ async function restoreProfile(page: Page, state: SavedAuthState): Promise<void> 
 }
 
 test.describe('#1284 ghost residents live proof', () => {
+	test.skip(true, '#2242 SQLite pool: needs a worker-side query, PR 5');
 	test.skip(PHASE !== 'mint' && PHASE !== 'ab', 'set GHOST_PHASE=mint|ab');
 	test.skip(!OPS || !STATE_FILE || !TOKEN, 'set GHOST_OPS, GHOST_STATE, GHOST_TOKEN');
 

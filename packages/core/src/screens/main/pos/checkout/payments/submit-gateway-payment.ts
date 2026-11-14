@@ -1,0 +1,237 @@
+import {
+	type AwaitingCustomerStamp,
+	type DeclaredValues,
+	type GatewaySubmitResponse,
+	MetaDataEntry,
+	type OrderPaymentSummary,
+	type PaymentRow,
+	withAttemptAnswer,
+	withAwaitingCustomer,
+	withGatewayAttempt,
+} from '@wcpos/order-math';
+import type { MoneyCommandPoster, Post } from '@wcpos/query';
+import {
+	isDefinitiveMoneyRefusal,
+	isPaidStatus,
+	moneyInMotionOf,
+	moneyRefusalOf,
+} from '@wcpos/sync-core';
+
+import type { NotMirrored } from '../../commands/land-answer';
+
+/**
+ * Submit a `gateway` capture-mode method (Payments Contract 1.2 §2, roadmap#415 R2/R4):
+ * Free runs the gateway's own `process_payment()` with the declared values and answers
+ * with what it did — `recorded` (a captured row, handled exactly like a manual record),
+ * `sent` (no row; the order stays the gateway's status under the awaiting-customer stamp)
+ * or `settled` (no row, no stamp: the gateway landed the order on the status the merchant
+ * stored as its POS Order Status, which finishes the sale — spec §3.1). The verb never
+ * decides the outcome; the response does. Pure apart from the injected deps so the
+ * decision tree is testable.
+ */
+
+export interface GatewayOrder {
+	uuid: string;
+	id: number;
+	meta_data: MetaDataEntry[];
+}
+export interface SubmitGatewayPaymentDeps {
+	post: Post & Pick<MoneyCommandPoster, 'settle'>;
+	/** Where the gateway sent the customer, read from the declared fields (spec §3.2). */
+	destination: string | null;
+	/** Mirror the answer onto the latest resident; never rejects, a failure is `{ cause }`. */
+	mirror: (answer: {
+		payment?: PaymentRow;
+		order: OrderPaymentSummary;
+		meta?: (meta: MetaDataEntry[]) => MetaDataEntry[];
+		accepted?: false; // a cancel's answer: no sale completion
+	}) => Promise<NotMirrored>;
+	cashierId: number;
+	now?: () => string;
+}
+type Answered = { order: OrderPaymentSummary; notMirrored: NotMirrored };
+export type SubmitGatewayPaymentOutcome =
+	| ({ kind: 'recorded'; via: 'online'; row: PaymentRow } & Answered)
+	| ({ kind: 'sent'; stamp: AwaitingCustomerStamp } & Answered)
+	| ({ kind: 'settled' } & Answered)
+	/** A replayed `settled`/`paid` whose order was reopened since: mirrored, never finished. */
+	| ({ kind: 'reopened' } & Answered)
+	/** `wcpos_fields_invalid`: a message per component id, `_form` for the gateway's own line. */
+	| { kind: 'fields_invalid'; errors: Record<string, string> }
+	/** 409 `wcpos_payment_in_flight`: an attempt the provider has not answered yet. */
+	| { kind: 'unanswered'; attemptId: string }
+	/** A 4xx the server will repeat; `provider` is true for the gateway's own refusal. */
+	| { kind: 'refused'; code: string; message: string; provider: boolean };
+
+type ErrorResponse = {
+	status?: number;
+	data?: { code?: string; message?: string; data?: { errors?: unknown; detail?: unknown } };
+};
+/** Free puts the gateway's own notice in `data.detail` under a generic `message`. */
+function refusalMessage(response: ErrorResponse | undefined, code: string): string {
+	const detail = response?.data?.data?.detail;
+	if (typeof detail === 'string' && detail.trim() !== '') return detail;
+	return response?.data?.message ?? code;
+}
+function errorResponse(error: unknown): ErrorResponse | undefined {
+	if (!error || typeof error !== 'object') return undefined;
+	const response = (error as { response?: unknown }).response;
+	return response && typeof response === 'object' ? (response as ErrorResponse) : undefined;
+}
+
+/**
+ * Whether a `settled` or `paid` submit answer still describes a finished sale. A replay answers
+ * the attempt's stored outcome with the order as it now stands, so another till's reopen shows
+ * as an open order. `paid` needs a paid status; `settled` a paid status or `pending`, which a
+ * merchant can store as a gateway's settle status (pay by invoice). An open, failed or cancelled
+ * order is no finished sale.
+ */
+export function submitStillDone(outcome: unknown, status: unknown): boolean {
+	if (outcome === 'paid') return isPaidStatus(status);
+	return outcome === 'settled' && (status === 'pending' || isPaidStatus(status));
+}
+
+export async function submitGatewayPayment(
+	order: GatewayOrder,
+	methodId: string,
+	input: { attemptId: string; values: DeclaredValues },
+	deps: SubmitGatewayPaymentDeps
+): Promise<SubmitGatewayPaymentOutcome> {
+	let data: Partial<GatewaySubmitResponse>;
+	try {
+		const response = await deps.post(`orders/${order.id}/payment-methods/${methodId}/submit`, {
+			attempt_id: input.attemptId,
+			values: input.values,
+		});
+		data = (response.data ?? {}) as Partial<GatewaySubmitResponse>;
+	} catch (error) {
+		const response = errorResponse(error);
+		const code = response?.data?.code;
+		if (code === 'wcpos_fields_invalid') {
+			const errors = response?.data?.data?.errors;
+			return {
+				kind: 'fields_invalid',
+				errors:
+					errors && typeof errors === 'object'
+						? Object.fromEntries(
+								Object.entries(errors as Record<string, unknown>).map(([id, message]) => [
+									id,
+									// `_form` carries every notice the gateway added, as a list.
+									Array.isArray(message) ? message.map(String).join(' ') : String(message),
+								])
+							)
+						: { _form: response?.data?.message ?? '' },
+			};
+		}
+		const inMotion = moneyInMotionOf(moneyRefusalOf(error));
+		if (inMotion?.kind === 'attempt') {
+			// The forced refresh brings the store's attempt map, so the resident names the attempt.
+			await deps.post.settle().catch(() => undefined);
+			return { kind: 'unanswered', attemptId: inMotion.id };
+		}
+		// The money answer rule (sync-core): a named 4xx is the store's decision, and so is a 502
+		// `wcpos_provider_error`, the gateway's own refusal (a notice, an exception, a redirect
+		// elsewhere: Free took nothing and put the previous method back). The poster has settled
+		// the journal for both. A session or proxy answer is not, and the journal keeps the submit.
+		if (code && isDefinitiveMoneyRefusal(moneyRefusalOf(error))) {
+			return {
+				kind: 'refused',
+				code,
+				message: refusalMessage(response, code),
+				provider: code === 'wcpos_provider_error',
+			};
+		}
+		throw error;
+	}
+	if (!data.order || typeof data.order.status !== 'string')
+		throw new Error('gateway_submit_malformed_response');
+	// Only the request is inside the try above: once the server has answered 2xx the outcome
+	// stands, and a failure writing the till's copy must surface as that, never as a retry.
+	// `answer` applies the store's supersede rules to the map (order-math `withAttemptAnswer`).
+	const mirror = async <const O extends { order: OrderPaymentSummary; row?: PaymentRow }>(
+		outcome: O,
+		awaiting: AwaitingCustomerStamp | null,
+		answer?: GatewaySubmitResponse['outcome']
+	) => ({
+		...outcome,
+		notMirrored: await deps.mirror({
+			payment: outcome.row,
+			order: outcome.order,
+			meta: (meta) =>
+				withAwaitingCustomer(
+					answer ? withAttemptAnswer(meta, input.attemptId, answer) : meta,
+					awaiting
+				),
+		}),
+	});
+	if (data.outcome === 'recorded' && data.payment) {
+		const row = data.payment;
+		return mirror({ kind: 'recorded', via: 'online', row, order: data.order }, null, 'recorded');
+	}
+	// A replay answers `paid` for an attempt that completed the sale: the same as `settled`, with
+	// the summary as the truth and no receipt number assumed.
+	if (
+		(data.outcome === 'settled' || data.outcome === 'paid') &&
+		!submitStillDone(data.outcome, data.order.status)
+	)
+		return mirror({ kind: 'reopened', order: data.order }, null);
+	if (data.outcome === 'settled' || data.outcome === 'paid') {
+		// The store settled the sale on the merchant's stored status and cleared any stamp an
+		// earlier send left (§3.1); the till's copy follows, with the summary's status.
+		return mirror({ kind: 'settled', order: data.order }, null, data.outcome);
+	}
+	if (data.outcome === 'sent') {
+		const stamp: AwaitingCustomerStamp = {
+			method_id: methodId,
+			destination: deps.destination,
+			attempt_id: input.attemptId,
+			sent_at_gmt: (deps.now ?? (() => new Date().toISOString()))(),
+			cashier_id: deps.cashierId,
+		};
+		// A `sent` whose summary is still pos-open is a replay of an earlier send after a later
+		// one was cancelled elsewhere (§4.2): the order is open, and the stamp is not ours to write.
+		const sent = { kind: 'sent', order: data.order, stamp } as const;
+		if (data.order.status === 'pos-open') return mirror(sent, null);
+		return mirror(sent, stamp, 'sent');
+	}
+	throw new Error('gateway_submit_malformed_response');
+}
+
+/** `POST …/payment-methods/{method}/cancel` (§2.2): Cancel invoice (`awaiting`), or the clear. */
+export async function cancelGatewayAttempt(
+	order: GatewayOrder,
+	target: { methodId: string; attemptId: string; awaiting?: AwaitingCustomerStamp },
+	deps: Pick<SubmitGatewayPaymentDeps, 'post' | 'mirror'>
+): Promise<
+	| ({ kind: 'answered'; reopened: boolean } & Answered)
+	| { kind: 'refused'; code: string; message: string }
+> {
+	let summary: OrderPaymentSummary;
+	try {
+		const response = await deps.post(
+			`orders/${order.id}/payment-methods/${target.methodId}/cancel`,
+			{ attempt_id: target.attemptId }
+		);
+		const answer = ((response.data ?? {}) as { order?: OrderPaymentSummary }).order;
+		// Only the store's own summary says what the order is now; an empty 2xx confirms nothing.
+		if (!answer || typeof answer.status !== 'string')
+			throw new Error('gateway_cancel_malformed_response');
+		summary = answer;
+	} catch (error) {
+		const response = errorResponse(error);
+		const code = response?.data?.code;
+		if (code && isDefinitiveMoneyRefusal(moneyRefusalOf(error)))
+			return { kind: 'refused', code, message: refusalMessage(response, code) };
+		throw error;
+	}
+	// A cancel reopens the order (`pos-open`, or `pos-partial` beside earlier legs). An answer
+	// with the order anywhere else did not cancel the invoice: the summary is mirrored with the
+	// stamp kept, and the outcome says so; a re-send would replay the same stored reply.
+	const reopened = summary.status === 'pos-open' || summary.status === 'pos-partial';
+	const meta = (m: MetaDataEntry[]) =>
+		target.awaiting && !reopened
+			? withAwaitingCustomer(m, target.awaiting)
+			: withGatewayAttempt(m, target.attemptId, { fate: 'cancelled', awaiting: null });
+	const notMirrored = await deps.mirror({ order: summary, meta, accepted: false });
+	return { kind: 'answered', reopened, order: summary, notMirrored };
+}

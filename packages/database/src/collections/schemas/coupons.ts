@@ -1,6 +1,6 @@
 export const couponsLiteral = {
 	title: 'WooCommerce Coupon schema',
-	version: 1,
+	version: 0,
 	description: 'WooCommerce Coupon schema',
 	type: 'object',
 	primaryKey: 'uuid',

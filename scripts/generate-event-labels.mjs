@@ -19,7 +19,17 @@ import { fileURLToPath } from 'node:url';
  */
 
 const BANNER = '// GENERATED — do not edit by hand; run pnpm generate:event-labels';
-const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT'];
+const DOMAINS = [
+	'AUTH',
+	'SYNC',
+	'CHECKOUT',
+	'PAYMENT',
+	'PRINT',
+	'PRODUCT',
+	'LICENSE',
+	'CLIENT',
+	'REGISTER',
+];
 const FIELDS = ['type', 'domain', 'label', 'introducedIn'];
 const KEY_PREFIX = 'health.logs.event.';
 const DESCRIPTION_KEY_PREFIX = 'health.logs.event_description.';

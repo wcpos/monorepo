@@ -1,0 +1,7 @@
+@wcpos/sync-engine
+Copyright (c) 2021-2026 WCPOS. Licensed under the MIT License (see LICENSE).
+
+This package declares rxdb-premium as an optional peer dependency. rxdb-premium is
+proprietary software, separately licensed by its vendor (https://rxdb.info/premium/),
+and is NOT included in, bundled with, or redistributed by this package. Using the
+features that depend on it requires your own rxdb-premium licence.

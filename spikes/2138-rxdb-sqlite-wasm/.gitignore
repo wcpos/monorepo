@@ -1,0 +1,4 @@
+.rxdb-src/
+*.log
+!browser-conformance.log
+!node-conformance-summary.log

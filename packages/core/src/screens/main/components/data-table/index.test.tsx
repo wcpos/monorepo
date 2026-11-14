@@ -1,450 +1,350 @@
-/**
- * @jest-environment jsdom
- */
+/** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { of } from 'rxjs';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
-import { QueryStateProvider } from '../../../../query';
-import { DataTable, DataTableFooter } from './index';
+import {
+	extendLimit,
+	handleWith,
+	patchUI,
+	renderTable,
+	reset,
+	setFilter,
+	setSort,
+	state,
+	tableTree,
+} from './test-fixture';
+import { DataTableRow } from './rows';
+import { DataTableSkeleton } from './skeleton';
 
-const mockSetSort = jest.fn();
-const mockExtendLimit = jest.fn();
-const mockSetFilter = jest.fn();
-const mockPatchUI = jest.fn();
-let mockTableMeta: Record<string, unknown> | undefined;
-let mockFooterProps: Record<string, unknown> | undefined;
-let mockDefaultFooterProps: Record<string, unknown> | undefined;
-const mockClearAndRefresh = jest.fn();
+import type { DataTableFooterProps } from './footer';
 
-// Mutable so a test can change the visible-column set between renders; the
-// default matches the original single-column fixture.
-let mockColumns: { key: string; show: boolean }[] = [{ key: 'level', show: true }];
-// Mutable so a test can render an empty (or search-pending) result.
-let mockResult: Record<string, unknown> = {
-	hits: [{ id: 'log-1', record: { payload: { level: 'error' } } }],
-};
-
-jest.mock('@wcpos/query', () => ({
-	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
-}));
-
-jest.mock('observable-hooks', () => ({
-	useObservableEagerState: () => mockColumns,
-	// The paging guard reads the binding's pending$/exhausted$ through this; the initial
-	// value ("not pending", "no opinion") is all these tests need.
-	useObservableState: (_source: unknown, initial: unknown) => initial,
-	useObservableSuspense: () => mockResult,
-}));
-
-jest.mock('../../contexts/ui-settings', () => ({
-	useUISettings: () => ({
-		uiSettings: {
-			columns$: {},
-			sortBy: 'timestamp',
-			sortDirection: 'desc',
-		},
-		getUILabel: (key: string) => key,
-		patchUI: mockPatchUI,
-	}),
-}));
-jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string) => key,
-}));
-
-jest.mock('@wcpos/components/table', () => ({
-	Table: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	TableBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	TableCell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	TableFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	TableHead: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	TableHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	TableRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<span data-testid={testID}>{children}</span>
-	),
-}));
-jest.mock('@wcpos/components/error-boundary', () => ({
-	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
-jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => children,
-}));
-jest.mock('@wcpos/components/virtualized-list', () => ({
-	Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	List: ({
-		data,
-		renderItem,
-		onEndReached,
-		ListEmptyComponent,
-	}: {
-		data: unknown[];
-		renderItem: (input: { item: unknown; index: number }) => React.ReactNode;
-		onEndReached: () => void;
-		ListEmptyComponent?: React.ComponentType;
-	}) => (
-		<div>
-			{data.length === 0 && ListEmptyComponent ? <ListEmptyComponent /> : null}
-			{data.map((item, index) => (
-				<React.Fragment key={index}>{renderItem({ item, index })}</React.Fragment>
-			))}
-			<button data-testid="end-reached" onClick={onEndReached} />
-		</div>
-	),
-	Item: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-jest.mock('./header', () => ({
-	DataTableHeader: ({
-		columnId,
-		sortBy,
-		sortDirection,
-		onSortingChange,
-	}: {
-		columnId: string;
-		sortBy: string;
-		sortDirection: 'asc' | 'desc';
-		onSortingChange: (sort: { sortBy: string; sortDirection: 'asc' }) => void;
-	}) => (
-		<button
-			data-testid={`sort-${columnId}`}
-			data-sort-by={sortBy}
-			data-sort-direction={sortDirection}
-			onClick={() => onSortingChange({ sortBy: columnId, sortDirection: 'asc' })}
-		/>
-	),
-}));
-jest.mock('./footer', () => ({
-	DataTableFooter: ({ children, ...props }: Record<string, unknown>) => {
-		mockDefaultFooterProps = props;
-		return (
-			<>
-				{children as React.ReactNode}
-				<button
-					data-testid="clear-and-refresh"
-					onClick={() => {
-						if (typeof props.collectionName !== 'string') {
-							throw new Error('collectionName is required');
-						}
-						mockClearAndRefresh(props.collectionName);
-					}}
-				/>
-			</>
-		);
-	},
-}));
-jest.mock('./list-footer', () => ({ ListFooterComponent: () => null }));
-jest.mock('../../components/record-text-cell', () => ({
-	RecordTextCell: ({ column }: { column: { id: string } }) => (
-		<div data-testid={`record-text-${column.id}`} />
-	),
-}));
-
-function Footer(props: Record<string, unknown>) {
-	mockFooterProps = props;
-	return null;
-}
-
-function TaxFooter(props: React.ComponentProps<typeof DataTableFooter>) {
-	return (
-		<DataTableFooter {...props}>
-			<span data-testid="tax-based-on" />
-		</DataTableFooter>
+beforeEach(reset);
+it('fine headers fill their cells and sorting keeps the applied-sort marker', () => {
+	renderTable();
+	expect(screen.getByRole('table')).toBeTruthy();
+	const header = screen.getByTestId('data-table-header-name');
+	expect(header.style.flex).toBe('1 1 0%');
+	expect(header.style.alignSelf).toBe('stretch');
+	const sortRow = screen.getByTestId('data-table-sort-name-asc');
+	// A sortable label truncates inside its cell instead of overflowing the next column:
+	// the row is capped at the cell and the label may shrink (a non-sortable header's
+	// plain Text already does).
+	expect(sortRow.style.maxWidth).toBe('100%');
+	expect((sortRow.firstElementChild as HTMLElement).style.flexShrink).toBe('1');
+	fireEvent.click(header);
+	expect(setSort).toHaveBeenCalledWith('name', 'desc');
+	expect(patchUI).toHaveBeenCalledWith({ sortBy: 'name', sortDirection: 'desc' });
+});
+it('coarse composes visible cells and a caller trailing slot in a pressable row, without headers', () => {
+	state.pointer = 'coarse';
+	const onPress = jest.fn();
+	renderTable({
+		renderItem: ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+			<DataTableRow
+				item={item}
+				onPress={onPress}
+				trailing={<span data-testid="trailing">+</span>}
+			/>
+		),
+	});
+	expect(screen.queryByTestId('data-table-header-name')).toBeNull();
+	expect(screen.getByTestId('cell-name')).toBeTruthy();
+	expect(screen.getByTestId('cell-price')).toBeTruthy();
+	expect(screen.queryByTestId('cell-actions')).toBeNull();
+	// The row's testID holds its trailing control: specs find a row's `+` inside the row.
+	expect(within(screen.getByTestId('data-table-row-uuid-1')).getByTestId('trailing')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('cell-name'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+});
+it('a row whose caret opens the record takes the press only while the Actions column is hidden', () => {
+	const open = jest.fn();
+	const renderItem = ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+		<DataTableRow item={item} pressWhenActionsHidden={open} />
 	);
-}
-
-describe('DataTable binding contract', () => {
-	beforeEach(() => {
-		jest.clearAllMocks();
-		mockTableMeta = undefined;
-		mockFooterProps = undefined;
-		mockDefaultFooterProps = undefined;
-		mockColumns = [{ key: 'level', show: true }];
-		mockResult = { hits: [{ id: 'log-1', record: { payload: { level: 'error' } } }] };
+	const { unmount } = renderTable({ renderItem });
+	fireEvent.click(screen.getByTestId('cell-name'));
+	expect(open).not.toHaveBeenCalled();
+	unmount();
+	state.columns = state.columns.map((column) =>
+		column.key === 'actions' ? { ...column, show: false } : column
+	);
+	renderTable({ renderItem });
+	fireEvent.click(screen.getByTestId('cell-name'));
+	expect(open).toHaveBeenCalledTimes(1);
+});
+it('a labelled row is itself a button: a press on its cells is the row press', () => {
+	// #2284: the drill-in variation row names itself, so on web the row pressable renders a
+	// <button>. The inner-control guard found that very button and dropped every click.
+	const onPress = jest.fn();
+	renderTable({
+		renderItem: ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+			<DataTableRow item={item} onPress={onPress} accessibilityLabel="Tea" />
+		),
 	});
+	fireEvent.click(screen.getByTestId('cell-name'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+});
+it('a press on a control inside a cell stays that control’s', () => {
+	const onPress = jest.fn();
+	renderTable({
+		cells: { name: () => <button data-testid="cell-control">edit</button> },
+		renderItem: ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+			<DataTableRow item={item} onPress={onPress} />
+		),
+	});
+	fireEvent.click(screen.getByTestId('cell-control'));
+	expect(onPress).not.toHaveBeenCalled();
+});
+it('keeps the pending search distinct from empty results', () => {
+	state.result = { hits: [], searchActive: true, searchState: 'pending' };
+	renderTable();
+	expect(screen.getByTestId('search-pending-message').textContent).toBe('common.searching');
+	expect(screen.queryByTestId('no-data-message')).toBeNull();
+});
+it('an empty list shows skeleton rows while the collection is syncing, the empty state once it settles', () => {
+	state.result = { hits: [], searchActive: false, searchState: 'answered' };
+	const handle = handleWith({ active: true });
+	renderTable({ handle, noDataMessage: <span data-testid="empty-state">No customers yet</span> });
+	expect(screen.getByTestId('data-table-syncing-rows')).toBeTruthy();
+	expect(screen.getAllByTestId('data-table-skeleton-name')).toHaveLength(5);
+	expect(screen.queryByTestId('empty-state')).toBeNull();
+	act(() => handle.set({ active: false }));
+	expect(screen.queryByTestId('data-table-syncing-rows')).toBeNull();
+	expect(screen.getByTestId('empty-state')).toBeTruthy();
+});
+it('a pending search says so even while the collection is syncing', () => {
+	state.result = { hits: [], searchActive: true, searchState: 'pending' };
+	renderTable({ handle: handleWith({ active: true }) });
+	expect(screen.getByTestId('search-pending-message')).toBeTruthy();
+	expect(screen.queryByTestId('data-table-syncing-rows')).toBeNull();
+});
+it('unknown totals print only the loaded count', () => {
+	renderTable();
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+	expect(screen.getByTestId('data-table-count').textContent).toBe(
+		'{"key":"common.showing_n","shown":"1"}'
+	);
+	expect(screen.getByTestId('data-table-total-count').textContent).toBe('');
+});
+it('skeleton follows visible columns, with a capped row count', () => {
+	state.columns[1].show = false;
+	render(<DataTableSkeleton id="pos-products" rowCount={100} />);
+	expect(screen.getAllByTestId('data-table-skeleton-name')).toHaveLength(12);
+	expect(screen.getAllByTestId('data-table-skeleton-actions')).toHaveLength(12);
+	expect(screen.queryByTestId('data-table-skeleton-price')).toBeNull();
+	// A line of text in a real cell, not a bar the height of a row: the skeleton row is as
+	// tall as its cells make it, which is what keeps it the size of the row that replaces it.
+	expect(screen.getAllByTestId('data-table-skeleton-name')[0].dataset.shape).toBe('line');
+	// The footer's row stands in the caption row's inset, so the card's bottom edge does not
+	// move when the table loads and the real caption row (also inset) takes its place.
+	expect(screen.getByTestId('data-table-caption-inset')).toBeTruthy();
+});
 
-	function renderEmptyStateTable() {
-		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
-		render(
-			<QueryStateProvider
-				collection="logs"
-				initialPageSize={1}
-				initialSort={{ field: 'level', direction: 'asc' }}
-			>
-				<BindingDataTable
-					id="logs"
-					collectionName="logs"
-					resource={{ kind: 'resource' }}
-					sort={{ field: 'level', direction: 'asc' }}
-					actions={{
-						setSort: mockSetSort,
-						extendLimit: mockExtendLimit,
-						setFilter: mockSetFilter,
-					}}
-					active$={of(false)}
-					total$={of(0)}
-					sync={jest.fn(async () => undefined)}
-					TableFooterComponent={Footer}
-				/>
-			</QueryStateProvider>
-		);
+// The screens' tables read the query handle (roadmap#423).
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => import('@wcpos/query').QueryHandle & {
+		set(partial: Record<string, unknown>): void;
+	};
+};
+it('the drawn rows stay while a changed handle answers, then its rows show', async () => {
+	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
+	const first = fakeQueryHandle({
+		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
+	});
+	// The screen's boundary: a table that suspended on the changed handle would show this.
+	const tree = (handle: unknown) => (
+		<React.Suspense fallback={<div data-testid="table-fallback" />}>
+			{tableTree({ handle })}
+		</React.Suspense>
+	);
+	const { rerender } = render(tree(first));
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+	// A changed query: an unanswered handle. The table defers it: the first rows stay drawn.
+	const next = fakeQueryHandle({ ready: false });
+	rerender(tree(next));
+	expect(screen.queryByTestId('table-fallback')).toBeNull();
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+	await act(async () =>
+		next.set({
+			ready: true,
+			result: { hits: [hit('coffee'), hit('milk')], searchActive: false, searchState: 'answered' },
+		})
+	);
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('2');
+});
+// A custom footer (the products screen's `TableFooter` → `DataTableFooter` + `TaxBasedOn`) takes
+// values: the drawn handle's `total` lands in the same commit as the count it describes.
+it('a custom footer gets the drawn total as a value in the rows’ commit', async () => {
+	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
+	const renders: { count: number; total: number | null | undefined }[] = [];
+	function Probe({ drawnCount: count, total }: DataTableFooterProps) {
+		renders.push({ count, total });
+		return <div data-testid="footer-probe">{`${count}/${String(total)}`}</div>;
 	}
-
-	it('says "searching", not "no results", while an active search is still pending (#1733)', () => {
-		mockResult = { hits: [], searchActive: true, searchState: 'pending' };
-		renderEmptyStateTable();
-
-		expect(screen.getByTestId('search-pending-message').textContent).toBe('common.searching');
-		expect(screen.queryByTestId('no-data-message')).toBeNull();
+	const first = fakeQueryHandle({
+		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
+		total: 5,
 	});
+	const tree = (handle: unknown) => (
+		<React.Suspense fallback={<div data-testid="table-fallback" />}>
+			{tableTree({ TableFooterComponent: Probe, handle })}
+		</React.Suspense>
+	);
+	const { rerender } = render(tree(first));
+	expect(screen.getByTestId('footer-probe').textContent).toBe('1/5');
+	// A changed query: the previous handle's rows and total stay while the new one answers.
+	const next = fakeQueryHandle({ ready: false, total: 99 });
+	rerender(tree(next));
+	expect(screen.queryByTestId('table-fallback')).toBeNull();
+	expect(screen.getByTestId('footer-probe').textContent).toBe('1/5');
+	renders.length = 0;
+	await act(async () =>
+		next.set({
+			ready: true,
+			result: { hits: [hit('coffee'), hit('milk')], searchActive: false, searchState: 'answered' },
+			total: 9,
+		})
+	);
+	expect(screen.getByTestId('footer-probe').textContent).toBe('2/9');
+	// Never the new count over the old denominator (or none), not even for one commit.
+	expect(renders.filter(({ count }) => count === 2).every(({ total }) => total === 9)).toBe(true);
+	expect(renders.some(({ count, total }) => count === 1 && total !== 5)).toBe(false);
+});
 
-	it('says "no results" only once the search has actually answered', () => {
-		mockResult = { hits: [], searchActive: true, searchState: 'answered' };
-		renderEmptyStateTable();
-
-		expect(screen.getByTestId('no-data-message').textContent).toBe('common.no_results_found');
-		expect(screen.queryByTestId('search-pending-message')).toBeNull();
+it('the default footer is the caption row: the drawn total, the live spinner, the live sync', async () => {
+	const hit = (id: string) => ({ id, record: { uuid: id, payload: { name: id } } });
+	const drawn = fakeQueryHandle({
+		result: { hits: [hit('tea')], searchActive: false, searchState: 'answered' },
+		total: 5,
+		active: false,
 	});
+	const drawnSync = jest.fn(async () => undefined);
+	Object.assign(drawn, { sync: drawnSync });
+	const tree = (handle: unknown) => (
+		<React.Suspense fallback={<div data-testid="table-fallback" />}>
+			{tableTree({ handle })}
+		</React.Suspense>
+	);
+	const { rerender } = render(tree(drawn));
+	// A changed query, unanswered: it is the live handle (pulling, its own total), the previous
+	// one stays drawn.
+	const live = fakeQueryHandle({ ready: false, total: 99, active: true });
+	const liveSync = jest.fn(async () => undefined);
+	Object.assign(live, { sync: liveSync });
+	rerender(tree(live));
 
-	it('uses binding actions for sorting and pagination and publishes only filter actions to cells', () => {
-		const resource = { kind: 'resource' };
-		const active$ = of(false);
-		const total$ = of(27);
-		const sync = jest.fn(async () => undefined);
-		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
+	// The mount owns the caption row's inset (surface.tsx `CaptionRowInset`), not the footer.
+	expect(
+		screen
+			.getByTestId('data-table-caption-inset')
+			.contains(screen.getByTestId('data-table-caption-row'))
+	).toBe(true);
+	expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('1');
+	expect(screen.getByTestId('data-table-total-count').textContent).toBe('5');
+	expect(screen.getByTestId('sync-button').dataset.active).toBe('true');
+	fireEvent.click(screen.getByTestId('sync-button'));
+	expect(liveSync).toHaveBeenCalledTimes(1);
+	expect(drawnSync).not.toHaveBeenCalled();
+});
 
-		render(
-			<QueryStateProvider
-				collection="logs"
-				initialPageSize={1}
-				initialSort={{ field: 'level', direction: 'asc' }}
-			>
-				<BindingDataTable
-					id="logs"
-					collectionName="logs"
-					resource={resource}
-					sort={{ field: 'level', direction: 'asc' }}
-					actions={{
-						setSort: mockSetSort,
-						extendLimit: mockExtendLimit,
-						setFilter: mockSetFilter,
-					}}
-					active$={active$}
-					total$={total$}
-					sync={sync}
-					renderItem={({ table }: { table: { options: { meta?: Record<string, unknown> } } }) => {
-						mockTableMeta = table.options.meta;
-						return <div />;
-					}}
-					TableFooterComponent={Footer}
-				/>
-			</QueryStateProvider>
-		);
-
-		fireEvent.click(screen.getByTestId('sort-level'));
-		fireEvent.click(screen.getByTestId('end-reached'));
-
-		expect(mockPatchUI).toHaveBeenCalledWith({ sortBy: 'level', sortDirection: 'asc' });
-		expect(mockSetSort).toHaveBeenCalledWith('level', 'asc');
-		expect(mockExtendLimit).toHaveBeenCalledTimes(1);
-		expect(mockTableMeta).toEqual({ actions: { setFilter: mockSetFilter } });
-		expect(mockTableMeta).not.toHaveProperty('query');
-		expect(mockFooterProps).toMatchObject({
-			collectionName: 'logs',
-			count: 1,
-			active$,
-			total$,
-			sync,
-		});
-		expect(mockFooterProps).not.toHaveProperty('query');
-		expect(screen.getByTestId('sort-level').getAttribute('data-sort-by')).toBe('level');
-		expect(screen.getByTestId('sort-level').getAttribute('data-sort-direction')).toBe('asc');
+it('a custom footer is handed values, never streams, with the table’s collection', () => {
+	const props: DataTableFooterProps[] = [];
+	function Footer(footer: DataTableFooterProps) {
+		props.push(footer);
+		return null;
+	}
+	const handle = handleWith({ total: 27, active: true });
+	renderTable({ handle, TableFooterComponent: Footer });
+	expect(props.at(-1)).toEqual({
+		collectionName: 'products',
+		drawnCount: 1,
+		active: true,
+		total: 27,
+		sync: handle.sync,
 	});
+});
 
-	it('renders the default footer from binding projections', () => {
-		const resource = { kind: 'resource' };
-		const active$ = of(false);
-		const total$ = of(27);
-		const sync = jest.fn(async () => undefined);
-		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
+it('a list footer is handed the live handle’s activity as a value', () => {
+	const seen: boolean[] = [];
+	function ListFooter({ active }: { active: boolean }) {
+		seen.push(active);
+		return null;
+	}
+	const handle = handleWith({ active: true });
+	renderTable({ handle, ListFooterComponent: ListFooter });
+	expect(seen.at(-1)).toBe(true);
+	act(() => handle.set({ active: false }));
+	expect(seen.at(-1)).toBe(false);
+});
 
-		render(
-			<QueryStateProvider
-				collection="coupons"
-				initialPageSize={1}
-				initialSort={{ field: 'code', direction: 'desc' }}
-			>
-				<BindingDataTable
-					id="coupons"
-					collectionName="coupons"
-					resource={resource}
-					sort={{ field: 'code', direction: 'desc' }}
-					actions={{
-						setSort: mockSetSort,
-						extendLimit: mockExtendLimit,
-						setFilter: mockSetFilter,
-					}}
-					active$={active$}
-					total$={total$}
-					sync={sync}
-				/>
-			</QueryStateProvider>
-		);
+it('pages through the actions on a full read, and holds while the handle’s demand is pending', () => {
+	// One row at a page size of one: a full read, which always extends.
+	const handle = handleWith({ pending: true });
+	renderTable({ handle });
+	fireEvent.click(screen.getByTestId('end-reached'));
+	expect(extendLimit).not.toHaveBeenCalled();
+	act(() => handle.set({ pending: false }));
+	fireEvent.click(screen.getByTestId('end-reached'));
+	expect(extendLimit).toHaveBeenCalledTimes(1);
+});
 
-		expect(mockDefaultFooterProps).toMatchObject({
-			collectionName: 'coupons',
-			count: 1,
-			active$,
-			total$,
-			sync,
-		});
-		expect(mockDefaultFooterProps).not.toHaveProperty('query');
+it('publishes only the filter action to the cells', () => {
+	let meta: Record<string, unknown> | undefined;
+	renderTable({
+		renderItem: ({ table }: { table: { options: { meta?: Record<string, unknown> } } }) => {
+			meta = table.options.meta;
+			return <div />;
+		},
 	});
+	expect(meta).toEqual({ actions: { setFilter } });
+});
 
-	it('resolves row cell maps and keeps the text fallback inside the table', () => {
-		mockColumns = [
-			{ key: 'level', show: true },
-			{ key: 'timestamp', show: true },
-		];
-		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
-		function FlatCell() {
-			return <div data-testid="flat-cell" />;
-		}
-		function RowCell() {
-			return <div data-testid="row-cell" />;
-		}
-		const cellsForRow = jest.fn(() => ({ level: RowCell }));
+it('resolves row cell maps and keeps the text fallback inside the table', () => {
+	function RowCell() {
+		return <div data-testid="row-cell" />;
+	}
+	function FlatCell() {
+		return <div data-testid="flat-cell" />;
+	}
+	const cellsForRow = jest.fn(() => ({ name: RowCell }));
+	renderTable({ cells: { name: FlatCell, price: FlatCell }, cellsForRow, showFooter: false });
+	expect(screen.getByTestId('row-cell')).toBeTruthy();
+	expect(screen.queryByTestId('flat-cell')).toBeNull();
+	expect(screen.getByTestId('cell-price')).toBeTruthy();
+	expect(cellsForRow).toHaveBeenCalledWith(
+		expect.objectContaining({ original: expect.objectContaining({ id: 'hit-1' }) })
+	);
+});
 
-		render(
-			<QueryStateProvider
-				collection="logs"
-				initialPageSize={1}
-				initialSort={{ field: 'level', direction: 'asc' }}
-			>
-				<BindingDataTable
-					id="logs"
-					collectionName="logs"
-					resource={{ kind: 'resource' }}
-					sort={{ field: 'level', direction: 'asc' }}
-					actions={{
-						setSort: mockSetSort,
-						extendLimit: mockExtendLimit,
-						setFilter: mockSetFilter,
-					}}
-					active$={of(false)}
-					total$={of(1)}
-					sync={jest.fn(async () => undefined)}
-					cells={{ level: FlatCell, timestamp: FlatCell }}
-					cellsForRow={cellsForRow}
-					showFooter={false}
-				/>
-			</QueryStateProvider>
-		);
-
-		expect(screen.getByTestId('row-cell')).toBeTruthy();
-		expect(screen.queryByTestId('flat-cell')).toBeNull();
-		expect(screen.getByTestId('record-text-timestamp')).toBeTruthy();
-		expect(cellsForRow).toHaveBeenCalledWith(
-			expect.objectContaining({ original: expect.objectContaining({ id: 'log-1' }) })
-		);
-	});
-
-	it('clears the explicit products collection when the table id names a screen', () => {
-		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
-
-		render(
-			<QueryStateProvider
-				collection="products"
-				initialPageSize={1}
-				initialSort={{ field: 'name', direction: 'asc' }}
-			>
-				<BindingDataTable
-					id="pos-products"
-					collectionName="products"
-					resource={{ kind: 'resource' }}
-					sort={{ field: 'name', direction: 'asc' }}
-					actions={{
-						setSort: mockSetSort,
-						extendLimit: mockExtendLimit,
-						setFilter: mockSetFilter,
-					}}
-					active$={of(false)}
-					total$={of(27)}
-					sync={jest.fn(async () => undefined)}
-					TableFooterComponent={TaxFooter}
-				/>
-			</QueryStateProvider>
-		);
-
-		expect(screen.getByTestId('tax-based-on')).toBeTruthy();
-		fireEvent.click(screen.getByTestId('clear-and-refresh'));
-		expect(mockClearAndRefresh).toHaveBeenCalledWith('products');
-	});
-
-	/**
-	 * Regression guard for the react-table v9 migration.
-	 *
-	 * Under v8 the table instance was rebuilt into a fresh object on every render
-	 * (`{ ...useReactTable(...) }`) purely so React Compiler could not serve a
-	 * memoized view of a table whose internals had mutated underneath it
-	 * (facebook/react#33057). v9 forbids that spread — its methods live on
-	 * prototypes — so the identity is now stable and correctness rests entirely on
-	 * v9's store subscription.
-	 *
-	 * This file is compiled by the React Compiler in jest (see the transform
-	 * routing in jest.config.js), so a stale memo here fails the test rather than
-	 * reaching a cashier as a column toggle that does nothing.
-	 */
-	it('re-renders header cells when the visible column set changes', () => {
-		mockColumns = [
-			{ key: 'level', show: true },
-			{ key: 'timestamp', show: true },
-		];
-		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
-		const props = {
-			id: 'logs',
-			collectionName: 'logs',
-			resource: { kind: 'resource' },
-			sort: { field: 'level', direction: 'asc' as const },
-			actions: {
-				setSort: mockSetSort,
-				extendLimit: mockExtendLimit,
-				setFilter: mockSetFilter,
-			},
-			active$: of(false),
-			total$: of(27),
-			sync: jest.fn(async () => undefined),
-			TableFooterComponent: Footer,
-		};
-
-		const { rerender } = render(
-			<QueryStateProvider
-				collection="logs"
-				initialPageSize={1}
-				initialSort={{ field: 'level', direction: 'asc' }}
-			>
-				<BindingDataTable {...props} />
-			</QueryStateProvider>
-		);
-
-		expect(screen.queryByTestId('sort-level')).toBeTruthy();
-		expect(screen.queryByTestId('sort-timestamp')).toBeTruthy();
-
-		// Hide a column, exactly as the column-visibility popover does.
-		mockColumns = [{ key: 'level', show: true }];
-		rerender(
-			<QueryStateProvider
-				collection="logs"
-				initialPageSize={1}
-				initialSort={{ field: 'level', direction: 'asc' }}
-			>
-				<BindingDataTable {...props} />
-			</QueryStateProvider>
-		);
-
-		expect(screen.queryByTestId('sort-level')).toBeTruthy();
-		expect(screen.queryByTestId('sort-timestamp')).toBeNull();
-	});
+/**
+ * Regression guard for the react-table v9 migration (see the NOTE in `DataTableBody`): this file
+ * runs against the table compiled by the React Compiler, as the app compiles it, so a stale memo
+ * fails here rather than reaching a cashier as a column toggle that does nothing.
+ */
+it('a row drops a cell when the settings switch its column off', () => {
+	const handle = handleWith();
+	const renderItem = ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+		<DataTableRow item={item} />
+	);
+	const { rerender } = renderTable({ handle, renderItem });
+	expect(screen.getByTestId('cell-price')).toBeTruthy();
+	// The settings toggle keeps the column and turns `show` off.
+	state.columns = state.columns.map((column) =>
+		column.key === 'price' ? { ...column, show: false } : column
+	);
+	rerender(tableTree({ handle, renderItem }));
+	expect(screen.queryByTestId('data-table-header-price')).toBeNull();
+	expect(screen.queryByTestId('cell-price')).toBeNull();
+});
+it('re-renders header cells when the visible column set changes', () => {
+	const handle = handleWith();
+	const { rerender } = renderTable({ handle });
+	expect(screen.queryByTestId('data-table-header-name')).toBeTruthy();
+	expect(screen.queryByTestId('data-table-header-price')).toBeTruthy();
+	// Hide a column, exactly as the column-visibility popover does.
+	state.columns = state.columns.filter(({ key }) => key !== 'price');
+	rerender(tableTree({ handle }));
+	expect(screen.queryByTestId('data-table-header-name')).toBeTruthy();
+	expect(screen.queryByTestId('data-table-header-price')).toBeNull();
 });

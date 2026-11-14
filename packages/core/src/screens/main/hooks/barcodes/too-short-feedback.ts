@@ -71,13 +71,17 @@ export function showHeuristicTooShortFeedback(
 			duration: 6000,
 		});
 	}
-	barcodeLogger.warn('Fast keystroke burst was shorter than the minimum length', {
-		context: {
-			barcode,
-			minLength,
-			actualLength: barcode.length,
-			terminated: options.terminated,
-			toastShown: shouldToast,
-		},
-	});
+	// Without a toast this is almost always a fast typist, not a scanner: forensic.
+	barcodeLogger[shouldToast ? 'warn' : 'debug'](
+		'Fast keystroke burst was shorter than the minimum length',
+		{
+			context: {
+				barcode,
+				minLength,
+				actualLength: barcode.length,
+				terminated: options.terminated,
+				toastShown: shouldToast,
+			},
+		}
+	);
 }

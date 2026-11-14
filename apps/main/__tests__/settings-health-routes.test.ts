@@ -12,6 +12,7 @@ const settingsRoutes = [
 	'general.tsx',
 	'tax.tsx',
 	'printing.tsx',
+	'card-readers.tsx',
 	'barcode-scanning.tsx',
 	'theme.tsx',
 ];
@@ -53,18 +54,27 @@ describe('settings and Store health route structure', () => {
 	});
 
 	it('routes settings entry points to the new area', () => {
-		expect(
-			source('../../packages/core/src/screens/main/components/header/user-menu.tsx')
-		).toContain("router.push('/settings')");
+		// The drawer is the one door to Settings; the cashier sheet carries no second copy
+		// (Paul, 2026-10-23), so it must not push the route itself.
+		expect(source('app/(app)/(drawer)/_layout.tsx')).toContain('name="settings"');
+		expect(source('../../packages/core/src/screens/main/pos/cart/user-sheet.tsx')).not.toContain(
+			"router.push('/settings')"
+		);
 	});
 
 	it('renders the existing logs screen at the nested health route', () => {
-		expect(source(`${routeRoot}/health/logs.tsx`)).toContain('@wcpos/core/screens/main/logs');
+		// The route takes the screen from the lazy rest chunk, which re-exports the logs screen.
+		const route = source(`${routeRoot}/health/logs.tsx`);
+		expect(route).toContain("from '@wcpos/core/screens/main/rest/lazy-screen'");
+		expect(route).toContain('m.LogsScreen');
+		expect(source('../../packages/core/src/screens/main/rest/index.tsx')).toContain(
+			"export { LogsScreen } from '../logs';"
+		);
 	});
 
 	it('gives every drawer route a stable navigation selector', () => {
 		expect(
-			source('../../packages/core/src/screens/main/components/drawer-content/drawer-item-list.tsx')
+			source('../../packages/core/src/screens/main/components/drawer-content/index.tsx')
 		).toContain('testID={`drawer-item-${route.name.replace');
 	});
 });

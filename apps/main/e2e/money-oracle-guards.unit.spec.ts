@@ -50,7 +50,7 @@ test.describe('assertDiscriminating', () => {
 	});
 
 	test('THROWS when the line type under test carries no taxes at all', () => {
-		// The zero-fee case: a numpad interaction that did not take leaves 0 on both
+		// The zero-fee case: an amount entry that did not take leaves 0 on both
 		// sides, which compares equal. Without this the scenario green-lights on a fee
 		// it never rang up.
 		expect(() => assertDiscriminating({ fee_lines: [{ taxes: [] }] }, 'fee_lines', 'x', 2)).toThrow(

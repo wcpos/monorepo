@@ -183,7 +183,7 @@ describe('seedOrderSchedulerTasks', () => {
 	});
 
 	// #954: a windowed task gets exactly ONE fetch invocation from the runner
-	// (`taskCompleted = task.mode !== 'greedy' || fetchResult.completed`), and `useDemand`
+	// (`taskCompleted = task.mode !== 'greedy' || fetchResult.completed`), and a query handle's demand
 	// declares a requirement once — so a fetch-to-completion range left windowed would stop
 	// after its first bounded pass and the persisted cursor would never be read again.
 	it('seeds a fetch-to-completion range as a GREEDY task so the runner drives it to the end', async () => {
@@ -207,6 +207,35 @@ describe('seedOrderSchedulerTasks', () => {
 					expect.objectContaining({
 						queryKey:
 							'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all',
+						mode: 'greedy',
+					}),
+				],
+			})
+		);
+	});
+
+	it('keeps the paid-earlier second phase on a ranged sales lane', async () => {
+		const { schedulerRepository } = arrangeBrowserOrderSeed();
+
+		await seedOrderFilterSchedulerTask({
+			database: MOCK_DATABASE,
+			status: 'completed',
+			search: '',
+			limit: 200,
+			afterSeconds: 1_782_864_000,
+			beforeSeconds: 1_784_073_599,
+			modifiedAfterSeconds: 1_782_864_000,
+			complete: true,
+			nowMs: 15_000,
+		});
+
+		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith(
+			expect.objectContaining({
+				repository: schedulerRepository,
+				tasks: [
+					expect.objectContaining({
+						queryKey:
+							'orders:browser:status=completed:after=1782864000:before=1784073599:modified_after=1782864000:search=:limit=all',
 						mode: 'greedy',
 					}),
 				],
@@ -306,6 +335,26 @@ describe('seedOrderSchedulerTasks', () => {
 					},
 				],
 				nowMs: 15_500,
+			})
+		);
+	});
+
+	it('seeds a payment-method-specific lane and requirement', async () => {
+		await seedOrderFilterSchedulerTask({
+			database: MOCK_DATABASE,
+			status: 'all',
+			search: '',
+			limit: 25,
+			paymentMethod: 'pos_cash',
+		});
+		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				tasks: [
+					expect.objectContaining({
+						queryKey: 'orders:browser:status=all:payment_method=pos_cash:search=:limit=25',
+						requirementId: 'orders.browser.status=all.payment_method=pos_cash.search=.limit=25',
+					}),
+				],
 			})
 		);
 	});

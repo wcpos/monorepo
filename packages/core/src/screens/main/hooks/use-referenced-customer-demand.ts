@@ -5,7 +5,9 @@ import { Observable } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
-import { remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
+import { demandRecordsByWooId } from '@wcpos/query/record-readers';
+import { useCoverageGeneration } from '@wcpos/query/query-state';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { parseRemoteId } from '../../../utils/parse-remote-id';
@@ -29,10 +31,20 @@ function referencedIds(result: OrdersResult): number[] {
 	return [...ids].sort((a, b) => a - b);
 }
 export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): void {
-	const { engine } = useQueryRuntime();
-	// useState initializer (not useRef): the set is read inside the pipe's
-	// callbacks, and react-compiler forbids ref reads in render scope.
-	const [attemptedIds] = React.useState(() => new Set<number>());
+	const runtime = useQueryRuntime();
+	const generation = useCoverageGeneration(runtime.engine, 'customers');
+	// The same identity as useScopeKey: a reset or store switch gets a fresh set.
+	// Late completions only mark the outgoing scope's set.
+	const [attempts, setAttempts] = React.useState(() => ({
+		engine: runtime.engine,
+		generation,
+		ids: new Set<number>(),
+	}));
+	let attemptedIds = attempts.ids;
+	if (attempts.engine !== runtime.engine || attempts.generation !== generation) {
+		attemptedIds = new Set<number>();
+		setAttempts({ engine: runtime.engine, generation, ids: attemptedIds });
+	}
 	const demand$ = React.useMemo(
 		() =>
 			result$.pipe(
@@ -46,19 +58,18 @@ export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): 
 							// An empty (or fully-attempted) set still flows through switchMap so
 							// the previous requirement is released; it just requests nothing new.
 							if (ids.length === 0) return;
-							const requirement = engine.require({
+							const requirement = demandRecordsByWooId(runtime.engine, {
 								id: `orders:referenced-customers:${ids.join(',')}`,
 								collection: 'customers',
-								kind: 'targeted-records',
-								remoteIds: ids.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
+								wooIds: ids,
 							});
 							// Attempted only when the requirement settles successfully.
 							// A 'released' outcome means switchMap superseded this requirement
 							// mid-flight — those ids re-enter the next requirement unmarked, so
 							// growing the visible set never strands an in-flight customer.
 							void requirement.ready
-								.then((outcome: { action?: string }) => {
-									if (outcome?.action !== 'released') {
+								.then((outcome) => {
+									if (outcome !== 'released') {
 										ids.forEach((id) => attemptedIds.add(id));
 									}
 								})
@@ -69,7 +80,7 @@ export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): 
 						})
 				)
 			),
-		[engine, result$, attemptedIds]
+		[runtime.engine, result$, attemptedIds]
 	);
 	useSubscription(demand$);
 }

@@ -1,5 +1,6 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
+import { findAllUncached } from '../collections/find-all-uncached';
 import { yieldToEventLoop } from '../event-loop-yield';
 
 import type { ExistenceManifestDocument } from './existence-manifest-schema';
@@ -39,7 +40,10 @@ export async function readManifestRange(
 	start: number,
 	end: number
 ): Promise<ExistenceManifestDocument[]> {
-	const docs = await collection.find({ selector: { wooId: { $gte: start, $lt: end } } }).exec();
+	// Uncached (#2502): every bucket is its own query string, and the audit reads every occupied one.
+	const docs = await findAllUncached(collection, {
+		selector: { wooId: { $gte: start, $lt: end } },
+	});
 	return docs.map((doc) => doc.toJSON());
 }
 
@@ -102,9 +106,12 @@ export async function occupiedManifestBucketIndexes(
 		if (page > 0) {
 			await yieldToEventLoop();
 		}
-		const rows = await collection
-			.find({ selector: { wooId: { $gt: cursor } }, sort: [{ wooId: 'asc' }], limit: pageSize })
-			.exec();
+		// Uncached (#2502): each page is its own query string; cached, the pages pin the whole manifest.
+		const rows = await findAllUncached(collection, {
+			selector: { wooId: { $gt: cursor } },
+			sort: [{ wooId: 'asc' }],
+			limit: pageSize,
+		});
 		for (const doc of rows) {
 			const wooId = Number(doc.toJSON().wooId) || 0;
 			if (wooId > 0) buckets.add(Math.floor(wooId / bucketSize));

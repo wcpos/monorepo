@@ -8,19 +8,17 @@ describe('printerIconName', () => {
 		expect(printerIconName({ connectionType: 'system', address: '' })).toBe('desktop');
 	});
 
-	it('returns "printer" for a winspool queue', () => {
-		expect(printerIconName({ connectionType: 'system', address: 'winspool:POS-80' })).toBe(
-			'printer'
-		);
+	it('returns "print" for a winspool queue', () => {
+		expect(printerIconName({ connectionType: 'system', address: 'winspool:POS-80' })).toBe('print');
 	});
 
-	it('returns "printer" for a network profile', () => {
-		expect(printerIconName({ connectionType: 'network' })).toBe('printer');
+	it('returns "print" for a network profile', () => {
+		expect(printerIconName({ connectionType: 'network' })).toBe('print');
 	});
 
-	it('returns "printer" for bluetooth and usb profiles', () => {
-		expect(printerIconName({ connectionType: 'bluetooth' })).toBe('printer');
-		expect(printerIconName({ connectionType: 'usb' })).toBe('printer');
+	it('returns "print" for bluetooth and usb profiles', () => {
+		expect(printerIconName({ connectionType: 'bluetooth' })).toBe('print');
+		expect(printerIconName({ connectionType: 'usb' })).toBe('print');
 	});
 });
 
@@ -46,7 +44,7 @@ describe('templateTypeLabel', () => {
 
 describe('printing settings copy', () => {
 	it('has bundled source translations for every Printing settings key', () => {
-		const files = ['index.tsx', 'printer-row.tsx', 'printers-empty-state.tsx', 'template-row.tsx'];
+		const files = ['index.tsx', 'printer-row.tsx', 'template-row.tsx'];
 		const sourceCatalog = JSON.parse(
 			readFileSync(
 				join(__dirname, '../../../../contexts/translations/locales/en/core.json'),
@@ -71,7 +69,7 @@ describe('printing settings copy', () => {
 	it('uses Print Dialog consistently for the built-in system printer', () => {
 		// The English lives in the bundled catalog, not in the source, so assert on
 		// the resolved copy for every key these screens use.
-		const files = ['index.tsx', 'printer-row.tsx', 'printers-empty-state.tsx'];
+		const files = ['index.tsx', 'printer-row.tsx'];
 		const sourceCatalog = JSON.parse(
 			readFileSync(
 				join(__dirname, '../../../../contexts/translations/locales/en/core.json'),

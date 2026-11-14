@@ -1,0 +1,96 @@
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
+import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+export interface RefundFailureReport {
+	level: 'info' | 'warn' | 'error';
+	/** Absent for a benign outcome (backgrounded before anything was sent). */
+	code?: ErrorCode;
+	/** Already-translated toast title. */
+	title: string;
+	/** Already-translated second line, when the code's own hint would mislead. */
+	text2?: string;
+}
+
+/**
+ * Statuses that are a store's definitive "no" to this refund. A 408/409/429 is a
+ * request that may still be processing or may be retried by the store, so it is
+ * not a refusal.
+ */
+function isRefusal(status: number | undefined): status is number {
+	return (
+		typeof status === 'number' &&
+		status >= 400 &&
+		status < 500 &&
+		status !== 408 &&
+		status !== 409 &&
+		status !== 429
+	);
+}
+
+/**
+ * What the cashier is told about a failed refund POST.
+ *
+ * Every retry mints a NEW idempotency key (`createRefundIdempotencyKey`), so a
+ * retry after a lost reply can refund twice. Only an offline block (nothing was
+ * sent) and a store refusal (nothing was refunded) are safe to retry blind;
+ * everything else must send the cashier to the order's refunds first.
+ */
+export function classifyRefundFailure(error: unknown, t: Translate): RefundFailureReport {
+	// The auth handler cancels a refused (401) request on purpose while it launches the
+	// sign-in: the store refused it, so no refund was made — never "outcome unknown".
+	const failure = error as { code?: unknown; name?: unknown } | null;
+	if (failure?.code === 'ERR_CANCELED' || failure?.name === 'CanceledError') {
+		return {
+			level: 'warn',
+			code: ERROR_CODES.SESSION_EXPIRED,
+			title: t('orders.refund_sign_in'),
+		};
+	}
+	// Backgrounded (the tab was hidden), not offline: no code, no "you're offline".
+	if ((error as { isSleeping?: unknown } | null)?.isSleeping === true) {
+		return {
+			level: 'info',
+			title: t('orders.refund_background'),
+			text2: t('common.try_again_now'),
+		};
+	}
+	if (isExpectedPreflightBlock(error)) {
+		return {
+			level: 'warn',
+			code: ERROR_CODES.SYNC_UNREACHABLE,
+			title: t('orders.refund_offline'),
+			// SYNC121's "changes send automatically" is not true of a refund.
+			text2: t('common.reconnect_then_retry'),
+		};
+	}
+
+	const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
+	const status = response?.status;
+	if (response && isRefusal(status)) {
+		// The HTTP client's mapped WordPress code (a missing route, a specific auth
+		// refusal) says more than the status does; fall back on the status only.
+		const wpCode = (error as { wpCode?: ErrorCode } | null)?.wpCode;
+		const code =
+			wpCode ?? (status === 403 ? ERROR_CODES.INSUFFICIENT_ROLE : ERROR_CODES.RECORD_INVALID_FIELD);
+		return {
+			level: ERROR_CATALOGUE[code].severity === 'error' ? 'error' : 'warn',
+			code,
+			// The store's own sentence ("Invalid refund amount.") is the reason.
+			title: extractErrorMessage(response.data, t('orders.refund_failed')),
+		};
+	}
+
+	return {
+		level: 'error',
+		code: ERROR_CODES.REFUND_OUTCOME_UNKNOWN,
+		title: t('orders.refund_outcome_unknown'),
+		text2: t('orders.refund_check_before_retry'),
+	};
+}

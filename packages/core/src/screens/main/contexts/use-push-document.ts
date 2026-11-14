@@ -1,101 +1,15 @@
 import * as React from 'react';
 
-import cloneDeep from 'lodash/cloneDeep';
+import { useQueryRuntime } from '@wcpos/query';
+import { pushRecord } from '@wcpos/query/mutations';
 
-import {
-	awaitWriteOutcome,
-	useQueryRuntime,
-	WRITEABLE_REMOTE_ID_FIELD,
-	type WriteableCollection,
-} from '@wcpos/query';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+export { enqueueRecordWrite as enqueueDocumentWrite } from '@wcpos/query/mutations';
 
-import { useT } from '../../../contexts/translations';
-import { pushFailureCode } from './push-failure-code';
-import { documentRecordId, findEngineResident } from '../hooks/mutations/use-local-mutation';
-
-const syncLogger = getLogger(['wcpos', 'sync', 'push']);
-
-type AnyRxDocument = {
-	id?: unknown;
-	uuid?: string;
-	collection: { name: string };
-	getLatest(): AnyRxDocument;
-};
-
-const REMOTE_ID_FIELD = WRITEABLE_REMOTE_ID_FIELD;
-
-function isWriteableCollection(name: string): name is WriteableCollection {
-	return Object.prototype.hasOwnProperty.call(REMOTE_ID_FIELD, name);
-}
-
-/**
- * Enqueue the current engine resident through the write plane. The passed legacy document is used
- * only for identity: its fields may be stale after an optimistic resident patch. Order pushes wait
- * for a terminal outcome because checkout requires the rematerialized Woo id.
- */
 export const usePushDocument = () => {
 	const runtime = useQueryRuntime();
-	const t = useT();
 
 	return React.useCallback(
-		async (document: AnyRxDocument) => {
-			const latest = document.getLatest();
-			const collectionName = latest.collection.name;
-			if (!isWriteableCollection(collectionName)) {
-				throw new Error(`Collection "${collectionName}" is not engine-writeable`);
-			}
-			const recordId = documentRecordId(latest);
-			if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
-
-			try {
-				const resident = await findEngineResident(runtime, collectionName, recordId);
-				if (!resident) {
-					throw new Error(`Engine resident "${recordId}" is missing from "${collectionName}"`);
-				}
-				const remoteId =
-					typeof resident.get === 'function'
-						? resident.get(REMOTE_ID_FIELD[collectionName])
-						: (resident as unknown as Record<string, unknown>)[REMOTE_ID_FIELD[collectionName]];
-				const payload = (
-					typeof resident.toMutableJSON === 'function'
-						? (resident.toMutableJSON().payload ?? {})
-						: cloneDeep((resident as unknown as Record<string, unknown>).payload ?? {})
-				) as Record<string, unknown>;
-				const receipt = await runtime.engine.write({
-					collection: collectionName,
-					operation: remoteId == null ? 'create' : 'update',
-					recordId,
-					payload,
-					...(collectionName === 'orders' ? { explicit: true } : {}),
-				});
-
-				let currentResident = resident;
-				if (collectionName === 'orders') {
-					await awaitWriteOutcome(runtime.engine, receipt.mutationId);
-					const refreshed = await findEngineResident(runtime, collectionName, recordId);
-					if (!refreshed) {
-						throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
-					}
-					currentResident = refreshed;
-				}
-
-				return currentResident;
-			} catch (error) {
-				const message = getErrorMessage(error);
-				syncLogger.error('Failed to send document to server', {
-					showToast: true,
-					code: pushFailureCode(error),
-					toast: { title: t('common.failed_to_send_to_server') },
-					context: {
-						documentId: recordId,
-						collectionName,
-						error: message,
-					},
-				});
-				throw error;
-			}
-		},
-		[runtime, t]
+		(document: Parameters<typeof pushRecord>[1]) => pushRecord(runtime, document),
+		[runtime]
 	);
 };

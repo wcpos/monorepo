@@ -39,6 +39,9 @@ export type SyncEventLevel = 'debug' | 'info' | 'warn' | 'error';
  * labelled.
  */
 export type SyncEventType =
+	| 'void.recovery.identity-appeared'
+	| 'void.cleanup-failed'
+	| 'write.admission-release-failed'
 	// apply
 	| 'apply.barcode-rederive'
 	| 'apply.delete'
@@ -85,6 +88,7 @@ export type SyncEventType =
 	| 'engine.disposed'
 	| 'engine.guard'
 	| 'engine.lane.tick'
+	| 'engine.request.deadline'
 	| 'engine.listener-error'
 	| 'engine.pos-bootstrap-error'
 	| 'engine.ready'
@@ -93,7 +97,6 @@ export type SyncEventType =
 	| 'engine.reconnect.retick'
 	| 'engine.reset-needs-confirmation'
 	| 'engine.scope-switched'
-	| 'engine.write-leader.degraded'
 	// maintenance
 	| 'maintenance.lane.error'
 	| 'maintenance.lane.tick'
@@ -112,6 +115,7 @@ export type SyncEventType =
 	// queue
 	| 'queue.drain.progress'
 	| 'queue.scheduler.drain'
+	| 'queue.write.ack-failed'
 	| 'queue.write.annihilate'
 	| 'queue.write.auto-reverted'
 	| 'queue.write.born-twice-requeue'
@@ -126,6 +130,7 @@ export type SyncEventType =
 	| 'queue.write.requeue-rebuilt'
 	| 'queue.write.reschedule-failed'
 	| 'queue.write.resolve'
+	| 'queue.write.session-refused'
 	| 'queue.write.tick.error'
 	// signal
 	| 'signal.cursor'
@@ -159,6 +164,19 @@ export type SyncEventFieldsBase = Readonly<Record<string, unknown>>;
  * other side too.
  */
 export type SyncEventFieldsByType = {
+	'maintenance.lane.error': {
+		readonly lane: string;
+		/** The failed request's status (0 = no response); absent for a local failure. */
+		readonly status?: number;
+		/** Failed ticks in a row for this lane, this one included. */
+		readonly consecutiveFailures: number;
+	};
+	'engine.request.deadline': {
+		readonly lane: string;
+		readonly elapsedMs: number;
+		/** Deadlines in a row on this lane, this one included. */
+		readonly consecutiveDeadlines: number;
+	};
 	'signal.cycle': {
 		readonly collectionsChecked?: readonly string[];
 		readonly pulls: number;
@@ -206,6 +224,10 @@ export type SyncEventFieldsByType = {
 		readonly changed: number;
 		readonly skippedDirty?: number;
 		readonly durationMs?: number;
+		/** Stamped when the audit ran but its cursor could not be saved. */
+		readonly outcome?: 'failed';
+		/** Cursor writes that failed in a row, this one included (with `outcome`). */
+		readonly consecutiveFailures?: number;
 	};
 	'coverage.compacted': { readonly removed: number };
 	'transport.request': {
@@ -264,6 +286,10 @@ export type SyncEventFieldsByType = {
 		readonly scanned?: number;
 		readonly succeeded: number;
 		readonly failed: number;
+		/** Of `failed`, tasks whose cause no transport/deadline row reported. */
+		readonly failedUnreported?: number;
+		/** Drains in a row with such a failure, this one included. */
+		readonly consecutiveUnreportedFailures?: number;
 		readonly claimLost?: number;
 		readonly completionLost?: number;
 		readonly failureLost?: number;

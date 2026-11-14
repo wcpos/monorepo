@@ -11,20 +11,38 @@ import {
 } from '@wcpos/hooks/use-http-client';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	getErrorMessage,
+	getLogger,
+	isErrorReported,
+	markErrorReported,
+} from '@wcpos/utils/logger';
+import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
+import {
+	credentialsTokenOwner,
+	type ReadonlySiteRecord,
+	type ReadonlyWpCredentialsRecord,
+	recordCashierProfile,
+} from '@wcpos/query/user-db';
 
 import { useAppState } from '../contexts/app-state';
-import { mergeStoresWithResponse } from '../utils/merge-stores';
+import { useReportUpdateRequired } from './use-update-required';
+import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
 
+/** Mark an error as already logged, so the outer catch does not write a second row. */
+function reported<T>(error: T): T {
+	markErrorReported(error);
+	return error;
+}
+
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
-	wpUser: import('@wcpos/database').WPCredentialsDocument;
+	site: ReadonlySiteRecord;
+	wpUser: ReadonlyWpCredentialsRecord;
 }
 
 interface UserValidationResult {
@@ -73,12 +91,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				wcpos_version: wcposVersion,
 				url: siteUrl,
 			},
-			wpUser: {
-				id: userId,
-				refresh_token: refreshToken,
-				incrementalPatch: wpUser.incrementalPatch.bind(wpUser),
-				getLatest: wpUser.getLatest.bind(wpUser),
-			},
+			wpUser: { ...credentialsTokenOwner(wpUser), id: userId, refresh_token: refreshToken },
 			getHttpClient: () => baseHttpClient,
 		});
 	}, [
@@ -95,8 +108,14 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		wpUser,
 	]);
 
+	// The server's protocol-gate refusal (426 wcpos_update_required) latches the
+	// per-site gate under wp_api_url — the key the sync engine and the in-app
+	// UpdateRequiredGate use — so the login card shows the update notice instead
+	// of "Re-authenticate" and "No stores found".
+	const onUpdateRequired = useReportUpdateRequired(wpApiUrl);
+
 	// Create HTTP client with token refresh handler
-	const httpClient = useHttpClient([tokenRefreshHandler]);
+	const httpClient = useHttpClient([tokenRefreshHandler], onUpdateRequired, wpApiUrl);
 
 	// Add a ref to track if validation is already in progress
 	const validationInProgress = React.useRef(false);
@@ -146,7 +165,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				siteUrl,
 				siteUuid: site.uuid,
 				wpUserUuid: wpUser.uuid,
-				currentWpUserStores: (wpUser as unknown as { stores?: string[] }).stores,
+				currentWpUserStores: wpUser.stores,
 			},
 		});
 
@@ -211,7 +230,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 								siteUrl,
 							},
 						});
-						throw new Error(errorMsg);
+						throw reported(new Error(errorMsg));
 					}
 
 					const data = get(response, 'data', {});
@@ -227,7 +246,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 								hasData: !!data,
 							},
 						});
-						throw new Error(errorMsg);
+						throw reported(new Error(errorMsg));
 					}
 
 					// Sanity check: verify that the response ID matches the expected user ID
@@ -241,7 +260,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 								siteUrl,
 							},
 						});
-						throw new Error(errorMsg);
+						throw reported(new Error(errorMsg));
 					}
 
 					return data;
@@ -254,132 +273,13 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						error?.response?.data,
 						'Failed to fetch user data from server'
 					);
-					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-					appLogger[logLevel](serverMessage, {
-						code: ERROR_CODES.AUTH_UNEXPECTED,
+					// Forensic: the rethrow below reaches the one terminal row ("[stores]
+					// validation FAILED"); logging here too made two rows per failure.
+					appLogger.debug(serverMessage, {
 						context: {
 							error: getErrorMessage(error),
 							userId,
 							siteUrl,
-						},
-					});
-					throw error;
-				}
-			};
-
-			/**
-			 * Update user data in local database (DB operation)
-			 */
-			const updateUserInDB = async (data: any) => {
-				try {
-					// Update user fields directly with response data
-					const updateData: any = {};
-					const fieldsToUpdate = [
-						'avatar_url',
-						'display_name',
-						'email',
-						'first_name',
-						'last_access',
-						'last_name',
-						'nice_name',
-						'username',
-					];
-
-					fieldsToUpdate.forEach((field) => {
-						if (data[field] !== undefined) {
-							updateData[field] = data[field];
-						}
-					});
-
-					// Roles can come as an array of slugs (`roles`) or a legacy single
-					// string (`role`) from older plugin versions. Normalize to array.
-					if (Array.isArray(data.roles)) {
-						updateData.roles = data.roles.filter(
-							(r: unknown): r is string => typeof r === 'string' && r.length > 0
-						);
-					} else if (typeof data.role === 'string' && data.role.length > 0) {
-						updateData.roles = [data.role];
-					}
-
-					// Server omits `capabilities` on plugin versions without the capability
-					// payload (absence = unknown = fail open). Never patch the key to
-					// `undefined` — RxDB schema validation rejects undefined values (422),
-					// which failed the whole login validation and left the user stuck on
-					// "Re-authenticate" with no stores. Stale stored caps are cleared via
-					// an incrementalModify below instead, which can actually remove a key.
-					let clearCapabilities = false;
-					if (data.capabilities === undefined) {
-						clearCapabilities = true;
-					} else if (Array.isArray(data.capabilities)) {
-						updateData.capabilities = [
-							...new Set(
-								data.capabilities.filter(
-									(capability: unknown): capability is string =>
-										typeof capability === 'string' && capability.length > 0
-								)
-							),
-						];
-					}
-
-					// Update user data if we have fields to update
-					if (Object.keys(updateData).length > 0) {
-						await wpUser.incrementalPatch(updateData);
-						appLogger.debug('User data updated successfully', {
-							context: {
-								userId,
-								updatedFields: Object.keys(updateData),
-							},
-						});
-					}
-
-					if (
-						clearCapabilities &&
-						(wpUser.getLatest() as unknown as { capabilities?: string[] }).capabilities !==
-							undefined
-					) {
-						await wpUser.getLatest().incrementalModify((docData) => {
-							delete (docData as { capabilities?: string[] }).capabilities;
-							return docData;
-						});
-						appLogger.debug('Cleared stale capabilities (server omitted the field)', {
-							context: { userId },
-						});
-					}
-
-					// Merge stores if present in response
-					if (data.stores && Array.isArray(data.stores)) {
-						appLogger.debug('Merging stores from cashier response', {
-							context: {
-								userId,
-								siteUuid: site.uuid,
-								remoteStoreCount: data.stores.length,
-								remoteStoreIds: data.stores.map((s: any) => s?.id),
-							},
-						});
-						await mergeStoresWithResponse({
-							userDB,
-							wpUser,
-							remoteStores: data.stores,
-							user: { uuid: user.uuid ?? '' },
-							siteID: site.uuid ?? '',
-						});
-					} else {
-						appLogger.debug('Cashier response has no stores array — skipping merge', {
-							context: {
-								userId,
-								siteUuid: site.uuid,
-								dataKeys: Object.keys(data ?? {}),
-								storesType: typeof data?.stores,
-							},
-						});
-					}
-				} catch (error) {
-					const errorMsg = getErrorMessage(error);
-					appLogger.error('Failed to update user in local database', {
-						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
-						context: {
-							error: errorMsg,
-							userId,
 						},
 					});
 					throw error;
@@ -391,12 +291,15 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				const data = await fetchUserData();
 
 				// Update local database with fetched data
-				await updateUserInDB(data);
+				await recordCashierProfile(userDB, wpUser, data, {
+					userUuid: user.uuid,
+					siteUuid: site.uuid,
+				});
 
 				appLogger.debug('[stores] validation complete, wpUser.stores after patch', {
 					context: {
 						wpUserUuid: wpUser.uuid,
-						storesAfter: (wpUser.getLatest() as unknown as { stores?: string[] }).stores,
+						storesAfter: wpUser.getLatest().stores,
 					},
 				});
 				setIsValid(true);
@@ -408,11 +311,24 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					appLogger.debug('[stores] validation deferred — app is in background', {
 						context: { userId, siteUrl },
 					});
+				} else if (isErrorReported(error)) {
+					// The failing step already wrote its own coded row.
+					setError(getErrorMessage(error));
+					setIsValid(false);
 				} else {
 					const errorMsg = getErrorMessage(error);
-					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-					appLogger[logLevel]('[stores] validation FAILED', {
-						code: ERROR_CODES.AUTH_UNEXPECTED,
+					// Runs on every app mount and only leaves the cashier data stale, so
+					// offline is forensic; otherwise the code of what the store answered,
+					// not AUTH999's "contact support".
+					const code = storeRequestFailureCode(error);
+					appLogger[
+						isExpectedPreflightBlock(error)
+							? 'debug'
+							: ERROR_CATALOGUE[code].severity === 'error'
+								? 'error'
+								: 'warn'
+					]('[stores] validation FAILED', {
+						code,
 						context: {
 							error: errorMsg,
 							userId,

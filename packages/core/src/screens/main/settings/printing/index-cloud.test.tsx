@@ -28,7 +28,32 @@ const cloudProfile: PrinterProfile = {
 const enqueue = jest.fn().mockResolvedValue(undefined);
 const httpPost = jest.fn().mockResolvedValue({ data: {} });
 
+// PropertyRow renders the Saved mark, whose exit beat imports reanimated's ESM.
+// Library parts that pull reanimated or expo-linking into Jest; this suite does not test them.
+jest.mock('@wcpos/components/badge', () => ({
+	Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
+jest.mock('react-native-reanimated', () => ({ useReducedMotion: () => true }));
+// The Delete confirm imports the alert dialog, whose overlay shell needs the real react-native;
+// this suite mocks react-native, so the dialog is a passthrough here (its behaviour is index.test.tsx's).
+jest.mock('@wcpos/components/alert-dialog', () => {
+	function Part({ children }: React.PropsWithChildren) {
+		return <div>{children}</div>;
+	}
+	return {
+		AlertDialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
+			open ? <div>{children}</div> : null,
+		AlertDialogContent: Part,
+		AlertDialogDescription: Part,
+		AlertDialogFooter: jest.requireActual('../../../../../jest/footer.test-utils')
+			.AlertDialogFooter,
+		AlertDialogHeader: Part,
+		AlertDialogTitle: Part,
+	};
+});
 jest.mock('react-native', () => ({
+	// DeviceRow reads the layout boundary; a wide pane.
+	useWindowDimensions: () => ({ width: 1024, height: 768 }),
 	View: ({
 		children,
 		className,
@@ -91,6 +116,7 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 
 jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 	DropdownMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -182,8 +208,8 @@ jest.mock('../printer/add-printer', () => ({
 	PrinterDialog: () => null,
 }));
 
-jest.mock('./printers-empty-state', () => ({
-	PrintersEmptyState: () => <div data-testid="printers-empty-state" />,
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({ testID }: { testID?: string }) => <div data-testid={testID} />,
 }));
 
 jest.mock('../components/settings-section', () => ({
@@ -192,6 +218,10 @@ jest.mock('../components/settings-section', () => ({
 
 jest.mock('./template-row', () => ({
 	TemplateRow: () => null,
+}));
+
+jest.mock('@wcpos/query', () => ({
+	observeTemplatePrinterOverrides: () => ({ pipe: () => new Map<string, string>() }),
 }));
 
 jest.mock('./use-ensure-system-printer', () => ({
@@ -208,17 +238,7 @@ jest.mock('../../receipt/hooks/use-active-templates', () => ({
 
 jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
-		storeDB: {
-			collections: {
-				printer_profiles: {
-					find: () => ({ $: [cloudProfile] }),
-					findOne: jest.fn(),
-				},
-				template_printer_overrides: {
-					find: () => ({ $: { pipe: () => new Map<string, string>() } }),
-				},
-			},
-		},
+		storeDB: {},
 	});
 	return { useAppState, useStoreSession: useAppState };
 });

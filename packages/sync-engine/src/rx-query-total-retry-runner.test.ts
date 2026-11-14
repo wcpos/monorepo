@@ -34,7 +34,9 @@ function state(overrides: Partial<QueryTotalRequestState> = {}): QueryTotalReque
 function createStateRepository(runnable: QueryTotalRequestState[], claimResult = true) {
 	return {
 		readRunnable: vi.fn(async () => runnable),
-		claim: vi.fn(async () => claimResult),
+		claim: vi.fn(
+			async (_expected: QueryTotalRequestState, _claimed: QueryTotalRequestState) => claimResult
+		),
 		markIdle: vi.fn(async () => true),
 		markFailed: vi.fn(async () => true),
 	};
@@ -56,6 +58,29 @@ const baseInput = {
 };
 
 describe('runQueryTotalRetryRequests', () => {
+	it('gives the second probe a full lease after the first consumes 25 seconds', async () => {
+		let nowMs = 1_000;
+		const stateRepository = createStateRepository([state(), state({ queryKey: 'second' })]);
+		const claims: QueryTotalRequestState[] = [];
+		stateRepository.claim = vi.fn(async (_expected, claimed) => {
+			claims.push(claimed);
+			return true;
+		});
+		await runQueryTotalRetryRequests({
+			...baseInput,
+			leaseForMs: 30_000,
+			getNowMs: () => nowMs,
+			stateRepository,
+			cacheRepository: createCacheRepository(),
+			fetchWooQueryTotal: async () => {
+				nowMs += 25_000;
+				return 42;
+			},
+		});
+		expect(claims.map((claim) => claim.claimedUntilMs)).toEqual([31_000, 56_000]);
+		expect(claims[1].claimedUntilMs).toBeGreaterThan(nowMs);
+	});
+
 	it('limits a forced batch to the requested query keys', async () => {
 		const censusRequest: QueryTotalWooRequest = {
 			...request,
@@ -282,7 +307,7 @@ describe('runQueryTotalRetryRequests', () => {
 		});
 		const stateRepository = createStateRepository([runnable]);
 		const cacheRepository = createCacheRepository();
-		const getNowMs = vi.fn(() => 1_700);
+		const getNowMs = vi.fn(() => 1_700).mockReturnValueOnce(1_000);
 		const fetchWooQueryTotal = vi.fn(async () => {
 			throw new Error('total unavailable');
 		});

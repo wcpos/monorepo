@@ -6,14 +6,20 @@ import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expect
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	CLIENT_QUERY_PARAM,
 	formatClientSignal,
+	parseUpdateRequiredBody,
 	PROTOCOL_QUERY_PARAM,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 
+import { storeRequestFailureCode } from '../../../utils/store-request-failure-code';
 import { isBotChallengeError } from './bot-challenge';
 import { useT } from '../../../contexts/translations';
 import {
@@ -42,6 +48,11 @@ class ApiDiscoveryError extends Error {
  */
 function errorWithCode(message: string, code: ErrorCode): Error {
 	return Object.assign(new Error(message), { errorCode: code });
+}
+
+/** The same tag on a discovery refusal, which the outer catch re-throws as it stands. */
+function discoveryErrorWithCode(message: string, code: ErrorCode): ApiDiscoveryError {
+	return Object.assign(new ApiDiscoveryError(message), { errorCode: code });
 }
 
 export type ApiDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
@@ -136,6 +147,19 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 			const errorResponse = get(error, ['response']);
 			if (errorResponse) {
+				// The protocol gate's refusal is keyed on the body code, whatever the status:
+				// the app is too old for this store, not a bad API response.
+				const updateRequired = parseUpdateRequiredBody(get(errorResponse, ['data']));
+				if (updateRequired) {
+					const message = t('auth.update_required');
+					discoveryLogger.error(message, {
+						showToast: true,
+						code: ERROR_CODES.APP_UPDATE_REQUIRED,
+						context: { wpApiUrl, ...updateRequired },
+					});
+					throw discoveryErrorWithCode(message, ERROR_CODES.APP_UPDATE_REQUIRED);
+				}
+
 				const status = get(errorResponse, 'status');
 				const contentType = get(errorResponse, ['headers', 'content-type']);
 				const isRestrictedApi =
@@ -155,7 +179,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 						code: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
 						context: { wpApiUrl, httpStatus: status },
 					});
-					throw new ApiDiscoveryError(errorMsg);
+					throw discoveryErrorWithCode(errorMsg, ERROR_CODES.AUTH_PLUGIN_CONFLICT);
 				}
 
 				// Server responded but not with the expected WP REST API format
@@ -168,10 +192,15 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				throw new ApiDiscoveryError(t('auth.bad_api_response'));
 			}
 
-			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
+			// Offline or no reply is "can't be reached" (SYNC121), a store error its own
+			// code — not AUTH999's "contact support" for a network blip.
+			const code = isExpectedPreflightBlock(error)
+				? ERROR_CODES.SYNC_UNREACHABLE
+				: storeRequestFailureCode(error);
+			const logLevel = ERROR_CATALOGUE[code].severity === 'error' ? 'error' : 'warn';
 			discoveryLogger[logLevel](`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
 				showToast: true,
-				code: ERROR_CODES.AUTH_UNEXPECTED,
+				code,
 				context: { wpApiUrl },
 			});
 			throw error;
@@ -218,6 +247,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					discoveryLogger.error(`Bad API response from ${wpApiUrl}`, {
 						showToast: true,
 						code: ERROR_CODES.AUTH_UNEXPECTED,
+						// The specific reason, not AUTH999's generic summary.
+						toast: { title: t('auth.bad_api_response') },
 						context: { wpApiUrl },
 					});
 					throw new ApiDiscoveryError(t('auth.bad_api_response'));
@@ -228,6 +259,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					discoveryLogger.error(`WordPress API not found at ${wpApiUrl}`, {
 						showToast: true,
 						code: ERROR_CODES.AUTH_UNEXPECTED,
+						toast: { title: t('auth.wordpress_api_not_found') },
 						context: {
 							wpApiUrl,
 						},
@@ -280,10 +312,6 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 				if (hasOlderWcposApi) {
 					discoveryLogger.error('WCPOS plugin on the store is out of date', {
-						showToast: true,
-						// Without an explicit title the toast shows the log message
-						// above, which is written for us, not for the merchant.
-						toast: { title: t('common.please_update_your_woocommerce_pos_plugin') },
 						code: ERROR_CODES.WCPOS_PLUGIN_OUTDATED,
 						context: {
 							reportedVersion,
@@ -308,10 +336,6 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				// means genuinely absent — so the log carries the distinction as
 				// data instead of guessing at it in prose.
 				discoveryLogger.error('WCPOS REST namespace not registered', {
-					showToast: true,
-					// Without an explicit title the toast shows the log message
-					// above, which is written for us, not for the merchant.
-					toast: { title: t('auth.woocommerce_pos_api_not_found') },
 					code: ERROR_CODES.REST_ROUTE_MISSING,
 					context: {
 						reportedVersion,

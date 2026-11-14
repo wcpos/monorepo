@@ -1,11 +1,16 @@
 /* eslint-disable import/first */
-import * as React from 'react';
 
+import * as React from 'react';
+import { StyleSheet, type ViewProps } from 'react-native';
+
+const mockViews: ViewProps[] = [];
+const mockAnimation = { duration: jest.fn().mockReturnThis(), easing: jest.fn().mockReturnThis() };
 const mockPlatform = { OS: 'ios' };
 const mockGestureHandlerScrollView = jest.fn();
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { DeviceScope } from '../lib/device';
 import {
 	Combobox,
 	ComboboxContent,
@@ -23,17 +28,51 @@ jest.mock(
 	{ virtual: true }
 );
 
+// These existing tests exercise the anchored popover, not the phone sheet.
+jest.mock('react-native', () => {
+	const actual = jest.requireActual('react-native');
+	return {
+		...actual,
+		Platform: { ...actual.Platform, OS: 'ios' },
+		// The sheet moves native accessibility focus into itself on mount; RN-web has no node handles.
+		findNodeHandle: () => 1,
+		AccessibilityInfo: { ...actual.AccessibilityInfo, setAccessibilityFocus: jest.fn() },
+		View: (props: ViewProps) => {
+			mockViews.push(props);
+			return <actual.View {...props} />;
+		},
+		useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+	};
+});
+jest.mock('../keyboard-controller', () => ({
+	KeyboardAvoidingView: jest.requireMock('react-native').View,
+	useKeyboardState: () => false,
+}));
+
 jest.mock('react-native-gesture-handler', () => ({
 	ScrollView: mockGestureHandlerScrollView,
 }));
 
+// Native-only package with untransformed Flow syntax; the combobox reads the insets
+// context and tolerates a null value (no provider).
+jest.mock('react-native-safe-area-context', () => ({
+	SafeAreaInsetsContext: React.createContext(null),
+	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
 jest.mock('react-native-reanimated', () => ({
+	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
+	Easing: { bezier: () => (value: number) => value },
 	__esModule: true,
 	default: {
 		View: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+		createAnimatedComponent: (component: React.ComponentType) => component,
 	},
-	FadeIn: { duration: () => ({}) },
-	FadeOut: {},
+	...Object.fromEntries(
+		'FadeIn FadeOut SlideInLeft SlideOutLeft SlideInRight SlideOutRight SlideInDown SlideOutDown'
+			.split(' ')
+			.map((name) => [name, mockAnimation])
+	),
 }));
 
 jest.mock('@rn-primitives/slot', () => ({
@@ -57,8 +96,9 @@ jest.mock('@rn-primitives/popover', () => ({
 			{children}
 		</div>
 	),
-	useRootContext: () => ({ onOpenChange: jest.fn() }),
+	useRootContext: () => mockPopoverRoot,
 }));
+const mockPopoverRoot = { open: true, onOpenChange: () => undefined };
 
 jest.mock('../input', () => ({
 	Input: ({ value, onChangeText, placeholder, ...props }: any) => (
@@ -119,6 +159,7 @@ jest.mock('../lib/use-arrow-key-navigation', () => ({
 describe('Combobox native content', () => {
 	beforeEach(() => {
 		mockPlatform.OS = 'ios';
+		mockViews.length = 0;
 	});
 
 	it('caps the native virtualized list height for long lists', () => {
@@ -257,6 +298,26 @@ describe('ComboboxValue', () => {
 		expect(screen.queryByText('shipping©')).toBeNull();
 	});
 
+	it.each([
+		[false, 'border-attention'],
+		[true, 'border-ring'],
+	])("tone='attention' draws the changed box at rest, open still wins (open %s)", (open, mark) => {
+		mockPopoverRoot.open = open;
+		mockViews.length = 0;
+		render(
+			<Combobox value={{ value: '7', label: 'Sam' }}>
+				<ComboboxTrigger>
+					<ComboboxValue placeholder="Select a cashier" tone="attention" />
+				</ComboboxTrigger>
+			</Combobox>
+		);
+		mockPopoverRoot.open = true;
+		const classes = mockViews.map((view) => String((view as { className?: string }).className));
+		const box = classes.find((className) => className.includes('rounded-field'));
+		expect(box).toContain(mark);
+		if (open) expect(box).not.toContain('border-attention');
+	});
+
 	it('still renders the placeholder when nothing is selected', () => {
 		render(
 			<Combobox>
@@ -268,4 +329,40 @@ describe('ComboboxValue', () => {
 
 		expect(screen.getByText('Select a category')).not.toBeNull();
 	});
+});
+
+/**
+ * A class assertion has to read the source: `react-native` is mapped to
+ * `react-native-web` here, whose `View` drops `className` before it reaches the
+ * DOM (the probe rendered `class=""`), so the tree cannot be asked for it.
+ */
+it('renders the phone sheet as a View with phone metrics, not primitive Content', () => {
+	render(
+		<DeviceScope phone>
+			<Combobox>
+				<ComboboxContent inline testID="phone-panel" />
+			</Combobox>
+		</DeviceScope>
+	);
+	expect(screen.queryByTestId('combobox-content')).toBeNull();
+	const panel = mockViews.find((p) => p.testID === 'phone-panel');
+	expect(
+		jest.requireMock('react-native').AccessibilityInfo.setAccessibilityFocus
+	).toHaveBeenCalledWith(1);
+	expect(panel?.className).toContain('rounded-t-2xl');
+	expect(StyleSheet.flatten(panel?.style)).toMatchObject({ maxHeight: 538 });
+	// The panel on the bottom edge paints the safe area itself (inset + 8), so the sheet reaches
+	// the edge in the panel's own colour; the shell pads nothing for it (overlay.tsx).
+	expect(StyleSheet.flatten(panel?.style)).toMatchObject({ paddingBottom: 8 });
+});
+it('keeps the native anchored wrapper full-bleed and box-none', () => {
+	mockViews.length = 0;
+	render(
+		<Combobox>
+			<ComboboxContent inline />
+		</Combobox>
+	);
+	expect(mockViews).toContainEqual(
+		expect.objectContaining({ style: StyleSheet.absoluteFill, pointerEvents: 'box-none' })
+	);
 });

@@ -1,0 +1,19 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": false,
+		"outDir": "dist",
+		"rootDir": ".",
+		"declaration": true,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"target": "es2022",
+		"skipLibCheck": true,
+		"paths": {
+			"@wcpos/sync-core": ["../sync-core/dist/src/index.d.ts"],
+			"@wcpos/sync-core/*": ["../sync-core/dist/src/*"]
+		}
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["src/**/*.test.ts", "node_modules", "dist"]
+}

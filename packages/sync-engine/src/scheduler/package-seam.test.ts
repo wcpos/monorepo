@@ -7,6 +7,9 @@ const sourceRoot = join(__dirname, '..');
 const deepImportAllowlist = new Set([
 	// Direct schema imports avoid evaluating census.ts while the canonical collection list initializes.
 	'collections/engine-collections.ts',
+	// The order write path seeds the by-parent refund lane; the scheduler index would evaluate the
+	// drain and the descriptors while the repository's own constants are still initialising.
+	'write-path/engine-order-repository.ts',
 ]);
 
 function sourceFiles(directory: string): string[] {

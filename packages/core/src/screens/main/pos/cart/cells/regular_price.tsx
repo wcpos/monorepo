@@ -1,28 +1,47 @@
 import * as React from 'react';
 
+import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { CurrencyInput } from '../../../components/currency-input';
+import { AmountField } from '../../../components/amount-field';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useLineItemData } from '../../hooks/use-line-item-data';
-import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { ensureNumberArray } from './ensure-number-array';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
+import { useCartTableReadOnly } from './read-only';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
 	item: LineItem;
 	type: 'line_items';
 }
 
-/**
- *
- */
-export function RegularPrice({ row }: CellContext<Props, 'regular_price'>) {
+export function RegularPrice(props: CellContext<Props, 'regular_price'>) {
+	return useCartTableReadOnly() ? (
+		<ReadOnlyRegularPrice {...props} />
+	) : (
+		<EditableRegularPrice {...props} />
+	);
+}
+
+function ReadOnlyRegularPrice({ row }: CellContext<Props, 'regular_price'>) {
+	const { getLineItemData } = useLineItemData();
+	const { regular_price: value } = getLineItemData(row.original.item);
+	const { format } = useCurrentOrderCurrencyFormat();
+	return (
+		<Text className="text-muted-foreground text-right tabular-nums">
+			{format(Number(value ?? 0))}
+		</Text>
+	);
+}
+
+function EditableRegularPrice({ row }: CellContext<Props, 'regular_price'>) {
 	const item = row.original.item;
 	const uuid = row.original.uuid;
-	const { updateLineItem } = useUpdateLineItem();
+	const { updateCartLine } = useUpdateCartLine();
 	const { getLineItemData } = useLineItemData();
 	const { regular_price: value } = getLineItemData(item);
 
@@ -36,9 +55,13 @@ export function RegularPrice({ row }: CellContext<Props, 'regular_price'>) {
 	 *
 	 */
 	return (
-		<CurrencyInput
+		<AmountField
+			kind="money"
+			look="quiet"
+			testID="cart-regular-price"
 			value={value}
-			onChangeText={(regular_price) => updateLineItem(uuid, { regular_price })}
+			textClassName="text-muted-foreground text-right"
+			onCommit={(regular_price) => updateCartLine('line_items', uuid, { regular_price })}
 			discounts={ensureNumberArray(quickDiscounts)}
 		/>
 	);

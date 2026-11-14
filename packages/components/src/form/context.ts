@@ -13,11 +13,22 @@ const FormFieldContext = React.createContext<FormFieldContextValue>({} as FormFi
 
 type FormItemContextValue = {
 	nativeID: string;
+	/**
+	 * What a press on this item's `FormLabel` does when the label has no `onPress` of its
+	 * own: set by a label-less field wrapper that adopted this item (see `aria.ts`).
+	 */
+	setLabelPress?: (press: (() => void) | undefined) => void;
+	/** Runs whatever `setLabelPress` last set. */
+	pressLabel?: () => void;
 };
 
 const FormItemContext = React.createContext<FormItemContextValue>({} as FormItemContextValue);
 
-const useFormField = () => {
+/**
+ * `itemNativeID` is for the one caller that sits ABOVE its `FormItem`: a field wrapper's
+ * `useFormControlAria`, which mints the item id and hands the same id to its `FormItem`.
+ */
+const useFormField = (itemNativeID?: string) => {
 	const fieldContext = React.useContext(FormFieldContext);
 	const itemContext = React.useContext(FormItemContext);
 	const { getFieldState, formState, handleSubmit } = useFormContext();
@@ -28,7 +39,7 @@ const useFormField = () => {
 		throw new Error('useFormField should be used within <FormField>');
 	}
 
-	const { nativeID } = itemContext;
+	const nativeID = itemNativeID ?? itemContext.nativeID;
 
 	return {
 		nativeID,

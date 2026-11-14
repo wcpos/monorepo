@@ -21,7 +21,7 @@ const markerFile = () => new File(Paths.document, CLEAR_LOCAL_DATA_ON_NEXT_LOAD_
  */
 export const scheduleClearLocalDataOnNextLoad = (): boolean => {
 	try {
-		markerFile().write('1');
+		markerFile().writeSync('1');
 		return true;
 	} catch {
 		return false;

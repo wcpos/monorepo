@@ -76,27 +76,39 @@ export function detectNewCartLines(prev: CartLineRow[], next: CartLineRow[]): st
 	}, []);
 }
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type LineItem = import('@wcpos/query').OrderLineItem;
 type LineItemImage = LineItem['image'];
-type OrderMetaData = NonNullable<import('@wcpos/database').OrderDocument['meta_data']>;
+type OrderMetaData = import('@wcpos/query').OrderMetaData;
 
 /**
- * Adds missing POS identity entries without replacing existing metadata values.
+ * Adds missing POS identity entries, rebinding the register only for an empty cart.
  *
  * @param metaData - Existing order metadata, or undefined for a new order.
  * @param identity - Identity values to add to the order.
  * @param identity.userId - The cashier's WordPress user ID.
  * @param identity.storeId - The store ID; zero omits the store entry.
  * @param identity.taxBasedOn - The tax-address basis, when available.
+ * @param rebindRegister - Use the current binding when starting an empty cart.
  * @returns A new metadata array containing every applicable identity entry.
  */
 export function ensurePosOrderIdentityMeta(
 	metaData: OrderMetaData | undefined,
-	identity: { userId: number | string; storeId: number; taxBasedOn?: string }
+	identity: {
+		userId: number | string;
+		storeId: number;
+		taxBasedOn?: string;
+		registerId?: string;
+		tillId?: string;
+	},
+	rebindRegister = false
 ): OrderMetaData {
 	const existing = wooMetaCarrier.readIdentity(metaData);
 	let ensured = wooMetaCarrier.stampIdentity(metaData, {
 		userId: existing.cashierId ?? identity.userId,
+		registerId: rebindRegister
+			? (identity.registerId ?? existing.registerId)
+			: (existing.registerId ?? identity.registerId),
+		tillId: existing.tillId ?? identity.tillId,
 		storeId: existing.storeId ?? identity.storeId,
 	}) as OrderMetaData;
 	if (identity.storeId === NO_STORE && existing.storeId === null) {
@@ -139,8 +151,9 @@ export const findByProductVariationID = (
 	variationId = 0
 ) => {
 	if (!Array.isArray(lineItems)) {
+		// An invariant break, not a checkout outcome: no "do not re-charge" advice.
 		posLogger.error('lineItems is not an array', {
-			code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: {
 				lineItems,
 				productId,
@@ -160,7 +173,7 @@ export const findByProductVariationID = (
  * @NOTE - we have to be careful here because if a property is undefined or null, it will be ingnored when
  * we send the data to the server.
  */
-type CustomerJSON = import('@wcpos/database').CustomerDocument;
+type CustomerJSON = import('@wcpos/query').CustomerPayload;
 export const transformCustomerJSONToOrderJSON = (
 	customer: CustomerJSON,
 	defaultCountry: string
@@ -191,24 +204,32 @@ export const transformCustomerJSONToOrderJSON = (
 			postcode: customer?.shipping?.postcode || '',
 			country: customer?.shipping?.country || '',
 		},
-		// Snapshot the customer's tax IDs onto the order at attach time. The
-		// order owns its own copy so post-sale edits don't leak back to the
-		// customer record (and customer-record edits don't retroactively
-		// change historical orders). Empty array when the customer has none —
-		// this overrides any prior snapshot if the cashier swaps customers.
-		tax_ids: Array.isArray(customer?.tax_ids)
-			? customer.tax_ids.map((taxId) => ({
-					...taxId,
-					verified: taxId.verified ? { ...taxId.verified } : null,
-				}))
-			: [],
+		tax_ids: snapshotCustomerTaxIds(customer),
 	};
 };
 
 /**
+ * The order's own copy of a customer's tax IDs, taken when the customer is attached: by
+ * the picker (through `transformCustomerJSONToOrderJSON`) and by the cart's new-customer
+ * form alike. The order owns the copy so post-sale edits don't leak back to the customer
+ * record (and customer-record edits don't retroactively change historical orders). Empty
+ * array when the customer has none, which overrides any prior snapshot if the cashier
+ * swaps customers.
+ */
+export const snapshotCustomerTaxIds = (
+	customer: Pick<CustomerJSON, 'tax_ids'> | null | undefined
+): NonNullable<CustomerJSON['tax_ids']> =>
+	Array.isArray(customer?.tax_ids)
+		? customer.tax_ids.map((taxId) => ({
+				...taxId,
+				verified: taxId.verified ? { ...taxId.verified } : null,
+			}))
+		: [];
+
+/**
  * Convert a product to the format expected by OrderDocument['line_items']
  */
-type Product = import('@wcpos/database').ProductDocument;
+type Product = import('@wcpos/query').ProductPayload;
 export const convertProductToLineItemWithoutTax = (
 	product: Product,
 	metaDataKeys?: string[]
@@ -263,7 +284,7 @@ export const convertProductToLineItemWithoutTax = (
 /**
  * Convert a variation to the format expected by OrderDocument['line_items']
  */
-type Variation = import('@wcpos/database').ProductVariationDocument;
+type Variation = import('@wcpos/query').VariationPayload;
 type MetaData = NonNullable<LineItem['meta_data']>;
 export const convertVariationToLineItemWithoutTax = (
 	variation: Variation,
@@ -319,11 +340,9 @@ export const convertVariationToLineItemWithoutTax = (
 		quantity: 1,
 		sku: variation.sku,
 		tax_class: variation.tax_class,
-		/**
-		 * Both wire shapes before falling back to the parent. A 1.10.0 store serves a variation
-		 * with `images[]` and no `image`, so reading `image` alone made the parent fallback ALWAYS
-		 * win — and unlike the blank thumbnail, this one is persisted: the parent's picture is
-		 * written onto the order line and shows in the order view and on receipts (#1577).
+		/*
+		 * The variation's own picture, then the parent's. This one is persisted: it is written
+		 * onto the order line and shows in the order view and on receipts (#1577).
 		 */
 		image:
 			normalizeLineItemImage(resolveImageEntry(variation)) ||
@@ -331,3 +350,33 @@ export const convertVariationToLineItemWithoutTax = (
 		meta_data: new_meta_data,
 	};
 };
+
+/**
+ * A line's meta rows as the writer applies them: the supplied rows without a row the cashier has
+ * only just added (no id, no key, no attribute, no value: it is not an edit and would be pushed as
+ * blank meta; a variation's attribute row has `attr_id`/`display_key` and no key, and stays), and
+ * with the line's CURRENT `_woocommerce_pos_data` row in place of the supplied copy. A sheet holds
+ * its own draft, so after an autosave of price, a flag or a category its copy of that row is
+ * stale, and `applyLineItemChanges` keeps whatever pos_data the supplied meta holds for the keys
+ * the write does not name — a meta-only edit would otherwise revert them. Called inside the
+ * order's mutation queue, where `line` is the line as it stands.
+ */
+export function lineMetaForWrite<
+	Row extends {
+		id?: number;
+		key?: string;
+		value?: unknown;
+		attr_id?: number;
+		display_key?: string;
+	},
+>(supplied: readonly Row[], line: { meta_data?: readonly Row[] | null } | undefined): Row[] {
+	const current = line?.meta_data?.find((row) => row.key === POS_META_KEYS.posData);
+	const blank = (row: Row) =>
+		row.id == null &&
+		!row.key &&
+		row.attr_id == null &&
+		!row.display_key &&
+		(row.value == null || row.value === '');
+	const rows = supplied.filter((row) => row.key !== POS_META_KEYS.posData && !blank(row));
+	return current ? [...rows, current] : rows;
+}

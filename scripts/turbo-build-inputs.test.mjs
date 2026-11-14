@@ -17,7 +17,10 @@ const result = spawnSync(
 		'--filter=@wcpos/sync-engine',
 		'--dry=json',
 	],
-	{ cwd: ROOT, encoding: 'utf8' }
+	// The plan lists every build input with its hash and passed 1 MiB once the icon sets
+	// landed; spawnSync's default maxBuffer truncates at a chunk boundary and the parse
+	// below fails on the cut, so give it room to grow.
+	{ cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
 );
 
 assert.equal(result.status, 0, result.stdout + result.stderr);

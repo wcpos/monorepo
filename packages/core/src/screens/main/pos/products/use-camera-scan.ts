@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useSegments } from 'expo-router';
-
 import { createScanSession, type ScanSession } from '@wcpos/scanner';
 import { useDocField } from '@wcpos/query';
 
@@ -9,6 +7,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useScanHub } from '../../hooks/barcodes/scan-hub-context';
 import { showTooShortFeedback } from '../../hooks/barcodes/too-short-feedback';
+import { useTillLocation } from '../use-till-location';
 
 // The retail set we ask the camera decoder for (spec §4: narrowing formats is a
 // documented speed win). expo-camera's BarcodeType strings.
@@ -35,8 +34,7 @@ export const useCameraScan = () => {
 	// keeps running in a backgrounded POS tree and the hub is app-scoped, so a
 	// decode arriving while another section is focused must be dropped at the
 	// source — the old POS-scoped bus never delivered these beyond the section.
-	const segments: string[] = useSegments();
-	const posSectionActive = segments.includes('(pos)');
+	const { inPos: posSectionActive } = useTillLocation();
 	const posSectionActiveRef = React.useRef(posSectionActive);
 	React.useEffect(() => {
 		posSectionActiveRef.current = posSectionActive;
@@ -60,6 +58,9 @@ export const useCameraScan = () => {
 	const getSession = React.useCallback((): ScanSession => {
 		if (!sessionRef.current) {
 			sessionRef.current = createScanSession({
+				// The decoder re-reports a barcode every frame it stays in view: one
+				// sighting adds the item once, however long the camera rests on it.
+				continuous: true,
 				onAccept: (code, symbology) => {
 					if (code.length < minCharsRef.current) {
 						// A decoded-but-too-short code must not vanish silently (#905):
@@ -67,9 +68,6 @@ export const useCameraScan = () => {
 						// cashier learns why nothing was added and can adjust the
 						// minimum-length setting if it's misconfigured.
 						showTooShortFeedback(tRef.current, code, minCharsRef.current);
-						return;
-					}
-					if (!posSectionActiveRef.current) {
 						return;
 					}
 					emitRef.current({
@@ -86,6 +84,13 @@ export const useCameraScan = () => {
 
 	const onScan = React.useCallback(
 		(result: CameraScanResult) => {
+			// Dropped before the session sees it: a read the session recorded while
+			// another section was focused would otherwise hold its cooldown, and a
+			// continuous source extends that hold on every frame, so a product still
+			// in view when the cashier returns to the POS would never be added.
+			if (!posSectionActiveRef.current) {
+				return;
+			}
 			getSession().offer(result.data, result.type);
 		},
 		[getSession]

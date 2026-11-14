@@ -8,8 +8,7 @@ import * as React from 'react';
  * assembly) drag a native module into every suite that touched the cart.
  */
 export interface ExtraDataContextProps {
-	extraData: import('rxdb').RxState<Record<string, unknown>>;
+	extraData: import('@wcpos/query/user-db').ExtraDataSlot;
 }
 
-// eslint-disable-next-line wcpos/no-rx-in-context-value -- Persisted extra data is structurally an RxState shared by its writer and field-hook consumers; sanctioned exception dated 2026-08-21, see #1385 stage K.
 export const ExtraDataContext = React.createContext<ExtraDataContextProps | null>(null);

@@ -7,7 +7,12 @@ import { startWith } from 'rxjs/operators';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { setTelemetryConsent, type TelemetryConsent } from '@wcpos/utils/logger/sentry-sink';
 
-export function useTelemetryConsent(): void {
+/**
+ * Returns the preference it applied so a second telemetry client owned by the
+ * app (EAS Observe) can follow the same answer: `null` at boot, before the
+ * session has restored.
+ */
+export function useTelemetryConsent(): TelemetryConsent | null {
 	const { store } = useAppState();
 	// Two different "no store" situations:
 	// - Boot, before the session has restored: no opinion (`null`). Sending
@@ -16,7 +21,7 @@ export function useTelemetryConsent(): void {
 	//   database opens — the moment the storage-corruption class fires.
 	// - Logout, after a store was seen: 'undecided', so the client stops until the
 	//   next merchant's preference is known.
-	// Adjust state during render — the sanctioned pattern (see useThemeRestorer).
+	// Adjust state during render — the sanctioned pattern.
 	const [seenStore, setSeenStore] = React.useState(false);
 	if (store && !seenStore) setSeenStore(true);
 	const consent$ = React.useMemo(
@@ -32,4 +37,6 @@ export function useTelemetryConsent(): void {
 	React.useEffect(() => {
 		if (consent) setTelemetryConsent(consent);
 	}, [consent]);
+
+	return consent ?? null;
 }

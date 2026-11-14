@@ -98,6 +98,30 @@ afterEach(() => {
 });
 
 describe('RxdbSyncEngine facade timers and live configuration', () => {
+	it.each(['till-123', undefined])(
+		'sends the instance header only when provided: %s',
+		async (installId) => {
+			const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => new Response('{}'));
+			let currentId: string | undefined = 'before-ready';
+			const engine = engineWith({ getInstanceId: async () => currentId, fetcher });
+			await engine.ready;
+			currentId = installId;
+			fetcher.mockClear();
+			try {
+				await engine.sync('change-signal');
+				await engine.hostTransport().fetcher(SYNC_BASE, {
+					headers: { 'x-wcpos-instance': 'forged' },
+				});
+				expect(fetcher.mock.calls.length).toBeGreaterThan(0);
+				for (const [, init] of fetcher.mock.calls) {
+					expect(new Headers(init?.headers).get('X-WCPOS-Instance')).toBe(installId ?? null);
+				}
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('publishes per-collection activity and monotonic reset/switch generations', async () => {
 		const engine = engineWith();
 		await engine.ready;
@@ -112,6 +136,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			'brands',
 			'tags',
 			'coupons',
+			'refunds',
 		]);
 		const initialGeneration = engine.status().collections.products.coverageGeneration;
 		expect(engine.status().collections.products).toEqual({
@@ -245,8 +270,11 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		if (!active) throw new Error('expected an active scope');
 		const orderId = '10000000-0000-4000-8000-000000000001';
 		await active.database.collections.orders.insert({
+			posUserId: '',
+			posStoreId: '',
 			uuid: orderId,
 			remoteId: null,
+			remoteKey: '',
 			number: '',
 			dateCreatedGmt: '2026-07-16T00:00:00',
 			status: 'pos-open',
@@ -371,12 +399,15 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			await engine.sync('change-signal');
 			message = 'different failure';
 			await engine.sync('change-signal');
-			for (const type of ['signal.tick.error', 'engine.lane.tick']) {
-				const rows = diagnostics.mock.calls
+			const levelsOf = (type: string) =>
+				diagnostics.mock.calls
 					.map(([event]) => event)
-					.filter((event) => event.type === type);
-				expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
-			}
+					.filter((event) => event.type === type)
+					.map((event) => event.level);
+			expect(levelsOf('signal.tick.error')).toEqual(['error', 'info', 'error']);
+			// The lane's own signal.tick.error reports the failure, so the summary
+			// tick row never escalates on its own.
+			expect(levelsOf('engine.lane.tick')).toEqual(['info', 'info', 'info']);
 		} finally {
 			await engine.dispose();
 		}
@@ -447,7 +478,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		}
 	});
 
-	it('keeps every tick row but lowers consecutive identical errors per lane', async () => {
+	it('keeps every tick row, at info, with each failed tick error', async () => {
 		let failure: string | null = null;
 		const diagnostics = vi.fn();
 		const engine = engineWith({
@@ -487,7 +518,9 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 				.filter(
 					(event) => event.type === 'engine.lane.tick' && event.fields.lane === 'change-signal'
 				);
-			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error', 'info', 'error']);
+			// recordLaneTick summaries are info even when the tick failed: the lane's
+			// own row (signal.tick.error here) carries the failure.
+			expect(rows.map((event) => event.level)).toEqual(['info', 'info', 'info', 'info', 'info']);
 			expect(rows.map((event) => event.fields.error)).toEqual([
 				'Census refresh failed for products',
 				'Census refresh failed for products',
@@ -502,8 +535,8 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 					(event) => event.type === 'engine.lane.tick' && event.fields.lane === 'query-total-retry'
 				);
 			expect(firstCensus).toMatchObject({
-				level: 'error',
-				fields: { error: 'Census refresh failed for products' },
+				level: 'info',
+				fields: { status: 'error', error: 'Census refresh failed for products' },
 			});
 		} finally {
 			await engine.dispose();
@@ -710,7 +743,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			const engine = engineWith({
 				fetcher: async (url) => {
 					urls.push(url);
-					return new Response(JSON.stringify({ documents: [], checkpoint, hasMore: false }), {
+					return new Response(JSON.stringify({ documents: [], checkpoint, complete: true }), {
 						status: 200,
 						headers: { 'content-type': 'application/json' },
 					});

@@ -1,9 +1,10 @@
-import type { NotificationCollection } from '@wcpos/database';
+import { type StoreLocalDatabase, upsertNotification } from '@wcpos/query';
+import { Toast } from '@wcpos/components/toast';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
-import { getNotificationBehavior } from './notification-behaviors';
+import { getNotificationBehavior, WORKFLOW_IDS } from './notification-behaviors';
 
 import type { NovuNotification } from './client';
 
@@ -18,7 +19,7 @@ function handleActionUrl(url: string): void {
 	// External URLs (http://, https://)
 	if (url.startsWith('http://') || url.startsWith('https://')) {
 		openExternalURL(url).catch((error) => {
-			novuLogger.error('Novu: Failed to open external URL', {
+			novuLogger.debug('Novu: Failed to open external URL', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { url, error },
 			});
@@ -48,7 +49,7 @@ function processNotificationBehavior(
 	// Get workflow ID from notification.data (set in Novu workflow config)
 	// WebSocket events don't include notification.workflow, so we use data.workflowId
 	const data = notification.data as { workflowId?: string } | undefined;
-	const workflowId = data?.workflowId;
+	const workflowId = data?.workflowId ?? notification.workflow?.identifier;
 	const severity = notification.severity as string | undefined;
 
 	// Get behavior config for this workflow
@@ -79,10 +80,30 @@ function processNotificationBehavior(
 					: undefined,
 			},
 		};
-		if (level === 'error') {
-			novuLogger.error(title, { ...options, code: ERROR_CODES.UNEXPECTED_ERROR });
+		// The notification's own subject is the toast title: a code's generic summary
+		// ("WCPOS encountered an unexpected error") must never replace it. A licence
+		// expiry carries LICENSE101's hint; any other critical notice carries no code —
+		// it is the store's message, not an app fault.
+		const withTitle = { ...options, toast: { ...options.toast, title } };
+		if (!behavior.saveToDb) {
+			// `saveToDb: false` (announcements) means a toast and no Logs row; every
+			// non-debug logger level persists, so the toast is shown directly.
+			novuLogger.debug(title, { context: body ? { body } : undefined });
+			Toast.show({
+				type: level === 'warn' ? 'warning' : level,
+				title,
+				...(withTitle.toast.text2 ? { description: withTitle.toast.text2 } : {}),
+				closeButton: withTitle.toast.dismissable,
+				...(withTitle.toast.action ? { action: withTitle.toast.action } : {}),
+			});
+		} else if (level === 'error' && workflowId === WORKFLOW_IDS.LICENSE_EXPIRED) {
+			novuLogger.error(title, { ...withTitle, code: ERROR_CODES.LICENSE_NOT_ACTIVE_HERE });
+		} else if (level === 'error') {
+			// Any other critical notice is the store's message, not an app fault: no
+			// "unexpected error" code to replace its subject or mislead its hint.
+			novuLogger.warn(title, withTitle);
 		} else {
-			novuLogger[level](title, options);
+			novuLogger[level](title, withTitle);
 		}
 	} else if (behavior.saveToDb) {
 		// Save to logs DB without showing toast
@@ -95,13 +116,13 @@ function processNotificationBehavior(
 /**
  * Sync a single notification to RxDB (v3 API)
  *
- * @param collection - The local notifications collection
+ * @param database - The store-local database
  * @param subscriberId - The Novu subscriber the notification belongs to
  * @param notification - The Novu notification object
  * @param isNewNotification - Whether this is a newly received notification (triggers behavior)
  */
 export async function syncNotificationToRxDB(
-	collection: NotificationCollection,
+	database: StoreLocalDatabase,
 	subscriberId: string,
 	notification: NovuNotification,
 	isNewNotification = false,
@@ -109,7 +130,7 @@ export async function syncNotificationToRxDB(
 ): Promise<void> {
 	const notificationId = notification.id;
 	if (!notificationId) {
-		novuLogger.error('Novu: Notification missing ID', {
+		novuLogger.debug('Novu: Notification missing ID', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { keys: Object.keys(notification) },
 		});
@@ -121,7 +142,7 @@ export async function syncNotificationToRxDB(
 
 	// Extract workflow ID for storage from notification.data (use null if undefined - RxDB requires string|null, not undefined)
 	const data = notification.data as { workflowId?: string } | undefined;
-	const workflowId = data?.workflowId ?? null;
+	const workflowId = data?.workflowId ?? notification.workflow?.identifier ?? null;
 
 	try {
 		// Guard against invalid createdAt - Novu v3 types show createdAt as optional string
@@ -142,27 +163,13 @@ export async function syncNotificationToRxDB(
 			channel: notification.channelType || 'in_app',
 		};
 
-		if (preserveLocalState) {
-			const existing = await collection.findOne(nextNotification.id).exec();
-			if (existing) {
-				await existing.incrementalModify((current) => ({
-					...current,
-					...nextNotification,
-					status: current.status === 'unread' ? nextNotification.status : current.status,
-					seen: current.seen || nextNotification.seen,
-				}));
-			} else {
-				// A concurrent WebSocket insert wins any primary-key conflict instead of being
-				// overwritten by this older snapshot.
-				await collection.insert(nextNotification);
-			}
-		} else {
-			await collection.upsert(nextNotification);
-		}
+		await upsertNotification(database, nextNotification, { preserveLocalState });
 		novuLogger.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
 	} catch (error) {
-		novuLogger.error('Novu: Failed to sync notification to RxDB', {
-			code: ERROR_CODES.UNEXPECTED_ERROR,
+		// A local findOne/insert/upsert rejected: the device's copy of the notification
+		// is what failed, so it keeps a coded row (warn — the notification still shows).
+		novuLogger.warn('Novu: Failed to sync notification to RxDB', {
+			code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 			context: { notificationId, error },
 		});
 	}
@@ -174,14 +181,14 @@ export async function syncNotificationToRxDB(
  * Used for initial load and refresh - these are NOT new notifications, so no toast.
  */
 export async function syncNotificationsToRxDB(
-	collection: NotificationCollection,
+	database: StoreLocalDatabase,
 	subscriberId: string,
 	notifications: NovuNotification[]
 ): Promise<void> {
 	// Pass isNewNotification=false to avoid showing toasts for old notifications
 	await Promise.all(
 		notifications.map((notification) =>
-			syncNotificationToRxDB(collection, subscriberId, notification, false, true)
+			syncNotificationToRxDB(database, subscriberId, notification, false, true)
 		)
 	);
 }

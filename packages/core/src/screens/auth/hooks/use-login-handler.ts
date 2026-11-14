@@ -2,12 +2,11 @@ import * as React from 'react';
 
 import { router } from 'expo-router';
 
-import { sanitizeWPCredentialsData } from '@wcpos/database';
-import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getLogger, isErrorReported, markErrorReported } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { type ReadonlySiteRecord, saveLoginCredentials } from '@wcpos/query/user-db';
 
 import { useAppState } from '../../../contexts/app-state';
-import { linkCredentialsToSite } from '../../../utils/site-writes';
 
 const authLogger = getLogger(['wcpos', 'auth', 'login']);
 
@@ -33,7 +32,7 @@ interface UseLoginHandlerReturn {
  * Hook for handling OAuth login responses and saving credentials
  */
 export const useLoginHandler = (
-	site: import('@wcpos/database').SiteDocument | null
+	site: Pick<ReadonlySiteRecord, 'uuid' | 'name'> | null
 ): UseLoginHandlerReturn => {
 	const { userDB } = useAppState();
 	const [isProcessing, setIsProcessing] = React.useState(false);
@@ -64,57 +63,26 @@ export const useLoginHandler = (
 						showToast: true,
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 					});
-					throw new Error('Invalid login response - missing required parameters');
+					const invalid = new Error('Invalid login response - missing required parameters');
+					markErrorReported(invalid);
+					throw invalid;
 				}
 
-				// Extract credentials from the response
-				const credentialsData = {
-					uuid: params.uuid,
-					id: parseInt(params.id, 10), // Convert string to number
-					display_name: params.display_name,
-					access_token: params.access_token,
-					refresh_token: params.refresh_token,
-					expires_at: Number(params.expires_at), // Convert to number and store the expiration timestamp
-					// Set default values for other required fields
-					first_name: '',
-					last_name: '',
-					email: '',
-					nice_name: params.display_name,
-					last_access: new Date().toISOString(),
-					avatar_url: '',
-					stores: [],
-					date_created_gmt: new Date().toISOString(),
-					date_modified_gmt: new Date().toISOString(),
-				};
-
-				// Check if credentials already exist
-				const existingCredentials = await userDB.wp_credentials
-					.findOne({
-						selector: { uuid: credentialsData.uuid },
-					})
-					.exec();
-
-				if (existingCredentials) {
-					// Update existing credentials with new tokens
-					await existingCredentials.incrementalPatch({
-						access_token: credentialsData.access_token,
-						refresh_token: credentialsData.refresh_token,
-						expires_at: credentialsData.expires_at,
-						display_name: credentialsData.display_name,
-						last_access: credentialsData.last_access,
-						date_modified_gmt: credentialsData.date_modified_gmt,
-					});
-
+				const { created, linked, credentials } = await saveLoginCredentials(
+					userDB,
+					site.uuid,
+					params
+				);
+				const credentialsData = { ...params, id: parseInt(params.id, 10), stores: [] };
+				if (!created) {
 					authLogger.debug(`[stores] Updated credentials for ${credentialsData.display_name}`, {
 						context: {
 							wpUserUuid: credentialsData.uuid,
 							userId: credentialsData.id,
-							existingStores: (existingCredentials as unknown as { stores?: string[] }).stores,
+							existingStores: credentials.stores,
 						},
 					});
 				} else {
-					// Create new credentials
-					await userDB.wp_credentials.insert(sanitizeWPCredentialsData(credentialsData));
 					authLogger.debug(`[stores] Created credentials for ${credentialsData.display_name}`, {
 						context: {
 							wpUserUuid: credentialsData.uuid,
@@ -124,9 +92,6 @@ export const useLoginHandler = (
 					});
 				}
 
-				// Link credentials to site if not already linked.
-				// Atomic append — see `linkCredentialsToSite` (#902).
-				const linked = await linkCredentialsToSite(site, credentialsData.uuid);
 				if (linked) {
 					authLogger.debug(`Linked ${credentialsData.display_name} to ${site.name}`);
 				}
@@ -141,44 +106,28 @@ export const useLoginHandler = (
 				const errorMessage =
 					(err instanceof Error ? err.message : '') || 'Failed to save WordPress credentials';
 
-				// Determine error type and code based on error characteristics
-				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED; // Default for DB operations
-
-				if (err instanceof Error && err.message?.includes('missing required parameters')) {
-					errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
-				} else if (err instanceof Error && err.name === 'ValidationError') {
-					errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
-				} else if (err instanceof Error && err.name === 'RxError') {
-					// Check for specific RxDB error codes
-					switch ((err as Error & { code?: string }).code) {
-						case 'RX1':
-							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
-							break;
-						case 'RX2':
-							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
-							break;
-						case 'RX3':
-							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
-							break;
-						default:
-							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
-					}
+				// One failure, one row and one toast. An invalid login response already
+				// wrote its AUTH999 row above; anything else is the local credential write.
+				if (!isErrorReported(err)) {
+					authLogger.error(`Failed to save WordPress credentials: ${errorMessage}`, {
+						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+						showToast: true,
+						context: {
+							error: errorMessage,
+						},
+					});
 				}
 
-				authLogger.error(`Failed to save WordPress credentials: ${errorMessage}`, {
-					code: errorCode,
-					showToast: true,
-					context: {
-						error: errorMessage,
-					},
-				});
-
 				setError(errorMessage);
+				// Rethrown (marked reported) so no caller goes on to announce a renewed
+				// session or clear the auth hold for credentials that were never saved.
+				markErrorReported(err);
+				throw err;
 			} finally {
 				setIsProcessing(false);
 			}
 		},
-		[userDB.wp_credentials, site]
+		[userDB, site]
 	);
 
 	return {

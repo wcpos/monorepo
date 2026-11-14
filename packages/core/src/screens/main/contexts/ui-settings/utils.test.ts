@@ -1,4 +1,6 @@
-import { mergeWithInitalValues } from './utils';
+import { cartPositionFromProductsPosition, mergeWithInitalValues } from './utils';
+
+jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 
 describe('mergeWithInitalValues', () => {
 	it('appends missing pos-cart columns for existing settings state', async () => {
@@ -46,6 +48,9 @@ describe('mergeWithInitalValues', () => {
 
 	it('does not write state when columns are already semantically equal', async () => {
 		const currentState = {
+			sortLines: 'newest_top',
+			position: 'right',
+			openOrdersPosition: 'bottom',
 			sortBy: 'id',
 			sortDirection: 'asc',
 			autoShowReceipt: true,
@@ -171,4 +176,194 @@ describe('mergeWithInitalValues', () => {
 			disableSort: true,
 		});
 	});
+
+	it('seeds the default filter bar on a pos-products state written before the setting existed', async () => {
+		const currentState: Record<string, unknown> = { position: 'left', viewMode: 'grid' };
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+
+		await mergeWithInitalValues('pos-products', state as never);
+
+		expect(state.set).not.toHaveBeenCalledWith('position', expect.any(Function));
+		expect(currentState.filterBar).toEqual([
+			{ id: 'stock_status', type: 'pill', show: true },
+			{ id: 'featured', type: 'pill', show: true },
+			{ id: 'on_sale', type: 'pill', show: true },
+			{ id: 'categories', type: 'pill', show: true },
+			{ id: 'tags', type: 'pill', show: true },
+			{ id: 'brands', type: 'pill', show: true },
+		]);
+	});
+
+	it('appends migrated legacy quick filters when filterBar is missing', async () => {
+		const currentState: Record<string, unknown> = {
+			quickFilters: [{ id: 'legacy', label: 'Sale', kind: 'on_sale', value: '' }],
+		};
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+
+		await mergeWithInitalValues('pos-products', state as never);
+
+		expect(currentState.filterBar).toEqual(
+			expect.arrayContaining([
+				{
+					id: 'legacy',
+					type: 'quick',
+					label: 'Sale',
+					conditions: [{ field: 'on_sale', value: true }],
+				},
+			])
+		);
+	});
+
+	it('resets a position outside the enum vocabulary to the authored default', async () => {
+		const currentState: Record<string, unknown> = { position: 'top', filterBar: [] };
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+
+		await mergeWithInitalValues('pos-cart', state as never);
+
+		expect(currentState.position).toBe('right');
+	});
+
+	it('keeps a position the cashier actually chose', async () => {
+		const currentState: Record<string, unknown> = { position: 'left', filterBar: [] };
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+
+		await mergeWithInitalValues('pos-cart', state as never);
+
+		expect(currentState.position).toBe('left');
+	});
+
+	it('seeds only a missing cart position, falling back to the authored default', async () => {
+		for (const [stored, seed, expected] of [
+			[undefined, 'left', 'left'],
+			['right', 'left', 'right'],
+			[undefined, undefined, 'right'],
+		] as const) {
+			const currentState: Record<string, unknown> = { position: stored };
+			const state = {
+				get: () => currentState,
+				set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+					currentState[key] = updater(currentState[key]);
+				}),
+			};
+			await mergeWithInitalValues('pos-cart', state as never, { position: seed });
+			expect(currentState.position).toBe(expected);
+		}
+	});
+
+	it('maps the legacy products position to the opposite cart side', () => {
+		expect(cartPositionFromProductsPosition('right')).toBe('left');
+		expect(cartPositionFromProductsPosition('left')).toBe('right');
+		expect(cartPositionFromProductsPosition(undefined)).toBeUndefined();
+		expect(cartPositionFromProductsPosition('top')).toBeUndefined();
+	});
+
+	it('seeds a cart with no sort as newest at top, and keeps a stored newest_bottom', async () => {
+		// The default moved to newest_top (2026-10-12); a profile that chose or was seeded with
+		// newest_bottom keeps it — the merge fills only what is missing.
+		for (const [stored, expected] of [
+			[undefined, 'newest_top'],
+			['newest_bottom', 'newest_bottom'],
+		] as const) {
+			const currentState: Record<string, unknown> = { columns: [] };
+			if (stored) currentState.sortLines = stored;
+			const state = {
+				get: () => currentState,
+				set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+					currentState[key] = updater(currentState[key]);
+				}),
+			};
+
+			await mergeWithInitalValues('pos-cart', state as never);
+
+			expect(currentState.sortLines).toBe(expected);
+			const wrote = state.set.mock.calls.some(([key]) => key === 'sortLines');
+			expect(wrote).toBe(stored === undefined);
+		}
+	});
+
+	it('resets a browseBy outside the vocabulary to the default, categories', async () => {
+		const currentState: Record<string, unknown> = {
+			position: 'left',
+			browseBy: 'favourites',
+			filterBar: [],
+		};
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+		await mergeWithInitalValues('pos-products', state as never);
+		expect(currentState.browseBy).toBe('categories');
+	});
+
+	it('keeps a browseBy the cashier chose, and seeds categories on a state written before the setting existed', async () => {
+		const chosen: Record<string, unknown> = {
+			position: 'left',
+			browseBy: 'all',
+			filterBar: [],
+		};
+		const older: Record<string, unknown> = { position: 'left', filterBar: [] };
+		for (const currentState of [chosen, older]) {
+			const state = {
+				get: () => currentState,
+				set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+					currentState[key] = updater(currentState[key]);
+				}),
+			};
+			await mergeWithInitalValues('pos-products', state as never);
+		}
+		expect(chosen.browseBy).toBe('all');
+		expect(older.browseBy).toBe('categories');
+	});
+});
+
+// Authored status sizing must displace the legacy icon width without undoing user preferences.
+it('gives orders status room for its label while keeping stored order and visibility', async () => {
+	const current: Record<string, unknown> = {
+		columns: [
+			{ key: 'number', show: true },
+			{ key: 'status', width: 45, hideLabel: true, show: false },
+		],
+	};
+	const state = {
+		get: () => current,
+		set: async (key: string, update: (value: unknown) => unknown) => {
+			current[key] = update(current[key]);
+		},
+	};
+	await mergeWithInitalValues('orders', state as never);
+	const columns = current.columns as {
+		key: string;
+		show: boolean;
+		width?: number;
+		flex?: number;
+		hideLabel?: boolean;
+	}[];
+	expect(columns.slice(0, 2).map((c) => c.key)).toEqual(['number', 'status']);
+	expect(columns[1]).toMatchObject({ show: false, flex: 1.6, hideLabel: false });
+	expect(columns[1].width).toBeUndefined();
 });

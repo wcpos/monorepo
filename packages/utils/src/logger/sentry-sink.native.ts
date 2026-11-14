@@ -3,7 +3,12 @@ import { File, Paths } from 'expo-file-system';
 
 import { AppInfo } from '../app-info';
 import { DEFAULT_APP_SCHEME } from '../app-info/scheme';
-import { buildCaptureOptions, createPendingCaptures, scrubEvent, SENTRY_DSN } from './sentry-core';
+import {
+	buildCaptureOptions,
+	createPendingCaptures,
+	prepareEvent,
+	SENTRY_DSN,
+} from './sentry-core';
 
 import type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
 
@@ -39,7 +44,7 @@ function persistConsent(consent: TelemetryConsent): void {
 	try {
 		const marker = consentMarkerFile();
 		if (consent === 'allowed') {
-			marker.write('allowed');
+			marker.writeSync('allowed');
 		} else if (marker.exists) {
 			marker.delete();
 		}
@@ -59,7 +64,7 @@ function initialize(): void {
 		dsn: SENTRY_DSN,
 		environment: AppInfo.platform,
 		sendDefaultPii: false,
-		beforeSend: scrubEvent,
+		beforeSend: prepareEvent,
 		enableWatchdogTerminationTracking: true,
 	});
 	isInitialized = true;
@@ -67,7 +72,7 @@ function initialize(): void {
 	let id = file.exists ? file.textSync() : '';
 	if (!id) {
 		id = globalThis.crypto.randomUUID();
-		file.write(id);
+		file.writeSync(id);
 	}
 	Sentry.setUser({ id });
 }

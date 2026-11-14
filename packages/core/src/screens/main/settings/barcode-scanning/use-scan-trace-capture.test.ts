@@ -69,6 +69,15 @@ describe('useScanTraceCapture', () => {
 		expect(result.current.attempts[0][0].key).toBe('6');
 	});
 
+	it('listens on web in the capture phase, beside the detector that swallows burst keys', () => {
+		const { useHotkeys } = jest.requireMock('@wcpos/hooks/use-hotkeys');
+		renderHook(() => useScanTraceCapture());
+
+		expect(useHotkeys).toHaveBeenCalledWith('*', expect.any(Function), {
+			eventListenerOptions: { capture: true },
+		});
+	});
+
 	it('records keys from a native onKeyPress event', () => {
 		const { result } = renderHook(() => useScanTraceCapture());
 

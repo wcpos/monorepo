@@ -128,7 +128,7 @@ describe('createE2eEngineLedgerObserver', () => {
 
 		expect(JSON.parse(lines[0].slice('WCPOS_E2E_ENGINE '.length))).toMatchObject({
 			type: 'coverage.require.error',
-			errorCode: 'SYNC321',
+			errorCode: 'SYNC401',
 		});
 	});
 

@@ -23,43 +23,12 @@ export function Section({
 	last?: boolean;
 }) {
 	return (
-		<View className={`px-5 py-4 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
+		<View className={`px-4 py-4 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
 			{title ? (
 				<View className="mb-3 flex-row items-baseline justify-between">
-					{typeof title === 'string' ? (
-						<Text className="text-foreground text-sm font-semibold">{title}</Text>
-					) : (
-						title
-					)}
+					{typeof title === 'string' ? <Text variant="section">{title}</Text> : title}
 					{right}
 				</View>
-			) : null}
-			{children}
-		</View>
-	);
-}
-
-/**
- * Compact rail-style section used in the right column.
- * Smaller padding and an uppercase muted heading.
- */
-export function RailSection({
-	title,
-	children,
-	className,
-	last,
-}: {
-	title?: string;
-	children: React.ReactNode;
-	className?: string;
-	last?: boolean;
-}) {
-	return (
-		<View className={`px-4 py-3 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
-			{title ? (
-				<Text className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
-					{title}
-				</Text>
 			) : null}
 			{children}
 		</View>

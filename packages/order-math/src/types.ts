@@ -1,3 +1,5 @@
+import type { TaxStatus } from './retax-line';
+
 /** String(number) — '95.5', never '95.50'. Per-field precision: §7 of spec. */
 export type MoneyString = string;
 
@@ -105,6 +107,7 @@ export interface CouponInput {
 }
 
 export interface CouponContext {
+	readonly taxStatusFor?: (line: LineItemInput) => TaxStatus | undefined;
 	/** key = LOWERCASE code. Must contain every active coupon_lines code + every validate.codes entry. */
 	readonly coupons: ReadonlyMap<string, CouponInput>;
 	/** Directly-assigned categories per product_id (NOT enriched — enrichment is internal). */

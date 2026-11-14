@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
 import Animated, {
 	useAnimatedStyle,
 	useDerivedValue,
@@ -9,7 +8,6 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
-import { map } from 'rxjs/operators';
 import { flexRender } from '@tanstack/react-table';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -18,8 +16,9 @@ import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { TableCell, TableRow } from '@wcpos/components/table';
 import type { EngineRecord } from '@wcpos/query';
 
-import { getColumnStyle } from '../../data-table';
+import { getColumnStyle } from '../../data-table/column-style';
 import { VariationRowProvider } from './context';
+import { useRowExpanded } from './use-row-expansion';
 import { Variations } from './variations';
 
 import type { DataTableFeatures } from '../../data-table';
@@ -36,10 +35,13 @@ export function VariableProductRow({
 	item,
 	index,
 	table,
+	row,
 }: {
 	item: Row<ProductRow, DataTableFeatures>;
 	index: number;
 	table: Table<ProductRow, DataTableFeatures>;
+	/** The products page's own row (its press opens the product); without it, the plain row. */
+	row?: React.ReactNode;
 }) {
 	/**
 	 * React Compiler breaks tanstack/react-table: it caches the
@@ -48,24 +50,8 @@ export function VariableProductRow({
 	 * https://github.com/facebook/react/issues/33057
 	 */
 	'use no memo';
-	const meta = table.options.meta as
-		| {
-				expanded$: import('rxjs').Observable<Record<string, boolean>>;
-				setRowExpanded?: (rowId: string, expanded: boolean) => void;
-				variationStockStatus?: string;
-		  }
-		| undefined;
-	/**
-	 * Memoised explicitly. This component carries `'use no memo'` above, so nothing else
-	 * would: the inline `.pipe()` built a new observable every render, and
-	 * `useObservableEagerState` keys its subscription on observable identity, so every
-	 * visible variable-product row resubscribed on every render.
-	 */
-	const isExpanded$ = React.useMemo(
-		() => meta!.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[item.id])),
-		[meta, item.id]
-	);
-	const isExpanded = useObservableEagerState(isExpanded$);
+	const meta = table.options.meta;
+	const isExpanded = useRowExpanded(meta, item.id);
 
 	/**
 	 * Animation setup
@@ -112,17 +98,19 @@ export function VariableProductRow({
 	return (
 		<VirtualizedList.Item>
 			<VariationRowProvider row={item} setRowExpanded={setRowExpanded}>
-				<TableRow testID={stableId ? `data-table-row-${stableId}` : undefined} index={index}>
-					{item.getVisibleCells().map((cell: Cell<ProductRow, unknown, DataTableFeatures>) => {
-						return (
-							<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
-								<ErrorBoundary>
-									<Suspense>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Suspense>
-								</ErrorBoundary>
-							</TableCell>
-						);
-					})}
-				</TableRow>
+				{row ?? (
+					<TableRow testID={stableId ? `data-table-row-${stableId}` : undefined} index={index}>
+						{item.getVisibleCells().map((cell: Cell<ProductRow, unknown, DataTableFeatures>) => {
+							return (
+								<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
+									<ErrorBoundary>
+										<Suspense>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Suspense>
+									</ErrorBoundary>
+								</TableCell>
+							);
+						})}
+					</TableRow>
+				)}
 				<Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
 					{/*
 					 * This is a workaround to get the height of the Variations component
@@ -141,7 +129,11 @@ export function VariableProductRow({
 						}}
 					>
 						{shouldRender ? (
-							<Variations row={item} stockStatus={meta?.variationStockStatus} />
+							<Variations
+								row={item}
+								stockStatus={meta?.variationStockStatus}
+								openVariation={meta?.openVariation}
+							/>
 						) : null}
 					</ScrollView>
 				</Animated.View>

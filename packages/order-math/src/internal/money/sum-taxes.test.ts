@@ -1,6 +1,12 @@
-import { sumItemizedTaxes, sumTaxes } from './sum-taxes';
+import { sumItemizedTaxes, sumStoredLineTax, sumTaxes } from './sum-taxes';
 
 describe('Calculate Taxes', () => {
+	it('sumStoredLineTax follows the round-at-subtotal setting for stored compound rates', () => {
+		const storedPerRate = [0.816016, 0.212164, 1.071429];
+		expect(sumStoredLineTax(storedPerRate, 2, true, false)).toBe(2.1);
+		expect(sumStoredLineTax(storedPerRate, 2, true, true)).toBe(2.099609);
+	});
+
 	it('should sum taxes', () => {
 		const taxes = [
 			{ id: 1, total: 1.665 },

@@ -4,7 +4,11 @@
  *
  *  - ORDER OPEN-RECENT WINDOW SEED: orders aren't covered by the change
  *    signal, so the open/recent window is re-seeded on an interval (windowed
- *    lane, one bounded fetch — never a bulk pull; guardrail G3).
+ *    lane, one bounded fetch — never a bulk pull; guardrail G3). The same tick
+ *    re-seeds a targeted fetch of every held `pos-open` cart that has a
+ *    remoteId and no local work, so a cart the store trashed is removed here
+ *    (the targeted fetch treats an omitted id as gone) — a POS-only session
+ *    runs neither tombstone lane.
  *  - PRODUCT BROWSE-WINDOW SEED (ADR 0027 §2): so a cold grid shows products
  *    without a search, a bounded result window by the POS default catalog sort
  *    is re-seeded on an interval (windowed lane, never a bulk pull; guardrail
@@ -29,7 +33,7 @@
  */
 
 import { REFERENCE_COLLECTIONS } from '@wcpos/sync-core';
-import type { StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
+import type { OrderDocument, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 
 import {
 	censusCollectionFromQueryKey,
@@ -50,9 +54,14 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
+	seedRefundWindowLane,
+	seedTargetedOrderSchedulerTask,
 	SUPPORTED_CENSUS_COLLECTIONS,
 } from '../scheduler';
-import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
+import {
+	type QueryTotalRetryRunnerInput,
+	runQueryTotalRetryRequests,
+} from '../rx-query-total-retry-runner';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
@@ -64,6 +73,11 @@ import {
 	type MaintenanceLaneName,
 	type MaintenanceLaneRegistryEntry,
 } from './lane-registry';
+import { scopeBoundFailureStreak } from '../failure-streak';
+import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
+import { findAllUncached } from '../collections/find-all-uncached';
+import { hasPendingLocalWork } from '../write-path/local-work-guard';
+import { OPEN_CART_ORDER_STATUS } from '../write-path/open-cart-hold';
 
 import type {
 	BarcodeSelectors,
@@ -82,11 +96,14 @@ export type MaintenanceLaneReport = {
 	error?: string;
 };
 
-/** The host port the query-total retry lane drains through (host-executed fetch). */
+/** The host port the query-total retry lane drains through: a host-executed fetch on
+ * the engine's `engineRequest`, which carries the lane's label and its one deadline
+ * (`request` already names the probe itself). */
 export type QueryTotalPort = {
 	fetchWooQueryTotal: (input: {
 		request: QueryTotalWooRequest;
 		signal?: AbortSignal;
+		engineRequest: (url: string, init?: RequestInit) => Promise<Response>;
 	}) => Promise<number | null>;
 };
 
@@ -134,6 +151,7 @@ export const COVERAGE_COMPACTION_MIN_EXPIRED_DOCUMENTS = 1;
 type MaintenanceLaneDeps = {
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
+	storeIdFor?: (scopeId: string) => string | number | undefined;
 	coverageFor: (scopeId: string) => LocalCoverage | null;
 	/** The per-scope barcode carriers a scheduler pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -141,7 +159,11 @@ type MaintenanceLaneDeps = {
 	/** Namespaced read base (site.syncBaseUrl) — the drain fetchers pull through it. */
 	syncBaseUrl: string;
 	/** The engine's transport port, threaded into every drain fetcher pull. */
-	fetcher: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+	fetcher: (
+		url: string,
+		init?: { signal?: AbortSignal },
+		options?: { lane?: MaintenanceLaneName }
+	) => Promise<Response>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
 	withCollectionActivity?: <T>(
@@ -152,7 +174,8 @@ type MaintenanceLaneDeps = {
 	ownerId: () => string;
 	/** Current facade-configured record cap for scheduler data requests. */
 	pullBatchSize?: () => number | undefined;
-	queryTotal?: QueryTotalPort;
+	/** The host's port with the engine's request already handed to it. */
+	queryTotal?: Pick<QueryTotalRetryRunnerInput, 'fetchWooQueryTotal'>;
 	censusFreshForMs: number;
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
 	censusTotals: () => Promise<CensusTotals>;
@@ -179,7 +202,6 @@ type MaintenanceLaneDeps = {
 	 * maintenance/customer-trickle.ts.
 	 */
 	currentCustomerBrowseWindowKey?: () => string | null;
-	isWritePlaneOwner: () => boolean;
 	lastUserActivityMs?: () => number;
 	hostVisible?: () => boolean;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
@@ -271,6 +293,10 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	): MaintenanceLane {
 		const existenceAudit = name === 'existence-prime' || name === 'existence-reconcile';
 		let lastError: string | null = null;
+		// Failed ticks in a row for THIS lane, stamped on maintenance.lane.error: the
+		// lane re-runs on its next tick, so the log alarms only on a streak. A tick
+		// that ran resets it.
+		const failureStreaks = scopeBoundFailureStreak(deps.manager);
 		/**
 		 * A skipped tick used to be COMPLETELY silent, which is why #1318 — a lane
 		 * that ran on the bench and never in a browser — cost four live soaks and a
@@ -348,6 +374,8 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				if (starvationReservationAtMs !== null) {
 					lastRanAtMs.set(name, starvationReservationAtMs);
 				}
+				// This tick's streak instance, read once: a switch mid-tick leaves it dead.
+				const tickStreak = failureStreaks();
 				try {
 					const report = await deps.manager.runGuarded<MaintenanceLaneReport>(async (bound) => {
 						const db = deps.databaseFor(bound.scopeId);
@@ -386,7 +414,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 								signal.addEventListener('abort', abort, { once: true });
 							}
 							try {
-								return await deps.fetcher(url, { ...init, signal: combined.signal });
+								return await deps.fetcher(
+									url,
+									{ ...init, signal: combined.signal },
+									{ lane: name }
+								);
 							} finally {
 								ticketSignal?.removeEventListener('abort', abort);
 								signal.removeEventListener('abort', abort);
@@ -462,6 +494,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						return { lane: name, status: 'ran' };
 					});
 					lastError = null;
+					if (report.status === 'ran') tickStreak.reset();
 					return report;
 				} catch (error) {
 					if (
@@ -474,11 +507,18 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					}
 					const message = error instanceof Error ? error.message : String(error);
 					lastError = message;
+					const status = requestStatusOf(error);
+					// Only a failure no other row reported counts toward the local-crash streak.
+					const consecutiveFailures = isReportedRequestStatus(status) ? 0 : tickStreak.fail();
 					deps.diagnostics({
 						type: 'maintenance.lane.error',
 						level: 'error',
 						message,
-						fields: { lane: name },
+						fields: {
+							lane: name,
+							...(status !== undefined ? { status } : {}),
+							consecutiveFailures,
+						},
 					});
 					return { lane: name, status: 'error', error: message };
 				}
@@ -499,7 +539,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	};
 
+	// Drains in a row with a task failure no other row reported (a local failure
+	// after the fetch, or a poison 2xx): the failed tasks retry after 30s, so one
+	// is an attempt, and a streak is the only verdict such a failure gets.
+	const unreportedTaskFailureStreaks = scopeBoundFailureStreak(deps.manager);
 	const schedulerDrain = lane('scheduler-drain', async (db, _scopeId, signal, fetcher) => {
+		const unreportedTaskFailures = unreportedTaskFailureStreaks();
 		const coverage = deps.coverageFor(_scopeId);
 		if (!coverage) return { summary: null };
 		// A reader, not a snapshot: this drain runs many tasks and a config poll can
@@ -509,6 +554,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				? undefined
 				: () => deps.barcodeSelectorsFor!(_scopeId) ?? undefined;
 		const result = await runEngineSchedulerDrain({
+			scope: { storeId: deps.storeIdFor?.(_scopeId) },
 			db: db as unknown as SchedulerDrainDatabase,
 			coverage,
 			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
@@ -539,18 +585,28 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.failureLost > 0 ||
 			result.renewalLost > 0;
 		if (!hasActivity) return { summary: null };
-		// Only an actual fetch failure is an ERROR — including `failureLost`, where the
-		// fetch threw and only the failure write was lost. `completionLost`/`renewalLost`
-		// mean another owner took the row mid-flight: a contention release, routine on a
-		// slow server. Logging them red put "could not load" rows in front of cashiers
-		// for drains that lost a benign race (2026-08-12 HAR), so they are warnings.
+		const consecutiveUnreportedFailures =
+			result.failedUnreported > 0 ? unreportedTaskFailures.fail() : 0;
+		if (result.failedUnreported === 0 && result.succeeded + result.failed > 0) {
+			unreportedTaskFailures.reset();
+		}
+		// A failed task (including `failureLost`, where the fetch threw and only the
+		// failure write was lost) is a WARNING here, never an error. This row is an
+		// aggregate: counters only, no cause. Each failure is already reported on its
+		// own — the transport row carries the status and path, and a declarer's
+		// `coverage.require.error` carries its requirement — and the Sentry sink
+		// captures every error-level log, so an error-level summary sent each failure
+		// to Sentry a second (or third) time as an unactionable SYNC321.
+		// `completionLost`/`renewalLost` mean another owner took the row mid-flight: a
+		// contention release, routine on a slow server (2026-08-12 HAR), also a warning.
 		// `claimLost` stays INFO: the row was never claimed, so no work was attempted.
 		const drainLevel =
-			result.failed > 0 || result.failureLost > 0
-				? 'error'
-				: result.completionLost > 0 || result.renewalLost > 0
-					? 'warn'
-					: 'info';
+			result.failed > 0 ||
+			result.failureLost > 0 ||
+			result.completionLost > 0 ||
+			result.renewalLost > 0
+				? 'warn'
+				: 'info';
 		deps.diagnostics({
 			type: 'queue.scheduler.drain',
 			level: drainLevel,
@@ -558,6 +614,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				scanned: result.scanned,
 				succeeded: result.succeeded,
 				failed: result.failed,
+				...(result.failedUnreported > 0
+					? { failedUnreported: result.failedUnreported, consecutiveUnreportedFailures }
+					: {}),
 				claimLost: result.claimLost,
 				completionLost: result.completionLost,
 				failureLost: result.failureLost,
@@ -585,7 +644,32 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			// manual-mode harnesses advance one deterministic clock).
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 		});
-		return seedSummary('Orders open-recent window seed (windowed, not a bulk pull)', result);
+		// Uncached: a bare `.exec()` every tick would pin this query and its cart documents in
+		// RxDB's query cache with no subscriber (the #2541 background-read class).
+		const heldOpenCarts = await findAllUncached(db.collections.orders, {
+			selector: { status: OPEN_CART_ORDER_STATUS },
+		});
+		const remoteIds = heldOpenCarts
+			.map((doc): OrderDocument => doc.toJSON())
+			.flatMap((doc) => (doc.remoteId !== null && !hasPendingLocalWork(doc) ? [doc.remoteId] : []));
+		if (remoteIds.length > 0) {
+			const seeded = await seedTargetedOrderSchedulerTask({
+				remoteIds,
+				priority: ORDER_OPEN_RECENT_PRIORITY,
+				completedDedupeForMs: 0,
+				database: db,
+				...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
+			});
+			// Fold the second seed into the summary like the reference lane does: a claim lost on
+			// it must raise the level, and the window seed alone usually dedupes to nothing.
+			result.inserted += seeded.inserted;
+			result.requeued += seeded.requeued;
+			result.claimLost += seeded.claimLost;
+		}
+		return seedSummary(
+			`Orders open-recent window seed (windowed, not a bulk pull); queued a check of ${remoteIds.length} held open carts`,
+			result
+		);
 	});
 
 	const productBrowseWindowSeed = lane('product-browse-window-seed', async (db) => {
@@ -603,6 +687,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	});
 
 	const referenceSeed = lane('reference-seed', async (db) => {
+		const nowMs = now();
+		const result = await seedRefundWindowLane({
+			database: db,
+			nowMs,
+			completedDedupeForMs: REFERENCE_SAFETY_REFRESH_MS,
+		});
 		const counts = await Promise.all(
 			REFERENCE_COLLECTIONS.map((collection) => db.collections[collection].count().exec())
 		);
@@ -615,10 +705,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		});
 		const collections = [...materialized, ...backfill];
 		if (collections.length === 0) {
-			return { summary: null, status: 'skipped', reason: 'no reference collections need seeding' };
+			return seedSummary('Refund history refresh', result);
 		}
-		const result = { inserted: 0, requeued: 0, claimLost: 0 };
-		const nowMs = now();
+
 		for (const [group, completedDedupeForMs] of [
 			[materialized, REFERENCE_SAFETY_REFRESH_MS],
 			[backfill, REFERENCE_REFRESH_DEDUPE_MS],
@@ -634,7 +723,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.requeued += seeded.requeued;
 			result.claimLost += seeded.claimLost;
 		}
-		const label = `Reference refresh (categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
+		const label = `Reference refresh (refunds + categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
 		return seedSummary(label, result);
 	});
 
@@ -751,6 +840,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				// a forced check is a direct user action, so its failure must surface as a
 				// lane error (status + lastError + events), not a healthy-looking count.
 				if ((forced !== undefined || tick.forceAllCensus) && result.failed > 0) {
+					if (result.timedOut === result.failed && result.lastTimeout) throw result.lastTimeout;
 					throw new Error(
 						forced === undefined
 							? 'Census refresh failed during full refresh'
@@ -772,9 +862,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			})
 		: null;
 	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const result = await tickCustomerTrickle({
 			baseUrl: deps.syncBaseUrl,
 			database: db,
@@ -802,9 +889,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	});
 	const productTrickle = lane('product-trickle', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const barcodeSelectors = () => deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
 		const result = await tickProductTrickle({
 			baseUrl: deps.syncBaseUrl,
@@ -837,9 +921,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	});
 	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
-		if (!deps.isWritePlaneOwner()) {
-			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
-		}
 		const barcodeSelectors: BarcodeSelectorsReader | undefined =
 			deps.barcodeSelectorsFor === undefined
 				? undefined

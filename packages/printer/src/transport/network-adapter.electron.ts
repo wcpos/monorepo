@@ -19,6 +19,9 @@ const eposPortByHost = new Map<string, number>();
 export class NetworkAdapter implements PrinterTransport {
 	readonly name = 'network-electron';
 	private resolvedEposPort?: Promise<number | null>;
+	// A miss is held for the job that probed it, so supportsMarkup() and the print that follows
+	// share one probe sequence (four 4 s probes, not eight). It never outlives the job.
+	private holdsEposMiss = false;
 
 	constructor(
 		private host: string,
@@ -26,12 +29,20 @@ export class NetworkAdapter implements PrinterTransport {
 		private vendor?: string
 	) {}
 
+	/**
+	 * Job boundary (PrinterService calls it as each job takes this transport): drop a miss a
+	 * previous job probed but never printed through, so every job probes afresh.
+	 */
+	beginJob(): void {
+		this.forgetEposMiss();
+	}
+
 	async printRaw(data: Uint8Array): Promise<void> {
 		const eposPort = await this.resolveEposPort();
 		if (eposPort != null) {
 			return new EpsonEposAdapter(this.host, eposPort).printRaw(data);
 		}
-		this.resolvedEposPort = undefined;
+		this.forgetEposMiss();
 
 		await ipcPrintRaw(
 			'print-raw-tcp',
@@ -59,13 +70,19 @@ export class NetworkAdapter implements PrinterTransport {
 
 	async printMarkup(job: MarkupPrintJob): Promise<void> {
 		const eposPort = await this.resolveEposPort();
-		if (eposPort == null) throw new Error('markup printing is not available on this transport');
+		if (eposPort == null) {
+			this.forgetEposMiss();
+			throw new Error('markup printing is not available on this transport');
+		}
 		return new EpsonEposAdapter(this.host, eposPort).printMarkup(job);
 	}
 
 	private resolveEposPort(): Promise<number | null> {
 		if (this.vendor !== 'epson') return Promise.resolve(null);
 		if (EPOS_HTTP_PORTS.includes(this.port)) return Promise.resolve(this.port);
+		if (this.holdsEposMiss) {
+			printerLogger.info('Reusing this job’s ePOS probe miss', { context: { host: this.host } });
+		}
 		this.resolvedEposPort ??= this.probeEposPort();
 		return this.resolvedEposPort;
 	}
@@ -83,9 +100,16 @@ export class NetworkAdapter implements PrinterTransport {
 			eposPortByHost.set(this.host, port);
 			printerLogger.info('Using freshly probed ePOS port', { context: { host: this.host, port } });
 		}
-		// Never remember a miss (roadmap#136 gotcha #5): the next call probes again.
-		else this.resolvedEposPort = undefined;
+		// Never remember a miss across jobs (roadmap#136 gotcha #5): it is held only until this job
+		// prints or the next job begins, and then the next job probes again.
+		else this.holdsEposMiss = true;
 		return port;
+	}
+
+	private forgetEposMiss(): void {
+		if (!this.holdsEposMiss) return;
+		this.holdsEposMiss = false;
+		this.resolvedEposPort = undefined;
 	}
 
 	async printHtml(_html: string): Promise<void> {

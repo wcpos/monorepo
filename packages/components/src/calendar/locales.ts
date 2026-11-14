@@ -1,6 +1,7 @@
-import { format } from 'date-fns';
-import * as Locales from 'date-fns/locale';
+import { format } from 'date-fns/format';
 import { LocaleConfig } from 'react-native-calendars';
+
+import { loadDateFnsLocale } from '@wcpos/utils/date-fns-locale';
 
 import type { Locale } from 'date-fns/locale';
 
@@ -38,8 +39,13 @@ const getToday = (locale: Locale) => {
 };
 
 // Function to update LocaleConfig
-export const updateLocaleConfig = (localeCode: string) => {
-	const locale = localeCode in Locales ? Locales[localeCode as keyof typeof Locales] : Locales.enUS;
+export const updateLocaleConfig = async (
+	localeCode: string,
+	isCurrent: () => boolean = () => true
+): Promise<boolean> => {
+	const locale = await loadDateFnsLocale(localeCode);
+	// A newer load or an unmount supersedes this one.
+	if (!isCurrent()) return false;
 
 	const config: CalendarLocaleConfig = {
 		monthNames: getMonthNames(locale),
@@ -53,4 +59,5 @@ export const updateLocaleConfig = (localeCode: string) => {
 		[localeCode]: config,
 	};
 	LocaleConfig.defaultLocale = localeCode;
+	return true;
 };

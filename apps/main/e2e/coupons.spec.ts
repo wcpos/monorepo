@@ -25,13 +25,7 @@ test.describe('Coupons Page (Pro)', () => {
 		test.skip(variant !== 'pro', 'Coupons page requires Pro');
 	});
 
-	test('should navigate to Coupons page and see coupon list', async ({ posPage: page }) => {
-		await navigateToPage(page, 'coupons');
-		const screen = visibleCouponsScreen(page);
-		await expect(screen.getByTestId('search-coupons')).toBeVisible({ timeout: 30_000 });
-	});
-
-	test('should show coupon data or empty state', async ({ posPage: page }) => {
+	test('Coupons page initial state', async ({ posPage: page }) => {
 		await navigateToPage(page, 'coupons');
 		const screen = visibleCouponsScreen(page);
 		await expect(screen.getByTestId('search-coupons')).toBeVisible({ timeout: 30_000 });
@@ -52,6 +46,8 @@ test.describe('Coupons Page (Pro)', () => {
 				{ timeout: 30_000 }
 			)
 			.toBeTruthy();
+
+		await expect(screen.getByTestId('coupons-add-button')).toBeVisible();
 	});
 
 	test('should search coupons', async ({ posPage: page }) => {
@@ -110,14 +106,6 @@ test.describe('Coupons Page (Pro)', () => {
 		// evidence that filtering happened; this only guards "must never grow".
 		await expect.poll(loadedRows, { timeout: 15_000 }).toBeLessThanOrEqual(shownBefore);
 	});
-
-	test('should have add coupon button on Coupons page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'coupons');
-		const screen = visibleCouponsScreen(page);
-		await expect(screen.getByTestId('search-coupons')).toBeVisible({ timeout: 30_000 });
-
-		await expect(screen.getByTestId('coupons-add-button')).toBeVisible();
-	});
 });
 
 /**
@@ -127,11 +115,6 @@ test.describe('Coupons Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
-	});
-
-	test('should show upgrade overlay on Coupons', async ({ posPage: page }) => {
-		await navigateToPage(page, 'coupons');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {

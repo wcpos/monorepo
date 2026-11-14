@@ -117,6 +117,62 @@ describe('hydrateResponse', () => {
 		await expect(hydrated.json()).rejects.toThrow();
 	});
 
+	// expo's Android fetch (57.0.14, NativeResponse.onResponse) marks the body
+	// COMPLETE after a cancel, so text() resolves with whatever had arrived —
+	// usually nothing — instead of rejecting. A search superseded after its
+	// headers then failed JSON.parse ("Unexpected end of input") and was logged
+	// as SYNC321, never recognised as the cancellation it was.
+	it('reports a body cut short by our own abort as the abort, not a parse error', async () => {
+		const controller = new AbortController();
+		const reason = new DOMException('Requirement released during drain', 'AbortError');
+		controller.abort(reason);
+		const response = new Response('', { status: 200 });
+
+		const hydrated = await hydrateResponse(response, {
+			envelopeRequested: true,
+			signal: controller.signal,
+		});
+
+		expect(hydrated.status).toBe(200);
+		await expect(hydrated.json()).rejects.toBe(reason);
+	});
+
+	it('names an abort without a reason as an AbortError (React Native drops abort reasons)', async () => {
+		// RN's abort-controller polyfill ignores reasons, so on device the signal is
+		// aborted with `reason` undefined — the branch that builds the AbortError.
+		const signal = { aborted: true, reason: undefined } as unknown as AbortSignal;
+		const response = new Response('[{"id":', { status: 200 });
+
+		const hydrated = await hydrateResponse(response, { envelopeRequested: true, signal });
+
+		const failure = await hydrated.json().catch((error: unknown) => error);
+		expect(failure).toBeInstanceOf(Error);
+		expect(failure).toMatchObject({ name: 'AbortError' });
+	});
+
+	it('keeps a parse failure a parse failure when nothing aborted the request', async () => {
+		const controller = new AbortController();
+		const response = new Response('', { status: 200 });
+
+		const hydrated = await hydrateResponse(response, {
+			envelopeRequested: true,
+			signal: controller.signal,
+		});
+
+		await expect(hydrated.json()).rejects.toBeInstanceOf(SyntaxError);
+	});
+
+	it('serves a complete body even when the signal aborted after it arrived', async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const hydrated = await hydrateResponse(enveloped({ total: 1 }), {
+			envelopeRequested: true,
+			signal: controller.signal,
+		});
+
+		expect(await hydrated.json()).toEqual([{ id: 7 }]);
+	});
+
 	it('drops a malformed validator instead of rejecting the response', async () => {
 		const response = enveloped({ total: 12, validator: 'bad\nvalidator' });
 

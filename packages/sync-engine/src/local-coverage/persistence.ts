@@ -2,6 +2,7 @@ import { createRevision, now } from 'rxdb/plugins/utils';
 
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
+import { findAllUncached } from '../collections/find-all-uncached';
 import { yieldToEventLoop } from '../event-loop-yield';
 import {
 	buildCoverageDocumentsFromQueryResult,
@@ -481,12 +482,14 @@ export class RxCoverageRepository {
 
 	async readCoverageDocuments(): Promise<PersistedCoverageDocumentSet> {
 		const [records, lanes] = await Promise.all([
-			this.coverageRecords
-				.find({ selector: {}, sort: [{ collectionName: 'asc' }, { documentId: 'asc' }] })
-				.exec(),
-			this.coverageLanes
-				.find({ selector: {}, sort: [{ collectionName: 'asc' }, { queryKey: 'asc' }] })
-				.exec(),
+			findAllUncached(this.coverageRecords, {
+				selector: {},
+				sort: [{ collectionName: 'asc' }, { documentId: 'asc' }],
+			}),
+			findAllUncached(this.coverageLanes, {
+				selector: {},
+				sort: [{ collectionName: 'asc' }, { queryKey: 'asc' }],
+			}),
 		]);
 
 		return {

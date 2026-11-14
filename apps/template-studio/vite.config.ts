@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import react from '@vitejs/plugin-react';
@@ -11,14 +10,15 @@ import {
 	shouldForwardCookies,
 } from './scripts/studio-security';
 import { sendRawTcp } from './scripts/raw-tcp-print';
-import { resolveDefaultWooCommercePosRoot } from './scripts/studio-paths';
+import {
+	galleryRegistryPath,
+	galleryTemplatesDir,
+	monorepoRoot as repoRoot,
+	wooCommercePosRoot,
+} from './scripts/studio-paths';
 import { appendDiagnosticTemplates } from './src/diagnostic-templates';
 import { listBundledTemplates } from './src/template-loader';
 
-const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const defaultWooCommercePosRoot = resolveDefaultWooCommercePosRoot(repoRoot);
-const wooCommercePosRoot = process.env.WCPOS_PLUGIN_ROOT ?? defaultWooCommercePosRoot;
-const galleryTemplatesDir = path.join(wooCommercePosRoot, 'templates/gallery');
 const wpProxyTarget = process.env.WCPOS_STUDIO_WP_URL ?? 'http://localhost:8888';
 const wpProxyOrigin = new URL(wpProxyTarget).origin;
 const allowedStoreOrigins = allowedOriginsFromEnv(
@@ -32,13 +32,14 @@ interface HttpStatusError extends Error {
 	statusCode?: number;
 }
 
+/** Provides Template Studio's local data, WordPress preview, and printing routes. */
 function templateStudioPlugin(): Plugin {
 	return {
 		name: 'wcpos-template-studio-data',
 		configureServer(server) {
-			server.watcher.add(galleryTemplatesDir);
+			server.watcher.add([galleryTemplatesDir, galleryRegistryPath]);
 			server.watcher.on('change', (file) => {
-				if (file.startsWith(galleryTemplatesDir)) {
+				if (file.startsWith(galleryTemplatesDir) || file === galleryRegistryPath) {
 					server.ws.send({ type: 'full-reload' });
 				}
 			});
@@ -201,6 +202,9 @@ function readJsonBody(
 }
 
 export default defineConfig({
+	define: {
+		'import.meta.env.WCPOS_STUDIO_WP_ORIGIN': JSON.stringify(wpProxyOrigin),
+	},
 	resolve: {
 		alias: {
 			'@wcpos/receipt-renderer/render-template': fileURLToPath(

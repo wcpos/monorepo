@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-type TemporaryOrderDocument = import('@wcpos/database').TemporaryOrderDocument;
+type TemporaryOrderDocument = import('@wcpos/query/temporary-order').TemporaryOrderRecord;
 type EngineOrderRecord = import('@wcpos/query').EngineRecord<'orders'>;
 type CurrentOrderRxDocument = EngineOrderRecord | TemporaryOrderDocument;
 
@@ -10,6 +10,11 @@ export type OpenOrderHit = { id: string; record: EngineOrderRecord };
 export interface CurrentOrderContextProps {
 	currentOrderRecord: CurrentOrderRecord;
 	openOrders: OpenOrderHit[];
+	/**
+	 * Whose open orders these are (cashier, store, register). A count that differs because
+	 * the scope changed is not a change in the count: the strip's badge keys its beat on it.
+	 */
+	openOrdersScope: string;
 	setCurrentOrderID: (id: string) => void;
 }
 
@@ -61,6 +66,9 @@ export const useCurrentOrderRecord = (): CurrentOrderRecord => {
 };
 
 export interface CurrentOrderActions {
+	/** Selected ID, even after its record leaves the open-orders query. */
+	getCurrentOrderID: () => string | undefined;
+	/** Writable order: the draft while the displayed paid sale is finishing. */
 	getCurrentOrderRecord: () => CurrentOrderRecord;
 	setCurrentOrderID: (id: string) => void;
 }

@@ -9,7 +9,7 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 const ALLOWED_REST_PREFIXES = ['/wcpos/v1/', '/wc/v3/', '/wp/v2/'];
 const MAX_RESPONSE_LENGTH = 1024 * 1024;
 // The host owns authentication; a page may never set or override these.
-const BLOCKED_REQUEST_HEADERS = ['authorization', 'cookie', 'x-wcpos', 'host'];
+const BLOCKED_REQUEST_HEADERS = ['authorization', 'cookie', 'x-wcpos', 'host', 'x-wcpos-instance'];
 
 // Validated after percent-decoding, not by prefix alone: a page holding the proxy must not be
 // able to walk out of the allowed REST namespaces with dot segments or delimiters, encoded or not.

@@ -15,12 +15,7 @@ export function EditableDate({
 	const item = row.original.record;
 	const dateExpiresGmt =
 		useRecordField(row.original.record, ({ payload }) => payload.date_expires_gmt) ?? null;
-	const meta = table.options.meta as unknown as {
-		onChange: (arg: {
-			document: EngineRecord<'coupons'>;
-			changes: Record<string, unknown>;
-		}) => void;
-	};
+	const commit = table.options.meta?.commit;
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 
@@ -28,7 +23,7 @@ export function EditableDate({
 		<CapabilityTooltip show={!readOnly && !caps.canEditCoupons} hint="editCoupons">
 			<DatePickerInput
 				value={dateExpiresGmt}
-				onChange={(val) => meta.onChange({ document: item, changes: { date_expires_gmt: val } })}
+				onChange={(val) => commit?.({ document: item, changes: { date_expires_gmt: val } })}
 				disabled={readOnly || !caps.canEditCoupons}
 			/>
 		</CapabilityTooltip>

@@ -1,11 +1,13 @@
 import round from 'lodash/round';
 
 import { calculateTaxes } from '../money/calculate-taxes';
-import { roundHalfUp, roundTaxTotal } from '../money/precision';
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../money/precision';
 import { getLineItemTaxStatus } from '../lines/pos-data';
 import { normalizeTaxClass } from '../tax-class';
 
 import type { PerItemDiscount } from './discount';
+import type { LineItemInput } from '../../types';
+import type { TaxStatus } from '../../retax-line';
 
 export interface CouponLineItem {
 	product_id: number;
@@ -318,7 +320,8 @@ export function computeDiscountedLineItems<
 /**
  * Calculate the coupon_line discount and discount_tax split.
  *
- * Expects ex-tax discount amounts (use convertDiscountsToExTax first).
+ * Expects discounts in the store's price basis: inclusive when pricesIncludeTax
+ * is true, ex-tax otherwise, matching WC_Abstract_Order::set_coupon_discount_amounts.
  * Tax is calculated per-item using each line item's tax class, then summed.
  *
  * When taxRoundAtSubtotal is false (default), each item's tax is rounded to dp
@@ -327,13 +330,17 @@ export function computeDiscountedLineItems<
  */
 export function calculateCouponDiscountTaxSplit(
 	perItemDiscounts: PerItemDiscount[],
-	lineItems: {
-		product_id?: number | null;
-		tax_class?: string | null;
-		tax_status?: string | null;
+	lineItems: LineItemInput[],
+	taxRates: {
+		id: number;
+		rate: string;
+		compound: boolean;
+		order: number;
+		class?: string;
+		priority?: number;
 	}[],
-	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[],
 	options?: {
+		statusOf?: (line: LineItemInput) => TaxStatus;
 		pricesIncludeTax?: boolean;
 		taxRoundAtSubtotal?: boolean;
 		dp?: number;
@@ -357,7 +364,8 @@ export function calculateCouponDiscountTaxSplit(
 		// WC: skip non-taxable items (tax_status !== 'taxable'). For product line
 		// items tax_status lives in _woocommerce_pos_data, so read it from there
 		// rather than a (non-existent) top-level field.
-		const taxStatus = getLineItemTaxStatus(lineItem);
+		const taxStatus =
+			lineItem && options?.statusOf ? options.statusOf(lineItem) : getLineItemTaxStatus(lineItem);
 		if (taxStatus !== 'taxable') {
 			totalDiscount += entry.discount;
 			continue;
@@ -369,14 +377,16 @@ export function calculateCouponDiscountTaxSplit(
 		if (applicableRates.length > 0) {
 			const taxResult = calculateTaxes({
 				amount: entry.discount,
-				rates: applicableRates as {
-					id: number;
-					rate: string;
-					compound: boolean;
-					order: number;
-				}[],
-				amountIncludesTax: false,
+				rates: applicableRates.map((r) => ({
+					id: r.id,
+					rate: r.rate,
+					compound: r.compound,
+					order: r.order,
+					priority: r.priority,
+				})),
+				amountIncludesTax: pricesIncludeTax,
 				dp,
+				perRatePrecision: getRoundingPrecision(dp),
 			});
 
 			// WC rounds per-item tax to dp when not rounding at subtotal level.
@@ -393,7 +403,7 @@ export function calculateCouponDiscountTaxSplit(
 	}
 
 	return {
-		discount: String(round(totalDiscount, 6)),
+		discount: String(round(totalDiscount - (pricesIncludeTax ? totalDiscountTax : 0), 6)),
 		discount_tax: String(round(totalDiscountTax, 6)),
 	};
 }

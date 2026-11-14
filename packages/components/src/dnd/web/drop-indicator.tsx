@@ -42,7 +42,7 @@ export function DropIndicator({ edge, gap }: { edge: Edge; gap: string }) {
 	return (
 		<div
 			style={edgeStyleMap[edge]}
-			className={`pointer-events-none absolute z-10 box-border bg-blue-700 before:absolute before:h-[8px] before:w-[8px] before:rounded-full before:border-[2px] before:border-solid before:border-blue-700 before:content-[''] ${orientationStyles[orientation]} ${edgeClassMap[edge]}`}
+			className={`bg-primary before:border-primary pointer-events-none absolute z-10 box-border before:absolute before:h-[8px] before:w-[8px] before:rounded-full before:border-[2px] before:border-solid before:content-[''] ${orientationStyles[orientation]} ${edgeClassMap[edge]}`}
 		></div>
 	);
 }

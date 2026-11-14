@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { StorageOutageBanner } from './storage-outage-banner';
+import { StorageOutageBanner } from '../components/storage-outage-banner';
 
 const mockPush = jest.fn();
 const mockReloadApp = jest.fn();
@@ -74,3 +74,18 @@ describe('StorageOutageBanner', () => {
 		expect(mockReloadApp).toHaveBeenCalledTimes(1);
 	});
 });
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: () => null }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: React.PropsWithChildren<{ onPress: () => void; testID?: string }>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+}));

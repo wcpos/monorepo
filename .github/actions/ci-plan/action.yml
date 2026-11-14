@@ -5,6 +5,9 @@ inputs:
     description: Pull request base commit SHA
     required: false
 outputs:
+  gallery:
+    description: Whether the gallery shoot should run
+    value: ${{ steps.plan.outputs.gallery }}
   lint:
     description: Whether lint should run
     value: ${{ steps.plan.outputs.lint }}

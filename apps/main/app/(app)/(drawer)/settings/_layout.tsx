@@ -4,7 +4,7 @@ import { Stack } from 'expo-router';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
-export const unstable_settings = { initialRouteName: '(pages)' };
+export const unstable_settings = { anchor: '(pages)' };
 
 export default function SettingsStack() {
 	const screenBackgroundColor = useNavigationBackground();

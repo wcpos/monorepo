@@ -125,8 +125,11 @@ async function insertBornLocalOrder(
 	const scope = engine.active();
 	if (!scope) throw new Error('live gate has no active engine scope');
 	await scope.database.collections.orders.insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: recordId,
 		remoteId: null,
+		remoteKey: '',
 		number: '',
 		dateCreatedGmt: String(payload['date_created_gmt'] ?? ''),
 		status: String(payload['status'] ?? ''),

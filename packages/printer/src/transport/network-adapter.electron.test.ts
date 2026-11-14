@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NetworkAdapter } from './network-adapter.electron';
+import { printerLogger } from '../logger';
 
 const {
 	eposConstructorMock,
@@ -115,5 +116,91 @@ describe('Electron NetworkAdapter ePOS routing', () => {
 		await expect(
 			adapter.printMarkup({ template: '<receipt/>', data: {}, options: {} })
 		).rejects.toThrow('markup printing is not available on this transport');
+		expect(probeEposEndpointMock).toHaveBeenCalledTimes(1);
+	});
+});
+
+// PrinterService asks supportsMarkup() and then prints in the same job; with four 4 s probes a
+// re-probe there doubled a missing ePOS endpoint's wait to ~32 s before raw bytes went out.
+describe('Electron NetworkAdapter ePOS probe scope', () => {
+	beforeEach(() => {
+		eposConstructorMock.mockClear();
+		eposPrintRawMock.mockReset().mockResolvedValue(undefined);
+		eposPrintMarkupMock.mockReset().mockResolvedValue(undefined);
+		ipcPrintRawMock.mockReset().mockResolvedValue(undefined);
+		probeEposEndpointMock.mockReset();
+	});
+
+	async function receiptJob(adapter: NetworkAdapter, data: Uint8Array) {
+		adapter.beginJob();
+		if (await adapter.supportsMarkup()) {
+			await adapter.printMarkup({ template: '<receipt/>', data: {}, options: {} });
+		} else {
+			await adapter.printRaw(data);
+		}
+	}
+
+	it('probes a missing ePOS endpoint once for supportsMarkup() then printRaw() in one job', async () => {
+		probeEposEndpointMock.mockResolvedValue(null);
+		const infoSpy = vi.spyOn(printerLogger, 'info');
+		const adapter = new NetworkAdapter('one-job-miss.test', 9100, 'epson');
+
+		await receiptJob(adapter, new Uint8Array([6]));
+
+		expect(probeEposEndpointMock).toHaveBeenCalledTimes(1);
+		expect(ipcPrintRawMock).toHaveBeenCalledTimes(1);
+		expect(ipcPrintRawMock).toHaveBeenCalledWith(
+			'print-raw-tcp',
+			expect.objectContaining({ host: 'one-job-miss.test', port: 9100 }),
+			expect.any(String)
+		);
+		expect(infoSpy).toHaveBeenCalledWith('Reusing this job’s ePOS probe miss', {
+			context: { host: 'one-job-miss.test' },
+		});
+		infoSpy.mockRestore();
+	});
+
+	it('probes again on the next job: a miss is never remembered across jobs', async () => {
+		probeEposEndpointMock.mockResolvedValue(null);
+		const adapter = new NetworkAdapter('next-job-miss.test', 9100, 'epson');
+
+		await receiptJob(adapter, new Uint8Array([7]));
+		await receiptJob(adapter, new Uint8Array([8]));
+
+		expect(probeEposEndpointMock).toHaveBeenCalledTimes(2);
+		expect(ipcPrintRawMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('forgets a miss from a job that never printed when the next job begins', async () => {
+		probeEposEndpointMock.mockResolvedValueOnce(null).mockResolvedValueOnce(8008);
+		const adapter = new NetworkAdapter('abandoned-job.test', 9100, 'epson');
+
+		// A job that asked, then failed to encode, never reaches printRaw.
+		adapter.beginJob();
+		expect(await adapter.supportsMarkup()).toBe(false);
+
+		// The printer came back between jobs: the next job must see it, not the old miss.
+		await receiptJob(adapter, new Uint8Array([9]));
+
+		expect(probeEposEndpointMock).toHaveBeenCalledTimes(2);
+		expect(eposPrintMarkupMock).toHaveBeenCalledTimes(1);
+		expect(ipcPrintRawMock).not.toHaveBeenCalled();
+	});
+
+	it('keeps a successful probe across jobs', async () => {
+		probeEposEndpointMock.mockResolvedValue(8008);
+		const adapter = new NetworkAdapter('success-across-jobs.test', 9100, 'epson');
+
+		await receiptJob(adapter, new Uint8Array([10]));
+		await receiptJob(adapter, new Uint8Array([11]));
+		await receiptJob(
+			new NetworkAdapter('success-across-jobs.test', 9100, 'epson'),
+			new Uint8Array([12])
+		);
+
+		expect(probeEposEndpointMock).toHaveBeenCalledTimes(1);
+		expect(eposConstructorMock).toHaveBeenCalledWith('success-across-jobs.test', 8008);
+		expect(eposPrintMarkupMock).toHaveBeenCalledTimes(3);
+		expect(ipcPrintRawMock).not.toHaveBeenCalled();
 	});
 });

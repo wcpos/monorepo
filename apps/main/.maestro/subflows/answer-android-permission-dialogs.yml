@@ -1,0 +1,53 @@
+appId: com.wcpos.main.dev
+# Maestro requires the config section in every flow file, subflows included
+# (see ensure-pos-ready.yml).
+---
+# Answer the runtime-permission dialogs the app raises on its first POS mount.
+#
+# On `next` the Stripe Terminal bridge mounts with the POS and asks for
+# location, then Nearby devices (BLUETOOTH_CONNECT/SCAN, API >= 31), whenever
+# the store advertises Stripe Terminal
+# (apps/main/lib/payment-drivers/stripe-terminal/bridge.tsx). Android
+# relaunches skip `launchApp` and its `pm grant` pass (README §3 rule 10), so
+# nothing pre-grants them. Unanswered, the dialog comes back on every cold
+# start and covers the POS: run 36898140001 failed both Android lanes on
+# `filter-pill-remove-stock_status`, which was visible to the `when` and then
+# hidden by the dialog 0.2-0.4 s later. A grant survives `stopApp`, so one
+# answer here, right after the first POS mount, holds for the rest of the suite.
+#
+# These are system buttons, not app UI: no testID exists, so they are selected
+# by the permission controller's text on the en-US emulator. `main` has no
+# payment drivers and never prompts; there the wait below is a single 10 s
+# no-op on Android.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          visible:
+            text: 'While using the app'
+          timeout: 10000
+          optional: true
+      - runFlow:
+          when:
+            visible:
+              text: 'While using the app'
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E answering the Android location permission dialog')}"
+            - tapOn:
+                text: 'While using the app'
+            # Nearby devices follows in the same request; SCAN shares
+            # CONNECT's group, so one Allow answers both.
+            - extendedWaitUntil:
+                visible:
+                  text: 'Allow'
+                timeout: 10000
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    text: 'Allow'
+                commands:
+                  - evalScript: "${console.log('WCPOS_E2E answering the Android nearby-devices permission dialog')}"
+                  - tapOn:
+                      text: 'Allow'

@@ -1,15 +1,22 @@
 import {
+	isRecordGoneRejection,
 	type QueuedMutation,
 	type RecordMutationQueue,
 	type RemoteId,
 	remoteIdOrNull,
 	type StoreScopeManager,
 	type SyncObserver,
+	wooIdOf,
 } from '@wcpos/sync-core';
 
+import { removeManifestByWooIds } from '../local-coverage/rx-existence-manifest-repository';
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
+import { type ResidentSync, stampedSync } from './order-revision';
+import { OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 import { requeueRejectedMutation } from './write-intents';
+import { scopeBoundObserver } from '../scope-bound';
+import { removeRefundChildren } from './refund-children';
 
 import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { RxDatabase } from 'rxdb';
@@ -58,8 +65,43 @@ export function rejectionSuggestsServerRecord(reason: string | null | undefined)
 	return typeof reason === 'string' && SERVER_MAY_HOLD_RECORD_REASONS.has(reason);
 }
 
-function serverMayHoldRecord(entry: { rejectedReason?: string }): boolean {
-	return rejectionSuggestsServerRecord(entry.rejectedReason);
+/** The confirmation verdict and the engine's born-local decision share one identity rule. */
+export function discardConsequence({
+	row,
+	resident,
+	remoteIdField,
+}: {
+	row: Pick<
+		QueuedMutation,
+		| 'collectionName'
+		| 'operation'
+		| 'payload'
+		| 'conflictDocument'
+		| 'rejectedReason'
+		| 'rejectedStatus'
+	>;
+	resident: Record<string, unknown> | null | 'read-failed';
+	remoteIdField?: string;
+}): 'destroys-record' | 'may-destroy-record' | 'keeps-record' | 'unknown' {
+	if (resident === 'read-failed') return 'unknown';
+	if (!resident) return 'keeps-record';
+	const remoteId =
+		remoteIdOrNull(remoteIdField ? resident[remoteIdField] : undefined) ??
+		(row.collectionName === 'orders'
+			? null
+			: (remoteIdOrNull(row.payload.id) ?? remoteIdOrNull(row.conflictDocument?.id)));
+	if (remoteId !== null) {
+		if (row.collectionName !== 'orders') return 'may-destroy-record';
+		const status =
+			resident.status ?? (resident.payload as Record<string, unknown> | undefined)?.status;
+		return isRecordGoneRejection(row.rejectedStatus, row.rejectedReason) &&
+			status !== OPEN_CART_ORDER_STATUS
+			? 'destroys-record'
+			: 'keeps-record';
+	}
+	return row.operation === 'create' && !rejectionSuggestsServerRecord(row.rejectedReason)
+		? 'destroys-record'
+		: 'keeps-record';
 }
 
 export type ConflictResolutionDeps = {
@@ -150,10 +192,17 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				let needsRepull: RemoteId | null = null;
 				let residentRemoved = false;
 				let resolved: { collectionName: string; recordId: string } | null = null;
+				// Everything this resolution logs AFTER its guarded write — the claim
+				// release, the re-pull, the settled row — runs outside the guard, so a
+				// switch can land first; the observer then belongs to the incoming scope,
+				// and none of these rows are its. The bound EPOCH decides, not the scope
+				// id, which matches again after a switch away and back (A→B→A).
+				let log: SyncObserver = () => undefined;
 				let claimedQueue: ReturnType<typeof queueFor> | null = null;
 				let claimTaken = false;
 				try {
 					await manager.runGuarded(async (bound) => {
+						log = scopeBoundObserver(bound, diagnostics);
 						const database = databaseFor(bound.scopeId);
 						if (!database) throw new Error('resolveConflict: scope database not open');
 						if (issuedAgainst !== null && database !== issuedAgainst) {
@@ -268,11 +317,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							const row = (
 								await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
 							)?.toJSON() as Record<string, unknown> | undefined;
-							const remoteId = remoteIdOrNull(
-								row?.[facet.remoteIdField] ??
-									(entry.payload as Record<string, unknown>).id ??
-									(entry.conflictDocument as Record<string, unknown> | undefined)?.id
-							);
+							const remoteId =
+								remoteIdOrNull(row?.[facet.remoteIdField]) ??
+								remoteIdOrNull(entry.payload.id) ??
+								remoteIdOrNull(entry.conflictDocument?.id);
 							if (remoteId !== null) {
 								// Discard WRITES this document back as server truth — without the
 								// scope's carriers the restored row would lose its barcode.
@@ -347,7 +395,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									await doc.incrementalModify((data) => ({
 										...data,
 										payload: reconcile((data.payload ?? {}) as Record<string, unknown>),
-										sync: { ...((data.sync ?? {}) as object), revision },
+										sync: stampedSync((data.sync ?? {}) as ResidentSync, revision),
 									}));
 								}
 							} else if (resolution === 'requeue-rebuilt') {
@@ -390,21 +438,18 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								// `_woocommerce_pos_uuid`), and a record that HAS one is no longer
 								// born-local: it exists server-side and must survive the discard.
 								//
-								// A rejected UPDATE always keeps its resident: that row is server
-								// truth, and discard means "accept it".
+								// An update keeps its resident unless the store proved it is gone.
 								const remoteId = facet ? row?.[facet.remoteIdField] : undefined;
+								const orderRemoteId = remoteIdOrNull(remoteId);
+								const verdict = discardConsequence({
+									row: entry,
+									resident: row ?? null,
+									remoteIdField: facet?.remoteIdField,
+								});
+								if (entry.collectionName === 'orders')
+									discardRemovesResident = verdict === 'destroys-record';
 								const bornLocalCreate =
-									entry.operation === 'create' &&
-									doc !== null &&
-									remoteIdOrNull(remoteId) === null &&
-									// The pre-flight above resolves a remote id from the queued payload
-									// too, and a server document coming back proves the record exists
-									// there whatever the resident's column says. Never destroy that.
-									// (Orders skip the pre-flight fetch entirely, so this is always
-									// null for them and the resident's column decides alone — which is
-									// exactly why `serverMayHoldRecord` below has to carry the weight.)
-									discardServerDocument === null &&
-									!serverMayHoldRecord(entry);
+									discardServerDocument === null && verdict === 'destroys-record';
 								const removesResident = discardRemovesResident || bornLocalCreate;
 								// Destroying is only safe when NOTHING is queued to send for this
 								// record. A live row means a push is pending or in flight, and for a
@@ -448,8 +493,11 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								// survives crashes and failed fetches (a failed task re-runs once
 								// its retry gate elapses), so discard can never strand the record
 								// silently posing as synced with the re-pull lost in memory.
-								const orderRemoteId = remoteIdOrNull(remoteId);
-								if (entry.collectionName === 'orders' && orderRemoteId !== null) {
+								if (
+									entry.collectionName === 'orders' &&
+									orderRemoteId !== null &&
+									!discardRemovesResident
+								) {
 									needsRepull = orderRemoteId;
 									await persistOrderRepull({ database, remoteIds: [orderRemoteId], nowMs: now() });
 								}
@@ -553,6 +601,20 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 										if (stillResident) throw error;
 										residentRemoved = true;
 									}
+									if (entry.collectionName === 'orders')
+										await removeRefundChildren(database.collections.refunds, [
+											row?.remoteId as string | null,
+										]);
+									// The store proved the order gone: its manifest row would otherwise claim a
+									// resident this device no longer holds. After the resident, like the refunds.
+									if (
+										entry.collectionName === 'orders' &&
+										discardRemovesResident &&
+										orderRemoteId !== null
+									)
+										await removeManifestByWooIds(database.collections.existenceManifestOrders, [
+											wooIdOf(orderRemoteId),
+										]);
 								}
 								// CAS, not an unconditional remove: two discards of one terminal row
 								// (a double-tap that beat the button's disabled state, two windows)
@@ -595,7 +657,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								// release self-heals at the lease deadline — but a storage failure
 								// here is still a failure someone may be diagnosing, so it is
 								// reported rather than swallowed silently (#1345).
-								diagnostics({
+								log({
 									type: 'queue.write.tick.error',
 									level: 'warn',
 									message: `conflict-claim release failed (row stays claimed until the lease deadline): ${error instanceof Error ? error.message : String(error)}`,
@@ -616,7 +678,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							reason: `conflict-discard:${mutationId}`,
 						});
 					} catch (error) {
-						diagnostics({
+						log({
 							type: 'queue.write.discard-repull-deferred',
 							level: 'warn',
 							collection: 'orders',
@@ -630,7 +692,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 					recordId: string;
 				} | null;
 				if (settledResolution) {
-					diagnostics({
+					log({
 						type: 'queue.write.resolve',
 						level: 'info',
 						collection: settledResolution.collectionName,

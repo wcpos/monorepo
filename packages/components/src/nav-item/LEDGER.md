@@ -1,0 +1,19 @@
+# Behaviour ledger: `nav-item`
+
+Seeded 2026-10-17 by design-system decision 8 (ruling `ruling-design-system-decisions-2026-10-16`, board `design-system-gallery-2026-10-16.html` §5). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence.
+
+**Job:** One navigation row: an area's page list (Settings, Store health), the front drawer's items (its notifications bell until 2026-10-28), and the rail's items (an icon-only square with a web tooltip).
+
+**Base:** `pressable-surface`, Icon, Text.
+
+## Lines
+
+1. A selected row lifts onto `bg-card`, the surface the content sits on; a press, and a hover on a fine pointer only, show the same lift; the label and icon are muted at rest and foreground when selected — evidence: `navigation-area/index.tsx` the lifted branch (2026-10-16); design-system decision 8.
+2. Two sizes: `row` (40, `rounded-md`, `text-sm`) for an area's page list, `drawer` (48, `rounded-lg`) for the drawer, where the selected icon and label are `text-primary` and the rest `text-sidebar-foreground` — evidence: design-system decision 8; `packages/core/src/screens/main/components/drawer-content/index.tsx`, where NavItem paints the tint from `selected`.
+3. Retired 2026-10-16: the drawer's 4 px left border on the selected item, its `bg-white/10` tinted hover and press, and a `default` Button forced transparent to draw a drawer row; the card-surface rows' `bg-primary/10` tint went with the last area that sat on `card` — evidence: design-system decision 8.
+4. The item renders on `pressable-surface` with the `card` wash (line 1's lift) and is always a `button`; `selected` is announced through the surface (`aria-selected`, which React Native maps onto the selected state), so the caller's `accessibilityState` is no longer merged by hand; it now gives the native press haptic — evidence: card 4 of the 2026-10-28 component-library review.
+5. A selected `drawer` item is a `bg-selected` block with `text-selected-foreground` words and glyphs, staying tinted on hover and press; `row` keeps its card lift — evidence: owner, 2026-10-29, primary board P2 on construction I.
+6. The `tint` is provided once through `TextClassContext`; the icon and label name no colour, the chevron keeps `text-muted-foreground` deliberately — test: `index.test.tsx` one-ink walk, mocks merge the context.
+7. `drawer` uses the `rail` wash and `bg-rail-selected` with `text-rail-selected-foreground`, retaining the selected surface on hover/press: light lifts to card with selected ink and uses Radix step 5 for the rest wash; the other themes alias their previous paint. `row` keeps its card lift — evidence: Paul, 2026-10-30, rail board C; test: `index.test.tsx` size table and one-ink walk.
+8. `count` is a count on the icon's shoulder (Store health's unread errors), handed to a string icon's `Icon count` (Icon line 8); an element icon paints itself and gets none, and `badge` stays the trailing slot after the label. The drawer's overlaid badge box and the bell's hand-placed badge used the same offsets from different boxes and did not match (Paul, 2026-11-08: "too high, it does not look like the badge on the logs icon"; and: "Surely a button with an icon and a badge should be a shared component so this sort of thing can't happen.") — evidence: test "hands count to a string icon only" in `index.test.tsx` — platform: all. _(added 2026-11-08)_
+9. The trailing `badge` slot renders its node inline in the row, at the node's own size: the `relative h-5 w-5` box it sat in was the anchor for `LogsBadge`'s absolute offsets, and once the Logs row's count became a plain `Badge` (the count fence, Icon line 8) that box stretched a 16 pill to 20 wide — evidence: review of #3402, 2026-11-08; test "renders a supplied icon element as is, the trailing badge and chevron, and presses" in `index.test.tsx` — platform: all.

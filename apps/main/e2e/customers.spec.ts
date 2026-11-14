@@ -25,19 +25,20 @@ async function openAddCartItemsMenu(page: Page) {
  * Customer-related tests in the POS context (both free and pro).
  */
 test.describe('Customers in POS', () => {
-	test('should show guest customer by default', async ({ posPage: page }) => {
-		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
-	});
-
-	test('should open customer address dialog when clicking customer name', async ({
+	test('opens the customer picker from the name and the address editor from the pin', async ({
 		posPage: page,
 	}) => {
 		const customerPill = page.getByTestId('cart-customer-name');
 		await expect(customerPill).toBeVisible({ timeout: 15_000 });
+		// The chip is a dropdown: a tap swaps in the picker (its trigger replaces the chip).
 		await customerPill.click();
+		await expect(page.getByTestId('cart-customer-select')).toBeVisible({ timeout: 15_000 });
+		await page.keyboard.press('Escape');
 
-		// Should open the Edit Customer Address dialog
-		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
+		// The address editor is the split chip's pin cell (owner, 2026-10-22).
+		await expect(customerPill).toBeVisible({ timeout: 15_000 });
+		await page.getByTestId('cart-customer-address').click();
+		await expect(page.getByTestId('customer-address-dialog')).toBeVisible({ timeout: 15_000 });
 	});
 });
 
@@ -50,25 +51,9 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		test.skip(variant !== 'pro', 'Adding customers from cart requires Pro');
 	});
 
-	test('should have enabled add customer button', async ({ posPage: page }) => {
-		await openAddCartItemsMenu(page);
-		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
-		await expect(addCustomerMenuItem).toBeVisible({ timeout: 10_000 });
-		await expect(addCustomerMenuItem).toBeEnabled();
-	});
-
-	test('should open add customer dialog from cart', async ({ posPage: page }) => {
-		await openAddCartItemsMenu(page);
-		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
-		await expect(addCustomerMenuItem).toBeEnabled({ timeout: 10_000 });
-		await addCustomerMenuItem.click();
-
-		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
-	});
-
 	/**
-	 * The one test in this file that actually SUBMITS. Everything above stops at
-	 * "the dialog opened", which is why a create that died in the storage layer
+	 * The one test in this file that actually SUBMITS. The other dialog tests stop
+	 * at "the dialog opened", which is why a create that died in the storage layer
 	 * shipped unnoticed: `use-mutation` sourced its payload from
 	 * `RxDocument.get('payload')`, an RxDB **Proxy**, and on web the storage lives
 	 * in a Worker — so the enqueue failed the structured clone with
@@ -95,11 +80,12 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		await dialog.getByTestId('customer-first-name-input').fill(probe);
 		await dialog.getByTestId('customer-last-name-input').fill('Probe');
 		await dialog.getByTestId('customer-email-input').fill(`${probe}@example.com`);
-		await dialog.getByTestId('customer-form-save').click();
+		await dialog.getByTestId('customer-form-add').click();
 
-		// The cart path awaits the Woo id before attaching the customer to the
-		// order, so the dialog closing IS the server round trip having completed —
-		// enqueue, push, ack, rematerialize. A failed create leaves it open.
+		// The cart attaches the customer from its local record without waiting
+		// for the Woo id (#1523), so the dialog closing is the enqueue and the
+		// attach having succeeded. A create that could not be queued leaves it open.
+		// The server round trip is covered by pos-offline-new-customer.spec.ts.
 		await expect(dialog).toBeHidden({ timeout: 30_000 });
 
 		// Read the pill addressed by testID; the probe token is the referent, not
@@ -149,13 +135,7 @@ test.describe('Customers Page (Pro)', () => {
 		test.skip(variant !== 'pro', 'Customers page requires Pro');
 	});
 
-	test('should navigate to Customers page and see customer list', async ({ posPage: page }) => {
-		await navigateToPage(page, 'customers');
-		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
-	});
-
-	test('should show customer data or empty state', async ({ posPage: page }) => {
+	test('Customers page initial state', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
 		const screen = page.getByTestId('screen-customers');
 		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
@@ -176,6 +156,8 @@ test.describe('Customers Page (Pro)', () => {
 				{ timeout: 30_000 }
 			)
 			.toBeTruthy();
+
+		await expect(screen.getByTestId('customers-add-button')).toBeVisible();
 	});
 
 	test('should search customers', async ({
@@ -224,14 +206,6 @@ test.describe('Customers Page (Pro)', () => {
 			});
 		}
 	});
-
-	test('should have add customer button on Customers page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'customers');
-		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
-
-		await expect(screen.getByTestId('customers-add-button')).toBeVisible();
-	});
 });
 
 /**
@@ -241,11 +215,6 @@ test.describe('Customers Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
-	});
-
-	test('should show upgrade overlay on Customers', async ({ posPage: page }) => {
-		await navigateToPage(page, 'customers');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {

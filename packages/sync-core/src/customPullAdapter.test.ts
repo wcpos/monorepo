@@ -9,6 +9,11 @@ import {
 	syncCustomPullBatchIntoRepository,
 } from './customPullAdapter';
 import { createFakePullServer, fakeUuid } from './fakePullServer';
+import {
+	InMemoryRecordMutationStorage,
+	pendingRecordIds,
+	RecordMutationQueue,
+} from './recordMutationQueue';
 import { mintRemoteId } from './woo/remoteIdCodec';
 
 // Pull fixtures come from the contract-faithful fake server (fakePullServer.ts, pinned against the
@@ -22,7 +27,7 @@ function response(body: unknown, headers: HeadersInit = {}) {
 const BASE_URL = 'http://wcpos.local/wp-json/wcpos/v2';
 
 describe('pullCustomBatch', () => {
-	it('preserves the current pull envelope fields verbatim', async () => {
+	it('does not adopt legacy top-level journal fields', async () => {
 		const checkpoint = normalizeCheckpoint({ sequence: 12 });
 		const result = await pullCustomBatch({
 			baseUrl: BASE_URL,
@@ -32,7 +37,7 @@ describe('pullCustomBatch', () => {
 				response({
 					documents: [],
 					checkpoint,
-					hasMore: false,
+					complete: true,
 					epoch: 'top-epoch',
 					head: 20,
 					horizon: 4,
@@ -42,13 +47,25 @@ describe('pullCustomBatch', () => {
 		expect(result).toMatchObject({
 			checkpoint,
 			hasMore: false,
-			epoch: 'top-epoch',
-			head: 20,
-			horizon: 4,
+			epoch: undefined,
+			head: undefined,
+			horizon: undefined,
 		});
 	});
 
-	it('accepts complete and journal fields nested in the future checkpoint', async () => {
+	it('rejects a response without a boolean complete instead of looping on it', async () => {
+		await expect(
+			pullCustomBatch({
+				baseUrl: BASE_URL,
+				checkpoint: null,
+				limit: 50,
+				fetcher: async () =>
+					response({ documents: [], checkpoint: normalizeCheckpoint(null), hasMore: false }),
+			})
+		).rejects.toThrow('no boolean `complete`');
+	});
+
+	it('accepts complete and journal fields nested in the checkpoint', async () => {
 		const checkpoint = {
 			...normalizeCheckpoint({ sequence: 12 }),
 			epoch: 'nested-epoch',
@@ -66,7 +83,7 @@ describe('pullCustomBatch', () => {
 		expect(result.checkpoint).toEqual(checkpoint);
 	});
 
-	it('prefers the unified fields in a mixed envelope (the published contract) and defaults an absent completion flag to false', async () => {
+	it('uses complete and nested journal fields even when legacy fields disagree', async () => {
 		const checkpoint = {
 			...normalizeCheckpoint({ sequence: 12 }),
 			epoch: 'nested-epoch',
@@ -88,17 +105,10 @@ describe('pullCustomBatch', () => {
 					horizon: 4,
 				}),
 		});
-		const absent = await pullCustomBatch({
-			baseUrl: BASE_URL,
-			checkpoint: null,
-			limit: 50,
-			fetcher: async () => response({ documents: [], checkpoint: normalizeCheckpoint(null) }),
-		});
 
 		// complete:false → hasMore true even though the legacy flag disagrees;
 		// journal fields come from inside the checkpoint.
 		expect(mixed).toMatchObject({ hasMore: true, epoch: 'nested-epoch', head: 99, horizon: 1 });
-		expect(absent.hasMore).toBe(false);
 	});
 
 	it('posts checkpoint parameters and returns documents', async () => {
@@ -282,21 +292,25 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 			.mockResolvedValueOnce(
 				response({
 					documents: [],
-					checkpoint: normalizeCheckpoint({ sequence: 5000 }),
-					hasMore: false,
-					epoch: 'epoch-A',
-					head: 6000,
-					horizon: 5001,
+					checkpoint: {
+						...normalizeCheckpoint({ sequence: 5000 }),
+						epoch: 'epoch-A',
+						head: 6000,
+						horizon: 5001,
+					},
+					complete: true,
 				})
 			)
 			.mockResolvedValueOnce(
 				response({
 					documents: [],
-					checkpoint: normalizeCheckpoint({ sequence: 5001 }),
-					hasMore: false,
-					epoch: 'epoch-A',
-					head: 6000,
-					horizon: 5001,
+					checkpoint: {
+						...normalizeCheckpoint({ sequence: 5001 }),
+						epoch: 'epoch-A',
+						head: 6000,
+						horizon: 5001,
+					},
+					complete: true,
 				})
 			);
 
@@ -517,10 +531,10 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 				orderId: 1,
 				revision: 'r5',
 				sequence: 5,
+				epoch: 'epoch-A',
+				head: 2,
 			},
-			hasMore: true,
-			epoch: 'epoch-A',
-			head: 2,
+			complete: false,
 		});
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
@@ -556,10 +570,10 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 				orderId: 3,
 				revision: 'r3',
 				sequence: 3,
+				epoch: 'epoch-A',
+				head: 12,
 			},
-			hasMore: true,
-			epoch: 'epoch-A',
-			head: 12,
+			complete: false,
 		});
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
@@ -595,7 +609,7 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 				revision: 'r3',
 				sequence: 3,
 			},
-			hasMore: false,
+			complete: true,
 		});
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
@@ -631,7 +645,7 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 				revision: '',
 				sequence: 0,
 			},
-			hasMore: true,
+			complete: false,
 		});
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
@@ -710,6 +724,75 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 		sequence: 12,
 	};
 
+	it('a live admission protects a delayed pull until the write is acknowledged', async () => {
+		const storage = new InMemoryRecordMutationStorage();
+		const queue = new RecordMutationQueue(storage);
+		const id = fakeUuid(11);
+		await queue.admitWriter('orders', id, 'writer', Date.now());
+		const protectedIds = pendingRecordIds(await storage.list());
+		await queue.enqueue({
+			mutationId: 'edit',
+			collectionName: 'orders',
+			recordId: id,
+			operation: 'update',
+			origin: 'existing',
+			payload: {},
+			baseRevision: null,
+			queuedAt: new Date().toISOString(),
+		});
+		let dirty = true;
+		const input = {
+			baseUrl: BASE_URL,
+			limit: 50,
+			fetcher: seededServer().fetch,
+			repository: {
+				upsertMany: async (documents: PullResponse['documents']) => {
+					if (documents.some((document) => document.uuid === id)) dirty = false;
+				},
+			},
+		};
+		await syncCustomPullBatchIntoRepository({ ...input, pendingMutationOrderIds: protectedIds });
+		expect(dirty).toBe(true);
+		await queue.releaseWriter('orders', id, 'writer');
+		await queue.removePending('edit');
+		await syncCustomPullBatchIntoRepository({
+			...input,
+			pendingMutationOrderIds: pendingRecordIds(await storage.list()),
+		});
+		expect(dirty).toBe(false);
+	});
+	it.each(['preparing', 'committed'] as const)(
+		'a %s void fence protects a delayed pull through removal',
+		async (phase) => {
+			const storage = new InMemoryRecordMutationStorage();
+			const queue = new RecordMutationQueue(storage);
+			const id = fakeUuid(11);
+			const residents = new Set([id]);
+			await queue.fenceForVoid('orders', id, 'void', Date.now());
+			await queue.setVoidPhase('orders', id, 'void', phase);
+			const protectedIds = pendingRecordIds(await storage.list());
+			await queue.setVoidPhase('orders', id, 'void', 'committed');
+			residents.delete(id); // The pull resumes only after the void removed the resident.
+			const input = {
+				baseUrl: BASE_URL,
+				limit: 50,
+				fetcher: seededServer().fetch,
+				repository: {
+					upsertMany: async (documents: PullResponse['documents']) => {
+						for (const document of documents) residents.add(document.uuid);
+					},
+				},
+			};
+			await syncCustomPullBatchIntoRepository({ ...input, pendingMutationOrderIds: protectedIds });
+			expect(residents.has(id)).toBe(false);
+			await queue.releaseVoidFence('orders', id, 'void');
+			await syncCustomPullBatchIntoRepository({
+				...input,
+				pendingMutationOrderIds: pendingRecordIds(await storage.list()),
+			});
+			expect(residents.has(id)).toBe(true);
+		}
+	);
 	it('filters pending documents out of the upsert but still advances the checkpoint', async () => {
 		const server = seededServer();
 		const repository = {

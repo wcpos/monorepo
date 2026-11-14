@@ -25,7 +25,7 @@ if (!config.resolver.assetExts.includes('wasm')) {
 // export condition → CJS, while internal relative imports within the ESM builds stay ESM.
 // This creates two separate module instances with independent state:
 //
-// 1. `disableVersionCheck()` / `setPremiumFlag()` called via CJS don't affect the ESM
+// 1. `setPremiumFlag()` called via CJS does not affect the ESM
 //    copies that storage and collection code actually use.
 // 2. `RXDB_UTILS_GLOBAL` (a plain module-scoped object) is duplicated, so
 //    setPremiumFlag() sets it on one copy while hasPremiumFlag() checks the other.
@@ -55,6 +55,13 @@ const workspaceSourceRoots = {
 
 const _baseResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+	if (moduleName === '@wcpos/main/components/gallery/registry') {
+		const gallery = process.env.EXPO_PUBLIC_WCPOS_GALLERY === '1' && platform === 'web';
+		return {
+			type: 'sourceFile',
+			filePath: path.join(__dirname, `components/gallery/registry${gallery ? '' : '.stub'}.tsx`),
+		};
+	}
 	if (moduleName === 'rxdb-premium/plugins/shared') {
 		return { type: 'sourceFile', filePath: rxdbPremiumESMShared };
 	}
@@ -102,7 +109,7 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 
 config = withUniwindConfig(config, {
 	cssEntryFile: './global.css',
-	extraThemes: ['ocean', 'sunset', 'monochrome'],
+	extraThemes: ['ocean', 'sunset', 'monochrome', 'paper', 'warm', 'bold', 'market'],
 });
 
 // Outermost on purpose: every serializer wrapper above (Expo, Atlas, uniwind)

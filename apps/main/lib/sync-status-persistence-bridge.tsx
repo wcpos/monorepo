@@ -34,7 +34,7 @@ export function SyncStatusPersistenceBridge() {
 				hydrateSyncStatus(state.get());
 			})
 			.catch((error: unknown) => {
-				syncStatusLogger.warn('Failed to hydrate sync status', {
+				syncStatusLogger.debug('Failed to hydrate sync status', {
 					context: { error: String(error) },
 				});
 			});
@@ -45,7 +45,7 @@ export function SyncStatusPersistenceBridge() {
 				const state = await statePromise;
 				await state.set('', () => snapshot);
 			} catch (error) {
-				syncStatusLogger.warn('Failed to persist sync status', {
+				syncStatusLogger.debug('Failed to persist sync status', {
 					context: { error: String(error) },
 				});
 			}

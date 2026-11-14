@@ -13,9 +13,11 @@ const mockActions = {
 	resetFilters: jest.fn(),
 };
 const mockState = { search: '', filters: {}, sort: {}, limit: 10 };
-const mockUseCollectionBinding = jest.fn(
+const mockSync = jest.fn().mockResolvedValue(undefined);
+const mockUseCollectionQueryHandle = jest.fn(
 	(_collection: string, _state: unknown, _options: { remoteIds: readonly string[] }) => ({
-		sync: jest.fn().mockResolvedValue(undefined),
+		sync: mockSync,
+		retry: jest.fn(),
 	})
 );
 
@@ -44,16 +46,16 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../../../query', () => ({
 	useQueryState: () => mockState,
 	useQueryStateActions: () => mockActions,
-	useCollectionBinding: (
+	useCollectionQueryHandle: (
 		collection: string,
 		state: unknown,
 		options: { remoteIds: readonly string[] }
-	) => mockUseCollectionBinding(collection, state, options),
+	) => mockUseCollectionQueryHandle(collection, state, options),
 }));
 jest.mock('./filters', () => ({ VariationsFilterBar: () => null }));
 jest.mock('./table', () => ({ VariationsTable: () => null }));
 
-describe('Variations query binding', () => {
+describe('Variations query handle', () => {
 	beforeEach(() => jest.clearAllMocks());
 
 	it('updates the bound variation ids when the parent observable changes', () => {
@@ -67,14 +69,17 @@ describe('Variations query binding', () => {
 
 		render(<Variations row={row} />);
 
-		expect(mockUseCollectionBinding).toHaveBeenLastCalledWith('variations', mockState, {
+		expect(mockUseCollectionQueryHandle).toHaveBeenLastCalledWith('variations', mockState, {
 			remoteIds: ['11', '12'],
 		});
+		expect(mockSync).toHaveBeenCalledTimes(1);
 
 		act(() => variations$.next([11, 12, 13]));
 
-		expect(mockUseCollectionBinding).toHaveBeenLastCalledWith('variations', mockState, {
+		expect(mockUseCollectionQueryHandle).toHaveBeenLastCalledWith('variations', mockState, {
 			remoteIds: ['11', '12', '13'],
 		});
+		// One refresh per expansion, not one per handle.
+		expect(mockSync).toHaveBeenCalledTimes(1);
 	});
 });

@@ -1,6 +1,7 @@
 export {
 	TreeCombobox,
 	TreeComboboxTrigger,
+	TreeComboboxValue,
 	TreeComboboxContent,
 	useTreeComboboxContext,
 } from './tree-combobox';
@@ -10,3 +11,4 @@ export type {
 	TreeComboboxMultiProps,
 	TreeComboboxContentProps,
 } from './types';
+export type { HierarchicalOption } from './use-hierarchy';

@@ -3,12 +3,15 @@
  */
 import * as React from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject, map } from 'rxjs';
 
 import type { EngineRecord } from '@wcpos/query';
 
 import { TaxRatesProvider, useTaxLocation, useTaxSettings } from './provider';
+import { CartConfigProvider, useCartConfig } from '../../pos/hooks/use-cart-config';
+import { useCartWrite } from '../../pos/commands/use-cart-write';
+import { enqueueOrderMutation } from '../../pos/hooks/order-mutation-queue';
 import { useTaxRates } from './use-tax-rates';
 import {
 	CurrentOrderContext,
@@ -16,6 +19,7 @@ import {
 } from '../../pos/contexts/current-order/context';
 
 import type { QueryStateOf } from '../../../../query';
+import type { PayloadChanges } from '../../hooks/mutations/use-local-mutation';
 
 type TestOrderRecord = EngineRecord<'orders'> & {
 	patchPayload: (patch: Record<string, unknown>) => void;
@@ -25,17 +29,26 @@ const allRates = [
 	{ id: 1, class: 'standard', country: '', state: '', cities: [], postcodes: [] },
 	{ id: 2, class: 'reduced-rate', country: '', state: '', cities: [], postcodes: [] },
 ];
-const mockResource = { hits: allRates.map((payload) => ({ record: { payload } })) };
+const mockResult = { hits: allRates.map((payload) => ({ record: { payload } })) };
 
 /**
  * Swappable so the address tests can supply country-specific rates; reset in `beforeEach`.
  */
-let activeResource: { hits: { record: { payload: unknown }; document?: unknown }[] } = mockResource;
+let activeResult: { hits: { record: { payload: unknown }; document?: unknown }[] } = mockResult;
 
-const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => ({
-	resource: activeResource,
-}));
-const mockUseObservableSuspense = jest.fn((resource: unknown) => resource);
+// The tax-rates query handle as a reader sees it (one snapshot, driven with `set`).
+type FakeHandle = import('@wcpos/query').QueryHandle & {
+	set(partial: Record<string, unknown>): void;
+};
+const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle') as {
+	fakeQueryHandle: (initial?: Record<string, unknown>) => FakeHandle;
+};
+// Built on the first acquire, so it answers with the `activeResult` the test has set by then.
+let mockHandle: FakeHandle | null = null;
+const mockUseCollectionQueryHandle = jest.fn(
+	(_collection: unknown, _state: unknown) =>
+		(mockHandle ??= fakeQueryHandle({ result: activeResult }))
+);
 
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
@@ -46,21 +59,35 @@ jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
 	return {
 		...actual,
-		useCollectionBinding: (collection: unknown, state: unknown) =>
-			mockUseCollectionBinding(collection, state),
+		useCollectionQueryHandle: (collection: unknown, state: unknown) =>
+			mockUseCollectionQueryHandle(collection, state),
 	};
 });
 
-/**
- * Only `useObservableSuspense` is stubbed — the rest of observable-hooks runs for real
- * against real subjects, because subscription identity is precisely what these tests are
- * about.
- */
-jest.mock('observable-hooks', () => {
-	const actual = jest.requireActual('observable-hooks');
+// The real boundary with a reset control: the provider wires `onReset` to the handle's retry
+// and `resetKeys` to the handle. (The app's fallback pulls in the styling runtime.)
+jest.mock('@wcpos/components/error-boundary', () => {
+	const { ErrorBoundary } = jest.requireActual('react-error-boundary');
 	return {
-		...actual,
-		useObservableSuspense: (resource: unknown) => mockUseObservableSuspense(resource),
+		ErrorBoundary: ({
+			children,
+			onReset,
+			resetKeys,
+		}: {
+			children: React.ReactNode;
+			onReset?: () => void;
+			resetKeys?: unknown[];
+		}) => (
+			<ErrorBoundary
+				onReset={onReset}
+				resetKeys={resetKeys}
+				fallbackRender={({ resetErrorBoundary }: { resetErrorBoundary: () => void }) => (
+					<button data-testid="tax-settings-error-reset" onClick={() => resetErrorBoundary()} />
+				)}
+			>
+				{children}
+			</ErrorBoundary>
+		),
 	};
 });
 
@@ -102,10 +129,10 @@ function makeOrder(meta: OrderMeta[] = []): TestOrderRecord {
 		},
 		collection: { name: 'orders' },
 		getLatest: () => record,
-		toJSON: () => ({ uuid: 'order-uuid', remoteId: null, payload: payload$.value }),
+		toJSON: () => ({ uuid: 'order-uuid', remoteId: null, remoteKey: '', payload: payload$.value }),
 		$: payload$.pipe(
 			map((payload) => ({
-				toJSON: () => ({ uuid: 'order-uuid', remoteId: null, payload }),
+				toJSON: () => ({ uuid: 'order-uuid', remoteId: null, remoteKey: '', payload }),
 			}))
 		),
 		patchPayload: (patch: Record<string, unknown>) =>
@@ -115,15 +142,16 @@ function makeOrder(meta: OrderMeta[] = []): TestOrderRecord {
 }
 
 function latestState(): QueryStateOf<'tax-rates'> {
-	const call = mockUseCollectionBinding.mock.calls.at(-1);
-	if (!call) throw new Error('provider tax-rates binding was not called');
+	const call = mockUseCollectionQueryHandle.mock.calls.at(-1);
+	if (!call) throw new Error('provider tax-rates handle was not acquired');
 	return call[1] as QueryStateOf<'tax-rates'>;
 }
 
 beforeEach(() => {
 	jest.clearAllMocks();
 	storeSubjects.tax_based_on$.next('base');
-	activeResource = mockResource;
+	activeResult = mockResult;
+	mockHandle = null;
 });
 
 describe('TaxRatesProvider query-state consumption', () => {
@@ -136,7 +164,12 @@ describe('TaxRatesProvider query-state consumption', () => {
 		return <output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>;
 	}
 
-	it('owns an all-rates binding and does not republish its query object', () => {
+	function AllRatesProbe() {
+		const { allRates: published } = useTaxSettings();
+		return <output data-testid="all-rate-ids">{published.map((rate) => rate.id).join(',')}</output>;
+	}
+
+	it('owns an all-rates handle and does not republish its query object', () => {
 		render(
 			<TaxRatesProvider>
 				<ContextProbe />
@@ -149,7 +182,7 @@ describe('TaxRatesProvider query-state consumption', () => {
 			sort: { field: 'id', direction: 'asc' },
 			limit: Number.MAX_SAFE_INTEGER,
 		});
-		expect(mockUseObservableSuspense).toHaveBeenCalledWith(mockResource);
+		expect(mockUseCollectionQueryHandle.mock.calls.at(-1)?.[0]).toBe('tax-rates');
 		const context = JSON.parse(screen.getByTestId('context').textContent ?? '') as Record<
 			string,
 			unknown
@@ -159,10 +192,107 @@ describe('TaxRatesProvider query-state consumption', () => {
 		expect(context).not.toHaveProperty('taxQuery');
 	});
 
+	it('publishes the rates the acquired handle answers with', () => {
+		render(
+			<TaxRatesProvider>
+				<AllRatesProbe />
+			</TaxRatesProvider>
+		);
+		expect(screen.getByTestId('all-rate-ids').textContent).toBe('1,2');
+
+		act(() => mockHandle?.set({ result: { hits: [{ record: { payload: allRates[1] } }] } }));
+		expect(screen.getByTestId('all-rate-ids').textContent).toBe('2');
+	});
+
+	it('says rates are read only once a bound read answers, zero rates included (#3186)', () => {
+		function ReadProbe() {
+			const { ratesRead, allRates: published } = useTaxSettings();
+			return <output data-testid="rates-read">{`${ratesRead}:${published.length}`}</output>;
+		}
+		activeResult = { hits: [], unbound: true } as typeof activeResult;
+		render(
+			<TaxRatesProvider>
+				<ReadProbe />
+			</TaxRatesProvider>
+		);
+		// Catches: the pre-database placeholder published as a read of no rates.
+		expect(screen.getByTestId('rates-read').textContent).toBe('false:0');
+
+		// Catches: a store with no tax rates at all mistaken for an unread one.
+		act(() => mockHandle?.set({ result: { hits: [] } }));
+		expect(screen.getByTestId('rates-read').textContent).toBe('true:0');
+
+		act(() => mockHandle?.set({ result: mockResult }));
+		expect(screen.getByTestId('rates-read').textContent).toBe('true:2');
+	});
+
+	it('throws a failed read to its own boundary, whose reset asks the handle again', async () => {
+		const failed = fakeQueryHandle({ ready: false, error: new Error('read failed') });
+		const retry = jest.fn(() => failed.set({ error: null, ready: false }));
+		failed.retry = retry;
+		mockHandle = failed;
+		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			render(
+				<TaxRatesProvider>
+					<AllRatesProbe />
+				</TaxRatesProvider>
+			);
+			expect(screen.getByTestId('tax-settings-error-reset')).toBeTruthy();
+			expect(screen.queryByTestId('all-rate-ids')).toBeNull();
+
+			// A remount over the same failed handle would throw again; the reset retries first.
+			act(() => {
+				fireEvent.click(screen.getByTestId('tax-settings-error-reset'));
+			});
+			expect(retry).toHaveBeenCalledTimes(1);
+			expect(screen.queryByTestId('tax-settings-error-reset')).toBeNull();
+			expect(screen.queryByTestId('all-rate-ids')).toBeNull();
+
+			await act(async () => failed.set({ ready: true, result: mockResult }));
+			expect(screen.getByTestId('all-rate-ids').textContent).toBe('1,2');
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+
+	/**
+	 * A coverage-generation bump (the tax-rates modal's clear-and-sync) moves the scope key, so
+	 * the provider is handed a fresh, unanswered handle. The POS body must keep the current
+	 * rates until it answers: suspending would swap it for the provider's `null` fallback.
+	 */
+	it('keeps the current rates published while a changed handle answers', async () => {
+		const tree = () => (
+			<React.Suspense fallback={<div data-testid="route-fallback" />}>
+				<TaxRatesProvider>
+					<AllRatesProbe />
+				</TaxRatesProvider>
+			</React.Suspense>
+		);
+		const { rerender } = render(tree());
+		expect(screen.getByTestId('all-rate-ids').textContent).toBe('1,2');
+
+		const next = fakeQueryHandle({ ready: false });
+		mockHandle = next;
+		await act(async () => rerender(tree()));
+		expect(mockUseCollectionQueryHandle).toHaveReturnedWith(next);
+		// A suspended update HIDES revealed content (`display: none`) rather than unmounting
+		// it, so the text alone would survive a blanked body: visibility is the instrument.
+		const probe = screen.getByTestId('all-rate-ids');
+		expect(probe.style.display).not.toBe('none');
+		expect(probe.textContent).toBe('1,2');
+		expect(screen.queryByTestId('route-fallback')).toBeNull();
+
+		await act(async () =>
+			next.set({ ready: true, result: { hits: [{ record: { payload: allRates[0] } }] } })
+		);
+		expect(screen.getByTestId('all-rate-ids').textContent).toBe('1');
+	});
+
 	it('uses the plain payload id as the equal-priority tax-rate tiebreak', () => {
 		const higherPayloadId = { ...allRates[0], id: 9, country: 'US', priority: 1 };
 		const lowerPayloadId = { ...allRates[0], id: 4, country: 'US', priority: 1 };
-		activeResource = {
+		activeResult = {
 			hits: [
 				{ record: { payload: higherPayloadId }, document: { ...higherPayloadId, id: 1 } },
 				{ record: { payload: lowerPayloadId }, document: { ...lowerPayloadId, id: 2 } },
@@ -323,8 +453,14 @@ describe('tax follows the customer address', () => {
 	};
 
 	function RatesProbe() {
-		const { rates } = useTaxLocation();
-		return <output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>;
+		const { rates, addressUsed, taxBasedOn } = useTaxLocation();
+		return (
+			<>
+				<output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>
+				<output data-testid="address-used">{addressUsed}</output>
+				<output data-testid="tax-based-on">{taxBasedOn}</output>
+			</>
+		);
 	}
 
 	function renderWithOrder(order: TestOrderRecord) {
@@ -336,7 +472,7 @@ describe('tax follows the customer address', () => {
 	}
 
 	beforeEach(() => {
-		activeResource = { hits: [usRate, gbRate].map((payload) => ({ record: { payload } })) };
+		activeResult = { hits: [usRate, gbRate].map((payload) => ({ record: { payload } })) };
 	});
 
 	it('re-filters the rates when the billing address changes', () => {
@@ -366,6 +502,46 @@ describe('tax follows the customer address', () => {
 			order.patchPayload({ shipping: { country: 'GB' } });
 		});
 
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+	});
+
+	it('falls back to the billing address when the shipping address has no country', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'GB' } });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+		expect(screen.getByTestId('address-used').textContent).toBe('billing');
+		expect(screen.getByTestId('tax-based-on').textContent).toBe('shipping');
+	});
+
+	it('falls back to the shop base when neither address has a country', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		renderWithOrder(makeOrder());
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+	});
+
+	it('follows the fallback when the shipping country is cleared', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'GB' }, shipping: { country: 'US' } });
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+
+		act(() => {
+			order.patchPayload({ shipping: { country: '' } });
+		});
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+	});
+
+	it('keeps the shipping address once it has a country', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'US' }, shipping: { country: 'GB' } });
+
+		renderWithOrder(order);
 		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
 	});
 
@@ -493,3 +669,108 @@ describe('current-order subscription', () => {
 		expect(screen.getByTestId('based-on').textContent).toBe('billing');
 	});
 });
+
+// The config reader used by product tiles must not subscribe to cart writes.
+jest.mock('../extra-data/use-extra-data', () => ({ useExtraData: () => ({ extraData: {} }) }));
+it('keeps cart-config consumers idle for line writes but updates for billing changes', () => {
+	storeSubjects.tax_based_on$.next('billing');
+	const order = makeOrder();
+	const configs: ReturnType<typeof useCartConfig>[] = [];
+	const Probe = React.memo(function Probe() {
+		configs.push(useCartConfig());
+		return null;
+	});
+	const tree = () => (
+		<CurrentOrderContext.Provider
+			value={{ currentOrderRecord: order } as unknown as CurrentOrderContextProps}
+		>
+			<TaxRatesProvider>
+				<Probe />
+			</TaxRatesProvider>
+		</CurrentOrderContext.Provider>
+	);
+	const { rerender } = render(tree());
+	const first = configs.at(-1);
+	const count = configs.length;
+	act(() => order.patchPayload({ line_items: [{ total: '10' }] }));
+	rerender(tree());
+	expect(configs).toHaveLength(count);
+	expect(configs.at(-1)).toBe(first);
+	act(() => order.patchPayload({ billing: { country: 'GB' } }));
+	expect(configs.at(-1)).not.toBe(first);
+});
+
+// Keep settlement real; only the resident-write boundary is replaced.
+jest.mock('../../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({
+		localPatch: ({ document, changes }: { document: TestOrderRecord; changes: PayloadChanges }) =>
+			document.patchPayload(changes(document.payload)),
+	}),
+}));
+it('settles a queued command with new rates after its caller unmounts', async () => {
+	const order = makeOrder();
+	order.patchPayload({ status: 'pos-open' });
+	const rate = { ...allRates[0], rate: '10', shipping: true };
+	activeResult = { hits: [{ record: { payload: rate } }] };
+	let write!: ReturnType<typeof useCartWrite>['settledWrite'];
+	function Tile() {
+		const { settledWrite } = useCartWrite();
+		React.useLayoutEffect(() => {
+			write = settledWrite;
+		}, [settledWrite]);
+		return null;
+	}
+	const tree = (mounted: boolean) => (
+		<TaxRatesProvider>
+			<CartConfigProvider>{mounted && <Tile />}</CartConfigProvider>
+		</TaxRatesProvider>
+	);
+	const { rerender } = render(tree(true));
+	let release!: () => void;
+	const blocker = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	void enqueueOrderMutation(order.uuid, () => blocker);
+	const queued = enqueueOrderMutation(order.uuid, async (queue) =>
+		write({
+			document: order,
+			queue,
+			data: { shipping_lines: [{ total: '10', method_id: 'flat_rate' }] },
+		})
+	);
+	rerender(tree(false));
+	act(() =>
+		mockHandle!.set({ result: { hits: [{ record: { payload: { ...rate, rate: '20' } } }] } })
+	);
+	await act(async () => {
+		release();
+		await queued;
+	});
+	expect(order.payload).toMatchObject({ total: '12', total_tax: '2', shipping_tax: '2' });
+});
+
+jest.mock('../../pos/commands/use-boundary-commit', () => ({
+	useBoundaryCommit: () => jest.fn(),
+}));
+
+it.each(['no', 'yes'])(
+	'applies order exemption only to exclusive prices (inclusive=%s)',
+	(inclusive) => {
+		storeSubjects.prices_include_tax$.next(inclusive);
+		const order = makeOrder([{ key: 'is_vat_exempt', value: 'yes' }]);
+		function Probe() {
+			return <output data-testid="exemption">{String(useTaxLocation().vatExempt)}</output>;
+		}
+		render(
+			<CurrentOrderContext.Provider
+				value={{ currentOrderRecord: order } as unknown as CurrentOrderContextProps}
+			>
+				<TaxRatesProvider>
+					<Probe />
+				</TaxRatesProvider>
+			</CurrentOrderContext.Provider>
+		);
+		expect(screen.getByTestId('exemption').textContent).toBe(String(inclusive === 'no'));
+		storeSubjects.prices_include_tax$.next('no');
+	}
+);

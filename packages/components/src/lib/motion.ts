@@ -1,0 +1,334 @@
+import { Easing, Keyframe } from 'react-native-reanimated';
+
+// Durations already used across the package, centralised.
+export const PRESS = 80;
+// The count badge: the swell before its spring, and the old number's fade under it.
+export const COUNT_SWELL = 90;
+export const COUNT_FADE = 170;
+export const OVERLAY_FADE = 150;
+export const CROSSFADE = 200;
+// expo-image's fade-in for a freshly loaded picture.
+export const IMAGE_FADE = 250;
+export const POPOVER_FADE = 200;
+// The cart quantity box growing into its keypad (decision 36), as drawn in the prototype.
+export const QUANTITY_GROW = 180;
+export const SHEET_RISE = 200;
+export const BEAT = 220;
+export const PANEL_SLIDE = 250;
+export const PANEL_SLIDE_OUT = 200;
+export const PANE = 280;
+export const STAMP = 380;
+export const SPINNER = 1000;
+export const INDETERMINATE = 1100;
+
+// The control points, for the three forms a curve is needed in: a Reanimated easing (shared
+// values, layout animations), a CSS string (web keyframes) and Reanimated's `cubicBezier()`
+// (CSS transitions, which the browser runs off the main thread).
+export const EASE_POINTS = [0.2, 0.7, 0.2, 1] as const;
+export const EASE = Easing.bezier(...EASE_POINTS);
+export const EASE_CSS = `cubic-bezier(${EASE_POINTS.join(', ')})`;
+export const EASE_BEAT = Easing.bezier(0.2, 0.9, 0.3, 1.1);
+// Leaving: speed up into the edge. The shared ease slows down at the end, and a surface that
+// leaves on it creeps as a sliver at the edge for its last frames (filmed 2026-10-01).
+export const EASE_EXIT_POINTS = [0.4, 0, 1, 1] as const;
+export const EASE_EXIT = Easing.bezier(...EASE_EXIT_POINTS);
+export const EASE_EXIT_CSS = `cubic-bezier(${EASE_EXIT_POINTS.join(', ')})`;
+
+export const TEAR_OFF_DURATION = 420;
+// Bold money's receipt column: the selected lime releases to the card. Long enough to read as a
+// flash, not a fade; a duration is a beat, never a literal at a call site (the uniwind ratchet).
+export const PAID_FLASH_DURATION = 600;
+export const ROLL_IN_DURATION = 480;
+// Keep pixel and percentage travel separate: timing cannot interpolate between different units.
+// Built on first use, not at import: twelve core suites mock Reanimated without `Keyframe`, and a
+// module that constructs one while loading would take every importer of this file down with it.
+// The types are inferred from the builders: what `.duration()` returns is what a layout animation
+// prop accepts.
+function buildTearOff() {
+	return new Keyframe({
+		0: { opacity: 1, transform: [{ translateY: 0 }, { translateY: '0%' }, { rotate: '0deg' }] },
+		25: {
+			transform: [{ translateY: 6 }, { translateY: '0%' }, { rotate: '0.6deg' }],
+			easing: EASE_EXIT,
+		},
+		100: {
+			opacity: 0.9,
+			transform: [{ translateY: 0 }, { translateY: '110%' }, { rotate: '2deg' }],
+			easing: EASE_EXIT,
+		},
+	}).duration(TEAR_OFF_DURATION);
+}
+function buildRollIn() {
+	return new Keyframe({
+		0: { opacity: 0, transform: [{ translateY: -14 }] },
+		100: { opacity: 1, transform: [{ translateY: 0 }], easing: EASE_BEAT },
+	}).duration(ROLL_IN_DURATION);
+}
+let tearOffKeyframe: ReturnType<typeof buildTearOff> | undefined;
+let rollInKeyframe: ReturnType<typeof buildRollIn> | undefined;
+/** The cart column tears off when the sale is paid (Paper till, Market stall). */
+export function tearOff() {
+	tearOffKeyframe ??= buildTearOff();
+	return tearOffKeyframe;
+}
+/** The next receipt rolls in after a tear-off. */
+export function rollIn() {
+	rollInKeyframe ??= buildRollIn();
+	return rollInKeyframe;
+}
+
+type Beat = {
+	name: string;
+	duration: number;
+	easing: typeof EASE | 'linear';
+	class: 'beat' | 'structural' | 'waiting';
+	waitingPath: boolean;
+	exempt?: boolean;
+	step?: number;
+	cap?: number;
+};
+
+// MOTION-RESEARCH.md Table 1: targets for rebuilds, NOT current component timings.
+// The four decorative effects are deliberately outside the adopted contract.
+export const BEATS = {
+	tearOff: {
+		name: 'Receipt tears off',
+		duration: TEAR_OFF_DURATION,
+		easing: EASE_EXIT,
+		class: 'beat',
+		waitingPath: false,
+	},
+	paidFlash: {
+		name: 'Paid flash releases',
+		duration: PAID_FLASH_DURATION,
+		easing: EASE,
+		class: 'beat',
+		waitingPath: false,
+	},
+	rollIn: {
+		name: 'Receipt rolls in',
+		duration: ROLL_IN_DURATION,
+		easing: EASE_BEAT,
+		class: 'beat',
+		waitingPath: false,
+	},
+	// Decision 29: one settle, never counting up.
+	totalSettles: {
+		name: 'Total settles',
+		duration: BEAT,
+		easing: EASE_BEAT,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// Rule 6: appears as the amount is typed (180ms in the drawing).
+	changeDue: {
+		name: 'Change due appears',
+		duration: 180,
+		easing: EASE,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// Decision 10: the settle budget. The row itself lights in 120 and releases over 420
+	// (`table/pulse-row.tsx`, 2026-10-02; 400+400 before).
+	lineAdded: {
+		name: 'Line-added highlight',
+		duration: BEAT,
+		easing: EASE,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// Decision 9: the disc itself is the acknowledgement (250ms).
+	successDisc: {
+		name: 'Success disc lands',
+		duration: 250,
+		easing: EASE_BEAT,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// Register item 7: retain the pop at the 400ms ceiling.
+	paidMoment: {
+		name: 'Paid moment',
+		duration: 400,
+		easing: EASE_BEAT,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// Target a single stamp-length draw, no delay; shipped 150+450 stays untouched.
+	paidTick: {
+		name: 'Paid tick draws',
+		duration: STAMP,
+		easing: EASE,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// The ledger arrival in the inventory is 280ms; not a general list animation.
+	paymentRow: {
+		name: 'A payment row lands',
+		duration: PANE,
+		easing: EASE_BEAT,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// Decision 29: keep the stamp, use the shared overshoot easing.
+	stamp: {
+		name: 'PAID / VOID stamp slams',
+		duration: STAMP,
+		easing: EASE_BEAT,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// Split drawing: the 400ms ring bounds the concurrent 300ms seat/fill.
+	splitLeg: {
+		name: 'A split leg is paid',
+		duration: 400,
+		easing: EASE,
+		class: 'beat',
+		waitingPath: true,
+	},
+	// Adopt the library's existing 250ms panel constant, not the drawing's 220ms.
+	panelIn: {
+		name: 'Side panel in',
+		duration: PANEL_SLIDE,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// The contract selects 200ms from the drawing's 180/200ms sheet variants.
+	sheetRise: {
+		name: 'Sheet rise',
+		duration: SHEET_RISE,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// Reports inherits the drawing's 180ms rise with a shorter distance.
+	reportsRise: {
+		name: 'Reports sheet rise',
+		duration: 180,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// Orders' folded pane arrives in 220ms in the drawing.
+	ordersPane: {
+		name: 'Orders pane in',
+		duration: BEAT,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// Adopt the existing 200ms popover constant for the shared drop family.
+	popoverIn: {
+		name: 'Menu / popover / toast / order list in',
+		duration: POPOVER_FADE,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// Quantity grow is 180ms; its future native twin uses size/opacity.
+	quantityGrow: {
+		name: 'Quantity expander grows',
+		duration: 180,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// Products pane stage is explicitly 280ms (2026-09-17 decision).
+	productsPane: {
+		name: 'Products pane slides',
+		duration: PANE,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// Drawing's 140ms exit and 10ms step; #340 caps staggered tiles at eight.
+	oldTiles: {
+		name: 'Old tiles leave',
+		duration: 140,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+		step: 10,
+		cap: 8,
+	},
+	// Keep the 22ms step; use BEAT so eight tiles finish in 374ms, not 414ms.
+	newTiles: {
+		name: 'New tiles land',
+		duration: BEAT,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+		step: 22,
+		cap: 8,
+	},
+	// Register crossfade ruling: furniture fades over 200ms, line items do not.
+	crossfade: {
+		name: 'Crossfade',
+		duration: CROSSFADE,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// Immediate press feedback uses the drawing's 80ms, not swipe/grip timings.
+	press: {
+		name: 'Press / swipe / grip',
+		duration: PRESS,
+		easing: EASE,
+		class: 'structural',
+		waitingPath: true,
+	},
+	// Functional indefinite wait: retain the 1s linear revolution under reduce-motion.
+	spinner: {
+		name: 'Spinner',
+		duration: SPINNER,
+		easing: 'linear',
+		class: 'waiting',
+		waitingPath: true,
+		exempt: true,
+	},
+	// Functional indefinite wait: the drawing's 1.1s cycle, also exempt.
+	indeterminateProgress: {
+		name: 'Indeterminate progress bar',
+		duration: INDETERMINATE,
+		easing: EASE,
+		class: 'waiting',
+		waitingPath: true,
+		exempt: true,
+	},
+	// The 600ms IS the deliberate hold gesture, not a wait after the gesture.
+	holdToVoid: {
+		name: 'Hold-to-void fill',
+		duration: 600,
+		easing: 'linear',
+		class: 'waiting',
+		waitingPath: false,
+		exempt: true,
+	},
+} satisfies Record<string, Beat>;
+
+// The accordion keeps its duration and takes the shared ease (2026-10-02; `ease-out` before).
+export const WEB_ANIMATIONS = {
+	'pop-in': `pop-in ${POPOVER_FADE}ms ${EASE_CSS}`,
+	'pop-out': `pop-out ${POPOVER_FADE}ms ${EASE_CSS} forwards`,
+	'quantity-grow': `quantity-grow ${QUANTITY_GROW}ms ${EASE_CSS}`,
+	'quantity-grow-up': `quantity-grow-up ${QUANTITY_GROW}ms ${EASE_CSS}`,
+	// The price keypad grows on the quantity's beat (Paul 2026-10-24: the price does what the
+	// quantity does).
+	'price-grow': `price-grow ${QUANTITY_GROW}ms ${EASE_CSS}`,
+	'price-grow-up': `price-grow-up ${QUANTITY_GROW}ms ${EASE_CSS}`,
+	indeterminate: `indeterminate ${INDETERMINATE}ms ${EASE_CSS} infinite`,
+	'accordion-down': `accordion-down ${CROSSFADE}ms ${EASE_CSS}`,
+	'accordion-up': `accordion-up ${CROSSFADE}ms ${EASE_CSS}`,
+	'overlay-in': `overlay-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
+	// The scrim is the panel's parent on web: it must outlast the panel's exit, or it takes the
+	// panel with it mid-slide.
+	'overlay-out': `overlay-out ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
+	'dialog-in': `dialog-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
+	'dialog-out': `dialog-out ${OVERLAY_FADE}ms ${EASE_CSS} forwards`,
+	'panel-in-left': `panel-in-left ${PANEL_SLIDE}ms ${EASE_CSS}`,
+	'panel-in-right': `panel-in-right ${PANEL_SLIDE}ms ${EASE_CSS}`,
+	'panel-out-left': `panel-out-left ${PANEL_SLIDE_OUT}ms ${EASE_EXIT_CSS} forwards`,
+	'panel-out-right': `panel-out-right ${PANEL_SLIDE_OUT}ms ${EASE_EXIT_CSS} forwards`,
+	'sheet-in': `sheet-in ${SHEET_RISE}ms ${EASE_CSS}`,
+	'sheet-out': `sheet-out ${PANEL_SLIDE_OUT}ms ${EASE_EXIT_CSS} forwards`,
+};

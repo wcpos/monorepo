@@ -40,6 +40,9 @@ jest.mock('@wcpos/components/vstack', () => {
 	const { View } = jest.requireActual('react-native');
 	return { VStack: View };
 });
+// The banner now renders through Notice, whose Icon and Loader are native-runtime imports.
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/docs-link', () => ({
 	DocsLink: ({ href, children, testID }: Record<string, unknown>) => (
 		<a data-testid={testID as string} href={href as string}>

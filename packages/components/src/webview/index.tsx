@@ -1,28 +1,26 @@
 import * as React from 'react';
 
 import isString from 'lodash/isString';
-import { WebView as RNWebView, WebViewProps as RNWebViewProps } from 'react-native-webview';
+import { WebView as RNWebView } from 'react-native-webview';
 
-export type WebViewHandle = Omit<RNWebView, 'postMessage'> & {
-	postMessage(message: any): void;
+import type {
+	WebViewErrorEvent,
+	WebViewEvent,
+	WebViewMessageEvent,
+	WebViewNavigationEvent,
+} from 'react-native-webview/lib/WebViewTypes';
+import type { WebViewLoadErrorEvent, WebViewProps } from './types';
+
+export type WebViewHandle = Omit<RNWebView<object>, 'postMessage'> & {
+	postMessage(message: unknown): void;
 };
 
-/**
- * react-native-webview types `onContentSizeChange` without the `contentSize`
- * payload it actually delivers — declare the real shape so the host can size
- * itself to the rendered document.
- */
-export interface WebViewContentSizeChangeEvent {
-	nativeEvent: { contentSize: { width: number; height: number } };
-}
+export type { WebViewLoadErrorEvent };
 
-export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange'> {
-	ref?: React.Ref<WebViewHandle>;
-	src?: string;
-	srcDoc?: string;
-	targetOrigin?: string;
-	onMessage: (event: { nativeEvent: { data: any } }) => void;
-	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
+/** The URL a navigation event names, when it names one. */
+function eventURL(event: { nativeEvent?: { url?: unknown } }): string | null {
+	const url = event.nativeEvent?.url;
+	return typeof url === 'string' && url !== '' ? url : null;
 }
 
 /**
@@ -35,15 +33,27 @@ function WebView({
 	targetOrigin: _targetOrigin,
 	onMessage,
 	onContentSizeChange,
+	onLoad,
+	onLoadStart,
+	onError,
 	...props
-}: WebViewProps) {
-	const localRef = React.useRef<RNWebView>(null);
+}: WebViewProps<WebViewHandle>) {
+	const localRef = React.useRef<RNWebView<object>>(null);
+	// react-native-webview 14.0.1 on Android (RNCWebViewClient.onReceivedError) reports a
+	// failed navigation as a FINISH and then an error, so `onLoad` fires for a document that
+	// never loaded. `loadSinceStartRef` holds the URL of a load since the last navigation
+	// start, so an error naming that same URL is marked `retractsLoad` (iOS errors never
+	// follow a load of their own URL). `erroredURLRef` is the URL that failed: its error page
+	// then fires a load-start of its own (doUpdateVisitedHistory), which is not a navigation
+	// and is not reported.
+	const loadSinceStartRef = React.useRef<string | null>(null);
+	const erroredURLRef = React.useRef<string | null>(null);
 
 	React.useImperativeHandle(
 		ref,
 		() =>
-			Object.assign(localRef.current ?? ({} as RNWebView), {
-				postMessage(message: any) {
+			Object.assign(localRef.current ?? ({} as RNWebView<object>), {
+				postMessage(message: unknown) {
 					const eventInit = JSON.stringify({ data: message });
 					localRef.current?.injectJavaScript(`
 						(function() {
@@ -76,14 +86,18 @@ function WebView({
 		[]
 	);
 
-	// srcDoc (inline HTML) takes priority over src (URI)
-	const source = srcDoc != null ? { html: srcDoc } : { uri: src || '' };
+	// srcDoc (inline HTML) takes priority over src (URI). When both are given the HTML is a page
+	// that was read from src (the receipt stage reads it once and shows the text), so src is its
+	// base: relative links in a template resolve against the store, as they did when the WebView
+	// loaded the URL itself.
+	const source =
+		srcDoc != null ? { html: srcDoc, ...(src ? { baseUrl: src } : {}) } : { uri: src || '' };
 
 	return (
-		<RNWebView
+		<RNWebView<object>
 			ref={localRef}
 			source={source}
-			onMessage={(event) => {
+			onMessage={(event: WebViewMessageEvent) => {
 				/**
 				 * https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#onmessage
 				 * data from the webview must be a string, we want to convert this to an object
@@ -105,13 +119,35 @@ function WebView({
 					onMessage?.(event);
 				}
 			}}
-			onError={(error) => {
+			onLoad={(event: WebViewNavigationEvent) => {
+				loadSinceStartRef.current = eventURL(event);
+				erroredURLRef.current = null;
+				onLoad?.(event);
+			}}
+			onLoadStart={(event: WebViewNavigationEvent) => {
+				const url = eventURL(event);
+				const errored = erroredURLRef.current;
+				if (
+					errored !== null &&
+					url !== null &&
+					(url === errored || url.startsWith('chrome-error://'))
+				)
+					return;
+				erroredURLRef.current = null;
+				loadSinceStartRef.current = null;
+				onLoadStart?.(event);
+			}}
+			onError={(error: WebViewErrorEvent) => {
+				const url = eventURL(error);
+				const retractsLoad = url !== null && loadSinceStartRef.current === url;
+				loadSinceStartRef.current = null;
+				erroredURLRef.current = url ?? '';
 				console.error('WebView error:', error);
-				props.onError?.(error);
+				onError?.({ ...error, nativeEvent: { ...error.nativeEvent, retractsLoad } });
 			}}
 			// react-native-webview types onContentSizeChange without `contentSize`,
 			// but it is populated at runtime — the cast bridges the upstream gap.
-			onContentSizeChange={onContentSizeChange as unknown as RNWebViewProps['onContentSizeChange']}
+			onContentSizeChange={onContentSizeChange as ((event: WebViewEvent) => void) | undefined}
 			{...props}
 		/>
 	);

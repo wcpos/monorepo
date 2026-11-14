@@ -18,6 +18,8 @@ export default function SettingsLayout() {
 			areaLabel={t('common.settings')}
 			testID="settings-navigation"
 			screenTestID="settings-screen"
+			barTestID="settings-bar"
+			leafPagesCarryTitle
 		>
 			<Slot />
 		</NavigationAreaLayout>

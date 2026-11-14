@@ -14,12 +14,8 @@ type CategoryRecord = { payload: { id: number; name: string }; uuid: string; rem
 
 let mockSelectedResource: ObservableResource<CategoryRecord[]>;
 
-jest.mock('../../../hooks/use-engine-document', () => ({
+jest.mock('@wcpos/query/record-readers', () => ({
 	useEngineRecordsByWooId: () => mockSelectedResource,
-}));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/tree-combobox', () => ({
 	TreeCombobox: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -64,3 +60,6 @@ describe('selected category labels', () => {
 		mockSelectedResource.destroy();
 	});
 });
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));

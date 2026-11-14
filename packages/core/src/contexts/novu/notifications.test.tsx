@@ -4,7 +4,7 @@
 import * as React from 'react';
 
 import { act, render, waitFor } from '@testing-library/react';
-import { type Observable, of, Subject } from 'rxjs';
+import { map, type Observable, of, Subject } from 'rxjs';
 
 import {
 	NovuNotificationsProvider,
@@ -33,15 +33,22 @@ let notificationQuery$: Observable<Record<string, unknown>[]> | null = null;
 
 const notificationsCollection = {
 	find: jest.fn(() => ({
-		$: notificationQuery$ ?? of(notificationDocs),
+		$: (notificationQuery$ ?? of(notificationDocs)).pipe(
+			map((rows) => rows.map((row) => ({ ...row, toJSON: () => row })))
+		),
 		exec: jest.fn(async () => []),
 	})),
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
 	upsert: jest.fn(async () => undefined),
 };
 
+const storeDB = {
+	notifications: notificationsCollection,
+	collections: { notifications: notificationsCollection },
+};
+
 jest.mock('../app-state', () => ({
-	useAppState: () => ({ storeDB: { notifications: notificationsCollection } }),
+	useAppState: () => ({ storeDB }),
 }));
 
 jest.mock('./config', () => ({
@@ -96,13 +103,24 @@ describe('NovuNotificationsProvider', () => {
 		});
 	});
 
-	it('bootstraps once for two concurrent consumers (bell + panel)', async () => {
+	it('bootstraps once for two concurrent consumers and shares their state', async () => {
+		const seen: unknown[] = [];
+
+		function Recorder() {
+			const value = useNovuNotifications();
+			seen.push(value);
+			return null;
+		}
+
 		render(
 			<NovuNotificationsProvider>
-				<Consumer label="bell" />
-				<Consumer label="panel" />
+				<Recorder />
+				<Recorder />
 			</NovuNotificationsProvider>
 		);
+
+		await waitFor(() => expect(seen.length).toBeGreaterThanOrEqual(2));
+		expect(seen[0]).toBe(seen[1]);
 
 		await waitFor(() => expect(mockedSyncSubscriber).toHaveBeenCalledTimes(1));
 
@@ -147,26 +165,6 @@ describe('NovuNotificationsProvider', () => {
 
 		expect(mockedGetNovuClient).toHaveBeenCalledTimes(1);
 		expect(mockedSubscribe).toHaveBeenCalledTimes(1);
-	});
-
-	it('shares one state object with every consumer', async () => {
-		const seen: unknown[] = [];
-
-		function Recorder() {
-			const value = useNovuNotifications();
-			seen.push(value);
-			return null;
-		}
-
-		render(
-			<NovuNotificationsProvider>
-				<Recorder />
-				<Recorder />
-			</NovuNotificationsProvider>
-		);
-
-		await waitFor(() => expect(seen.length).toBeGreaterThanOrEqual(2));
-		expect(seen[0]).toBe(seen[1]);
 	});
 
 	it('does not bootstrap when there is no subscriber (logged out)', async () => {

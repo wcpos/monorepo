@@ -3,7 +3,14 @@
  */
 import { makeRedirectUri } from 'expo-auth-session';
 
-import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './utils';
+import { URL_IMPLEMENTATIONS, withGlobalUrl } from '../../../jest/url-implementations';
+import {
+	buildAuthUrl,
+	extractAuthParams,
+	generateState,
+	getRedirectUri,
+	parseAuthResult,
+} from './utils';
 
 // Mock expo-auth-session for getRedirectUri
 jest.mock('expo-auth-session', () => ({
@@ -16,6 +23,20 @@ jest.mock('@wcpos/utils/app-info', () => ({
 		return appInfo;
 	},
 }));
+
+describe.each(URL_IMPLEMENTATIONS)('buildAuthUrl with an IDN host (%s)', (_, impl) => {
+	withGlobalUrl(impl);
+
+	it('canonicalizes the host and preserves the redirect URI', () => {
+		const url = buildAuthUrl('https://münchen-laden.de/wcpos-login/', 'https://app/callback', 's1');
+		expect(url.startsWith('https://xn--mnchen-laden-dlb.de/wcpos-login/?')).toBe(true);
+		expect(new URL(url).searchParams.get('redirect_uri')).toBe('https://app/callback');
+	});
+
+	it('extracts callback query params with a hash present', () => {
+		expect(extractAuthParams('wcpos://callback?token=t#x=1')?.get('token')).toBe('t');
+	});
+});
 
 describe('use-wcpos-auth utils', () => {
 	describe('getRedirectUri', () => {

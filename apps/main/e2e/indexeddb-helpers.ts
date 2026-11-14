@@ -1,3 +1,5 @@
+import { TILL_ANCHOR_KEY } from '@wcpos/database/till-anchor-key';
+
 import type { Page } from '@playwright/test';
 
 /**
@@ -124,4 +126,23 @@ export async function restoreLocalStorage(page: Page, data: Record<string, strin
 			localStorage.setItem(key, value);
 		}
 	}, data);
+}
+
+/** Whether a saved snapshot carries a till anchor; one captured before the anchor existed does not. */
+export function hasTillAnchor(localStorage: Record<string, string>): boolean {
+	return TILL_ANCHOR_KEY in localStorage;
+}
+
+/**
+ * Restore a saved snapshot's localStorage into a page that boots as its own till. A
+ * restored snapshot is a copy of the login's database; without its till anchor the copy
+ * re-mints itself as a new till before it sells, the same path a real clone takes, so
+ * no two tests stamp the same till and sale counter.
+ */
+export async function restoreLocalStorageAsClone(
+	page: Page,
+	data: Record<string, string>
+): Promise<void> {
+	const { [TILL_ANCHOR_KEY]: _clonedTill, ...withoutAnchor } = data;
+	await restoreLocalStorage(page, withoutAnchor);
 }

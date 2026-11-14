@@ -1,73 +1,41 @@
 import * as React from 'react';
 
+import { ObserveRoot } from 'expo-observe';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
-import { Uniwind, useUniwind } from 'uniwind';
+import { useUniwind } from 'uniwind';
 
+import { isLightTheme } from '@wcpos/components/lib/themes';
+import { GalleryRootLayout, IS_GALLERY_BUILD } from '@wcpos/main/components/gallery/registry';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { hasStoreSession, useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
+import { ScaleProvider } from '@wcpos/core/contexts/scale';
+import { ThemeSettingProvider } from '@wcpos/core/contexts/theme-setting';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
+import { markRedirectHandedToOpener } from '@wcpos/core/hooks/use-wcpos-auth/redirect-result';
 import { setToast } from '@wcpos/utils/logger';
 
 import {
 	ClearLocalDataBlockedScreen,
 	useClearLocalDataOnStartup,
 } from '../components/clear-local-data-on-startup';
+import { DesktopWindowChrome } from '../components/desktop-window-chrome';
+import { LiveTabGate } from '../components/live-tab-gate';
 import { RootError } from '../components/root-error';
+// Configures EAS Observe at import, before any screen mounts (see lib/observe.ts).
+import { useObserveConsent } from '../lib/observe';
 import '../global.css';
 import '../polyfills';
 
-WebBrowser.maybeCompleteAuthSession();
-
-/**
- * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
- */
-// function UniwindInsetSync() {
-// 	const insets = React.useContext(SafeAreaInsetsContext);
-
-// 	// Sync insets to Uniwind when they change
-// 	React.useEffect(() => {
-// 		if (insets) {
-// 			Uniwind.updateInsets(insets);
-// 		}
-// 	}, [insets]);
-
-// 	return null;
-// }
-
-/**
- * Restores the saved theme from the store document on app startup.
- * Returns true when theme restoration is complete.
- */
-function useThemeRestorer() {
-	const { store } = useAppState();
-	const [restoredForStore, setRestoredForStore] = React.useState<unknown>(null);
-	const [isThemeReady, setIsThemeReady] = React.useState(false);
-
-	// Adjust state during render — sanctioned pattern, not an effect, not flagged.
-	if (store && restoredForStore !== store) {
-		setRestoredForStore(store);
-		setIsThemeReady(true);
-	}
-
-	// External mutation belongs in a pre-paint effect; read store.theme directly.
-	React.useLayoutEffect(() => {
-		if (!store) return;
-		const savedTheme = store.theme;
-		if (savedTheme && savedTheme !== 'system') {
-			Uniwind.setTheme(savedTheme as Parameters<typeof Uniwind.setTheme>[0]);
-		}
-	}, [store]);
-
-	return { isThemeReady, hasStore: !!store };
-}
+const authSession = WebBrowser.maybeCompleteAuthSession();
+if (authSession.type === 'success') markRedirectHandedToOpener();
 
 /**
  * Determines the appropriate toast theme based on the current Uniwind theme.
@@ -75,15 +43,15 @@ function useThemeRestorer() {
  */
 function useToastTheme(): 'light' | 'dark' {
 	const { theme } = useUniwind();
-	// Light theme is the only "light" theme, all others are dark
-	return theme === 'light' ? 'light' : 'dark';
+	return isLightTheme(theme) ? 'light' : 'dark';
 }
 
 function RootStack() {
 	const appState = useAppState();
-	const { store } = appState;
-	const { isThemeReady } = useThemeRestorer();
-	useTelemetryConsent();
+	// One merchant preference, two telemetry clients: the Sentry sink (inside the
+	// hook) and EAS Observe. Neither sends anything before it is `allowed`.
+	const telemetryConsent = useTelemetryConsent();
+	useObserveConsent(telemetryConsent);
 	const t = useT();
 	// `Toast.show` on its own would print the developer log message when a call
 	// site logs `showToast: true` without cashier copy. The adapter resolves the
@@ -91,22 +59,18 @@ function RootStack() {
 	// changes identity so a language switch takes effect on the next toast.
 	setToast(createMerchantToast(t, Toast.show));
 
-	// Wait for theme to be ready when we have a store
-	// This prevents the flash of default theme colors
-	if (store && !isThemeReady) {
-		return null;
-	}
-
 	return (
-		<Stack screenOptions={{ headerShown: false }}>
-			{/* The whole session, not just the store database: the (app) stack calls
-			    useStoreSession on its first render, and a partially hydrated session
-			    used to mount it and throw (#2112). */}
-			<Stack.Protected guard={hasStoreSession(appState)}>
-				<Stack.Screen name="(app)" />
-			</Stack.Protected>
-			<Stack.Screen name="(auth)" />
-		</Stack>
+		<>
+			<Stack screenOptions={{ headerShown: false }}>
+				{/* The whole session, not just the store database: the (app) stack calls
+				    useStoreSession on its first render, and a partially hydrated session
+				    used to mount it and throw (#2112). */}
+				<Stack.Protected guard={hasStoreSession(appState)}>
+					<Stack.Screen name="(app)" />
+				</Stack.Protected>
+				<Stack.Screen name="(auth)" />
+			</Stack>
+		</>
 	);
 }
 
@@ -120,7 +84,26 @@ function ThemedToaster() {
 	return <Toaster position="top-center" theme={toastTheme} richColors />;
 }
 
-export default function RootLayout() {
+function RootLayout() {
+	// A build-time constant: false in every merchant build (Metro resolves the gallery
+	// registry to its stub), so production never reads the route to decide anything.
+	if (IS_GALLERY_BUILD) return <GalleryRootLayout merchant={MerchantRootLayout} />;
+	return (
+		<LiveTabGate>
+			<MerchantRootLayout />
+		</LiveTabGate>
+	);
+}
+
+/**
+ * EAS Observe marks time-to-first-render from this wrapper and scopes its
+ * per-route hooks under it. No `errorBoundaryFallback`: the merchant-facing
+ * root boundary (`RootError`, with its unsent-changes count) stays the app's
+ * own, and unhandled JS errors still reach Observe through its global handler.
+ */
+export default ObserveRoot.wrap(RootLayout);
+
+function MerchantRootLayout() {
 	const clearLocalDataState = useClearLocalDataOnStartup();
 
 	if (clearLocalDataState === 'clearing') {
@@ -137,16 +120,30 @@ export default function RootLayout() {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<SafeAreaProvider style={{ overflow: 'hidden' }}>
-				<GestureHandlerRootView style={{ flex: 1 }}>
-					<KeyboardProvider>
-						<HydrationProviders>
-							<RootStack />
-							<ErrorBoundary>
-								<ThemedToaster />
-							</ErrorBoundary>
-						</HydrationProviders>
-					</KeyboardProvider>
-				</GestureHandlerRootView>
+				{/* Desktop only: publishes the frameless window's title-bar strip, part of the top edge. */}
+				<DesktopWindowChrome>
+					<GestureHandlerRootView style={{ flex: 1 }}>
+						<KeyboardProvider>
+							<HydrationProviders>
+								{/* Inside the hydration sandwich (it reads the store's Scale
+								    override) and around the toaster, so every PortalHost —
+								    the app's, the (auth) one and the named `pos` host — sits
+								    inside the scale scope. */}
+								<ScaleProvider>
+									{/* Inside the scale scope for the same reason: it reads the store's
+									    icon family, and the toaster and every PortalHost draw icons too.
+									    It also applies the store's theme before the first frame paints. */}
+									<ThemeSettingProvider>
+										<RootStack />
+										<ErrorBoundary>
+											<ThemedToaster />
+										</ErrorBoundary>
+									</ThemeSettingProvider>
+								</ScaleProvider>
+							</HydrationProviders>
+						</KeyboardProvider>
+					</GestureHandlerRootView>
+				</DesktopWindowChrome>
 			</SafeAreaProvider>
 		</ErrorBoundary>
 	);

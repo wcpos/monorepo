@@ -22,6 +22,8 @@ export function createFakeCarrier(
 	};
 	const carrier: PosCarrier & { state: FakeCarrierState } = {
 		state,
+		vatExempt: wooMetaCarrier.vatExempt,
+		stampVatExempt: wooMetaCarrier.stampVatExempt,
 		readIdentity(meta) {
 			if (meta === undefined) {
 				return { cashierId: state.cashierId, storeId: state.storeId };

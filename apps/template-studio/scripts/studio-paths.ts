@@ -27,6 +27,9 @@ export const defaultWooCommercePosRoot = resolveDefaultWooCommercePosRoot(monore
 export const wooCommercePosRoot = process.env.WCPOS_PLUGIN_ROOT ?? defaultWooCommercePosRoot;
 export const galleryTemplatesDir =
 	process.env.WCPOS_GALLERY_TEMPLATES_DIR ?? path.join(wooCommercePosRoot, 'templates/gallery');
+export const galleryRegistryPath =
+	process.env.WCPOS_GALLERY_REGISTRY_PATH ??
+	path.join(wooCommercePosRoot, 'includes/Templates/Gallery_Registry.php');
 export const galleryPreviewOutputDir =
 	process.env.WCPOS_GALLERY_PREVIEW_DIR ?? path.join(studioRoot, 'gallery-previews');
 export const curatedSnapshotDir = path.join(studioRoot, 'snapshots/curated');

@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 
+import { SavedFieldProvider } from '@wcpos/components/form';
 import { Button } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
+import { Notice } from '@wcpos/components/notice';
 import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import {
@@ -16,12 +17,11 @@ import {
 	usePrinterDiscovery,
 } from '@wcpos/printer';
 
-import { AdvancedSettings } from './dialog/advanced-settings';
 import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { WebVendorSegmented } from './dialog/connection/web-vendor-segmented';
-import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
+import { usePrinterFooter } from './dialog/use-printer-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { TestPrintError } from './dialog/test-print-error';
 import { usePrinterDialogForm } from './dialog/use-printer-dialog-form';
@@ -42,21 +42,28 @@ const WEB_DEFAULTS: PrinterFormValues = { ...DEFAULT_FORM_VALUES, vendor: 'epson
 interface PrinterDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSave: () => void;
+	onClose: () => void;
 	printer?: PrinterProfile;
 	printerCount?: number;
 	prefill?: PrinterDialogPrefill;
 }
 
 export function PrinterDialog(props: PrinterDialogProps) {
-	if (!props.printer) return props.open ? <PrinterSetupDialog {...props} platform="web" /> : null;
-	return <EditPrinterDialog {...props} />;
+	if (!props.printer)
+		return props.open ? (
+			<PrinterSetupDialog {...props} onSave={props.onClose} platform="web" />
+		) : null;
+	return (
+		<SavedFieldProvider>
+			<EditPrinterDialog {...props} />
+		</SavedFieldProvider>
+	);
 }
 
 function EditPrinterDialog({
 	open,
 	onOpenChange,
-	onSave,
+	onClose,
 	printer,
 	printerCount = 0,
 	prefill,
@@ -66,10 +73,8 @@ function EditPrinterDialog({
 	const { connectUsbDevice, connectBluetoothDevice } = discovery;
 	const {
 		form,
-		isEditing,
 		testLoading,
 		drawerLoading,
-		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
@@ -77,8 +82,7 @@ function EditPrinterDialog({
 		setManualVendor,
 		handleOpenDrawer,
 		handleTestPrint,
-		handleSave,
-		handleSaveAnyway,
+		handleClose,
 	} = usePrinterDialogForm({
 		open,
 		schema: webPrinterSchema,
@@ -87,7 +91,7 @@ function EditPrinterDialog({
 		printer,
 		prefill,
 		printerCount,
-		onSave,
+		onClose,
 	});
 
 	const vendor = useWatch({
@@ -136,14 +140,7 @@ function EditPrinterDialog({
 		return types;
 	}, []);
 
-	const banner = (
-		<View className="bg-muted flex-row items-start gap-2 rounded-md p-3">
-			<Icon name="circleInfo" size="sm" className="text-muted-foreground mt-0.5" />
-			<Text className="text-muted-foreground flex-1 text-sm">
-				{t('settings.web_printer_limitation')}
-			</Text>
-		</View>
-	);
+	const banner = <Notice tone="info" title={t('settings.web_printer_limitation')} />;
 
 	const webDeviceSection = connectionType !== 'network' && (
 		<VStack className="gap-2">
@@ -172,7 +169,7 @@ function EditPrinterDialog({
 			{discovery.printers
 				.filter((p) => p.connectionType === connectionType)
 				.map((device) => (
-					<Pressable
+					<ListItem
 						key={device.id}
 						testID={`add-printer-web-device-${device.id}`}
 						onPress={() => {
@@ -185,12 +182,11 @@ function EditPrinterDialog({
 								form.setValue('vendor', device.vendor);
 							}
 						}}
-						className="border-border flex-row items-center gap-2 rounded-md border p-2"
 					>
 						<Text className="text-sm">
 							{device.name} ({device.connectionType})
 						</Text>
-					</Pressable>
+					</ListItem>
 				))}
 		</VStack>
 	);
@@ -207,28 +203,40 @@ function EditPrinterDialog({
 		[form, setManualVendor]
 	);
 
+	const footer = usePrinterFooter({
+		showOpenDrawer: canOpenDrawer,
+		testLoading,
+		drawerLoading,
+		onOpenDrawer: () => void handleOpenDrawer(),
+		onTestPrint: () => void handleTestPrint(),
+	});
+
 	return (
 		<PrinterDialogLayout
 			form={form}
 			open={open}
-			onOpenChange={onOpenChange}
-			isEditing={isEditing}
+			onOpenChange={(next) => {
+				if (!next) void handleClose();
+				else onOpenChange(next);
+			}}
 			banner={banner}
-			connectionSection={
+			connectionRow={
+				<ConnectionTypeSegmented
+					form={form}
+					value={connectionType}
+					availableTypes={availableTypes}
+					onChange={(v) => {
+						form.setValue('connectionType', v, {
+							shouldDirty: true,
+						});
+						form.setValue('address', '', {
+							shouldDirty: true,
+						});
+					}}
+				/>
+			}
+			connectionLane={
 				<>
-					<ConnectionTypeSegmented
-						form={form}
-						value={connectionType}
-						availableTypes={availableTypes}
-						onChange={(v) => {
-							form.setValue('connectionType', v, {
-								shouldDirty: true,
-							});
-							form.setValue('address', '', {
-								shouldDirty: true,
-							});
-						}}
-					/>
 					{connectionType === 'network' && (
 						<>
 							<WebVendorSegmented vendor={vendor} onSelect={handleVendorSelect} />
@@ -250,34 +258,14 @@ function EditPrinterDialog({
 					)}
 					{webDeviceSection}
 					{discovery.error && (
-						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
+						<Text testID="add-printer-discovery-error" variant="help">
 							{formatDiscoveryError(discovery.error, t)}
 						</Text>
 					)}
 				</>
 			}
-			advancedSettings={
-				<AdvancedSettings
-					form={form}
-					showVendor={false}
-					vendorOptions={[]}
-					defaultOpen={isEditing}
-				/>
-			}
 			errorSection={<TestPrintError error={testError} />}
-			footer={
-				<PrinterDialogFooter
-					showSaveAnyway={!!testError}
-					showOpenDrawer={canOpenDrawer}
-					testLoading={testLoading}
-					drawerLoading={drawerLoading}
-					saveLoading={saveLoading}
-					onOpenDrawer={handleOpenDrawer}
-					onTestPrint={handleTestPrint}
-					onSave={form.handleSubmit(handleSave)}
-					onSaveAnyway={handleSaveAnyway}
-				/>
-			}
+			footer={footer}
 		/>
 	);
 }

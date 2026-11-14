@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { FlexAlignType, ViewStyle } from 'react-native';
+import { View } from 'react-native';
 
 import {
 	columnVisibilityFeature,
@@ -11,33 +11,34 @@ import {
 	tableFeatures,
 	useTable,
 } from '@tanstack/react-table';
-import { useObservableSuspense } from 'observable-hooks';
 import { find } from 'lodash';
 
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableFooter,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@wcpos/components/table';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Suspense } from '@wcpos/components/suspense';
+import { usePointer } from '@wcpos/components/lib/device';
+import { Table, TableBody, TableFooter, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { QueryResult } from '@wcpos/query';
+import type { QueryHandle, QueryResult } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
-import { useGuardedExtendLimit } from '../../../../query';
+import {
+	useDrawnHandle,
+	useGuardedExtendLimit,
+	useQueryHandleFields,
+	useQuerySnapshot,
+} from '../../../../query';
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
-import { RecordTextCell } from '../../components/record-text-cell';
+import { RecordTextCell } from '../record-text-cell';
 import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
+import { getRowTestID, RowLayoutContext, DataTableRow as RowView } from './rows';
+import { ResizeHead } from './resize';
+import { DataTableSkeletonRows } from './skeleton';
+import { getColumnStyle } from './column-style';
+import { CaptionRowInset, TableSurface } from './surface';
 
+import type { DataTableFooterProps } from './footer';
 import type { SortingChange } from './sort-field';
 import type { CollectionKey as QueryCollectionKey } from '../../../../query';
 import type { RowData, TableOptions } from '@tanstack/react-table';
@@ -52,14 +53,10 @@ const dataTableFeatures = tableFeatures({
 });
 
 type DataTableFeatures = typeof dataTableFeatures;
-type DataTableRow = QueryResult<import('rxdb').RxCollection>['hits'][number];
+type DataTableRow = QueryResult['hits'][number];
 type CellComponent = React.ElementType;
 type CellMap = Record<string, CellComponent>;
-type DataTableConfig<TData extends RowData> = Omit<
-	Partial<TableOptions<DataTableFeatures, TData>>,
-	'meta'
-> & {
-	meta?: Record<string, unknown>;
+type DataTableConfig<TData extends RowData> = Partial<TableOptions<DataTableFeatures, TData>> & {
 	extraData?: unknown;
 };
 
@@ -74,9 +71,7 @@ interface RenderHeaderProps {
 	onSortingChange: (sort: SortingChange) => void;
 }
 
-type BindingDataTableFooterProps = React.ComponentProps<typeof DataTableFooter>;
-
-interface BindingActions<TSortField extends string> {
+interface TableActions<TSortField extends string> {
 	setSort(field: TSortField, direction: 'asc' | 'desc'): void;
 	extendLimit(): void;
 	setFilter: (...args: never[]) => void;
@@ -84,7 +79,8 @@ interface BindingActions<TSortField extends string> {
 
 interface CommonProps<TData extends RowData> {
 	id: UISettingID;
-	noDataMessage?: string;
+	listRef?: React.Ref<import('@wcpos/components/virtualized-list/types').VirtualizedListHandle>;
+	noDataMessage?: string | React.ReactElement;
 	estimatedItemSize?: number;
 	showFooter?: boolean;
 	renderItem?: (params: {
@@ -93,30 +89,119 @@ interface CommonProps<TData extends RowData> {
 		table: any;
 	}) => React.ReactElement<React.ComponentProps<typeof VirtualizedList.Item>>;
 	cells?: CellMap;
+	columnLabels?: Record<string, string>;
 	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap;
 	renderHeader?: (props: RenderHeaderProps) => React.ReactNode;
+	/** Off for a table that borrows another's settings id (the variations pane): a header sort must not rewrite the products sort. */
+	persistSort?: boolean;
 	tableConfig?: DataTableConfig<TData>;
 	getItemType?: (row: any) => string;
-	ListFooterComponent?: React.ComponentType<any>;
+	/** Under the last row; handed the live handle's `active` as a value. */
+	ListFooterComponent?: React.ComponentType<{ active: boolean }>;
+	/**
+	 * Replaces the table's own end-reached (`actions.extendLimit` behind its guard) for a caller
+	 * that guards and arms its paging itself (a browse level, which pages on its own rows and
+	 * re-fires an end-reached the guard ignored while pending).
+	 */
+	onEndReached?: () => void;
 }
 
-type BindingProps<TSortField extends string> = {
+type TableProps<TSortField extends string> = {
 	collectionName: DataTableCollectionKey;
-	binding?: Pick<import('../../../../query').QueryBinding, 'pending$' | 'exhausted$'>;
-	resource: import('observable-hooks').ObservableResource<QueryResult<import('rxdb').RxCollection>>;
 	sort: { field: TSortField; direction: 'asc' | 'desc' };
-	actions: BindingActions<TSortField>;
-	TableFooterComponent?: React.ComponentType<BindingDataTableFooterProps>;
-	active$: import('rxjs').Observable<boolean>;
-	total$: import('rxjs').Observable<number | null>;
-	sync: () => Promise<void>;
+	actions: TableActions<TSortField>;
+	/** Replaces the default footer; handed values only (`DataTableFooterProps`). */
+	TableFooterComponent?: React.ComponentType<DataTableFooterProps>;
 };
 
+type RowsHandle = QueryHandle<QueryResult>;
+
+/**
+ * The source is a query handle (roadmap#423): one snapshot, suspended on until the engine's
+ * first answer (the screen's boundary draws the skeleton), a changed query keeping its rows
+ * while the next one suspends (`useDrawnHandle`).
+ */
 type Props<TData extends RowData, TSortField extends string> = CommonProps<TData> &
-	BindingProps<TSortField>;
+	TableProps<TSortField> & { handle: RowsHandle };
+
+/** What the body draws: the drawn snapshot's rows, and the two handles its footer reads. */
+type BodyProps<TData extends RowData, TSortField extends string> = CommonProps<TData> &
+	TableProps<TSortField> & {
+		result: QueryResult;
+		syncing: boolean;
+		paging: { pending: boolean; exhausted: boolean | null };
+		/** The live handle: the spinner and the sync button are the engine's now. */
+		handle: RowsHandle;
+		/** The drawn handle: the total rides with the rows it counts. */
+		shown: RowsHandle;
+	};
+
+const TABLE_FIELDS = ['pending', 'exhausted'] as const;
+const ACTIVE_FIELD = ['active'] as const;
+const TOTAL_FIELD = ['total'] as const;
+
+/**
+ * The footer row, default or the caller's: `total` from the drawn handle in the SAME commit as
+ * the rows it counts, the spinner from the live one. Read here, not in the body, so the body
+ * does not re-render when the census lands.
+ */
+function HandleFooter({
+	Footer,
+	collectionName,
+	handle,
+	shown,
+	drawnCount,
+}: {
+	Footer: React.ComponentType<DataTableFooterProps>;
+	collectionName: DataTableCollectionKey;
+	handle: RowsHandle;
+	shown: RowsHandle;
+	drawnCount: number;
+}) {
+	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
+	const { total } = useQueryHandleFields(shown, TOTAL_FIELD);
+	return (
+		<Footer
+			collectionName={collectionName}
+			active={active}
+			total={total}
+			sync={handle.sync}
+			drawnCount={drawnCount}
+		/>
+	);
+}
 
 function DataTable<TData extends RowData, TSortField extends string = string>(
 	props: Props<TData, TSortField>
+) {
+	const { handle, ...rest } = props;
+	// Stale-while-loading: the drawn (previous) handle's rows stay while the new one suspends.
+	const shown = useDrawnHandle(handle);
+	const settling = shown !== handle;
+	const snapshot = useQuerySnapshot(shown, TABLE_FIELDS);
+	// The spinner is the engine's now, whichever query is drawn.
+	const { active } = useQueryHandleFields(handle, ACTIVE_FIELD);
+	return (
+		<DataTableBody<TData, TSortField>
+			{...rest}
+			result={snapshot.result}
+			syncing={active}
+			// A changed query that has not answered is in flight for paging (#1221).
+			paging={{ pending: snapshot.pending || settling, exhausted: snapshot.exhausted }}
+			// Handles as data, not a component per handle: the footer (and its sync button's
+			// state) stays mounted across a query change.
+			handle={handle}
+			shown={shown}
+		/>
+	);
+}
+
+/** Skeleton rows shown in an empty list while the collection is still syncing: enough to read
+ *  as a table filling, few enough that a store with three coupons does not flash a page. */
+const SYNCING_SKELETON_ROWS = 5;
+
+function DataTableBody<TData extends RowData, TSortField extends string = string>(
+	props: BodyProps<TData, TSortField>
 ) {
 	/*
 	 * NOTE (react-table v9): this component is now compiled by the React
@@ -138,27 +223,47 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	 */
 	const {
 		id,
+		listRef,
 		noDataMessage,
 		estimatedItemSize,
 		showFooter = true,
 		renderItem,
 		cells,
 		cellsForRow,
+		columnLabels,
 		renderHeader,
+		persistSort = true,
 		tableConfig,
 		getItemType,
 		ListFooterComponent,
+		onEndReached,
 	} = props;
-	const resource = props.resource;
+	const pointer = usePointer();
 	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
-	const uiColumns = useDocField(uiSettings, (value) => value.columns);
+	const settingsColumns = useDocField(uiSettings, (value) => value.columns);
+	const [widths, setWidths] = React.useState(() => new Map<string, number>());
+	const uiColumns = React.useMemo(
+		() =>
+			settingsColumns.map((column) =>
+				widths.has(column.key)
+					? { ...column, width: widths.get(column.key), flex: undefined }
+					: column
+			),
+		[settingsColumns, widths]
+	);
 	const t = useT();
-	const result = useObservableSuspense(resource);
+	const { result, syncing, paging: queryPaging } = props;
 	const deferredResult = React.useDeferredValue(result);
+	// A deferred frame behind the answer is in flight for paging too: the guard must not judge
+	// the new answer on the old hit count (#1221).
+	const paging = {
+		pending: queryPaging.pending || deferredResult !== result,
+		exhausted: queryPaging.exhausted,
+	};
 
 	const columns = React.useMemo(
-		() => buildColumns(uiColumns, getUILabel, cells, cellsForRow),
-		[uiColumns, getUILabel, cells, cellsForRow]
+		() => buildColumns(uiColumns, getUILabel, cells, cellsForRow, columnLabels),
+		[uiColumns, getUILabel, cells, cellsForRow, columnLabels]
 	);
 
 	const columnVisibility = React.useMemo(
@@ -171,10 +276,10 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }: SortingChange) => {
-			void patchUI({ sortBy, sortDirection });
+			if (persistSort) void patchUI({ sortBy, sortDirection });
 			props.actions.setSort(sortBy as TSortField, sortDirection);
 		},
-		[patchUI, props.actions]
+		[patchUI, persistSort, props.actions]
 	);
 
 	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
@@ -182,20 +287,19 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	const handleEndReached = useGuardedExtendLimit(
 		props.actions.extendLimit,
 		deferredResult.hits.length,
-		props.binding
+		paging
 	);
 
+	// The caller's TData names what its cells read off the drawn hits (the table's rows).
+	const config = tableConfig as Partial<TableOptions<DataTableFeatures, DataTableRow>> | undefined;
 	const table = useTable<DataTableFeatures, DataTableRow>({
 		features: dataTableFeatures,
 		columns,
 		data: deferredResult.hits,
 		getRowId: (row) => row.id,
-		...(tableConfig as unknown as Partial<TableOptions<DataTableFeatures, DataTableRow>>),
-		state: { columnVisibility, ...tableConfig?.state },
-		meta: {
-			...tableConfig?.meta,
-			actions: { setFilter: props.actions.setFilter },
-		} as unknown as TableOptions<DataTableFeatures, DataTableRow>['meta'],
+		...config,
+		state: { columnVisibility, ...config?.state },
+		meta: { ...config?.meta, actions: { setFilter: props.actions.setFilter } },
 	});
 
 	/**
@@ -204,133 +308,159 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	const extraData = React.useMemo(() => {
 		return {
 			columnVisibility,
+			widths,
 			tableConfig: tableConfig?.extraData,
 		};
-	}, [columnVisibility, tableConfig?.extraData]);
+	}, [columnVisibility, widths, tableConfig?.extraData]);
 
 	return (
-		<Table className="flex h-full flex-col">
-			<TableHeader>
-				{table.getHeaderGroups().map((headerGroup) => (
-					<TableRow key={headerGroup.id}>
-						{headerGroup.headers.map((header) => (
-							<TableHead key={header.id} style={getColumnStyle(header.column.columnDef.meta)}>
-								{renderHeader ? (
-									renderHeader({
-										header,
-										table,
-										collectionName: props.collectionName,
-										sortBy,
-										sortDirection,
-										onSortingChange: handleSortingChange,
-									})
-								) : (
-									<DataTableHeader
-										collectionName={props.collectionName}
-										columnId={header.column.id}
-										header={flexRender(header.column.columnDef.header, header.getContext())}
-										disableSort={!header.column.getCanSort()}
-										sortBy={sortBy}
-										sortDirection={sortDirection}
-										onSortingChange={handleSortingChange}
-										align={header.column.columnDef.meta?.align}
-									/>
-								)}
-							</TableHead>
-						))}
-					</TableRow>
-				))}
-			</TableHeader>
-			<VirtualizedList.Root
-				testID={`data-table-scroller-${props.collectionName}`}
-				style={{ flex: 1 }}
-			>
-				<VirtualizedList.List
-					data={table.getRowModel().rows}
-					keyExtractor={(item) => item.id}
-					renderItem={({ item, index }) =>
-						renderItem
-							? renderItem({ item, index, table })
-							: defaultRenderItem({ item, index, table })
-					}
-					estimatedItemSize={estimatedItemSize ?? 50}
-					parentComponent={TableBody as unknown as typeof import('react-native').View}
-					getItemType={getItemType}
-					onEndReachedThreshold={0.1}
-					onEndReached={handleEndReached}
-					ListEmptyComponent={() => (
-						<TableRow className="justify-center p-2">
-							{/* "No results" may only ever mean the search ANSWERED with nothing.
-							    A pending search (index building, engine database not bound yet)
-							    says so instead — rendering the ordinary empty state there reads
-							    as "this record does not exist" (#1733). */}
-							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
-								<Text testID="search-pending-message">{t('common.searching')}</Text>
-							) : (
-								<Text testID="no-data-message">
-									{noDataMessage ? noDataMessage : t('common.no_results_found')}
-								</Text>
-							)}
-						</TableRow>
+		// The header and rows sit on the one card surface (surface.tsx, ledger line 19); the footer
+		// is a caption row on the ground beneath it, the same row the POS tile grid has, so the two
+		// views share a footer and only the body differs.
+		<View className="flex h-full flex-col">
+			<TableSurface>
+				<Table className="flex h-full flex-col">
+					{pointer === 'fine' && (
+						<TableHeader>
+							{table.getHeaderGroups().map((headerGroup) => (
+								<TableRow key={headerGroup.id} className="min-h-row border-border border-b">
+									{headerGroup.headers.map((header, index) => (
+										<ResizeHead
+											key={header.id}
+											columnId={header.column.id}
+											meta={header.column.columnDef.meta}
+											// The rows give the last BODY cell the remainder only when no actions
+											// column trails them (the actions cell keeps its configured width beside
+											// the pressable); the header follows the same rule or drifts from the cells.
+											last={
+												index === headerGroup.headers.length - 1 &&
+												!headerGroup.headers.some((h) => h.column.id === 'actions')
+											}
+											resizable={header.column.id !== 'actions'}
+											onResize={(width) =>
+												setWidths((previous) => new Map(previous).set(header.column.id, width))
+											}
+										>
+											{renderHeader ? (
+												renderHeader({
+													header,
+													table,
+													collectionName: props.collectionName,
+													sortBy,
+													sortDirection,
+													onSortingChange: handleSortingChange,
+												})
+											) : (
+												<DataTableHeader
+													collectionName={props.collectionName}
+													columnId={header.column.id}
+													header={flexRender(header.column.columnDef.header, header.getContext())}
+													disableSort={!header.column.getCanSort()}
+													sortBy={sortBy}
+													sortDirection={sortDirection}
+													onSortingChange={handleSortingChange}
+													align={header.column.columnDef.meta?.align}
+												/>
+											)}
+										</ResizeHead>
+									))}
+								</TableRow>
+							))}
+						</TableHeader>
 					)}
-					ListFooterComponent={() =>
-						ListFooterComponent ? (
-							<ListFooterComponent active$={props.active$} />
-						) : (
-							<DefaultListFooterComponent active$={props.active$} />
-						)
-					}
-					extraData={extraData}
-				/>
-			</VirtualizedList.Root>
+					<RowLayoutContext.Provider value={extraData}>
+						<VirtualizedList.Root
+							testID={`data-table-scroller-${props.collectionName}`}
+							style={{ flex: 1 }}
+						>
+							<VirtualizedList.List
+								ref={listRef}
+								data={table.getRowModel().rows}
+								keyExtractor={(item) => item.id}
+								renderItem={({ item, index }) =>
+									renderItem
+										? renderItem({ item, index, table })
+										: defaultRenderItem({ item, index, table })
+								}
+								estimatedItemSize={estimatedItemSize ?? 50}
+								parentComponent={TableBody as unknown as typeof import('react-native').View}
+								getItemType={getItemType}
+								onEndReachedThreshold={0.1}
+								onEndReached={onEndReached ?? handleEndReached}
+								ListEmptyComponent={() => {
+									/* "No results" may only ever mean the search ANSWERED with nothing.
+						   A pending search (index building, engine database not bound yet)
+						   says so instead — rendering the ordinary empty state there reads
+						   as "this record does not exist" (#1733). */
+									const searchPending =
+										deferredResult.searchActive && deferredResult.searchState === 'pending';
+									/* An empty list while the collection is still pulling is not an empty
+						   store either: the footer's sync spinner is running, and "No customers
+						   yet" beside it told a fresh install it had no data while 5,454
+						   customers were on their way. Rows in flight look like rows in flight
+						   until the pull settles. */
+									if (syncing && !searchPending) {
+										return (
+											<View testID="data-table-syncing-rows">
+												<DataTableSkeletonRows id={id} rowCount={SYNCING_SKELETON_ROWS} />
+											</View>
+										);
+									}
+									return (
+										<View className="justify-center p-6">
+											{searchPending ? (
+												<Text testID="search-pending-message">{t('common.searching')}</Text>
+											) : React.isValidElement(noDataMessage) ? (
+												noDataMessage
+											) : (
+												<Text testID="no-data-message">
+													{noDataMessage ? noDataMessage : t('common.no_results_found')}
+												</Text>
+											)}
+										</View>
+									);
+								}}
+								ListFooterComponent={() =>
+									ListFooterComponent ? (
+										<ListFooterComponent active={syncing} />
+									) : (
+										<DefaultListFooterComponent active={syncing} />
+									)
+								}
+								extraData={extraData}
+							/>
+						</VirtualizedList.Root>
+					</RowLayoutContext.Provider>
+				</Table>
+			</TableSurface>
 			{showFooter && (
 				<TableFooter>
-					{props.TableFooterComponent ? (
-						<props.TableFooterComponent
+					{/* The footer's text lines up with the cells' by the card's own gutter (surface.tsx). */}
+					<CaptionRowInset>
+						<HandleFooter
+							Footer={props.TableFooterComponent ?? DataTableFooter}
 							collectionName={props.collectionName}
-							active$={props.active$}
-							total$={props.total$}
-							sync={props.sync}
-							count={result.hits.length}
+							handle={props.handle}
+							shown={props.shown}
+							drawnCount={result.hits.length}
 						/>
-					) : (
-						<DataTableFooter
-							collectionName={props.collectionName}
-							active$={props.active$}
-							total$={props.total$}
-							sync={props.sync}
-							count={result.hits.length}
-						/>
-					)}
+					</CaptionRowInset>
 				</TableFooter>
 			)}
-		</Table>
+		</View>
 	);
 }
 
-function getRowTestID(item: any) {
-	const record = item?.original?.record;
-	// Woo numeric ids can appear after a create ack; the adapter uuid/hit id is stable for the row.
-	const stableId = record?.payload?.slug ?? record?.uuid ?? item?.id;
-	return stableId !== null && stableId !== undefined && stableId !== ''
-		? `data-table-row-${stableId}`
-		: undefined;
-}
-
-function defaultRenderItem({ item, index, table }: { item: any; index: number; table: any }) {
+function defaultRenderItem({
+	item,
+}: {
+	item: Row<DataTableRow, DataTableFeatures>;
+	index: number;
+	table: TanStackTable<DataTableRow, DataTableFeatures>;
+}) {
 	return (
 		<VirtualizedList.Item>
-			<TableRow testID={getRowTestID(item)} index={index}>
-				{item.getVisibleCells().map((cell: any) => {
-					return (
-						<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
-							<ErrorBoundary>
-								<Suspense>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Suspense>
-							</ErrorBoundary>
-						</TableCell>
-					);
-				})}
-			</TableRow>
+			<RowView item={item} />
 		</VirtualizedList.Item>
 	);
 }
@@ -339,7 +469,8 @@ function buildColumns<TData extends RowData>(
 	columns: any,
 	getUILabel: (key: string) => string,
 	cells?: CellMap,
-	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap
+	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap,
+	columnLabels?: Record<string, string>
 ): ColumnDef<DataTableRow, unknown, DataTableFeatures>[] {
 	return columns.map((c: any) => {
 		return {
@@ -359,42 +490,19 @@ function buildColumns<TData extends RowData>(
 				const Cell = rowCells?.[c.key] ?? RecordTextCell;
 				return <Cell {...info} />;
 			},
-			header: c.hideLabel ? '' : getUILabel(c.key),
+			header: c.hideLabel ? '' : (columnLabels?.[c.key] ?? getUILabel(c.key)),
 		};
 	});
 }
 
-function getFlexAlign(align: 'left' | 'right' | 'center'): FlexAlignType {
-	switch (align) {
-		case 'left':
-			return 'flex-start';
-		case 'right':
-			return 'flex-end';
-		case 'center':
-			return 'center';
-		default:
-			return 'flex-start';
-	}
-}
-
-function getColumnStyle(meta: any): ViewStyle {
-	if (meta?.width) {
-		return {
-			flexGrow: 0,
-			flexShrink: 0,
-			flexBasis: meta.width,
-			alignItems: getFlexAlign(meta.align || 'left'),
-		};
-	}
-	return {
-		flexGrow: meta?.flex ?? 1,
-		flexShrink: 0,
-		flexBasis: '0%',
-		alignItems: getFlexAlign(meta?.align || 'left'),
-	};
-}
-
-export { DataTable, DataTableHeader, DataTableFooter, defaultRenderItem, getColumnStyle };
+export {
+	DataTable,
+	DataTableHeader,
+	DataTableFooter,
+	defaultRenderItem,
+	getColumnStyle,
+	getRowTestID,
+};
 export type { RenderHeaderProps, SortingChange };
-export type { BindingDataTableFooterProps };
+export type { DataTableFooterProps };
 export type { CellComponent, DataTableFeatures };
