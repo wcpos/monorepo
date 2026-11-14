@@ -153,13 +153,13 @@ jest.mock('@wcpos/components/dialog', () => ({
 jest.mock('@wcpos/components/table', () => ({
 	Table: ({ children }: any) => <table>{children}</table>,
 	TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-	TableCell: ({ children }: any) => <td>{children}</td>,
-	TableHead: ({ children }: any) => <th>{children}</th>,
+	TableCell: ({ children, className }: any) => <td data-classes={className}>{children}</td>,
+	TableHead: ({ children, className }: any) => <th data-classes={className}>{children}</th>,
 	TableHeader: ({ children }: any) => <thead>{children}</thead>,
 	TableRow: ({ children }: any) => <tr>{children}</tr>,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: any) => <span>{children}</span>,
+	Text: ({ children, numberOfLines }: any) => <span data-lines={numberOfLines}>{children}</span>,
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: any) => <div>{children}</div>,
@@ -473,6 +473,48 @@ describe('RefundOrderForm', () => {
 
 		await waitFor(() => expect(pendingRefund).toHaveBeenCalledTimes(1));
 		expect(processLabel()).toHaveAttribute('data-loading', 'true');
+	});
+
+	it('gives the number columns a floor and lets the product name wrap to two lines', async () => {
+		const orderWithLine = {
+			...order,
+			line_items: [
+				{
+					id: 77,
+					name: 'Aim Analog Watch',
+					quantity: 2,
+					total: '20.00',
+					total_tax: '0.00',
+					taxes: [],
+				},
+			],
+		} as never;
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+			return Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '1' } });
+		});
+
+		await act(async () => {
+			render(<RefundOrderForm order={orderWithLine} />);
+		});
+
+		const columns = [
+			'min-w-0 flex-[3]',
+			'min-w-17 flex-1',
+			'min-w-14 flex-1',
+			'min-w-21 flex-1',
+			'min-w-23 flex-1',
+		];
+		expect(
+			screen.getAllByRole('columnheader').map((head) => head.getAttribute('data-classes'))
+		).toEqual(columns);
+		const row = screen.getAllByRole('row')[1];
+		expect(
+			within(row)
+				.getAllByRole('cell')
+				.map((cell) => cell.getAttribute('data-classes'))
+		).toEqual(columns);
+		expect(screen.getByText('Aim Analog Watch')).toHaveAttribute('data-lines', '2');
 	});
 
 	it('holds line quantities at zero until detailed refund rows load', async () => {
