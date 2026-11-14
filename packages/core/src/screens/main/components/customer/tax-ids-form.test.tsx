@@ -31,13 +31,15 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	VStack: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div data-classes={className}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/form', () => {
 	const { Controller } = jest.requireActual('react-hook-form') as typeof import('react-hook-form');
 	return {
 		FormField: Controller,
-		FormInput: () => null,
+		FormInput: ({ label }: { label: string }) => <span data-testid={`input-${label}`} />,
 		FormSelect: ({
 			customComponent: Component,
 			value,
@@ -166,4 +168,18 @@ describe('TaxIdsForm country defaults', () => {
 		fireEvent.click(screen.getByTestId('type-change'));
 		expect(form.rows()[0]).toMatchObject({ type: 'es_nif', country: 'ES' });
 	});
+});
+
+// A narrow dialog (nl, 2026-11): the ID input shrank to ~70 px beside Type and Remove; with a 160
+// floor it wraps to its own line instead.
+it('the tax ID input keeps 160 and wraps instead of shrinking', () => {
+	mockStore = { store_country: 'DE' };
+	renderForm({
+		billing: { country: 'DE' },
+		tax_ids: [{ type: 'eu_vat', value: 'DE123456789', country: 'DE' }],
+	});
+	const wrapper = screen.getByTestId('input-tax_id.value_label').parentElement as HTMLElement;
+	expect(wrapper.dataset.classes?.split(' ')).toEqual(
+		expect.arrayContaining(['min-w-40', 'flex-1'])
+	);
 });

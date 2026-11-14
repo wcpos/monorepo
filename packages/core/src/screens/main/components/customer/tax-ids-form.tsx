@@ -170,7 +170,8 @@ export function TaxIdsForm({ name = 'tax_ids', testID }: TaxIdsFormProps) {
 								)}
 							/>
 						</View>
-						<VStack className="flex-1 p-2">
+						{/* The ID keeps 160: when Type, ID and Country do not fit, it wraps to its own line. */}
+						<VStack className="min-w-40 flex-1 p-2">
 							<FormField
 								control={control}
 								name={`${name}.${index}.value`}
