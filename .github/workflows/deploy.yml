@@ -231,8 +231,11 @@ jobs:
         if: (github.event_name == 'push' && github.ref_name == 'main') || github.event.inputs.target == 'production'
         working-directory: apps/main
         run: |
-          eas deploy --export-dir ./build --production
+          # --json moves only eas's human output to stderr; the deploy and alias move are unchanged. `.url` is this deploy's own URL.
+          DEPLOY_JSON=$(eas deploy --export-dir ./build --production --json)
+          echo "$DEPLOY_JSON"
           echo "production_url=https://wcpos.expo.app" >> $GITHUB_OUTPUT
+          echo "deploy_url=$(echo "$DEPLOY_JSON" | jq -r '.url // empty' 2>/dev/null || true)" >> $GITHUB_OUTPUT
 
       - name: 📝 Get deployment URL
         id: get-url
@@ -241,7 +244,7 @@ jobs:
             echo "url=${{ steps.deploy-preview.outputs.preview_url }}" >> $GITHUB_OUTPUT
             echo "is_production=false" >> $GITHUB_OUTPUT
           else
-            echo "url=https://wcpos.expo.app" >> $GITHUB_OUTPUT
+            echo "url=${{ steps.deploy-production.outputs.deploy_url }}" >> $GITHUB_OUTPUT
             echo "is_production=true" >> $GITHUB_OUTPUT
           fi
 
@@ -343,23 +346,26 @@ jobs:
           echo "::error title=E2E shared setup::The shared login and sync failed (see the login step above). The shards will not start: six shards logging in by themselves on a stalled store only cascade into 401/403. Check the store's health, then use \"Re-run all jobs\"."
           exit 1
 
-  # E2E runs from concurrent PRs hit the shared dev store WITHOUT any
-  # cross-run serialization. A global FIFO queue job lived here from
+  # A global FIFO queue JOB lived here from
   # 2026-08-12 to 2026-08-18: with 2+ PRs active it starved every merge gate
-  # (the gate polls ~40 min; queue latency ran to hours), so nothing merged
-  # on agent-heavy evenings. Cross-run safety is the SPECS' job — worker- and
+  # (#1265), because one holder kept the store for a whole run. Since
+  # 2026-11-13 (desk ruling, after dev-pro hit pm.max_children=32 whenever two
+  # web runs overlapped) each shard queues per lane and shard index in its own
+  # concurrency group (`queue: max`), so runs pipeline shard by shard instead
+  # of holding the store whole. The Merge Gate poll was raised to ~150 min
+  # (merge-gate.yml, MERGE_GATE_MAX_ATTEMPTS) so a PR four runs deep waits
+  # instead of going red. Cross-run safety in the specs still applies:
   # run-private probe records (checkout-probe.ts / search-probe.ts random
   # tokens), relative count assertions (store-agnostic E2E policy in
-  # CLAUDE.md), and Playwright CI retries absorb residual contention. If a
-  # spec flakes under concurrency, fix THAT spec's isolation; do not
-  # reintroduce a cross-run mutex here.
+  # CLAUDE.md), and Playwright CI retries absorb residual contention.
   # Exception, dev-next only (Front desk ruling B, 2026-10-01): six web shards
   # and two native dispatches together saturated its six php-fpm workers
   # (1,898 499s, every device failed at the connect screen). Next-lane runs
   # queue in e2e-setup's `🚦 Queue for dev-next` step, shared with
   # e2e-native.yml (scripts/wait-devnext-free.mjs). Only dispatched and
   # scheduled runs reach dev-next — PRs to next skip this suite — so the
-  # queue cannot starve a merge gate. The main lane is not queued.
+  # queue cannot starve a merge gate. The main lane queues per shard through
+  # the e2e job's concurrency group instead.
   # dev-next is the next lane's one store (owner ruling 2026-10-19: three dev
   # stores, no fourth). Six shards logging in at once saturated it on
   # 2026-09-30 (#2321); e2e-setup now does every login and sync serially (#2324).
@@ -392,9 +398,12 @@ jobs:
         # nothing. One shard cannot produce that. A quarantine-only run is one shard too.
         shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
         shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[6]') }}
+    # One web E2E run per dev store at a time: shards queue per lane and shard, never
+    # cancelled (desk ruling 2026-11-13). Why, and the exceptions: see the comment above `e2e:`.
     concurrency:
-      group: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && !inputs.quarantine_only && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
-      cancel-in-progress: true
+      group: ${{ (github.event_name == 'schedule' || inputs.quarantine_only || needs.changes.outputs.lane == '') && format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) || format('e2e-store-{0}-shard-{1}', needs.changes.outputs.lane, matrix.shardIndex) }}
+      cancel-in-progress: false
+      queue: max
     steps:
       # First, before any setup: a run that belongs to neither trunk has no
       # store to test against, and guessing one is how a next-lane app was
@@ -713,6 +722,7 @@ jobs:
           # legitimately skipped deploy (dependabot actor, nothing app-affecting)
           # takes the skipped-deploy path further down like any other run.
           if [ "$EVENT_NAME" = "push" ] && [ "$DEPLOY_RESULT" = "success" ]; then
+            [ -n "$DEPLOY_URL" ] || { echo "::error::Production deployed, but its own URL was not captured from 'eas deploy --json' (see 🚀 Deploy production), so no E2E ran. No fallback to the https://wcpos.expo.app alias."; exit 1; }
             if [ "$E2E_RESULT" = "cancelled" ]; then
               echo "::error::E2E verification was superseded by a newer main push"
               exit 1
