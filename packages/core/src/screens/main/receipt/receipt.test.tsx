@@ -22,8 +22,9 @@ let mockSuspenseValue: unknown;
 
 const mockOrder = {
 	uuid: 'local-order-42',
-	payload: { id: 42, links: undefined, billing: {} },
+	payload: { id: 42, links: undefined, billing: {}, status: 'completed', total: '149.00' },
 };
+let mockGateway: { settled_order_status?: string } | undefined;
 
 const defaultTemplateRenderer = {
 	templates: [{ id: 7, output_type: 'pdf', paper_width: null }],
@@ -76,6 +77,11 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DismissIsClose: jest.requireActual('../../../../jest/footer.test-utils').DismissIsClose,
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
+	DialogDescription: ({ children }: { children?: React.ReactNode }) => <p>{children}</p>,
+}));
+
+jest.mock('../hooks/use-payment-gateways', () => ({
+	usePaymentGateways: () => ({ gateway: mockGateway }),
 }));
 
 jest.mock('uniwind', () => ({ useCSSVariable: () => [] }));
@@ -192,7 +198,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
-		store: { wc_price_decimals$: new BehaviorSubject(2) },
+		store: { wc_price_decimals$: new BehaviorSubject(2), price_num_decimals: 2 },
 	}),
 }));
 
@@ -516,3 +522,61 @@ it.each([null, mockOrder])(
 		expect(screen.getByTestId('receipt-panel').getAttribute('data-side')).toBe('right');
 	}
 );
+
+// A receipt handed over for an unpaid sale must say so; a paid one must not.
+describe('Receipt of an unpaid order', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockAwaiting = false;
+		mockGateway = undefined;
+		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+	});
+
+	const withPayload = (payload: Record<string, unknown>) => {
+		mockSuspenseValue = { ...mockOrder, payload: { ...mockOrder.payload, ...payload } };
+	};
+	const variant = (testID: string) => screen.getByTestId(testID).dataset.variant;
+
+	it('an unsaved open order: Not paid mark, Save to store primary, Print outlined', () => {
+		const translations = jest.requireMock('../../../contexts/translations');
+		const { createTestT } = jest.requireActual('../../../../jest/translate');
+		const translation = jest.spyOn(translations, 'useT').mockReturnValue(createTestT());
+		withPayload({ id: undefined, status: 'pos-open', total: '149.00', refunds: [] });
+		try {
+			render(<Receipt resource={{} as never} />);
+			expect(screen.getByTestId('receipt-not-paid').textContent).toBe('Not paid · 149.00 due');
+			expect(variant('receipt-sync-order-button')).toBe('default');
+			expect(variant('receipt-print-button')).toBe('outline');
+		} finally {
+			translation.mockRestore();
+		}
+	});
+
+	it('a saved unpaid order keeps Print primary and the mark', () => {
+		withPayload({ status: 'pending' });
+		render(<Receipt resource={{} as never} />);
+		expect(variant('receipt-print-button')).toBe('default');
+		expect(screen.getByTestId('receipt-not-paid')).toBeTruthy();
+		expect(screen.queryByTestId('receipt-sync-order-button')).toBeNull();
+	});
+
+	it('a paid order: no mark, Print primary', () => {
+		withPayload({ status: 'completed' });
+		render(<Receipt resource={{} as never} />);
+		expect(screen.queryByTestId('receipt-not-paid')).toBeNull();
+		expect(variant('receipt-print-button')).toBe('default');
+	});
+
+	it('a gateway that settles at pending counts as paid', () => {
+		mockGateway = { settled_order_status: 'pending' };
+		withPayload({ status: 'pending', payment_method: 'bacs' });
+		render(<Receipt resource={{} as never} />);
+		expect(screen.queryByTestId('receipt-not-paid')).toBeNull();
+	});
+
+	it('a refund document carries no mark', () => {
+		withPayload({ status: 'pos-open' });
+		render(<Receipt resource={{} as never} document="refund:12" />);
+		expect(screen.queryByTestId('receipt-not-paid')).toBeNull();
+	});
+});
