@@ -63,6 +63,7 @@ type Identified = Pick<OrderPayload, 'meta_data'>;
  * Whether a record belongs to the scope by its POS identity, read from its local parent when there
  * is one. With no register, a non-POS parent joins the store scope (ledger line 37); the sentinel
  * matches a parent by `created_via`.
+ * The sentinel keeps every parentless refund.
  */
 export function inRoom(
 	{ store, registerId, cashierId }: Pick<ReportsFilterScope, 'store' | 'registerId' | 'cashierId'>,
@@ -75,7 +76,7 @@ export function inRoom(
 			(!registerId && !!parent && parent.created_via !== POS_SOURCE) ||
 			(parent && !/^\d+$/.test(String(store))
 				? parent.created_via === store
-				: identity.storeId === String(store === POS_SOURCE ? 0 : store))) &&
+				: store === POS_SOURCE || identity.storeId === String(store))) &&
 		(!registerId || identity.registerId === registerId) &&
 		(!cashierId || identity.cashierId === cashierId)
 	);
