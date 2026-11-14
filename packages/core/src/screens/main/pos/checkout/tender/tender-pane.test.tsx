@@ -1224,6 +1224,42 @@ describe('split V1: the pane builds each payment', () => {
 		});
 	});
 
+	it('with picks, Exact offers the picked share, not the balance (F44)', () => {
+		// 3 of 4 Lemonade (1500) and 1 of 3 Fish & chips (2200): this payment is 3700 of 18250.
+		const picks = { picked: { l1: 3, l2: 1 } };
+		const flow = splitFlow(picks);
+		const { rerender } = render(<TenderPane flow={flow} format={String} />);
+		expect(text('checkout-entry')).toBe('3700');
+		expect(text('checkout-quick-exact')).toBe('Exact 3700');
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 3700 });
+		// Typed over, Exact still offers the share, never the whole bill.
+		const typed = splitFlow(picks, { entryMinor: 5000, entryDirty: true });
+		rerender(<TenderPane flow={typed} format={String} />);
+		expect(text('checkout-quick-exact')).toBe('Exact 3700');
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(typed.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 3700 });
+		// With + amount armed the tap writes the amount: the picks' price is not counted twice.
+		const extra = splitFlow(picks, { extraMinor: 300 });
+		rerender(<TenderPane flow={extra} format={String} />);
+		expect(text('checkout-quick-exact')).toBe('Exact 4000');
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(extra.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 300 });
+		// A method that gives no change keeps Full balance at the balance, picks or not.
+		const card: PaymentMethodDescriptor = {
+			...method,
+			id: 'card',
+			title: 'Card',
+			kind: 'other',
+			capabilities: { ...method.capabilities, change: false },
+		};
+		const onCard = splitFlow({ ...picks, method: card }, { methodId: card.id });
+		rerender(<TenderPane flow={onCard} format={String} />);
+		expect(text('checkout-quick-balance')).toBe('Full balance 18250');
+		fireEvent.click(screen.getByTestId('checkout-quick-balance'));
+		expect(onCard.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 18250 });
+	});
+
 	// Paul's decision 11A (F45): a tile takes exactly its figure, never picks + it.
 	it('a quick-cash tile dispatches quick-tender, Exact keeps set-entry', () => {
 		const flow = splitFlow({ picked: { l1: 1 } }, { extraMinor: 0 });
@@ -1231,8 +1267,10 @@ describe('split V1: the pane builds each payment', () => {
 		expect(text('checkout-plus-amount')).toBe('+ 0');
 		fireEvent.click(screen.getByTestId('checkout-quick-10.00'));
 		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'quick-tender', minor: 1000 });
+		expect(text('checkout-quick-exact')).toBe('Exact 500');
+		// F44: Exact offers the picked share; with + amount armed its tap writes the amount (0).
 		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
-		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 18250 });
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 0 });
 	});
 
 	it('on a phone, Pick items puts the lines in the keypad’s place, and Back to keypad restores it', () => {
