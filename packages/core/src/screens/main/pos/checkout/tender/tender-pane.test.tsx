@@ -1212,6 +1212,17 @@ describe('split V1: the pane builds each payment', () => {
 		});
 	});
 
+	// Paul's decision 11A (F45): a tile takes exactly its figure, never picks + it.
+	it('a quick-cash tile dispatches quick-tender, Exact keeps set-entry', () => {
+		const flow = splitFlow({ picked: { l1: 1 } }, { extraMinor: 0 });
+		render(<TenderPane flow={flow} format={String} />);
+		expect(text('checkout-plus-amount')).toBe('+ 0');
+		fireEvent.click(screen.getByTestId('checkout-quick-10.00'));
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'quick-tender', minor: 1000 });
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 18250 });
+	});
+
 	it('on a phone, Pick items puts the lines in the keypad’s place, and Back to keypad restores it', () => {
 		const paid = { l2: { units: 1, methods: ['Card'] } };
 		const flow = splitFlow({ paidUnits: paid });

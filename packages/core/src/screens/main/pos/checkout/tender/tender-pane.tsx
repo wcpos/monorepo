@@ -903,7 +903,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							label={format(minor)}
 							testID={`checkout-quick-${fromMinor(minor, flow.dp)}`}
 							disabled={busy}
-							onPress={() => flow.commands.dispatch({ type: 'set-entry', minor })}
+							onPress={() => flow.commands.dispatch({ type: 'quick-tender', minor })}
 						/>
 					))}
 					{method && !fixedAmount && !percent ? (
