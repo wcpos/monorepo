@@ -100,3 +100,12 @@ export function stripInWindow(revealed: number, stripWidth: number, rowWidth: nu
 	'worklet';
 	return stripOffset(revealed, stripWidth) - windowOffset(revealed, rowWidth);
 }
+
+/**
+ * The window's opacity, always set: Reanimated keeps the last value of a key that leaves an animated
+ * style, so the window is hidden while its row is unmeasured and shown again once it is.
+ */
+export function windowOpacity(rowWidth: number): number {
+	'worklet';
+	return rowWidth > 0 ? 1 : 0;
+}

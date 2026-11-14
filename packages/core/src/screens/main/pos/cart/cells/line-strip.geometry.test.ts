@@ -9,6 +9,7 @@ import {
 	stripInWindow,
 	stripOffset,
 	windowOffset,
+	windowOpacity,
 } from './line-strip.geometry';
 
 // A register column and a phone, with the shipped strip (Edit 88 + Remove 96).
@@ -123,5 +124,9 @@ describe('the window moves, never resizes', () => {
 			const stripRight = left + ROW_WIDTH + stripInWindow(r, STRIP_WIDTH, ROW_WIDTH);
 			expect(stripRight).toBe(ROW_WIDTH + stripOffset(r, STRIP_WIDTH));
 		}
+	});
+	it('the window is hidden only while its row is unmeasured', () => {
+		expect(windowOpacity(0)).toBe(0);
+		expect(windowOpacity(ROW_WIDTH)).toBe(1);
 	});
 });

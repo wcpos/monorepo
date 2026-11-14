@@ -28,6 +28,7 @@ import {
 	removePoint,
 	stripInWindow,
 	windowOffset,
+	windowOpacity,
 } from './line-strip.geometry';
 import { useT } from '../../../../../contexts/translations';
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
@@ -177,7 +178,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	const windowStyle = useAnimatedStyle(() => ({
 		transform: [{ translateX: windowOffset(-onStage(offset.value), rowWidth) }],
 		// Unmeasured, the window would sit over the whole row: an unmeasured row never shows the strip.
-		...(rowWidth ? {} : { opacity: 0 }),
+		opacity: windowOpacity(rowWidth),
 	}));
 	const stripStyle = useAnimatedStyle(() => ({
 		transform: [{ translateX: stripInWindow(-onStage(offset.value), stripWidth, rowWidth) }],
