@@ -652,6 +652,14 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			state.limit >= Number.MAX_SAFE_INTEGER
 		)
 			dimensions.limit = 'all';
+		// Reports count on the sale moment; an order paid in the window may have been created before it.
+		if (
+			salesRead &&
+			dimensions.limit === 'all' &&
+			dimensions.afterSeconds !== undefined &&
+			dimensions.beforeSeconds !== undefined
+		)
+			dimensions.modifiedAfterSeconds = dimensions.afterSeconds;
 		demand.push({
 			id: requirementId(options.id, 'orders-browse'),
 			collection: 'orders',
