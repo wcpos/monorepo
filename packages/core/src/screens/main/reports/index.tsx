@@ -108,21 +108,6 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	const stores = useReportsDirectories().stores ?? [];
 	const storeIds = stores.flatMap((row) => (row.id === undefined ? [] : [row.id]));
 	const noStoreEnabled = !!license?.isPro && stores.length > 1;
-	const noStoreState = React.useMemo(
-		() =>
-			noStoreEnabled
-				? {
-						...state,
-						filters: {
-							...state.filters,
-							store: noStoreFilter(storeIds),
-							register: undefined,
-						},
-					}
-				: state,
-		[state, noStoreEnabled, storeIds]
-	);
-	const noStoreHandle = useCollectionQueryHandle('orders', noStoreState, { storeScope: 'sales' });
 	// The four handles are owned here (the effects retain them), above the refunds and
 	// comparison boundaries, so a suspended or failed secondary read never drops a handle. A
 	// failed sales read goes to the screen's boundary above this owner; its reset remounts the
@@ -176,7 +161,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		storeId: allStores ? 0 : noStore ? NO_STORE_SCOPE_ID : storeId,
 		cashier: state.filters.cashier === undefined ? undefined : Number(state.filters.cashier),
 	};
-	const select = (next: ClosureScope) => {
+	const dayWindow = (next: ClosureScope) => {
 		const nextStoreId = next.storeId ?? storeId;
 		const nextStore =
 			nextStoreId === undefined ||
@@ -188,13 +173,10 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		// A store switch must use the new zone before the query rerenders useStoreDay.
 		const { timezone: nextZone } = resolveDayTimezone(nextStore, site);
 		const dayBounds = (value: string) => storeDayBounds(calendarDate(parseISO(value)), nextZone);
-		actions.setFilter(
-			'dateRange',
-			rangeToFilter({
-				from: dayBounds(next.from).from,
-				to: dayBounds(next.to).to,
-			})
-		);
+		return rangeToFilter({ from: dayBounds(next.from).from, to: dayBounds(next.to).to });
+	};
+	const select = (next: ClosureScope) => {
+		actions.setFilter('dateRange', dayWindow(next));
 		actions.setFilter('register', next.registerId || undefined);
 		actions.setFilter(
 			'store',
@@ -206,6 +188,25 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		);
 		actions.setFilter('cashier', next.cashier === undefined ? undefined : String(next.cashier));
 	};
+	// The notice counts the window its View opens: No store keeps the bound till's day.
+	const noStoreScope = { ...scope, storeId: NO_STORE_SCOPE_ID, registerId: '' };
+	const noStoreRange = dayWindow(noStoreScope);
+	const noStoreState = React.useMemo(
+		() =>
+			noStoreEnabled
+				? {
+						...state,
+						filters: {
+							...state.filters,
+							dateRange: noStoreRange,
+							store: noStoreFilter(storeIds),
+							register: undefined,
+						},
+					}
+				: state,
+		[state, noStoreEnabled, storeIds, noStoreRange]
+	);
+	const noStoreHandle = useCollectionQueryHandle('orders', noStoreState, { storeScope: 'sales' });
 	const date = (
 		<DateButton
 			scope={scope}
@@ -224,7 +225,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		<NoStoreProvider
 			handle={noStoreHandle}
 			enabled={noStoreEnabled}
-			onView={() => select({ ...scope, storeId: NO_STORE_SCOPE_ID, registerId: '' })}
+			onView={() => select(noStoreScope)}
 		>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
 			<View className="min-h-0 flex-1">
