@@ -392,7 +392,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			showsVerticalScrollIndicator={false}
 		>
 			<HStack className="flex-wrap items-center justify-center gap-2">
-				<Text testID="checkout-label" decodeHtml variant="caption">
+				<Text testID="checkout-label" decodeHtml variant="key" className="text-foreground">
 					{shared
 						? t('pos_checkout.shared_payment_n_of', { n, ways })
 						: plan
@@ -455,12 +455,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				</>
 			) : (
 				<>
-					<AmountFigure
-						testID="checkout-entry"
-						className={flow.state.entryDirty ? '' : 'opacity-70'}
-					>
-						{format(shownMinor)}
-					</AmountFigure>
+					<AmountFigure testID="checkout-entry">{format(shownMinor)}</AmountFigure>
 					<Text
 						testID="checkout-entry-hint"
 						variant="key"
@@ -528,44 +523,51 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							</Button>
 						</View>
 					) : counted.length >= 1 ? (
-						<PressableSurface
+						<Button
+							variant="ghost"
+							size="sm"
+							className="flex-row gap-1"
 							testID="checkout-plan-done"
-							role="button"
 							disabled={busy}
 							onPress={() => flow.commands.dispatch({ type: 'toggle-done' })}
-							className="bg-success/20 border-success/30 min-h-ctl flex-row items-center gap-1 rounded-full border px-3"
 						>
 							<Icon name="check" size="xs" className="text-success" />
-							<Text className="text-foreground text-xs" decodeHtml>
+							<ButtonText decodeHtml>
 								{counted.length === 1
 									? `${(done[0] ?? doneLeg(counted[0])).title} ${format(toMinor(counted[0].amount, flow.dp))}`
 									: t('pos_checkout.n_paid_amount', {
 											n: counted.length,
 											amount: format(flow.paidMinor),
 										})}
-							</Text>
+							</ButtonText>
 							<Icon name="chevronDown" size="xs" className="text-muted-foreground" />
-						</PressableSurface>
+						</Button>
 					) : null}
-					{legs.map((leg) => (
-						<View
-							key={leg.index}
-							testID={`checkout-plan-leg-${leg.index}`}
-							className={`min-h-ctl flex-row items-center gap-1 rounded-full border px-3 ${leg.state === 'done' ? 'bg-success/20 border-success/30' : leg.state === 'now' ? 'border-primary' : 'border-border opacity-60'} ${leg.state === 'rest' ? 'border-dashed' : ''}`}
-						>
-							{leg.state === 'done' ? (
-								<Icon name="check" size="xs" className="text-success" />
+					{legs.map((leg, index) => (
+						<React.Fragment key={leg.index}>
+							{index > 0 || (!showDone && counted.length >= 1) ? (
+								<Text variant="key" className="text-foreground" aria-hidden>
+									·
+								</Text>
 							) : null}
-							{/* Words stay in the foreground on every leg: green text on the done leg's
-							    green wash reads under 4.5:1; the wash and the check carry the state. */}
-							<Text className="text-foreground text-xs" decodeHtml>
-								{leg.state === 'rest'
-									? t('pos_checkout.then_amount', { amount: format(leg.minor) })
-									: leg.run > 1
-										? t('pos_checkout.then_n_times', { n: leg.run, amount: format(leg.minor) })
-										: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
-							</Text>
-						</View>
+							<View
+								key={leg.index}
+								testID={`checkout-plan-leg-${leg.index}`}
+								className="flex-row items-center gap-1"
+							>
+								{leg.state === 'done' ? (
+									<Icon name="check" size="xs" className="text-success" />
+								) : null}
+								{/* Status, not a control: plain text; the check marks a done leg. */}
+								<Text variant="key" className="text-foreground" decodeHtml>
+									{leg.state === 'rest'
+										? t('pos_checkout.then_amount', { amount: format(leg.minor) })
+										: leg.run > 1
+											? t('pos_checkout.then_n_times', { n: leg.run, amount: format(leg.minor) })
+											: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
+								</Text>
+							</View>
+						</React.Fragment>
 					))}
 					{plan ? (
 						<Button
