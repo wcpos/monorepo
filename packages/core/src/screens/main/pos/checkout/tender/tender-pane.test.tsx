@@ -1507,6 +1507,37 @@ it('the shrunk pane floors its content at the fit and never fixes its height, so
 	expect(style.minHeight).toBeGreaterThanOrEqual(400);
 });
 
+it('the commit bar sits outside the keypad scroll, so it never scrolls off', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	expect(screen.getByTestId('checkout-commit')).toBeTruthy();
+	expect(
+		screen.getByTestId('checkout-keypad-pane').contains(screen.getByTestId('checkout-commit'))
+	).toBe(false);
+});
+
+// Tile fit: keypad y 200 + 3 gaps of 8 + 4 rows of 64 = 480, with no foot inside the scroll.
+it('the keypad keeps tile keys while the scroll fits them, the bar no longer counted', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	act(() => {
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 480 } } });
+	});
+	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
+	act(() => mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 479 } } }));
+	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
+});
+
+// Control floor: keypad y 200 + 3 gaps of 8 + 4 rows of 44 = 400.
+it('the shrunk scroll floors its content at the control-height fit', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	act(() => {
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 300 } } });
+	});
+	const style = mockContentStyles['checkout-keypad-pane'] as Record<string, unknown>;
+	expect(style.minHeight).toBe(400);
+});
+
 // Fractional widths plus a gap must not wrap five methods into four columns.
 it.each([
 	[false, 5],
