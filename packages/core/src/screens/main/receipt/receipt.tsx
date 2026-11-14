@@ -5,16 +5,15 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Text } from '@wcpos/components/text';
-import { getNetPaymentTotal } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { PrintSheetContent } from './print-sheet';
 import { useReceiptActions } from './receipt-actions';
 import { useReceiptDocument } from './use-receipt-document';
 import { useT } from '../../../contexts/translations';
-import { useCurrencyFormat } from '../hooks/use-currency-format';
 import { usePaymentGateways } from '../hooks/use-payment-gateways';
 import { isSettledOrderStatus } from '../pos/checkout/sale-completion';
+import { useLedgerView } from '../pos/checkout/tender/use-ledger-view';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
@@ -68,11 +67,8 @@ function ReceiptDocument({
 	const { sync, choices, print, dialog } = useReceiptActions(doc, order);
 	const status = useRecordField(order, (o) => o.payload.status);
 	const paymentMethod = useRecordField(order, (o) => o.payload.payment_method);
-	const total = useRecordField(order, (o) => o.payload.total);
-	const refunds = useRecordField(order, (o) => o.payload.refunds);
-	const currencySymbol = useRecordField(order, (o) => o.payload.currency_symbol);
 	const { gateway } = usePaymentGateways(paymentMethod, !!paymentMethod);
-	const { format } = useCurrencyFormat({ currencySymbol });
+	const view = useLedgerView(order);
 	// A missing status fails closed, as the auto-print does: an order not known to be paid is marked.
 	const notPaid = !document && !isSettledOrderStatus(status ?? '', gateway?.settled_order_status);
 	return (
@@ -84,7 +80,7 @@ function ReceiptDocument({
 					notPaid ? (
 						<Text className="text-warning-text" testID="receipt-not-paid">
 							{t('receipt.not_paid_amount_due', {
-								amount: format(getNetPaymentTotal(total, refunds) || 0),
+								amount: view.format(Math.max(view.balanceMinor, 0)),
 							})}
 						</Text>
 					) : undefined

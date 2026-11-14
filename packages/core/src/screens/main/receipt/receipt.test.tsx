@@ -6,6 +6,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
+import { withLedger } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { Receipt } from './receipt';
@@ -82,6 +83,10 @@ jest.mock('@wcpos/components/dialog', () => ({
 
 jest.mock('../hooks/use-payment-gateways', () => ({
 	usePaymentGateways: () => ({ gateway: mockGateway }),
+}));
+
+jest.mock('../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ methods: [], byId: new Map() }),
 }));
 
 jest.mock('uniwind', () => ({ useCSSVariable: () => [] }));
@@ -197,6 +202,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ store: { price_num_decimals: 2 } }),
 	useAppState: () => ({
 		store: { wc_price_decimals$: new BehaviorSubject(2), price_num_decimals: 2 },
 	}),
@@ -547,6 +553,54 @@ describe('Receipt of an unpaid order', () => {
 			expect(screen.getByTestId('receipt-not-paid').textContent).toBe('Not paid · 149.00 due');
 			expect(variant('receipt-sync-order-button')).toBe('default');
 			expect(variant('receipt-print-button')).toBe('outline');
+		} finally {
+			translation.mockRestore();
+		}
+	});
+
+	it("a part-paid order's mark shows the balance still owed, not the total", () => {
+		const translations = jest.requireMock('../../../contexts/translations');
+		const { createTestT } = jest.requireActual('../../../../jest/translate');
+		const translation = jest.spyOn(translations, 'useT').mockReturnValue(createTestT());
+		withPayload({
+			status: 'pos-partial',
+			total: '100.00',
+			meta_data: withLedger(
+				[],
+				[
+					{
+						id: 'captured-leg',
+						source: 'app',
+						order_id: 42,
+						method_id: 'pos_cash',
+						provider: null,
+						kind: 'cash',
+						capture_mode: 'manual',
+						transport: null,
+						recorded_offline: false,
+						amount: '40.00',
+						currency: 'USD',
+						tendered: null,
+						change: null,
+						tip: null,
+						status: 'captured',
+						failure_reason: null,
+						refunded_amount: '0.00',
+						refunds: [],
+						provider_refs: {},
+						receipt: {},
+						cashier_id: 1,
+						store_id: null,
+						created_at_gmt: '2026-01-01T00:00:00Z',
+						captured_at_gmt: '2026-01-01T00:00:00Z',
+						updated_at_gmt: '2026-01-01T00:00:00Z',
+					},
+				]
+			),
+		});
+		try {
+			render(<Receipt resource={{} as never} />);
+			expect(screen.getByTestId('receipt-not-paid').textContent).toBe('Not paid · 60.00 due');
 		} finally {
 			translation.mockRestore();
 		}
