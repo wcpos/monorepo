@@ -28,12 +28,7 @@ export type {
 	QueryStateActions,
 } from './query-state-types';
 export { compileQuery, normalizeQuerySortField, saleMomentOf } from './query-state-translator';
-export {
-	NO_STORE_FILTER_PREFIX,
-	noStoreFilter,
-	noStoreFilterIds,
-	isNoStore,
-} from './query-state-translator';
+export { noStoreFilter, noStoreFilterIds, isNoStore } from './query-state-translator';
 export { parseRemoteId } from './parse-remote-id';
 export { acquireSearchSelectHandle, SEARCH_SELECT_COLLECTIONS } from './search-select';
 export type { SearchSelectCollection } from './search-select';
