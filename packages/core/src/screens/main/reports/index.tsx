@@ -12,7 +12,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
-import type { SortFieldsByCollection } from '@wcpos/query/query-state';
+import { noStoreFilter, type SortFieldsByCollection } from '@wcpos/query/query-state';
 import { useGround } from '@wcpos/components/lib/ground';
 import { TileGrid } from '@wcpos/components/tile-grid';
 
@@ -36,6 +36,7 @@ import { Closures } from './closures';
 import { ClosurePanel } from './closures/closure-panel';
 import { ReportsProvider, ReportsRefunds, ReportsScopeProvider, useReportsPeriod } from './context';
 import {
+	NO_STORE_SCOPE_ID,
 	ReportsDirectoriesProvider,
 	ReportsFilterScopeProvider,
 	useReportsDirectories,
@@ -43,6 +44,7 @@ import {
 } from './scope';
 import { HeroShell, SalesScope } from './hero';
 import { Reports } from './reports';
+import { NoStoreProvider } from './no-store';
 import { useAppState } from '../../../contexts/app-state';
 import { useUISettings } from '../contexts/ui-settings';
 import {
@@ -102,7 +104,26 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	const ground = useGround();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
-	// The three handles are owned here (the effects retain them), above the refunds and
+	const { license } = useAppInfo();
+	const stores = useReportsDirectories().stores ?? [];
+	const storeIds = stores.flatMap((row) => (row.id === undefined ? [] : [row.id]));
+	const noStoreEnabled = !!license?.isPro && stores.length > 1;
+	const noStoreState = React.useMemo(
+		() =>
+			noStoreEnabled
+				? {
+						...state,
+						filters: {
+							...state.filters,
+							store: noStoreFilter(storeIds),
+							register: undefined,
+						},
+					}
+				: state,
+		[state, noStoreEnabled, storeIds]
+	);
+	const noStoreHandle = useCollectionQueryHandle('orders', noStoreState, { storeScope: 'sales' });
+	// The four handles are owned here (the effects retain them), above the refunds and
 	// comparison boundaries, so a suspended or failed secondary read never drops a handle. A
 	// failed sales read goes to the screen's boundary above this owner; its reset remounts the
 	// owner, which reads afresh.
@@ -138,10 +159,9 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	const refundsHandle = useCollectionQueryHandle('refunds', refundsState);
 	// All stores keeps the bound till's day, zone and formats (`useStoreDay(0)` could pick a
 	// directory store 0).
-	const { storeId, allStores } = useReportsFilterScope();
+	const { storeId, allStores, noStore } = useReportsFilterScope();
 	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
 	const { store, site } = useAppState();
-	const stores = useReportsDirectories().stores ?? [];
 	const range = state.filters.dateRange;
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
@@ -153,13 +173,16 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		from: day(range?.from, presets().today.from),
 		to: day(range?.to, presets().today.to),
 		registerId: state.filters.register ?? '',
-		storeId: allStores ? 0 : storeId,
+		storeId: allStores ? 0 : noStore ? NO_STORE_SCOPE_ID : storeId,
 		cashier: state.filters.cashier === undefined ? undefined : Number(state.filters.cashier),
 	};
 	const select = (next: ClosureScope) => {
 		const nextStoreId = next.storeId ?? storeId;
 		const nextStore =
-			nextStoreId === undefined || nextStoreId === 0 || nextStoreId === store?.id
+			nextStoreId === undefined ||
+			nextStoreId === 0 ||
+			nextStoreId === NO_STORE_SCOPE_ID ||
+			nextStoreId === store?.id
 				? store
 				: stores.find((row) => row.id === nextStoreId);
 		// A store switch must use the new zone before the query rerenders useStoreDay.
@@ -175,7 +198,11 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		actions.setFilter('register', next.registerId || undefined);
 		actions.setFilter(
 			'store',
-			next.storeId === undefined ? state.filters.store : String(next.storeId || 'woocommerce-pos')
+			next.storeId === undefined
+				? state.filters.store
+				: next.storeId === NO_STORE_SCOPE_ID
+					? noStoreFilter(storeIds)
+					: String(next.storeId || 'woocommerce-pos')
 		);
 		actions.setFilter('cashier', next.cashier === undefined ? undefined : String(next.cashier));
 	};
@@ -194,7 +221,11 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		/>
 	);
 	return (
-		<>
+		<NoStoreProvider
+			handle={noStoreHandle}
+			enabled={noStoreEnabled}
+			onView={() => select({ ...scope, storeId: NO_STORE_SCOPE_ID, registerId: '' })}
+		>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
 			<View className="min-h-0 flex-1">
 				{/* The date button stays available while the first orders load: it is the only way out
@@ -238,7 +269,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 					</Suspense>
 				)}
 			</View>
-		</>
+		</NoStoreProvider>
 	);
 }
 

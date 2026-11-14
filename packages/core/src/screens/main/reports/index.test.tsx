@@ -63,6 +63,7 @@ jest.mock('../../../hooks/use-app-info', () => ({
 }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 const mockBarScope = jest.fn();
 let mockNextStoreID = 9;
 const mockViewedStores = of([

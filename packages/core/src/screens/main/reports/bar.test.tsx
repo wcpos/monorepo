@@ -11,7 +11,8 @@ import { HISTORY_DAYS } from '@wcpos/sync-core';
 import { Bar, ClosuresCashierChip } from './bar';
 import { DateButton } from './date-button';
 import { ReportsScreen } from './index';
-import { ReportsDirectoriesProvider } from './scope';
+import { NO_STORE_SCOPE_ID, ReportsDirectoriesProvider } from './scope';
+import { type NoStoreSummary, NoStoreSummaryContext } from './no-store';
 
 import type { ClosureScope } from './closures/use-closure-rows';
 
@@ -561,4 +562,55 @@ it('does not offer All stores on a single-store site', () => {
 	} finally {
 		spy.mockRestore();
 	}
+});
+
+function noStoreBar(
+	summary: NoStoreSummary | undefined,
+	storeId = 1,
+	room: 'sales' | 'closures' = 'sales'
+) {
+	return (
+		<NoStoreSummaryContext.Provider value={summary}>
+			<Bar
+				room={room}
+				scope={{ ...scope, storeId, registerId: '' }}
+				onScopeChange={change}
+				onBack={() => undefined}
+			/>
+		</NoStoreSummaryContext.Provider>
+	);
+}
+it('lists No store after real stores and clears the register when chosen', () => {
+	isPro = true;
+	render(noStoreBar({ count: 4, amount: 4.88, view: jest.fn() }));
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	expect(screen.getAllByTestId(/^reports-store-/).map((row) => row.dataset.testid)).toEqual([
+		'reports-store-all',
+		'reports-store-1',
+		'reports-store-2',
+		'reports-store-none',
+	]);
+	fireEvent.click(screen.getByTestId('reports-store-none'));
+	expect(change).toHaveBeenLastCalledWith({ ...scope, storeId: NO_STORE_SCOPE_ID, registerId: '' });
+});
+it.each([
+	['sales', undefined],
+	['sales', 0],
+	['closures', 4],
+] as const)('does not list No store in %s with count %s', (room, count) => {
+	render(
+		noStoreBar(count === undefined ? undefined : { count, amount: 0, view: jest.fn() }, 1, room)
+	);
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	expect(screen.queryByTestId('reports-store-none')).toBeNull();
+});
+it('keeps an empty selected No store checked, named and without individual registers', () => {
+	isPro = true;
+	render(noStoreBar({ count: 0, amount: 0, view: jest.fn() }, NO_STORE_SCOPE_ID));
+	expect(screen.getByTestId('reports-scope').textContent).toBe('No store · All registers');
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	expect(screen.getByTestId('reports-store-none').getAttribute('aria-checked')).toBe('true');
+	expect(screen.getAllByTestId(/^reports-register-/).map((row) => row.dataset.testid)).toEqual([
+		'reports-register-all',
+	]);
 });

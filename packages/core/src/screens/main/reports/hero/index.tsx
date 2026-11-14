@@ -38,6 +38,7 @@ import { useReportPrint } from '../panels/use-report-print';
 import { useReportsDirectories, useReportsFilterScope } from '../scope';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { ReportsSyncProgress } from '../sync-progress';
+import { NoStoreNotice } from '../no-store';
 import { ScopeRow } from '../scope-row';
 import { MenuChip } from '../menu-chip';
 
@@ -504,6 +505,7 @@ export function Hero() {
 					</ReportsComparison>
 				</React.Suspense>
 			</ErrorBoundary>
+			<NoStoreNotice />
 			<ReportsSyncProgress lane="comparison" />
 			{phone ? (
 				<>

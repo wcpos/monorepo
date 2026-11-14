@@ -23,7 +23,8 @@ import {
 import { ManagementBar } from '../components/management-bar';
 import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
 import { MenuChip } from './menu-chip';
-import { useReportsDirectories } from './scope';
+import { NO_STORE_SCOPE_ID, useReportsDirectories } from './scope';
+import { useNoStoreSummary } from './no-store';
 
 type ScopeProps = { scope: ClosureScope; onScopeChange: (scope: ClosureScope) => void };
 
@@ -64,6 +65,8 @@ export function Bar({
 	const stores = useReportsDirectories().stores ?? [];
 	// Store 0 is also a single-store install's own id: All stores only with stores to choose from.
 	const allStores = room === 'sales' && scope.storeId === 0 && stores.length > 1;
+	const noStore = useNoStoreSummary();
+	const noStoreSelected = room === 'sales' && scope.storeId === NO_STORE_SCOPE_ID;
 	const directory = useRegisterDirectory(
 		license?.isPro && stores.some((row) => row.id === scope.storeId) ? scope.storeId : store.id
 	);
@@ -77,7 +80,8 @@ export function Bar({
 		setLocked('');
 		const next = { ...scope, ...changes };
 		const destination =
-			(room === 'sales' && next.storeId === 0) || next.storeId === store.id
+			(room === 'sales' && (next.storeId === 0 || next.storeId === NO_STORE_SCOPE_ID)) ||
+			next.storeId === store.id
 				? store
 				: stores.find((row) => row.id === next.storeId);
 		const destinationZone = resolveDayTimezone(destination, site).timezone;
@@ -143,7 +147,7 @@ export function Bar({
 									    Store · Register: the larger container first, as every line that names both reads. */}
 									<Text numberOfLines={1} className="text-foreground min-w-0 shrink font-semibold">
 										{stores.length > 1
-											? `${allStores ? t('reports.all_stores') : (stores.find((row) => row.id === scope.storeId)?.name ?? store.name)} · `
+											? `${allStores ? t('reports.all_stores') : noStoreSelected ? t('reports.no_store') : (stores.find((row) => row.id === scope.storeId)?.name ?? store.name)} · `
 											: ''}
 										{directory.registers.find((row) => row.id === scope.registerId)?.name ??
 											(scope.registerId && binding.registerId
@@ -167,9 +171,12 @@ export function Bar({
 										{[
 											...(room === 'sales' ? [{ id: 0, name: t('reports.all_stores') }] : []),
 											...stores,
+											...(room === 'sales' && (noStoreSelected || (noStore?.count ?? 0) > 0)
+												? [{ id: NO_STORE_SCOPE_ID, name: t('reports.no_store') }]
+												: []),
 										].map((row) =>
 											option(
-												`reports-store-${row.id === 0 ? 'all' : row.id}`,
+												`reports-store-${row.id === 0 ? 'all' : row.id === NO_STORE_SCOPE_ID ? 'none' : row.id}`,
 												row.name ?? '',
 												{
 													storeId: row.id,
@@ -177,7 +184,7 @@ export function Bar({
 													// register, or `unbound` on an unbound Free till); returning to it from another store
 													// restores the binding, so another store's register never rides along.
 													registerId:
-														row.id === 0
+														row.id === 0 || row.id === NO_STORE_SCOPE_ID
 															? ''
 															: row.id === store.id
 																? (scope.storeId ?? store.id) === store.id
@@ -187,7 +194,11 @@ export function Bar({
 												},
 												row.id !== 0 && row.id === store.id,
 												row.id === 0 ? t('reports.all_stores') : t('reports.other_stores'),
-												row.id === 0 ? scope.storeId === 0 : row.id === (scope.storeId ?? store.id)
+												row.id === NO_STORE_SCOPE_ID
+													? noStoreSelected
+													: row.id === 0
+														? scope.storeId === 0
+														: row.id === (scope.storeId ?? store.id)
 											)
 										)}
 									</MenuRowGroup>
@@ -198,7 +209,7 @@ export function Bar({
 								<MenuRowGroup accessibilityLabel={t('common.register')}>
 									{[
 										{ id: '', name: t('reports.all_registers') },
-										...(allStores ? [] : directory.registers),
+										...(allStores || noStoreSelected ? [] : directory.registers),
 									].map((row) =>
 										option(
 											`reports-register-${row.id || 'all'}`,
