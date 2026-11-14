@@ -85,3 +85,18 @@ export function stripOffset(revealed: number, stripWidth: number): number {
 	'worklet';
 	return Math.max(0, stripWidth - revealed);
 }
+
+/**
+ * The strip's window is the row wide and slides in from the trailing edge: this is how far right
+ * of the row's left edge its leading edge sits. The row's own clip hides what is pushed past it.
+ */
+export function windowOffset(revealed: number, rowWidth: number): number {
+	'worklet';
+	return Math.max(0, rowWidth - revealed);
+}
+
+/** The strip's counter-slide inside the moving window, so it sits in the row where it always did. */
+export function stripInWindow(revealed: number, stripWidth: number, rowWidth: number): number {
+	'worklet';
+	return stripOffset(revealed, stripWidth) - windowOffset(revealed, rowWidth);
+}

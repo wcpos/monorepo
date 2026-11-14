@@ -361,6 +361,9 @@ it("the actions paint over the row: the strip's window comes after the body and 
 	expect(row.lastElementChild).toBe(windowEl);
 	expect(windowEl.contains(strip)).toBe(true);
 	expect(windowEl.getAttribute('data-classes')).toMatch(/\boverflow-hidden\b/);
+	// The window is the row wide and moves by transform, never pinned right and resized.
+	expect(windowEl.getAttribute('data-classes')).toMatch(/\binset-0\b/);
+	expect(windowEl.getAttribute('data-classes')).not.toMatch(/\bright-0\b/);
 	// Nothing of the strip sits before the body, under it.
 	const body = row.firstElementChild;
 	expect(body).not.toBe(windowEl);

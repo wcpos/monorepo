@@ -6,7 +6,9 @@ import {
 	REMOVE_BAND,
 	removeOffset,
 	removePoint,
+	stripInWindow,
 	stripOffset,
+	windowOffset,
 } from './line-strip.geometry';
 
 // A register column and a phone, with the shipped strip (Edit 88 + Remove 96).
@@ -97,6 +99,29 @@ describe('the strip over the row', () => {
 	it('the body always reaches under the window: no gap', () => {
 		for (const r of PULLS) {
 			expect(ROW_WIDTH + bodyOffset(r, STRIP_WIDTH)).toBeGreaterThanOrEqual(ROW_WIDTH - r);
+		}
+	});
+});
+
+describe('the window moves, never resizes', () => {
+	const ROW_WIDTH = 400;
+	const STRIP_WIDTH = 200;
+	it('the row-wide window slides in from the trailing edge and stops at the leading edge', () => {
+		expect(windowOffset(0, ROW_WIDTH)).toBe(400);
+		expect(windowOffset(200, ROW_WIDTH)).toBe(200);
+		expect(windowOffset(400, ROW_WIDTH)).toBe(0);
+		expect(windowOffset(500, ROW_WIDTH)).toBe(0);
+		// A window at the leading edge is 0, never -0.
+		expect(Object.is(windowOffset(400, ROW_WIDTH), 0)).toBe(true);
+	});
+	it('shows the same picture as the window that was as wide as the pull', () => {
+		for (const r of [0, 16, 100, 200, 260, 399, 400]) {
+			const left = windowOffset(r, ROW_WIDTH);
+			// The row clips the window at its own right edge.
+			const visible = [left, Math.min(ROW_WIDTH, left + ROW_WIDTH)];
+			expect(visible).toEqual([ROW_WIDTH - Math.min(r, ROW_WIDTH), ROW_WIDTH]);
+			const stripRight = left + ROW_WIDTH + stripInWindow(r, STRIP_WIDTH, ROW_WIDTH);
+			expect(stripRight).toBe(ROW_WIDTH + stripOffset(r, STRIP_WIDTH));
 		}
 	});
 });

@@ -26,7 +26,8 @@ import {
 	releaseOutcome,
 	removeOffset,
 	removePoint,
-	stripOffset,
+	stripInWindow,
+	windowOffset,
 } from './line-strip.geometry';
 import { useT } from '../../../../../contexts/translations';
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
@@ -173,9 +174,13 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	const style = useAnimatedStyle(() => ({
 		transform: [{ translateX: bodyOffset(-onStage(offset.value), stripWidth) }],
 	}));
-	const windowStyle = useAnimatedStyle(() => ({ width: -onStage(offset.value) }));
+	const windowStyle = useAnimatedStyle(() => ({
+		transform: [{ translateX: windowOffset(-onStage(offset.value), rowWidth) }],
+		// Unmeasured, the window would sit over the whole row: an unmeasured row never shows the strip.
+		...(rowWidth ? {} : { opacity: 0 }),
+	}));
 	const stripStyle = useAnimatedStyle(() => ({
-		transform: [{ translateX: stripOffset(-onStage(offset.value), stripWidth) }],
+		transform: [{ translateX: stripInWindow(-onStage(offset.value), stripWidth, rowWidth) }],
 	}));
 	const editStyle = useAnimatedStyle(() => ({
 		opacity: 1 - swallow.value,
@@ -407,11 +412,11 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			</GestureDetector>
 			<Animated.View
 				testID="cart-line-strip-window"
-				className="absolute inset-y-0 right-0 overflow-hidden"
+				className="absolute inset-0 overflow-hidden"
 				style={windowStyle}
 				pointerEvents="box-none"
 			>
-				{/* The strip slides in over the row's figures inside a window as wide as the pull, so the quantity and the name stay put at the open rest; the red fills what the window shows past the buttons, and Edit rides at its leading edge until Remove swallows it. */}
+				{/* The window is the row wide and slides in from the trailing edge, and the strip counter-slides inside it, so the strip slides in over the row's figures and the quantity and the name stay put at the open rest; the red fills what the window shows past the buttons, and Edit rides at its leading edge until Remove swallows it. */}
 				<Animated.View
 					testID="cart-line-strip"
 					className="bg-destructive absolute inset-y-0 right-0 flex-row items-stretch justify-end"
