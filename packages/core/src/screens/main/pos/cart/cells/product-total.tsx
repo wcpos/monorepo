@@ -30,11 +30,11 @@ export function ProductTotal({ row, column }: CellContext<Props, 'total'>) {
 	const { displaySubtotal } = React.useMemo(() => {
 		if (taxDisplayCart === 'incl') {
 			return {
-				displaySubtotal: toNumber(item.subtotal) + toNumber(item.subtotal_tax),
+				displaySubtotal: toNumber(item.subtotal ?? '0') + toNumber(item.subtotal_tax ?? '0'),
 			};
 		}
 		return {
-			displaySubtotal: toNumber(item.subtotal),
+			displaySubtotal: toNumber(item.subtotal ?? '0'),
 		};
 	}, [item.subtotal, item.subtotal_tax, taxDisplayCart]);
 	return (

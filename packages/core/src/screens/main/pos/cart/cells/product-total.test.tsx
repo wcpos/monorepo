@@ -88,3 +88,9 @@ it('a line with no discount shows the same figure as before', () => {
 	renderLine({ id: 7, quantity: 2, subtotal: '110.00', total: '110.00' });
 	expect(screen.getByTestId('checkout-ledger-total-7').textContent).toBe('$110.00');
 });
+
+it('tax-inclusive, a line with no subtotal tax shows its subtotal, not $0.00', () => {
+	mockTaxDisplayCart = 'incl';
+	renderLine({ id: 7, quantity: 1, subtotal: '45.00', total: '45.00' });
+	expect(screen.getByTestId('checkout-ledger-total-7').textContent).toBe('$45.00');
+});
