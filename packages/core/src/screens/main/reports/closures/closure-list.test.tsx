@@ -471,6 +471,54 @@ it('shows the session counts as unknown, not zero, while the read is unavailable
 	expect(screen.getByTestId('closures-filter-all')).toBeTruthy();
 });
 
+const money = ['discrepancy', 'cash-at-open', 'cash-activity', 'cash-at-close'];
+
+// Revert: override only Sessions when unknown, or leave Cash at open computed from the local float.
+it('dashes every money tile and blanks every note while the read is unavailable', () => {
+	const t = createTestT();
+	const sessions = [
+		{ id: 'open', expected_float: '50' },
+	] as import('./session-card').SessionSummary[];
+	const rows = [
+		row('1', {
+			expected: { cash: '120' },
+			counted: { cash: '118' },
+			variance: { cash: '-2' },
+			breakdowns: { opening_float: { counted: '100' } },
+		}),
+	];
+	const notes = [
+		'1 short',
+		t('reports.stat_floats'),
+		t('reports.stat_activity_note'),
+		t('reports.stat_counts', { count: 1 }),
+	];
+	const view = render(<ClosureList rows={rows} sessions={sessions} />);
+	for (const id of money) {
+		expect(screen.getByTestId(`closure-stat-${id}`).textContent).not.toBe('—');
+	}
+	for (const note of notes) expect(screen.getByText(note)).toBeTruthy();
+	expect(screen.getByTestId('closure-stat-discrepancy').className).toContain('text-bad');
+	view.rerender(<ClosureList rows={rows} sessions={sessions} unknown />);
+	for (const id of ['sessions', ...money]) {
+		expect(screen.getByTestId(`closure-stat-${id}`).textContent).toBe('—');
+	}
+	for (const note of [...notes, t('reports.stat_nothing_closed')]) {
+		expect(screen.queryByText(note)).toBeNull();
+	}
+	expect(screen.getByTestId('closure-stat-discrepancy').className).toContain('text-foreground');
+	expect(screen.getByTestId('closure-stat-discrepancy').className).not.toContain('text-bad');
+});
+
+// Revert: keep Cash at close's "nothing closed yet" note when unknown.
+it('drops the nothing-closed note and dashes the money tiles when unknown with no data', () => {
+	render(<ClosureList rows={[]} sessions={[]} unknown />);
+	expect(screen.queryByText(createTestT()('reports.stat_nothing_closed'))).toBeNull();
+	for (const id of money) {
+		expect(screen.getByTestId(`closure-stat-${id}`).textContent).toBe('—');
+	}
+});
+
 // Revert: include open cash activity, prefer expected over counted float, or sum absolute variances.
 it('totals three closures and one open session in the viewed currency, hiding stats when blind', () => {
 	const sessions = [
