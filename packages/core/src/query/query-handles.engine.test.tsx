@@ -1032,7 +1032,8 @@ describe('query handles over the engine', () => {
 		await firstValueFrom(field$(result.current, 'total'));
 		expect(engine.coverageSubscribeCalls).toContainEqual({
 			collection: 'orders',
-			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
+			queryKey:
+				'orders:browser:status=all:after=1782864000:before=1783987200:modified_after=1782864000:search=:limit=all',
 		});
 		expect(engine.requireCalls.at(-1)).not.toHaveProperty('store');
 	});
@@ -1050,7 +1051,8 @@ describe('query handles over the engine', () => {
 		);
 		const target = {
 			collection: 'orders' as const,
-			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
+			queryKey:
+				'orders:browser:status=all:after=1782864000:before=1783987200:modified_after=1782864000:search=:limit=all',
 		};
 		engine.setCoverageVerdict(target, {
 			total: 99,

@@ -350,7 +350,15 @@ describe('ReportsScreen query-state wiring', () => {
 			expect(queryState.filters.register).toBe('r');
 			const sales = compileQuery('orders', queryState, { id: 'report', ...options });
 			const pos = compileQuery('orders', queryState, { id: 'report' });
-			expect(sales.demand).toEqual(pos.demand);
+			// Reports count on the sale moment, so the sales lane also walks orders created before
+			// the window and modified in it; nothing else about the demand differs from pos.
+			expect(sales.demand).toEqual(
+				pos.demand.map((item) => ({
+					...item,
+					modifiedAfterSeconds: (item as { afterSeconds?: number }).afterSeconds,
+				}))
+			);
+			expect(pos.demand[0]).not.toHaveProperty('modifiedAfterSeconds');
 			// Store scoping stays pos; only the date clause moves to the local sale-moment predicate.
 			const { $and: clauses } = pos.read.prefilter as { $and: Record<string, unknown>[] };
 			expect(sales.read.prefilter).toEqual({

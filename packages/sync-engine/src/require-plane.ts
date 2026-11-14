@@ -201,6 +201,12 @@ export type OrderBrowseDimensions = {
 	/** date_created_gmt range bounds, epoch seconds. */
 	afterSeconds?: number;
 	beforeSeconds?: number;
+	/**
+	 * Ranged (`limit: 'all'`) lanes only: after the created-in-range walk, also walk orders
+	 * created at or before afterSeconds and modified after this instant (epoch seconds).
+	 * Used by Reports, which count on the sale moment.
+	 */
+	modifiedAfterSeconds?: number;
 	/** Supported orders orderby values. Both orderby and order, or neither. */
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';

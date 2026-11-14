@@ -79,6 +79,7 @@ export type OrderBrowserSchedulerDescriptor = {
 	paymentMethod?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
+	modifiedAfterSeconds?: number;
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
 	complete: boolean;
@@ -113,6 +114,7 @@ export type OrderBrowseWindowFields = {
 	paymentMethod?: string | undefined;
 	afterSeconds?: number | undefined;
 	beforeSeconds?: number | undefined;
+	modifiedAfterSeconds?: number | undefined;
 	orderby?: OrderBrowserSchedulerDescriptor['orderby'];
 	order?: OrderBrowserSchedulerDescriptor['order'];
 };
@@ -154,6 +156,7 @@ function encodeOrderBrowseWindowKey(fields: OrderBrowseWindowFields, limitText: 
 		browseWindowKeyPart('payment_method', fields.paymentMethod),
 		browseWindowKeyPart('after', fields.afterSeconds),
 		browseWindowKeyPart('before', fields.beforeSeconds),
+		browseWindowKeyPart('modified_after', fields.modifiedAfterSeconds),
 		orderBrowseWindowSortPart(fields),
 		`:search=${fields.search}`,
 		`:limit=${limitText}`,
@@ -196,6 +199,15 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 	const afterSeconds = safeNonNegativeInteger(dims.afterSeconds);
 	const beforeSeconds = safeNonNegativeInteger(dims.beforeSeconds);
+	const modifiedAfterSeconds = safeNonNegativeInteger(dims.modifiedAfterSeconds);
+	if (
+		modifiedAfterSeconds !== undefined &&
+		(dims.limit !== 'all' || afterSeconds === undefined || beforeSeconds === undefined)
+	) {
+		throw new TypeError(
+			"orders browse modifiedAfterSeconds requires limit 'all' and both date bounds"
+		);
+	}
 	if (dims.paymentMethod !== undefined && !isGatewayId(dims.paymentMethod)) {
 		throw new TypeError(
 			'orders browse payment method must be a gateway id of 1–64 letters, digits, _, . or -'
@@ -238,6 +250,7 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		store,
 		afterSeconds,
 		beforeSeconds,
+		modifiedAfterSeconds,
 		orderby: dims.orderby,
 		order: dims.order,
 	});
@@ -266,7 +279,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 	// BETWEEN the colon-free `status` and `:search=` — appending them after `search`
 	// would let a literal search term like `invoice:after=1` be read as a date bound.
 	const match =
-		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::register=([a-f0-9-]{36}))?(?::store=([a-z0-9_-]+))?(?::payment_method=([A-Za-z0-9_.-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::register=([a-f0-9-]{36}))?(?::store=([a-z0-9_-]+))?(?::payment_method=([A-Za-z0-9_.-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::modified_after=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
 			queryKey
 		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
@@ -281,6 +294,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 		paymentMethod,
 		afterText,
 		beforeText,
+		modifiedAfterText,
 		orderby,
 		order,
 		search,
@@ -291,12 +305,15 @@ export function parseOrderBrowserSchedulerDescriptor(
 	const cashierId = cashierText === undefined ? undefined : Number(cashierText);
 	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
 	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
+	const modifiedAfterSeconds =
+		modifiedAfterText === undefined ? undefined : Number(modifiedAfterText);
 	if (
 		(paymentMethod !== undefined && !isGatewayId(paymentMethod)) ||
 		(customerId !== undefined && !Number.isSafeInteger(customerId)) ||
 		(cashierId !== undefined && !Number.isSafeInteger(cashierId)) ||
 		(afterSeconds !== undefined && !Number.isSafeInteger(afterSeconds)) ||
 		(beforeSeconds !== undefined && !Number.isSafeInteger(beforeSeconds)) ||
+		(modifiedAfterSeconds !== undefined && !Number.isSafeInteger(modifiedAfterSeconds)) ||
 		(orderby === undefined) !== (order === undefined)
 	) {
 		return {
@@ -304,6 +321,12 @@ export function parseOrderBrowserSchedulerDescriptor(
 		};
 	}
 	const complete = limitText === 'all';
+	if (
+		modifiedAfterSeconds !== undefined &&
+		(!complete || afterSeconds === undefined || beforeSeconds === undefined)
+	) {
+		return { skipReason: 'modified_after requires a ranged limit=all window' };
+	}
 	if (complete && afterSeconds === undefined && beforeSeconds === undefined) {
 		return {
 			skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON,
@@ -327,6 +350,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 			...(paymentMethod !== undefined ? { paymentMethod } : {}),
 			...(afterSeconds !== undefined ? { afterSeconds } : {}),
 			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
+			...(modifiedAfterSeconds !== undefined ? { modifiedAfterSeconds } : {}),
 			// A ranged lane is sort-agnostic (see the sortPart note in orderBrowserQueryKey), so the
 			// sort is DROPPED here rather than rejected: lanes and queued tasks persisted before
 			// that change still carry it, and refusing them would strand the task instead of
@@ -359,6 +383,7 @@ export function orderBrowseWindowFields(
 		paymentMethod: descriptor.paymentMethod,
 		afterSeconds: descriptor.afterSeconds,
 		beforeSeconds: descriptor.beforeSeconds,
+		modifiedAfterSeconds: descriptor.modifiedAfterSeconds,
 		orderby: descriptor.orderby,
 		order: descriptor.order,
 	};
