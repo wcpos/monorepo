@@ -10,6 +10,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DismissIsClose,
+	type FooterButton,
 	type FooterSlot,
 } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
@@ -28,6 +29,8 @@ export type PrintSheetProps = {
 	error?: React.ReactNode;
 	record?: FooterSlot | FooterSlot[];
 	secondary?: FooterSlot | FooterSlot[];
+	/** The primary when it is not Print (an unsaved order's Save to store); Print then leads the secondaries. */
+	primary?: FooterButton;
 	onPrint: () => void | Promise<unknown>;
 	side?: 'left' | 'right';
 	portalHost?: string | null;
@@ -63,6 +66,7 @@ export function PrintSheetInner({
 	error,
 	record,
 	secondary,
+	primary,
 	onPrint,
 	aside,
 	fullWidth,
@@ -73,6 +77,14 @@ export function PrintSheetInner({
 	children,
 }: Omit<PrintSheetProps, 'side' | 'portalHost' | 'testID'> & { header?: React.ReactNode }) {
 	const t = useT();
+	const print: FooterButton = {
+		label: doc.printedTo ? t('receipt.print_again') : printLabel,
+		testID: printTestID,
+		icon: 'print',
+		onPress: () => void onPrint(),
+		disabled: !!waiting || doc.printHeld,
+		loading: doc.isPrinting || doc.isSyncing,
+	};
 	return (
 		<>
 			{header ?? (
@@ -105,15 +117,8 @@ export function PrintSheetInner({
 					aside={aside}
 					close={close}
 					record={record}
-					secondary={secondary}
-					intent={{
-						label: doc.printedTo ? t('receipt.print_again') : printLabel,
-						testID: printTestID,
-						icon: 'print',
-						onPress: () => void onPrint(),
-						disabled: !!waiting || doc.printHeld,
-						loading: doc.isPrinting || doc.isSyncing,
-					}}
+					secondary={primary ? [print, secondary].flat() : secondary}
+					intent={primary ?? print}
 				/>
 			</DismissIsClose>
 			{children}

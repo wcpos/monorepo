@@ -406,7 +406,8 @@ export function DialogFooter({
 						</View>
 					)}
 					{(dismissable || alternatives.length > 0 || intent) && (
-						<View className={cn(group, fill && 'flex-1')}>
+						// A wrapped row sits at the trailing edge, so the primary never lands alone at the start.
+						<View className={cn(group, 'justify-end', fill && 'flex-1')}>
 							{dismiss}
 							{other}
 							{primary}

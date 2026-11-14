@@ -121,6 +121,45 @@ it('keeps record and secondary actions outlined and preserves receipt selectors'
 	expect(screen.getByTestId('receipt-print-button').dataset.variant).toBe('default');
 });
 
+const footerButtons = () =>
+	Array.from(document.querySelectorAll<HTMLElement>('[data-variant]')).map(
+		(button) => `${button.dataset.testid}:${button.dataset.variant}`
+	);
+
+// Every caller that names no primary (the X/Z reports and the rest) keeps Print as the primary.
+it('Print stays the primary when no other primary is given', () => {
+	render(
+		<PrintSheetContent
+			{...props()}
+			record={{ label: 'Sync', testID: 'sync' }}
+			secondary={{ label: 'Email receipt', testID: 'email' }}
+		/>
+	);
+	expect(footerButtons()).toEqual([
+		'sync:outline',
+		'dialog-footer-close:outline',
+		'email:outline',
+		'print-sheet-print:default',
+	]);
+});
+
+// An unsaved order leads with Save to store; Print stays first among the alternatives.
+it('a given primary takes the intent and Print leads the secondaries', () => {
+	render(
+		<PrintSheetContent
+			{...props()}
+			primary={{ label: 'Save to store', testID: 'p' }}
+			secondary={{ label: 'Email receipt', testID: 'email' }}
+		/>
+	);
+	expect(footerButtons()).toEqual([
+		'dialog-footer-close:outline',
+		'print-sheet-print:outline',
+		'email:outline',
+		'p:default',
+	]);
+});
+
 // A single template and no printer still have visible values, never empty selectors.
 it('shows read-only property values when there are no choices', () => {
 	render(<PrintSheetContent {...props()} />);
