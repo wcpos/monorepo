@@ -561,6 +561,88 @@ it('records paid out and Undo inserts a void', async () => {
 	fireEvent.click(screen.getByTestId('toast-undo'));
 	await waitFor(() => expect(voidMovement).toHaveBeenCalledWith('movement'));
 });
+// Paul's decision 1A (payout-over-drawer): warn, then ask once more; nothing is refused.
+describe('a paid out larger than the drawer', () => {
+	const move = (opener: 'paid-out' | 'paid-in', value: string) => {
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		fireEvent.click(screen.getByTestId(`register-panel-${opener}`));
+		fireEvent.change(screen.getByTestId('movement-amount'), { target: { value } });
+		fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Milk' } });
+	};
+	const recordsOnce = async (type: string, amount: string) => {
+		await waitFor(() => expect(recordMovement).toHaveBeenCalledTimes(1));
+		expect(recordMovement).toHaveBeenCalledWith({ type, amount, reason: 'Milk' });
+	};
+	// Lets the exclusive confirm settle before the next assertion.
+	const tap = async () => {
+		await act(async () => {
+			fireEvent.click(confirmButton());
+		});
+	};
+
+	it('warns and records only on the second tap', async () => {
+		move('paid-out', '200');
+		expect(screen.getByTestId('movement-after-figure').getAttribute('data-classes')).toContain(
+			'text-bad'
+		);
+		expect(screen.getByTestId('movement-over-drawer').textContent).toContain(
+			'register.more_than_drawer_holds £155.00'
+		);
+		await tap();
+		expect(recordMovement).not.toHaveBeenCalled();
+		expect(confirmButton().textContent).toContain('register.take_out_anyway £200.00');
+		await tap();
+		await recordsOnce('paid_out', '200');
+	});
+
+	it('an amount edit takes the second ask back', async () => {
+		move('paid-out', '200');
+		await tap();
+		fireEvent.change(screen.getByTestId('movement-amount'), { target: { value: '300' } });
+		expect(confirmButton().textContent).not.toContain('take_out_anyway');
+		await tap();
+		expect(recordMovement).not.toHaveBeenCalled();
+		await tap();
+		await recordsOnce('paid_out', '300');
+	});
+
+	it('the whole drawer is not over it', async () => {
+		move('paid-out', '155');
+		expect(screen.queryByTestId('movement-over-drawer')).toBeNull();
+		expect(screen.getByTestId('movement-after-figure').getAttribute('data-classes')).not.toContain(
+			'text-bad'
+		);
+		await tap();
+		await recordsOnce('paid_out', '155');
+	});
+
+	it('a blind cashier takes it out with one tap and sees no figure', async () => {
+		blind = true;
+		move('paid-out', '200');
+		expect(screen.queryByTestId('movement-over-drawer')).toBeNull();
+		expect(screen.queryByTestId('movement-after')).toBeNull();
+		expect(confirmButton().textContent).not.toContain('take_out_anyway');
+		await tap();
+		await recordsOnce('paid_out', '200');
+	});
+
+	it('pending figures take it out with one tap', async () => {
+		currentFiguresPending = true;
+		move('paid-out', '200');
+		expect(screen.queryByTestId('movement-over-drawer')).toBeNull();
+		await tap();
+		await recordsOnce('paid_out', '200');
+	});
+
+	it('a paid in never asks', async () => {
+		// The drawer is still below zero after it.
+		expected = { cash: '-50', card: '30' };
+		move('paid-in', '20');
+		expect(screen.queryByTestId('movement-over-drawer')).toBeNull();
+		await tap();
+		await recordsOnce('paid_in', '20');
+	});
+});
 it('no sale hides amount and opens the resolved drawer', async () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-no-sale'));
