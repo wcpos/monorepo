@@ -73,7 +73,8 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string, args?: Record<string, unknown>) =>
 		args ? `${key} ${JSON.stringify(args)}` : key,
 }));
-jest.mock('../../../services/register/use-register', () => ({ useRegister: () => null }));
+let mockRegister: unknown = null;
+jest.mock('../../../services/register/use-register', () => ({ useRegister: () => mockRegister }));
 // Wide unless a test says otherwise: the phone pushes the explicit (tabs) cart (#2374).
 let mockPhone = false;
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockPhone }));
@@ -94,6 +95,7 @@ beforeEach(() => {
 	mockConnectivity = 'online';
 	mockOnDrain = () => {};
 	mockPhone = false;
+	mockRegister = null;
 });
 
 const leg = {
@@ -455,4 +457,40 @@ it('queues the reopen as an explicit write, which the open-cart hold never holds
 		pathname: '/cart/[...orderId]',
 		params: { orderId: ['order-1'] },
 	});
+});
+
+it("stamps this store's bound register, not the site pointer another store left behind (#3358)", async () => {
+	// Store 1 is bound to register A; a visit to store 2 moved the site pointer to B.
+	mockRegister = {
+		id: 'till',
+		sites: {
+			'site-1': {
+				register_id: 'register-b',
+				register_name: 'B',
+				register_store_id: 2,
+				bindings: { '1': { register_id: 'register-a', register_name: 'A' } },
+			},
+		},
+	};
+	jest
+		.mocked(applyLocalPatch)
+		.mockResolvedValueOnce({ document: order, mutationId: 'm-reopen' } as never);
+	mockOnDrain = () =>
+		emit({
+			type: 'write-acknowledged',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'm-reopen',
+		} as EngineEvent);
+	const { result } = renderHook(() => useReopenOrder(order));
+	await act(async () => result.current.reopen());
+	expect(applyLocalPatch).toHaveBeenCalledWith(
+		expect.anything(),
+		expect.objectContaining({
+			data: expect.objectContaining({
+				meta_data: expect.arrayContaining([{ key: '_wcpos_register', value: 'register-a' }]),
+			}),
+		}),
+		expect.anything()
+	);
 });

@@ -95,7 +95,8 @@ export function DeclaredFieldsView({ fields, values, errors, onChange: emit, dis
 						{component.component === 'select' ? (
 							<View testID={`checkout-field-${component.id}`} accessibilityLabel={component.label}>
 								<OptionSelect
-									options={component.options}
+									// A gateway's own "Choose…" option (value '') crashes Radix Select (POS-32J).
+									options={component.options.filter((option) => option.value !== '')}
 									value={value === '' ? undefined : value}
 									placeholder={t('pos_checkout.choose_field', { label: component.label })}
 									disabled={disabled}

@@ -115,6 +115,10 @@ function deriveDrawer(
 	// by this device (session-store.ts, id = session id), so any closure is our own close
 	// and `closedElsewhere` cannot fire for a genuine remote close (#3560).
 	const closedHere = !!lastClosure && rows.closed.some((row) => row.id === lastClosure.session_id);
+	const serverOrderIds =
+		session?.server_order_ids != null
+			? new Set(session.server_order_ids)
+			: session?.server_order_ids;
 	return {
 		session,
 		refusedClose,
@@ -131,7 +135,7 @@ function deriveDrawer(
 			session?.server_sales_count != null && session.server_expected_at != null
 				? session.server_sales_count +
 					orders.filter((record) =>
-						outsideBaseline(record, session.server_expected_at, session.server_order_ids)
+						outsideBaseline(record, session.server_expected_at, serverOrderIds)
 					).length
 				: orders.length,
 		/** § 4.9 invariant 1: a seeded session's figures are unknown until the server's baseline. */

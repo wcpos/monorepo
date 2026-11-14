@@ -15,9 +15,14 @@ export function outsideBaseline(
 		payload: { id?: number; date_created_gmt?: string };
 	},
 	baselineAt?: string | null,
-	orderIds?: readonly number[] | null
+	orderIds?: readonly number[] | ReadonlySet<number> | null
 ) {
-	if (orderIds != null) return !orderIds.some((id) => id === record.payload.id);
+	// `payload` is a getter on engine records: read it once, not once per server order id.
+	const id = record.payload.id;
+	if (orderIds != null)
+		return !(orderIds instanceof Set
+			? orderIds.has(id!)
+			: (orderIds as readonly number[]).includes(id!));
 	return record.remoteId === null || afterBaseline(record.payload.date_created_gmt, baselineAt);
 }
 /** What the server snapshot already counts; undefined when the session has no snapshot. */

@@ -53,7 +53,11 @@ jobs:
           # on a Gallery check nothing ever reports. Gallery is required only
           # where test.yml reports it.
           MERGE_GATE_REQUIRED_CHECKS: ${{ github.event.pull_request.base.ref == '1.11.x' && '🧹 Lint|🧪 Unit Tests|🎭 E2E Tests' || '🧹 Lint|🧪 Unit Tests|🎭 E2E Tests|Gallery' }}
-          # 140 × 30s ≈ 70 min: covers deploy (~7 min) plus the slower of a
-          # web shard (~12 min) and a native run (~32 min), with one retry.
-          MERGE_GATE_MAX_ATTEMPTS: '140'
+          # 300 × 30s ≈ 150 min (desk ruling 2026-11-13): web E2E shards queue
+          # across runs per dev store (deploy.yml `e2e` concurrency), so the gate
+          # out-waits four queued runs: deploy + shared setup (~12 min) + four
+          # shard slots at 13 Nov's worst contended 28 min (4 × 28 = 112) + ~25
+          # min margin for one retry ≈ 150. Uncontended shards ran 14–19 min,
+          # so the typical four-deep wait is nearer 90 min.
+          MERGE_GATE_MAX_ATTEMPTS: '300'
         run: .github/scripts/merge-gate.sh

@@ -214,6 +214,35 @@ describe('seedOrderSchedulerTasks', () => {
 		);
 	});
 
+	it('keeps the paid-earlier second phase on a ranged sales lane', async () => {
+		const { schedulerRepository } = arrangeBrowserOrderSeed();
+
+		await seedOrderFilterSchedulerTask({
+			database: MOCK_DATABASE,
+			status: 'completed',
+			search: '',
+			limit: 200,
+			afterSeconds: 1_782_864_000,
+			beforeSeconds: 1_784_073_599,
+			modifiedAfterSeconds: 1_782_864_000,
+			complete: true,
+			nowMs: 15_000,
+		});
+
+		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith(
+			expect.objectContaining({
+				repository: schedulerRepository,
+				tasks: [
+					expect.objectContaining({
+						queryKey:
+							'orders:browser:status=completed:after=1782864000:before=1784073599:modified_after=1782864000:search=:limit=all',
+						mode: 'greedy',
+					}),
+				],
+			})
+		);
+	});
+
 	it('keeps an ordinary windowed browse windowed', async () => {
 		arrangeBrowserOrderSeed();
 
