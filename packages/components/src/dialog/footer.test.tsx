@@ -145,7 +145,10 @@ it('omits the dismiss outside an overlay shell even with close true', () => {
 });
 it.each([
 	[false, ['Aside', 'Destructive', 'Record', 'Close', 'Secondary', 'Other', 'Intent']],
-	[true, ['Aside', 'Intent', 'Secondary', 'Other', 'Close', 'Record', 'Destructive']],
+	[
+		true,
+		['Aside', 'Intent', 'Secondary', 'Other', 'Close', 'Record', 'footer-apart', 'Destructive'],
+	],
 ] as const)('orders every role explicitly (phone=%s)', (phone, order) => {
 	footer(slots, phone);
 	expect(
@@ -167,6 +170,34 @@ it.each([
 		'pt-4'
 	);
 });
+it.each([
+	[
+		'phone, destructive plus Close',
+		true,
+		{ destructive: slots.destructive },
+		['footer-close', 'footer-apart', 'Destructive'],
+	],
+	[
+		'tablet, destructive plus Close',
+		false,
+		{ destructive: slots.destructive },
+		['Destructive', 'footer-close'],
+	],
+	[
+		'phone, destructive only',
+		true,
+		{ destructive: slots.destructive, close: false },
+		['Destructive'],
+	],
+	['phone, no destructive', true, { secondary: action('Other') }, ['Other', 'footer-close']],
+] as const)(
+	'sets the destructive group apart only on the phone, below other buttons (%s)',
+	(_case, phone, props, order) => {
+		footer(props, phone);
+		const ids = screen.getByTestId('footer').querySelectorAll('[data-testid]');
+		expect(Array.from(ids, (el) => el.getAttribute('data-testid'))).toEqual(order);
+	}
+);
 it('chooses translated Cancel with intent and Close without; close dismisses', () => {
 	const change = jest.fn();
 	const pressed = jest.fn();
