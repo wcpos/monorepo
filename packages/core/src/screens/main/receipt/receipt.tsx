@@ -15,6 +15,9 @@ import { usePaymentGateways } from '../hooks/use-payment-gateways';
 import { isSettledOrderStatus } from '../pos/checkout/sale-completion';
 import { useLedgerView } from '../pos/checkout/tender/use-ledger-view';
 
+// Mirrors the order view's dead statuses: these owe nothing.
+const DEAD_STATUSES = ['cancelled', 'failed', 'refunded', 'trash'];
+
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
 	document?: string;
@@ -70,7 +73,11 @@ function ReceiptDocument({
 	const { gateway } = usePaymentGateways(paymentMethod, !!paymentMethod);
 	const view = useLedgerView(order);
 	// A missing status fails closed, as the auto-print does: an order not known to be paid is marked.
-	const notPaid = !document && !isSettledOrderStatus(status ?? '', gateway?.settled_order_status);
+	const notPaid =
+		!document &&
+		!isSettledOrderStatus(status ?? '', gateway?.settled_order_status) &&
+		!DEAD_STATUSES.includes(status ?? '') &&
+		view.balanceMinor > 0;
 	return (
 		<Dialog route>
 			<PrintSheetContent
@@ -80,7 +87,7 @@ function ReceiptDocument({
 					notPaid ? (
 						<Text className="text-warning-text" testID="receipt-not-paid">
 							{t('receipt.not_paid_amount_due', {
-								amount: view.format(Math.max(view.balanceMinor, 0)),
+								amount: view.format(view.balanceMinor),
 							})}
 						</Text>
 					) : undefined

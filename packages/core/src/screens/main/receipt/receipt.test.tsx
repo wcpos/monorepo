@@ -606,6 +606,94 @@ describe('Receipt of an unpaid order', () => {
 		}
 	});
 
+	it('a fully refunded order carries no mark', () => {
+		withPayload({
+			status: 'refunded',
+			total: '100.00',
+			meta_data: withLedger(
+				[],
+				[
+					{
+						id: 'captured-leg',
+						source: 'app',
+						order_id: 42,
+						method_id: 'pos_cash',
+						provider: null,
+						kind: 'cash',
+						capture_mode: 'manual',
+						transport: null,
+						recorded_offline: false,
+						amount: '100.00',
+						currency: 'USD',
+						tendered: null,
+						change: null,
+						tip: null,
+						status: 'captured',
+						failure_reason: null,
+						refunded_amount: '100.00',
+						refunds: [{ id: 12, amount: '100.00', status: 'succeeded', provider_ref: null }],
+						provider_refs: {},
+						receipt: {},
+						cashier_id: 1,
+						store_id: null,
+						created_at_gmt: '2026-01-01T00:00:00Z',
+						captured_at_gmt: '2026-01-01T00:00:00Z',
+						updated_at_gmt: '2026-01-01T00:00:00Z',
+					},
+				]
+			),
+		});
+		render(<Receipt resource={{} as never} />);
+		expect(screen.queryByTestId('receipt-not-paid')).toBeNull();
+	});
+
+	it('a zero balance carries no mark', () => {
+		withPayload({
+			status: 'pending',
+			total: '50.00',
+			meta_data: withLedger(
+				[],
+				[
+					{
+						id: 'captured-leg',
+						source: 'app',
+						order_id: 42,
+						method_id: 'pos_cash',
+						provider: null,
+						kind: 'cash',
+						capture_mode: 'manual',
+						transport: null,
+						recorded_offline: false,
+						amount: '50.00',
+						currency: 'USD',
+						tendered: null,
+						change: null,
+						tip: null,
+						status: 'captured',
+						failure_reason: null,
+						refunded_amount: '0.00',
+						refunds: [],
+						provider_refs: {},
+						receipt: {},
+						cashier_id: 1,
+						store_id: null,
+						created_at_gmt: '2026-01-01T00:00:00Z',
+						captured_at_gmt: '2026-01-01T00:00:00Z',
+						updated_at_gmt: '2026-01-01T00:00:00Z',
+					},
+				]
+			),
+		});
+		render(<Receipt resource={{} as never} />);
+		expect(screen.queryByTestId('receipt-not-paid')).toBeNull();
+	});
+
+	it.each(['cancelled', 'failed', 'trash'])('a %s order carries no mark', (status) => {
+		withPayload({ status, total: '100.00' });
+		render(<Receipt resource={{} as never} />);
+		expect(screen.queryByTestId('receipt-not-paid')).toBeNull();
+	});
+
 	it('a saved unpaid order keeps Print primary and the mark', () => {
 		withPayload({ status: 'pending' });
 		render(<Receipt resource={{} as never} />);
