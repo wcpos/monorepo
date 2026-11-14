@@ -636,6 +636,7 @@ describe('query-state translator', () => {
 					status: 'completed',
 					afterSeconds: 1782864000,
 					beforeSeconds: 1783987200,
+					modifiedAfterSeconds: 1782864000,
 					orderby: 'date',
 					order: 'desc',
 					limit: 'all',
@@ -645,6 +646,22 @@ describe('query-state translator', () => {
 			expect(compiled.represented).toBe(false);
 			expect(compiled.coverage).toBe('superset');
 			expect(fixtures.filter(compiled.read.residual)).toEqual([]);
+		});
+		it('adds modifiedAfterSeconds only to the sales-scoped unbounded date range demand', () => {
+			const state = {
+				...base,
+				limit: Number.MAX_SAFE_INTEGER,
+				filters: { dateRange: { from: '2026-07-01', to: '2026-07-14' } },
+			};
+			const sales = compileQuery('orders', state, { id: 'sales', storeScope: 'sales' });
+			const pos = compileQuery('orders', state, { id: 'pos' });
+			expect(sales.demand[0]).toMatchObject({
+				kind: 'orders-browse',
+				limit: 'all',
+				afterSeconds: 1782864000,
+				modifiedAfterSeconds: 1782864000,
+			});
+			expect(pos.demand[0]).not.toHaveProperty('modifiedAfterSeconds');
 		});
 	});
 

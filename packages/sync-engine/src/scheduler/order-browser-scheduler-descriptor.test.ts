@@ -7,12 +7,52 @@ import {
 	ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS,
 	orderBrowserPredecessorWindow,
 	orderBrowserQueryKey,
+	orderBrowseWindowFields,
+	orderBrowseWindowQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
 } from './order-browser-scheduler-descriptor';
 
 import type { OrderBrowseDimensions } from '../require-plane';
 
 describe('orderBrowserQueryKey', () => {
+	it('round-trips a ranged modified_after window through descriptor fields', () => {
+		const queryKey = orderBrowserQueryKey({
+			afterSeconds: 100,
+			beforeSeconds: 200,
+			modifiedAfterSeconds: 100,
+			limit: 'all',
+		});
+		expect(queryKey).toBe(
+			'orders:browser:status=all:after=100:before=200:modified_after=100:search=:limit=all'
+		);
+		const decision = parseOrderBrowserSchedulerDescriptor(queryKey);
+		expect(decision?.descriptor?.modifiedAfterSeconds).toBe(100);
+		expect(orderBrowseWindowQueryKey(orderBrowseWindowFields(decision!.descriptor!))).toBe(
+			queryKey
+		);
+	});
+
+	it.each<OrderBrowseDimensions>([
+		{ afterSeconds: 100, beforeSeconds: 200, limit: 25 },
+		{ beforeSeconds: 200, limit: 'all' },
+		{ afterSeconds: 100, limit: 'all' },
+	])('rejects modifiedAfterSeconds without a ranged limit=all window: %j', (dimensions) => {
+		expect(() => orderBrowserQueryKey({ ...dimensions, modifiedAfterSeconds: 100 })).toThrow(
+			new TypeError("orders browse modifiedAfterSeconds requires limit 'all' and both date bounds")
+		);
+	});
+
+	it.each([
+		'orders:browser:status=all:before=200:modified_after=100:search=:limit=25',
+		'orders:browser:status=all:after=100:before=200:modified_after=100:search=:limit=25',
+		'orders:browser:status=all:before=200:modified_after=100:search=:limit=all',
+		'orders:browser:status=all:after=100:modified_after=100:search=:limit=all',
+	])('skips modified_after without a ranged limit=all window: %s', (queryKey) => {
+		expect(parseOrderBrowserSchedulerDescriptor(queryKey)).toEqual({
+			skipReason: 'modified_after requires a ranged limit=all window',
+		});
+	});
+
 	const fixtures: {
 		dims: OrderBrowseDimensions;
 		queryKey: string;
