@@ -60,7 +60,14 @@ jest.mock('@wcpos/components/vstack', () => ({
 // The split picker's stepper is not drawn here (no `picker`); its buttons stay out of jsdom.
 jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 
-const item = { id: 7, quantity: 2, total: '110.00', total_tax: '9.80', subtotal: '110.00' };
+const item = {
+	id: 7,
+	quantity: 2,
+	total: '110.00',
+	total_tax: '9.80',
+	subtotal: '110.00',
+	subtotal_tax: '9.80',
+};
 const props = {
 	row: { original: { uuid: '', type: 'line_items', item } },
 	column: { columnDef: { meta: { show: () => false } } },
