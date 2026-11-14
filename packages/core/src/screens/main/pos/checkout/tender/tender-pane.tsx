@@ -193,10 +193,13 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const ctl = useCSSVariable('--spacing-ctl');
 	const scale = Object.values(SCALE_STEPS).find((step) => step[4] === parseFloat(String(tile)));
 	const [paneHeight, setPaneHeight] = React.useState(0);
-	const [headHeight, setHeadHeight] = React.useState(0);
-	const [footHeight, setFootHeight] = React.useState(0);
+	const [contentSize, setContentSize] = React.useState(0);
+	const [keypadSize, setKeypadSize] = React.useState(0);
+	// The head is two sizes, not the keypad's y: a browser reports layout only on resize, and rows added above move the keypad without resizing it.
+	const headHeight = contentSize > 0 && keypadSize > 0 ? contentSize - keypadSize : 0;
 	const gap = scale ? scale[0] * 2 : 0;
-	const fixedHeight = headHeight + footHeight + gap * KEYPAD_ROWS.length;
+	// The commit bar sits outside the scroll, so the measured scroll height already excludes it.
+	const fixedHeight = headHeight + gap * (KEYPAD_ROWS.length - 1);
 	const shrink =
 		!!scale && paneHeight > 0 && paneHeight < fixedHeight + KEYPAD_ROWS.length * scale[4];
 	const contentHeight = shrink
@@ -373,13 +376,14 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						: '')
 		: t('pos_checkout.choose_how_paying');
 
-	return (
+	const scroll = (
 		<ScrollView
 			testID="checkout-keypad-pane"
-			className="bg-card flex-1"
+			className="flex-1"
 			// A declared field leaves the keyboard open: the first tap on Send must reach it.
 			keyboardShouldPersistTaps="handled"
 			onLayout={(event) => setPaneHeight(event.nativeEvent.layout.height)}
+			onContentSizeChange={(_width, height) => setContentSize(height)}
 			contentContainerClassName="items-center gap-2"
 			// `minHeight`, never `height`: a native ScrollView scrolls only to its content container's
 			// own height, not to children overflowing it (a browser counts overflow, Yoga does not), so
@@ -994,12 +998,18 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					onPress={(name) => flow.commands.dispatch({ type: 'key', key: name as TenderKey })}
 					fit={shrink ? 'shrink' : 'tile'}
 					testID="checkout-keypad"
-					onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
+					onLayout={(event) => setKeypadSize(event.nativeEvent.layout.height)}
 					className="w-full"
 				/>
 			)}
+		</ScrollView>
+	);
+
+	return (
+		<View className="bg-card flex-1 gap-2">
+			{scroll}
 			{/* On a phone the full-size dialog keeps this 8 above the bottom inset: the shell's `fill` pads the inset and the panel keeps `py-2` (`lib/overlay`, `dialog/index.tsx`). */}
-			<View className="w-full" onLayout={(event) => setFootHeight(event.nativeEvent.layout.height)}>
+			<View className="w-full">
 				<Button
 					variant="default"
 					size="lg"
@@ -1023,7 +1033,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					</ButtonText>
 				</Button>
 			</View>
-		</ScrollView>
+		</View>
 	);
 }
 

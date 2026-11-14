@@ -20,7 +20,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { leaveCheckout, useOrderCheckoutStage } from '../checkout-mode';
 import { ReceiptStage } from '../receipt-stage/receipt-stage';
 import { useFinishSale } from '../receipt-stage/use-finish-sale';
-import { leaveOrCancel } from './checkout-body';
+import { checkoutBodyFor, leaveOrCancel } from './checkout-body';
 import { CancelPaymentButton, CheckoutBodyView, TenderTabs } from './checkout-body-view';
 import { LedgerPane } from './ledger-pane';
 import { TenderPane } from './tender-pane';
@@ -147,7 +147,13 @@ export function TenderCheckout({ order }: Props) {
 						{compact ? null : cancelPayment}
 					</HStack>
 				</DialogHeader>
-				<DialogBody className="flex-1 px-0" contentContainerStyle={{ flexGrow: 1 }}>
+				{/* Only the pane, which has its own scroll, is bounded to the dialog; the other bodies scroll in the dialog body, which a 100% container would stop on a device. */}
+				<DialogBody
+					className="flex-1 px-0"
+					contentContainerStyle={
+						checkoutBodyFor(flow) === 'pane' ? { height: '100%' } : { flexGrow: 1 }
+					}
+				>
 					<VStack space="sm" className="flex-1">
 						{/* #163 R5 and the totals ruling both land here: this modal is the last
 						    point before goods change hands, and it is the only screen in front
