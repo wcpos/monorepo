@@ -502,6 +502,18 @@ it.each([
 	}
 );
 
+it('the amount label names the number in the key size and the foreground, not the grey caption', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	const label = screen.getByTestId('checkout-label');
+	expect(label.getAttribute('data-variant')).toBe('key');
+	expect(label.className).toContain('text-foreground');
+});
+
+it('the amount to take is at full strength before the cashier types', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	expect(screen.getByTestId('checkout-entry').className).not.toContain('opacity');
+});
+
 it('says the amount once: the eyebrow and Full balance drop it while the entry is the balance', () => {
 	const card: PaymentMethodDescriptor = {
 		...method,
@@ -1372,6 +1384,24 @@ describe('split V1: the pane builds each payment', () => {
 		expect(text('checkout-commit')).toBe('Take 2000 in Cash · 3 of 6');
 		expect(text('checkout-plan-done')).toBe('2 paid · 3800');
 		expect(text('checkout-plan-leg-3')).toBe('Then 3 × 4150');
+	});
+
+	it('the split plan reads as text: legs carry no chip chrome and the taken part is a ghost button', () => {
+		const flow = splitFlow(
+			{
+				rows: ab,
+				paidMinor: 3800,
+				balanceMinor: 14450,
+				plan: s10,
+			},
+			{ entryMinor: 2000, entryDirty: true }
+		);
+		render(<TenderPane flow={flow} format={String} />);
+		const done = screen.getByTestId('checkout-plan-done');
+		const legs = screen.getAllByTestId(/^checkout-plan-leg-/);
+		expect(done.getAttribute('data-variant')).toBe('ghost');
+		for (const leg of legs) expect(leg.className).not.toMatch(/border|rounded-full|opacity/);
+		expect(text('checkout-plan')).toContain(`${done.textContent}·${legs[0].textContent}`);
 	});
 
 	it('S10 D reads 4 of 6, and a short D moves the difference to payments 5 and 6', () => {
