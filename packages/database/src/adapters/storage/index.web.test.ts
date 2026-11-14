@@ -110,8 +110,12 @@ describe('web SQLite storage', () => {
 	it.each(['error', 'messageerror'])(
 		'reports %s before an instance exists and allows unsubscribe',
 		async (type) => {
-			const { getWebNewStorage, onStorageWorkerLost, terminateStorageWorker } =
-				await import('./index.web');
+			const {
+				getWebNewStorage,
+				getWebStorageWorkerPaths,
+				onStorageWorkerLost,
+				terminateStorageWorker,
+			} = await import('./index.web');
 			const { isStorageDegraded, clearStorageDegradation } =
 				await import('../../plugins/wrapped-error-handler-storage');
 			await import('../default/index.web');
@@ -121,7 +125,10 @@ describe('web SQLite storage', () => {
 			await getWebNewStorage().createStorageInstance({} as never);
 			const worker = mockWorker.mock.results[0].value;
 			worker.dispatchEvent(new Event(type));
-			expect(lost).toHaveBeenCalledWith(expect.stringContaining(type));
+			const url = getWebStorageWorkerPaths().targetOpfsWorker;
+			expect(lost).toHaveBeenCalledWith(
+				`Storage worker failed to load or crashed (${url})${type === 'messageerror' ? ': messageerror' : ''}`
+			);
 			expect(isStorageDegraded()).toBe(true);
 			unsubscribe();
 			worker.dispatchEvent(new Event(type));

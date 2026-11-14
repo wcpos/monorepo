@@ -10,13 +10,17 @@ import {
 	getRegisteredDatabaseNames,
 } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import { terminateStorageWorker } from '@wcpos/database/adapters/storage/index.web';
+import {
+	onStorageWorkerLost,
+	terminateStorageWorker,
+} from '@wcpos/database/adapters/storage/index.web';
 import { reloadApp } from '@wcpos/core/utils/reload-app';
 import { createLiveTab } from '@wcpos/database/live-tab/live-tab.web';
 
 import { LiveTabGate } from './live-tab-gate.web';
 
 const mockFinishPendingHydration = jest.fn();
+const mockParkedTab = jest.fn((_props: { detail?: string }) => null);
 const mockState = new BehaviorSubject<LiveTabState>({ kind: 'parked', reason: 'another-tab-live' });
 const mockCreate = jest.fn((_deps: Parameters<typeof createLiveTab>[0]) => ({
 	state$: mockState,
@@ -48,7 +52,9 @@ jest.mock('@wcpos/core/utils/reload-app', () => ({ reloadApp: jest.fn() }));
 jest.mock('../lib/create-app-engine', () => ({ disposeAppSyncEngine: jest.fn() }));
 jest.mock('@wcpos/utils/logger', () => ({ log: { warn: jest.fn(), error: jest.fn() } }));
 jest.mock('react-dom', () => ({ flushSync: (fn: () => void) => fn() }));
-jest.mock('./parked-tab', () => ({ ParkedTab: () => null }));
+jest.mock('./parked-tab', () => ({
+	ParkedTab: (props: { detail?: string }) => mockParkedTab(props),
+}));
 
 beforeAll(() =>
 	Object.defineProperty(globalThis.navigator, 'locks', { configurable: true, value: {} })
@@ -71,6 +77,17 @@ it('does not render children while parked; renders while live; creates the page 
 	expect(mockCreate).toHaveBeenCalledTimes(1);
 	await act(async () => mockState.next({ kind: 'parked', reason: 'worker-lost' }));
 	expect(view.queryByTestId('child')).toBeNull();
+});
+
+it('passes the worker failure reason to the parked tab', async () => {
+	await render(<LiveTabGate />);
+	const detail =
+		'Storage worker failed to load or crashed (https://example.test/sqlite.worker.js?ver=1)';
+	await act(async () => {
+		jest.mocked(onStorageWorkerLost).mock.calls[0][0](detail);
+		mockState.next({ kind: 'parked', reason: 'worker-lost' });
+	});
+	expect(mockParkedTab.mock.lastCall?.[0]).toEqual(expect.objectContaining({ detail }));
 });
 
 it('terminally fails each registered database at the teardown deadline, then terminates before unlocking', async () => {

@@ -1209,6 +1209,13 @@ describe('wrappedErrorHandlerStorage', () => {
 
 		it('reports worker events for every database and before the first instance', async () => {
 			reportStorageWorkerLost(undefined, 'script load failed');
+			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+				expect.stringMatching(/^Storage degraded for database ".+" in createStorageInstance$/),
+				expect.objectContaining({
+					code: 'SYNC161',
+					context: expect.objectContaining({ reason: 'script load failed' }),
+				})
+			);
 			expect(isStorageDegraded()).toBe(true);
 			clearStorageDegradation();
 			const first = await wrap('events-first', { close: jest.fn(async () => undefined) });
