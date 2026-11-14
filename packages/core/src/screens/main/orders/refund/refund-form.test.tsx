@@ -819,7 +819,7 @@ describe('RefundOrderForm', () => {
 			const lineOrder = {
 				...order,
 				payment_method: 'pos_cash',
-				refunds: [{ total: '-10.00' }],
+				refunds: [{ id: 5, total: '-10.00' }],
 				line_items: [
 					{ id: 77, name: 'Belt', quantity: 2, total: '20.00', total_tax: '0.00', taxes: [] },
 				],
@@ -830,7 +830,7 @@ describe('RefundOrderForm', () => {
 					return Promise.reject(new Error('offline'));
 				}
 				return Promise.resolve({
-					data: [{ total: '-10.00', line_items: [{ id: 77, quantity: 1 }] }],
+					data: [{ id: 5, total: '-10.00', line_items: [{ id: 77, quantity: 1 }] }],
 					headers: { 'x-wp-totalpages': '1' },
 				});
 			});
@@ -983,6 +983,46 @@ describe('RefundOrderForm', () => {
 			);
 			expect(screen.getByTestId('refund-history-missing')).toBeInTheDocument();
 			expect(qtyField()).toBeDisabled();
+		});
+
+		it('a refund synced in before a failed reload locks the lines', async () => {
+			mockRefundsGets(
+				() => Promise.resolve({ data: [historyRow], headers: { 'x-wp-totalpages': '1' } }),
+				storeError
+			);
+			const { rerender } = render(<RefundOrderForm order={lockedOrder} />);
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('2'));
+
+			const synced = {
+				...lockedOrder,
+				refunds: [...lockedOrder.refunds, { id: 10, total: '-20.00' }],
+			};
+			rerender(<RefundOrderForm order={synced} />);
+
+			expect(await screen.findByTestId('refund-history-missing')).toBeInTheDocument();
+			expect(qtyField()).toBeDisabled();
+			expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+				'orders.previously_refunded-€40.00'
+			);
+		});
+
+		it('a synced order holding the same refunds keeps the history read', async () => {
+			mockRefundsGets(
+				() => Promise.resolve({ data: [historyRow], headers: { 'x-wp-totalpages': '1' } }),
+				storeError
+			);
+			const { rerender } = render(<RefundOrderForm order={lockedOrder} />);
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('2'));
+
+			rerender(
+				<RefundOrderForm
+					order={{ ...lockedOrder, refunds: [{ id: 9, total: '-20.00', reason: 'Damaged' }] }}
+				/>
+			);
+			await waitFor(() => expect(refundsGets()).toBe(2));
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('2'));
+			expect(screen.queryByTestId('refund-history-missing')).not.toBeInTheDocument();
+			expect(qtyField()).toBeEnabled();
 		});
 
 		it('no saved refunds: the lines still lock', async () => {
