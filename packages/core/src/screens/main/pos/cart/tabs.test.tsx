@@ -477,7 +477,7 @@ it('keeps phone tabs to who and amount or a dot, with no active chip', () => {
 	enterReceipt('late');
 	render(<OpenOrderTabs />);
 	const content = screen.getByTestId('open-order-tab-open').firstElementChild!;
-	expect(content.className).toContain('flex-row');
+	expect(content.className).toContain('flex-col');
 	expect(content.textContent).toBe('Guest · Hat$10.00');
 	// A plain cart has no dot on the phone either; only a real status draws one.
 	expect(screen.queryByTestId('open-order-chip-open')).toBeNull();
@@ -603,6 +603,32 @@ it('centres selections, list picks and keyboard steps, clamping the first and la
 		mockReducedMotion = true;
 		rerender(<OpenOrderTabs />);
 		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 344, animated: false });
+	} finally {
+		mockOpen = open;
+	}
+});
+it("phone: the row scrolls to a tab's start with the active cart whole, and snaps to tab starts", () => {
+	const open = mockOpen;
+	try {
+		mockPhone = true;
+		mockOpen = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id) => ({
+			id,
+			record: mockRecord(id, '2026-09-07T12:00:00'),
+		}));
+		mockCurrent = mockOpen[4].record;
+		const { rerender } = render(<OpenOrderTabs />);
+		layout(560);
+		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 300, animated: false });
+		expect(screen.getByTestId('scroll-row').dataset.snaps).toBe('[0,100,200,300,344]');
+		mockCurrent = mockOpen[2].record;
+		rerender(<OpenOrderTabs />);
+		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 100, animated: true });
+		mockCurrent = mockOpen[0].record;
+		rerender(<OpenOrderTabs />);
+		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 0, animated: true });
+		mockCurrent = mockOpen[7].record;
+		rerender(<OpenOrderTabs />);
+		expect(mockScrollTo).toHaveBeenLastCalledWith({ x: 344, animated: true });
 	} finally {
 		mockOpen = open;
 	}
