@@ -137,6 +137,7 @@ export function RefundOrderForm({ order }: Props) {
 	const [refundDetails, setRefundDetails] = React.useState<RefundDetail[]>(() =>
 		normalizeRefundDetails(orderData.refunds || [])
 	);
+	const storeHistoryOrderId = React.useRef<number | null>(null);
 	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(orderData.id));
 	const refundsFallback = JSON.stringify(orderData.refunds || []);
 	const getRefundsFallback = React.useCallback(() => {
@@ -191,6 +192,7 @@ export function RefundOrderForm({ order }: Props) {
 				);
 				if (!mounted) return;
 				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
+				storeHistoryOrderId.current = orderData.id ?? null;
 				setRefundDetailsLoading(false);
 			})
 			.catch((error: unknown) => {
@@ -200,6 +202,13 @@ export function RefundOrderForm({ order }: Props) {
 					context: { orderId: orderData.id, error: getErrorMessage(error) },
 				});
 				if (!mounted) return;
+				// A reconnect reloads with a new client; the saved refunds carry no line detail.
+				// A failed reload keeps the history already read from the store for this order
+				// rather than show already-refunded units as refundable.
+				if (storeHistoryOrderId.current === orderData.id) {
+					setRefundDetailsLoading(false);
+					return;
+				}
 				setRefundDetails(getRefundsFallback());
 				setRefundDetailsLoading(false);
 			});
