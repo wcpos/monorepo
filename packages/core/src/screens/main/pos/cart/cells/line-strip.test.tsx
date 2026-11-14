@@ -353,3 +353,19 @@ it('a removal cancelled before it commits brings the row back and leaves it remo
 	fireEvent.click(screen.getByTestId('cart-line-remove'));
 	expect(pulseRemove).toHaveBeenCalledTimes(2);
 });
+it("the actions paint over the row: the strip's window comes after the body and clips", () => {
+	renderStrip();
+	const row = screen.getByTestId('cart-line-row');
+	const windowEl = screen.getByTestId('cart-line-strip-window');
+	const strip = screen.getByTestId('cart-line-strip');
+	expect(row.lastElementChild).toBe(windowEl);
+	expect(windowEl.contains(strip)).toBe(true);
+	expect(windowEl.getAttribute('data-classes')).toMatch(/\boverflow-hidden\b/);
+	// The window is the row wide and moves by transform, never pinned right and resized.
+	expect(windowEl.getAttribute('data-classes')).toMatch(/\binset-0\b/);
+	expect(windowEl.getAttribute('data-classes')).not.toMatch(/\bright-0\b/);
+	// Nothing of the strip sits before the body, under it.
+	const body = row.firstElementChild;
+	expect(body).not.toBe(windowEl);
+	expect(body?.contains(strip)).toBe(false);
+});

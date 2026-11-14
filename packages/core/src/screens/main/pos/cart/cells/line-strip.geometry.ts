@@ -70,3 +70,42 @@ export function removeOffset(revealed: number, removeWidth: number, swallow: num
 	'worklet';
 	return 0 - swallow * Math.max(0, revealed - removeWidth - LABEL_INSET);
 }
+
+/**
+ * The row body's travel. It holds still while the strip slides in over its figures, so the
+ * quantity and the name stay readable at the open rest, and moves only with the pull past it.
+ */
+export function bodyOffset(revealed: number, stripWidth: number): number {
+	'worklet';
+	return 0 - Math.max(0, revealed - stripWidth);
+}
+
+/** The strip's travel inside its window: in from the trailing edge until the open rest, then still. */
+export function stripOffset(revealed: number, stripWidth: number): number {
+	'worklet';
+	return Math.max(0, stripWidth - revealed);
+}
+
+/**
+ * The strip's window is the row wide and slides in from the trailing edge: this is how far right
+ * of the row's left edge its leading edge sits. The row's own clip hides what is pushed past it.
+ */
+export function windowOffset(revealed: number, rowWidth: number): number {
+	'worklet';
+	return Math.max(0, rowWidth - revealed);
+}
+
+/** The strip's counter-slide inside the moving window, so it sits in the row where it always did. */
+export function stripInWindow(revealed: number, stripWidth: number, rowWidth: number): number {
+	'worklet';
+	return stripOffset(revealed, stripWidth) - windowOffset(revealed, rowWidth);
+}
+
+/**
+ * The window's opacity, always set: Reanimated keeps the last value of a key that leaves an animated
+ * style, so the window is hidden while its row is unmeasured and shown again once it is.
+ */
+export function windowOpacity(rowWidth: number): number {
+	'worklet';
+	return rowWidth > 0 ? 1 : 0;
+}

@@ -1,4 +1,4 @@
-import { centredOffset, rowOverflows, snapOffsets, tabOffsets } from './tab-window';
+import { centredOffset, leadingOffset, rowOverflows, snapOffsets, tabOffsets } from './tab-window';
 
 it.each([
 	[0, 96, 0],
@@ -35,6 +35,32 @@ it('sorts and deduplicates native snap stops after clamping', () => {
 		})
 	).toEqual([0, 100, 300]);
 	expect(snapOffsets({ rowWidth: 300, contentWidth: 0, tabs: [] })).toEqual([]);
+});
+it('phone: the tab before the active one leads while the active one fits whole beside it', () => {
+	expect(
+		leadingOffset({ rowWidth: 456, contentWidth: 800, tabX: 400, tabWidth: 100, previousX: 300 })
+	).toBe(300);
+	expect(leadingOffset({ rowWidth: 456, contentWidth: 800, tabX: 0, tabWidth: 100 })).toBe(0);
+});
+it('phone: a wide active tab leads itself', () => {
+	expect(
+		leadingOffset({ rowWidth: 456, contentWidth: 1100, tabX: 400, tabWidth: 400, previousX: 300 })
+	).toBe(400);
+});
+it('phone: never past the end of the row', () => {
+	expect(
+		leadingOffset({ rowWidth: 456, contentWidth: 800, tabX: 700, tabWidth: 100, previousX: 600 })
+	).toBe(344);
+});
+it('phone snap stops are tab starts, clamped and de-duplicated', () => {
+	expect(
+		snapOffsets({
+			rowWidth: 456,
+			contentWidth: 800,
+			tabs: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ x: i * 100, width: 100 })),
+			align: 'start',
+		})
+	).toEqual([0, 100, 200, 300, 344]);
 });
 
 it('derives offsets from mounted order and measured widths, not stale positions', () => {

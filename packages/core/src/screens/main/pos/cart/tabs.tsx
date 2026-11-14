@@ -44,6 +44,7 @@ import { trayExceptions } from './tray-exceptions';
 import { useAwaitingStore } from '../checkout/use-awaiting-store';
 import {
 	centredOffset,
+	leadingOffset,
 	NEW_TAB_WIDTH,
 	PLUS_WIDTH,
 	ROW_REACH,
@@ -235,14 +236,16 @@ export function OpenOrderTabs({
 	// it lands without a slide. Every later one slides (motion ruling: buttery, never a jump).
 	const settled = React.useRef(false);
 	const previousActive = React.useRef(activeValue);
+	const previous = mounted[mounted.findIndex(({ id }) => id === activeValue) - 1];
 	const offset = fresh
 		? Math.max(0, contentWidth - rowWidth)
 		: activePosition &&
-			centredOffset({
+			(phone ? leadingOffset : centredOffset)({
 				rowWidth,
 				contentWidth,
 				tabX: activePosition.x,
 				tabWidth: activePosition.width,
+				previousX: previous && positions.get(previous.id)?.x,
 			});
 	// External selection and layout jointly drive the scroll, unless the cashier swiped away.
 	React.useEffect(() => {
@@ -396,10 +399,11 @@ export function OpenOrderTabs({
 					}}
 					scrollEventThrottle={16}
 					onMomentumScrollEnd={endProgrammatic}
-					// Native swipes snap to tab centres; RN-web ignores snapping, intentionally.
+					// Native swipes snap to tab centres (phone: tab starts); RN-web ignores snapping, intentionally.
 					snapToOffsets={snapOffsets({
 						rowWidth,
 						contentWidth,
+						align: phone ? 'start' : 'centre',
 						tabs: mounted.flatMap(({ id }) => {
 							const position = positions.get(id);
 							return position ? [position] : [];
@@ -524,9 +528,7 @@ function TabContent({
 	return (
 		// tabular-nums on the wrapper: on web it reaches the status label's amounts (waiting for
 		// terminal, partly paid) so a tab does not change width as its numbers change.
-		<View
-			className={`tabular-nums ${phone ? 'flex-row items-center gap-1' : 'flex-col items-start gap-0'}`}
-		>
+		<View className="flex-col items-start gap-0 tabular-nums">
 			<Text
 				testID={`open-order-tab-${order.uuid}-who`}
 				numberOfLines={1}
