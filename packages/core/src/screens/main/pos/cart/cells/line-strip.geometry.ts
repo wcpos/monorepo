@@ -70,3 +70,18 @@ export function removeOffset(revealed: number, removeWidth: number, swallow: num
 	'worklet';
 	return 0 - swallow * Math.max(0, revealed - removeWidth - LABEL_INSET);
 }
+
+/**
+ * The row body's travel. It holds still while the strip slides in over its figures, so the
+ * quantity and the name stay readable at the open rest, and moves only with the pull past it.
+ */
+export function bodyOffset(revealed: number, stripWidth: number): number {
+	'worklet';
+	return 0 - Math.max(0, revealed - stripWidth);
+}
+
+/** The strip's travel inside its window: in from the trailing edge until the open rest, then still. */
+export function stripOffset(revealed: number, stripWidth: number): number {
+	'worklet';
+	return Math.max(0, stripWidth - revealed);
+}
