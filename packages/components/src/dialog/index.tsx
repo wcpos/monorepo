@@ -394,6 +394,17 @@ export function DialogFooter({
 					{other}
 					{dismiss}
 					{own}
+					{/* Void is never flush under Close; the tablet already sets it apart on the left. */}
+					{losses.length > 0 && count > losses.length && (
+						<View
+							testID={testID ? `${testID}-apart` : 'dialog-footer-apart'}
+							className="h-ctl justify-center"
+							accessibilityElementsHidden
+							importantForAccessibility="no-hide-descendants"
+						>
+							<View className="border-border border-t" />
+						</View>
+					)}
 					{losing}
 				</>
 			) : (
