@@ -28,16 +28,21 @@ export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDo
 	heldParentIds(ids: number[]): Promise<Map<number, number[] | null>>;
 };
 
+// Reports browse passes anyStore (front desk ruling F3b, 2026-11-14: reports cover every store).
+// Till lanes keep #2122's store veto: a store-scoped till never holds a parentless
+// refund of another store.
 export async function admitRefundPage(
 	input: RefundSchedulerFetcherInput,
-	rows: WooRefundPayload[]
+	rows: WooRefundPayload[],
+	options: { anyStore?: boolean } = {}
 ) {
+	const scope = options.anyStore ? undefined : input.scope;
 	const held = await input.heldParentIds([...new Set(rows.map((row) => row.parent_id))]);
 	const documents = rows
 		.filter((row) => {
 			const listed = held.get(row.parent_id);
 			if (listed !== undefined) return listed === null || listed.includes(row.id);
-			return hasPosRefundStamp(row.meta_data, input.scope);
+			return hasPosRefundStamp(row.meta_data, scope);
 		})
 		.map((raw) => materializeRefund(raw).storedDocument);
 	let applied = (await input.repository.upsertMany(documents)) ?? documents;
@@ -48,7 +53,7 @@ export async function admitRefundPage(
 		const removed = applied.filter(({ payload }) => {
 			const listed = current.get(payload.parent_id);
 			if (listed !== undefined) return Array.isArray(listed) && !listed.includes(payload.id);
-			return !hasPosRefundStamp(payload.meta_data, input.scope);
+			return !hasPosRefundStamp(payload.meta_data, scope);
 		});
 		if (removed.length > 0) {
 			await input.repository.removeMany(removed);

@@ -70,7 +70,8 @@ export function terminateStorageWorker(): void {
 }
 
 function createStorageWorker(): Worker {
-	const worker = new Worker(getWebStorageWorkerPaths().targetOpfsWorker, {
+	const url = getWebStorageWorkerPaths().targetOpfsWorker;
+	const worker = new Worker(url, {
 		type: 'module',
 		name: STORAGE_WORKER_NAME,
 	});
@@ -79,7 +80,13 @@ function createStorageWorker(): Worker {
 	// listeners catch script-load failures and crashes that DO report (#2242).
 	for (const type of ['error', 'messageerror']) {
 		worker.addEventListener(type, (event) => {
-			const message = `Storage worker ${type}: ${'message' in event ? event.message : 'connection lost'}`;
+			const detail =
+				'message' in event && event.message
+					? `: ${event.message}`
+					: type === 'messageerror'
+						? ': messageerror'
+						: '';
+			const message = `Storage worker failed to load or crashed (${url})${detail}`;
 			for (const listener of workerLostListeners) listener(message);
 		});
 	}
