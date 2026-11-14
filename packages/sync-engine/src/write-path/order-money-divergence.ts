@@ -351,6 +351,26 @@ function withinRoundingTie(
 }
 
 /**
+ * POS value EXACTLY half-way at a narrower comparison width, server kept either
+ * rounding. Woo stores coupon `discount_tax` HALF-DOWN (`WC_DISCOUNT_ROUNDING_MODE`):
+ * POS `0.275` comes back `0.27`. `0.2751` vs `0.27` still differs; never at full
+ * width; digits only. Shared by comparator and adoption, which must agree.
+ */
+function withinHalfwayTie(
+	pos: string,
+	roundedServer: string,
+	width: number,
+	posDecimals: number
+): boolean {
+	if (width >= posDecimals) return false;
+	const fraction = pos.slice(pos.indexOf('.') + 1);
+	if (!/^50*$/.test(fraction.slice(width))) return false;
+	const halfUp = roundDecimalString(pos, width);
+	const halfDown = roundDecimalString(pos.slice(0, -(posDecimals - width)), width);
+	return roundedServer === halfUp || roundedServer === halfDown;
+}
+
+/**
  * THE width at which two spellings of money count as the same number.
  * Server width is EFFECTIVE (trailing fractional zeros stripped); POS width
  * stays authored. A dp-rendered ack padded to contract width claims no
@@ -445,13 +465,14 @@ function compareSlot(
 	if (
 		mode === 'exact-6dp' &&
 		decimals !== null &&
-		withinRoundingTie(
+		(withinRoundingTie(
 			roundedPos,
 			roundedServer,
 			decimals,
 			decimalsOf(pos) ?? -1,
 			decimalsOf(server) ?? -1
-		)
+		) ||
+			withinHalfwayTie(pos, roundedServer, decimals, decimalsOf(pos) ?? -1))
 	) {
 		return null;
 	}
@@ -621,13 +642,15 @@ export function preserveEquivalentLocalPrecision(
 		// keep the POS spelling too — adopting the server's microunit would make
 		// use-order-totals recompute the POS value, see a difference, and patch
 		// it back: the write loop this function exists to prevent.
+		// The half-way tie at a narrower width is part of this shared equality too.
 		const width = equivalenceDecimals(posDecimals, server);
 		const roundedPos = roundDecimalString(pos, width);
 		const roundedServer = roundDecimalString(server, width);
 		if (roundedPos === null || roundedServer === null) return;
 		if (
 			roundedPos !== roundedServer &&
-			!withinRoundingTie(roundedPos, roundedServer, width, posDecimals, serverDecimals)
+			!withinRoundingTie(roundedPos, roundedServer, width, posDecimals, serverDecimals) &&
+			!withinHalfwayTie(pos, roundedServer, width, posDecimals)
 		) {
 			return;
 		}
