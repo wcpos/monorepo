@@ -86,15 +86,43 @@ jest.mock('@wcpos/components/form', () => ({
 // the count fields render too, addressed by their field name.
 jest.mock('../../components/amount-field', () => ({
 	AmountField: () => null,
-	FormAmountField: ({ testID, name, kind, onChange }: any) => {
+	FormAmountField: ({ testID, name, kind, onChange, disabled }: any) => {
 		const id = testID ?? (kind === 'count' ? name : undefined);
 		return id ? (
 			<input
 				data-testid={id}
+				disabled={disabled}
 				onChange={(e) => onChange(kind === 'count' ? Number(e.target.value) : e.target.value)}
 			/>
 		) : null;
 	},
+}));
+// The history notice is a Notice; the stand-in keeps its testID, title and action buttons.
+jest.mock('@wcpos/components/notice', () => ({
+	Notice: ({
+		testID,
+		title,
+		actions,
+	}: {
+		testID?: string;
+		title: string;
+		actions?: { label: string; onPress: () => void; testID?: string; loading?: boolean }[];
+	}) => (
+		<div data-testid={testID}>
+			{title}
+			{actions?.map((action) => (
+				<button
+					key={action.label}
+					type="button"
+					data-testid={action.testID}
+					data-loading={action.loading ? 'true' : 'false'}
+					onClick={action.onPress}
+				>
+					{action.label}
+				</button>
+			))}
+		</div>
+	),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
@@ -190,6 +218,8 @@ jest.mock('./use-refund-mutation', () => ({
 	useRefundMutation: () => mockUseRefundMutation(),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => mockUseRouter() }));
+// buildRefundPayload is read from the real mutation module, whose uuid import is ESM.
+jest.mock('uuid', () => ({ v4: () => 'mock-uuid' }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: any) =>
 		vars?.gateway ? `${key}:${vars.gateway}` : vars?.amount ? `${key}:${vars.amount}` : key,
@@ -799,6 +829,137 @@ describe('RefundOrderForm', () => {
 				expect(screen.getByTestId('confirm-process-refund-button')).toBeDisabled()
 			);
 			expect(screen.getByText('orders.confirm_refund_description:€0.00')).toBeInTheDocument();
+		});
+	});
+
+	describe('when the refund history does not load online', () => {
+		const { buildRefundPayload } =
+			jest.requireActual<typeof import('./use-refund-mutation')>('./use-refund-mutation');
+		const mockRefundCall = jest.fn((_args: any) => new Promise<void>(() => {}));
+		const refundsUrl = 'orders/23858/refunds';
+		// One line of 3 at €20, €200 total, one earlier refund of €20: €180 may still be refunded.
+		const lockedOrder = {
+			...order,
+			total: '200.00',
+			refunds: [{ id: 9, total: '-20.00' }],
+			line_items: [
+				{ id: 77, name: 'Watch', quantity: 3, total: '60.00', total_tax: '0.00', taxes: [] },
+			],
+		} as any;
+		const historyRow = { id: 9, total: '-20.00', line_items: [{ id: 77, quantity: -1 }] };
+
+		// The gateway lookup resolves; each refunds GET takes the next answer, the last one repeating.
+		function mockRefundsGets(...answers: (() => Promise<unknown>)[]) {
+			let call = 0;
+			mockGet.mockImplementation((url: string) => {
+				if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+				return answers[Math.min(call++, answers.length - 1)]();
+			});
+		}
+		const storeError = () => Promise.reject(new Error('store error'));
+		const qtyCell = () =>
+			screen.getByText('Watch').closest('tr')?.querySelectorAll('td')[2] as HTMLElement;
+		const qtyField = () => screen.getByTestId('line_items.0.refund_qty');
+		const processButton = () => screen.getByTestId('process-refund-button');
+		const enterAmount = (value: string) =>
+			fireEvent.change(screen.getByTestId('refund-custom-amount'), { target: { value } });
+		const refundsGets = () => mockGet.mock.calls.filter(([url]) => url === refundsUrl).length;
+
+		beforeEach(() => {
+			mockUseRefundMutation.mockReturnValue(mockRefundCall);
+		});
+
+		it('locks the lines and refunds only an amount', async () => {
+			let failHistory!: (error: Error) => void;
+			mockRefundsGets(() => new Promise((_resolve, reject) => (failHistory = reject)));
+			render(<RefundOrderForm order={lockedOrder} />);
+			// A quantity entered while the history loads is cleared once the lines lock.
+			fireEvent.change(qtyField(), { target: { value: '1' } });
+			await act(async () => failHistory(new Error('store error')));
+
+			expect(await screen.findByTestId('refund-history-missing')).toHaveTextContent(
+				'orders.refund_history_not_loaded'
+			);
+			expect(qtyCell()).toHaveTextContent('–');
+			expect(qtyField()).toBeDisabled();
+
+			enterAmount('45');
+			await waitFor(() => expect(processButton()).toBeEnabled());
+			fireEvent.click(processButton());
+			fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+
+			await waitFor(() => expect(mockRefundCall).toHaveBeenCalledTimes(1));
+			const args = mockRefundCall.mock.calls[0][0];
+			expect(args).toEqual(expect.objectContaining({ amount: '45.00', lineItems: [] }));
+			const payload = buildRefundPayload(args);
+			expect(payload).toEqual(expect.objectContaining({ amount: '45.00' }));
+			expect(payload).not.toHaveProperty('line_items');
+		});
+
+		it('the cap still holds while the lines are locked', async () => {
+			mockRefundsGets(storeError);
+			render(<RefundOrderForm order={lockedOrder} />);
+			await screen.findByTestId('refund-history-missing');
+
+			// 180 first, so the 181 refusal below is the cap and not a lookup still settling.
+			enterAmount('180');
+			await waitFor(() => expect(processButton()).toBeEnabled());
+
+			enterAmount('181');
+			await waitFor(() => expect(processButton()).toBeDisabled());
+
+			enterAmount('180');
+			await waitFor(() => expect(processButton()).toBeEnabled());
+		});
+
+		it('Retry unlocks the lines with the right quantities', async () => {
+			mockRefundsGets(storeError, () =>
+				Promise.resolve({ data: [historyRow], headers: { 'x-wp-totalpages': '1' } })
+			);
+			render(<RefundOrderForm order={lockedOrder} />);
+			await screen.findByTestId('refund-history-missing');
+
+			fireEvent.click(screen.getByTestId('refund-history-retry'));
+
+			await waitFor(() =>
+				expect(screen.queryByTestId('refund-history-missing')).not.toBeInTheDocument()
+			);
+			// The rows follow the form's reset, one render after the notice goes.
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('2'));
+			expect(qtyField()).toBeEnabled();
+		});
+
+		it('a failed Retry keeps the lines locked', async () => {
+			mockRefundsGets(storeError);
+			render(<RefundOrderForm order={lockedOrder} />);
+			await screen.findByTestId('refund-history-missing');
+
+			fireEvent.click(screen.getByTestId('refund-history-retry'));
+
+			await waitFor(() => expect(refundsGets()).toBe(2));
+			await waitFor(() =>
+				expect(screen.getByTestId('refund-history-retry')).toHaveAttribute('data-loading', 'false')
+			);
+			expect(screen.getByTestId('refund-history-missing')).toBeInTheDocument();
+			expect(qtyField()).toBeDisabled();
+		});
+
+		it('no saved refunds: no notice and the full quantity', async () => {
+			mockRefundsGets(storeError);
+			render(<RefundOrderForm order={{ ...lockedOrder, refunds: [] }} />);
+
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('3'));
+			expect(screen.queryByTestId('refund-history-missing')).not.toBeInTheDocument();
+			expect(qtyField()).toBeEnabled();
+		});
+
+		it('offline is unchanged', async () => {
+			mockOnlineStatus = 'offline';
+			mockRefundsGets(storeError);
+			render(<RefundOrderForm order={lockedOrder} />);
+
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('3'));
+			expect(screen.queryByTestId('refund-history-missing')).not.toBeInTheDocument();
 		});
 	});
 });

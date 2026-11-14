@@ -1107,6 +1107,7 @@
 	"orders.refund_count_other": "{count} refunds",
 	"orders.refund_destination": "Refund destination",
 	"orders.refund_failed": "Failed to process refund",
+	"orders.refund_history_not_loaded": "Refund history did not load, so line refunds are off. Refund an amount, or try again.",
 	"orders.refund_offline": "You're offline, so no refund was made.",
 	"orders.refund_sign_in": "No refund was made — sign in, then try again.",
 	"orders.refund_background": "WCPOS was in the background, so no refund was made.",
