@@ -26,18 +26,46 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: (_store: unknown, selector: (value: typeof mockStore) => unknown) =>
 		selector(mockStore),
 }));
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+// A call with options shows them, so an interpolated message can be read back.
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string, options?: object) =>
+		options ? `${key} ${JSON.stringify(options)}` : key,
+}));
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	View: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div data-classes={className}>{children}</div>
+	),
+}));
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	HStack: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div data-classes={className}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	VStack: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div data-classes={className}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/form', () => {
 	const { Controller } = jest.requireActual('react-hook-form') as typeof import('react-hook-form');
 	return {
 		FormField: Controller,
-		FormInput: () => null,
+		FormInput: ({
+			label,
+			description,
+			descriptionTone,
+		}: {
+			label: string;
+			description?: string;
+			descriptionTone?: string;
+		}) => (
+			<span
+				data-testid={`input-${label}`}
+				data-description={description}
+				data-tone={descriptionTone}
+			/>
+		),
 		FormSelect: ({
 			customComponent: Component,
 			value,
@@ -165,5 +193,48 @@ describe('TaxIdsForm country defaults', () => {
 		mockNextType = 'es_nif';
 		fireEvent.click(screen.getByTestId('type-change'));
 		expect(form.rows()[0]).toMatchObject({ type: 'es_nif', country: 'ES' });
+	});
+});
+
+describe('a tax ID row', () => {
+	beforeEach(() => {
+		mockStore = { store_country: 'DE' };
+	});
+	const renderRow = (type: TaxIdType, value: string) =>
+		renderForm({ billing: { country: 'DE' }, tax_ids: [{ type, value, country: 'DE' }] });
+	const idInput = () => screen.getByTestId('input-tax_id.value_label');
+
+	// The ID shrank to ~75 px beside Type and Country and cut the number off (decision 8A).
+	it('Type and Country share a line and the ID has its own full line beneath them', () => {
+		renderRow('eu_vat', 'DE123456789');
+		const typeCell = screen.getByTestId('selected-type').closest('[data-classes]') as HTMLElement;
+		const countryCell = screen.getByTestId('input-tax_id.country_label')
+			.parentElement as HTMLElement;
+		const row = typeCell.parentElement as HTMLElement;
+		expect(countryCell.parentElement).toBe(row);
+		expect(row.contains(idInput())).toBe(false);
+		expect(row.compareDocumentPosition(idInput()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		const idClasses = (idInput().parentElement as HTMLElement).dataset.classes?.split(' ');
+		expect(idClasses).toContain('p-2');
+		expect(idClasses?.filter((name) => /^(min-)?w-|^flex-1$/.test(name))).toEqual([]);
+	});
+
+	it('a mismatch names the type and shows its example, in the warning tone', () => {
+		renderRow('eu_vat', 'DE1234');
+		expect(idInput().dataset.description).toBe(
+			'tax_id.invalid_format_example {"type":"tax_id.label.eu_vat","example":"DE123456789"}'
+		);
+		expect(idInput().dataset.tone).toBe('warning');
+	});
+
+	// "Other" has no example, and only a blank value fails its check.
+	it('an Other row keeps the plain message', () => {
+		renderRow('other', ' ');
+		expect(idInput().dataset.description).toBe('tax_id.invalid_format');
+	});
+
+	it('a valid ID shows no description', () => {
+		renderRow('eu_vat', 'DE123456789');
+		expect(idInput().dataset.description).toBeUndefined();
 	});
 });

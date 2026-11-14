@@ -94,7 +94,14 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({ r: 'Front' }),
 }));
-jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
+// Jest does not compile Uniwind classes, so expose them on the DOM.
+jest.mock('@wcpos/components/text', () => {
+	const actual = jest.requireActual('react-native');
+	return {
+		Text: ({ className, ...props }: import('react-native').TextProps & { className?: string }) =>
+			React.createElement(actual.Text, { ...props, dataSet: { classes: className } }),
+	};
+});
 // The bar's icon-only buttons are IconButtons (expo-haptics is ESM, so never loaded here).
 jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ onPress, testID }: { onPress?: () => void; testID?: string }) => (
@@ -155,13 +162,16 @@ it('opens the route-selected row on a phone', () => {
 	expect(screen.getByTestId('selected-closure').textContent).toBe('c');
 });
 
-// Revert: leave failed pages with no list Retry, or collapse loading/unavailable/denied into empty.
+// Revert: leave failed pages with no list Retry, collapse loading/unavailable/denied into empty,
+// or drop the status line's muted row styling.
 it.each(['loading', 'unavailable', 'denied', 'error'])(
 	'exposes the distinct %s list state',
 	(state) => {
 		status = state;
 		render(<Closures scope={scope} />);
-		expect(screen.getByTestId(`closures-${state}`)).toBeTruthy();
+		expect(screen.getByTestId(`closures-${state}`).getAttribute('data-classes')).toContain(
+			'text-muted-foreground'
+		);
 		if (state === 'error') {
 			fireEvent.click(screen.getByTestId('closures-retry'));
 			expect(loadMore).toHaveBeenCalled();
@@ -169,6 +179,16 @@ it.each(['loading', 'unavailable', 'denied', 'error'])(
 		status = 'ready';
 	}
 );
+// Revert: drop the `unknown=` prop index.tsx passes to ClosureList.
+it.each([
+	['unavailable', true],
+	['ready', false],
+])('tells the list its counts are unknown when the read is %s', (state, unknown) => {
+	status = state;
+	render(<Closures scope={scope} />);
+	expect(closureList).toHaveBeenLastCalledWith(expect.objectContaining({ unknown }));
+	status = 'ready';
+});
 // Revert: never expose the next-page action.
 it('loads the next page on demand', () => {
 	render(<Closures scope={scope} />);

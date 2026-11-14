@@ -12,6 +12,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { PaymentWebview } from '../components/payment-webview';
+import { useAmountToPay } from '../components/title';
 import { useCheckoutSession } from '../hooks/use-checkout-session';
 import { PayFrameNotice } from '../pay-page/pay-frame-notice';
 import { usePayFrameGate } from '../pay-page/use-pay-frame-gate';
@@ -32,6 +33,7 @@ interface Props {
  */
 export function LegacyTab({ flow, order, receiptHost }: Props) {
 	const t = useT();
+	const amountToPay = useAmountToPay(order);
 	const paymentURL = useRecordField(order, (record) => record.payload.links?.payment?.[0]?.href);
 	const { handleStockRejection, settledOrderStatuses, gatewayResolved, gatewayError, refetch } =
 		useCheckoutSession(order);
@@ -117,7 +119,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 				testID="checkout-payment-form-load-failed"
 			/>
 			{/* The frame renders nothing until the pay link is prepared, so the slot holds
-			    the pane's height itself: Process Payment sits at the foot from the first
+			    the pane's height itself: Charge sits at the foot from the first
 			    paint instead of jumping down when the pay page arrives. */}
 			<View className="flex-1" testID="checkout-legacy-frame-slot">
 				<PaymentWebview
@@ -136,7 +138,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 					disabled={frameGate.status !== 'ready' || frameGate.busy}
 					onPress={frameGate.press}
 				>
-					<ButtonText>{t('pos_checkout.process_payment')}</ButtonText>
+					<ButtonText>{t('pos_checkout.charge_amount', { amount: amountToPay })}</ButtonText>
 				</Button>
 			</HStack>
 		</VStack>

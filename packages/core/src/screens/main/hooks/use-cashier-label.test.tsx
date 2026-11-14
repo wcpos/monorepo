@@ -33,6 +33,7 @@ const engine = {
 	db$,
 };
 const manager = { engine };
+const mockCredentials$ = new BehaviorSubject<unknown>([]);
 
 jest.mock('../../../../../query/src/provider', () => ({
 	...jest.requireActual('../../../../../query/src/provider'),
@@ -41,6 +42,20 @@ jest.mock('../../../../../query/src/provider', () => ({
 
 jest.mock('./use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: mockFormat }),
+}));
+
+jest.mock('../../../contexts/app-state', () => ({ useStoreSession: () => ({ site: {} }) }));
+
+jest.mock('../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
+		'../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
+
+jest.mock('@wcpos/query/user-db', () => ({
+	PENDING_USER_DB_READ: 'pending',
+	observeSiteCredentials: () => mockCredentials$.asObservable(),
 }));
 
 function fakeCustomer(): RxDocument<EngineDocument> {
@@ -74,6 +89,7 @@ describe('useCashierLabel', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		document$.next(null);
+		mockCredentials$.next([]);
 	});
 
 	it('resolves and formats an engine-resident customer record', async () => {
@@ -89,21 +105,32 @@ describe('useCashierLabel', () => {
 		expect(result.current.record?.payload.last_name).toBe('Lovelace');
 	});
 
-	it('falls back to the formatted id when the engine document is absent', () => {
+	// Climb wording batch W8. Revert: return format({ id }) at the fallback and this reads "ID: 99".
+	it('falls back to "Cashier #id" when the engine document is absent', () => {
 		const { result } = renderHook(() => useCashierLabel(99));
 
-		expect(result.current).toEqual({ id: 99, label: 'ID: 99', record: undefined });
+		expect(result.current).toEqual({ id: 99, label: 'Cashier #99', record: undefined });
 	});
 
 	it('updates one mounted label when the cashier document arrives', async () => {
 		const { result } = renderHook(() => useCashierLabel(42));
 
-		expect(result.current).toEqual({ id: 42, label: 'ID: 42', record: undefined });
+		expect(result.current).toEqual({ id: 42, label: 'Cashier #42', record: undefined });
 
 		act(() => document$.next(fakeCustomer()));
 
 		await waitFor(() => expect(result.current.label).toBe('Ada Lovelace'));
 		expect(result.current.record?.payload.id).toBe(42);
+	});
+
+	// Revert: look the cashier up only in customers, so a staff user shows as an id.
+	it("names a cashier who is not a customer from the site's logged-in users", async () => {
+		document$.next(null);
+		mockCredentials$.next([{ id: 7, display_name: 'Demo Cashier' }]);
+
+		const { result } = renderHook(() => useCashierLabel(7));
+
+		await waitFor(() => expect(result.current.label).toBe('Demo Cashier'));
 	});
 
 	it.each([undefined, 'not-a-number'])('returns an empty label without querying for %p', (id) => {

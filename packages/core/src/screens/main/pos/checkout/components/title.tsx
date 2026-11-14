@@ -12,25 +12,32 @@ interface CheckoutTitleProps {
 }
 
 /**
- *
+ * The order's net payment total, formatted: what the cashier is about to charge.
  */
-export function CheckoutTitle({ order }: CheckoutTitleProps) {
+export function useAmountToPay(order: CheckoutTitleProps['order']): string {
 	const currencySymbol = useRecordField(order, (record) => record.payload.currency_symbol);
 	const total = useRecordField(order, (record) => record.payload.total);
 	const refunds = useRecordField(order, (record) => record.payload.refunds);
 	const { format } = useCurrencyFormat({ currencySymbol: currencySymbol ?? '' });
+
+	return format(getNetPaymentTotal(total, refunds) || 0);
+}
+
+/**
+ *
+ */
+export function CheckoutTitle({ order }: CheckoutTitleProps) {
+	const amount = useAmountToPay(order);
 	const t = useT();
 
 	if (!order) {
 		throw new Error('Order not found');
 	}
 
-	const displayTotal = getNetPaymentTotal(total, refunds);
-
 	return (
 		<Text testID="checkout-amount-to-pay" className="text-center text-lg font-bold">
 			{t('pos_checkout.amount_to_pay')}
-			{`: ${format(displayTotal || 0)}`}
+			{`: ${amount}`}
 		</Text>
 	);
 }

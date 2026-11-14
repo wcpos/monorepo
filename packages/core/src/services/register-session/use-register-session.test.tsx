@@ -1409,7 +1409,7 @@ it('does not name a counter while selling', async () => {
 	expect(result.current.countingElsewhere).toBe(false);
 });
 
-it.each(['elsewhere', 'here', 'no-marker', 'no-closure', 'different-session'])(
+it.each(['elsewhere', 'here', 'no-marker', 'no-closure', 'different-session', 'own-recreated'])(
 	'identifies a close %s from the closed-elsewhere marker',
 	async (kind) => {
 		addRxPlugin(RxDBLocalDocumentsPlugin);
@@ -1435,14 +1435,37 @@ it.each(['elsewhere', 'here', 'no-marker', 'no-closure', 'different-session'])(
 				counted_float: null,
 				business_day: null,
 			});
-			if (kind === 'here') await markCountingHere(userDB, 'site', 'register', true);
+			if (kind === 'here' || kind === 'own-recreated')
+				await markCountingHere(userDB, 'site', 'register', true);
 			// A remote refresh clears live; our own close clears it with counting_here still set.
 			if (kind !== 'no-marker') await recordLiveSession(userDB, 'site', 'register', null);
+			if (kind === 'own-recreated') {
+				// F46: this device closed it; the server's stale "open" listing re-creates live unmarked.
+				await recordLiveSession(userDB, 'site', 'register', {
+					session_id: 'session',
+					status: 'open',
+					opened_at_gmt: session.opened_at_gmt,
+					opened_by: null,
+					acknowledged: true,
+					expected_float: null,
+					counted_float: null,
+					business_day: null,
+				});
+				await recordLiveSession(userDB, 'site', 'register', null);
+				closed = [{ ...session, status: 'closed', closure_id: 'session' }];
+			}
 			active = [];
 			closureRows =
 				kind === 'no-closure'
 					? []
-					: [{ id: 'session', closed_by: 8, closed_at: '2026-10-29T17:00:00Z' }];
+					: [
+							{
+								id: 'session',
+								session_id: 'session',
+								closed_by: 8,
+								closed_at: '2026-10-29T17:00:00Z',
+							},
+						];
 			const { result, unmount } = renderHook(() => useRegisterSession());
 			try {
 				await waitFor(() => expect(result.current.loaded).toBe(true));
@@ -1458,6 +1481,36 @@ it.each(['elsewhere', 'here', 'no-marker', 'no-closure', 'different-session'])(
 			closureRows = previousClosures;
 			await userDB.remove();
 		}
+	}
+);
+
+// F46: a close is a local write; the bridge sends it at once instead of at its next minute tick.
+it.each(['startCounting', 'closeSession'] as const)(
+	'%s asks the bridge to send it now, and only once it succeeds',
+	async (action) => {
+		jest.mocked(actions.beginCount).mockResolvedValue({ ...session, status: 'counting' } as never);
+		jest
+			.mocked(actions.closeRegister)
+			.mockResolvedValue({ closure: { id: 'closure' }, kept: null } as never);
+		const result = await settled();
+		const run = (): Promise<unknown> =>
+			action === 'startCounting'
+				? result.current.actions.startCounting()
+				: result.current.actions.closeSession({ counted: { cash: '100' } });
+		await act(async () => {
+			await run();
+		});
+		expect(mockRequestRefresh).toHaveBeenCalledTimes(1);
+		expect(mockRequestRefresh).toHaveBeenCalledWith({
+			storeDB: mockStoreSession.storeDB,
+			registerId: 'register',
+		});
+		mockRequestRefresh.mockClear();
+		jest
+			.mocked(action === 'startCounting' ? actions.beginCount : actions.closeRegister)
+			.mockRejectedValueOnce(new Error('disk'));
+		await expect(run()).rejects.toThrow('disk');
+		expect(mockRequestRefresh).not.toHaveBeenCalled();
 	}
 );
 

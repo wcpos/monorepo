@@ -316,6 +316,22 @@ describe('read-only (checkout and receipt)', () => {
 		expect(rows.filter((row) => row.className.includes('bg-card'))).toHaveLength(1);
 	});
 
+	it('a split by item folds the Price column and gives it back when the split closes', () => {
+		const picker = {
+			picked: { 'line-b': 1 },
+			paid: {},
+			unitMinor: () => 0,
+			format: String,
+			pick: jest.fn(),
+		};
+		const { rerender } = render(<CartTable readOnly picker={picker} />);
+		expect(screen.queryByText('Price')).toBeNull();
+		for (const label of ['Item', 'Total', 'This payment'])
+			expect(screen.getByText(label)).toBeTruthy();
+		rerender(<CartTable readOnly />);
+		expect(screen.getByText('Price')).toBeTruthy();
+	});
+
 	it('never pulses and never shows the empty-cart state', () => {
 		mockCartLines.line_items = [];
 		const { rerender } = render(<CartTable readOnly />);

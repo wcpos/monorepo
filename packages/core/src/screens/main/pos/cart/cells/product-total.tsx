@@ -10,6 +10,7 @@ import { useDocField } from '@wcpos/query';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { readOnlyLineKey, readOnlyTestID, useCartTableReadOnly } from './read-only';
+import { useLineTaxLabel } from './use-line-tax-label';
 type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
@@ -22,50 +23,34 @@ export function ProductTotal({ row, column }: CellContext<Props, 'total'>) {
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { store } = useAppState();
 	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
+	const taxLabel = useLineTaxLabel();
 	/**
 	 * Get display values if cart includes tax
 	 */
-	const { displayTotal, displaySubtotal } = React.useMemo(() => {
+	const { displaySubtotal } = React.useMemo(() => {
 		if (taxDisplayCart === 'incl') {
 			return {
-				displayTotal: toNumber(item.total) + toNumber(item.total_tax),
-				displaySubtotal: toNumber(item.subtotal) + toNumber(item.subtotal_tax),
+				displaySubtotal: toNumber(item.subtotal ?? '0') + toNumber(item.subtotal_tax ?? '0'),
 			};
 		}
 		return {
-			displayTotal: toNumber(item.total),
-			displaySubtotal: toNumber(item.subtotal),
+			displaySubtotal: toNumber(item.subtotal ?? '0'),
 		};
-	}, [item.subtotal, item.subtotal_tax, item.total, item.total_tax, taxDisplayCart]);
-	/**
-	 * If subtotal and total are different, then item is on sale
-	 */
-	const onSale = parseFloat(item.total ?? '0') !== parseFloat(item.subtotal ?? '0');
+	}, [item.subtotal, item.subtotal_tax, taxDisplayCart]);
 	return (
 		<VStack space="xs" className="justify-end">
-			{onSale && column.columnDef.meta?.show?.('on_sale') && (
-				<>
-					<Text className="text-muted-foreground text-right tabular-nums line-through">
-						{format(displaySubtotal || 0)}
-					</Text>
-					{column.columnDef.meta?.show?.('tax') && (
-						<Text variant="key" tabular className="text-right line-through">
-							{`${taxDisplayCart} ${format(Number(item.subtotal_tax) || 0)} tax`}
-						</Text>
-					)}
-				</>
-			)}
+			{/* The line before cart discounts and coupons, which show once under Subtotal (decision 4A); the product's own sale is struck in the Price cell. */}
 			<Text
 				testID={
 					readOnly ? readOnlyTestID('total', readOnlyLineKey(row.original.uuid, item)) : undefined
 				}
 				className="text-right font-semibold tabular-nums"
 			>
-				{format(displayTotal || 0)}
+				{format(displaySubtotal || 0)}
 			</Text>
 			{column.columnDef.meta?.show?.('tax') && (
 				<Text variant="key" tabular className="text-right">
-					{`${taxDisplayCart} ${format(Number(item.total_tax) || 0)} tax`}
+					{taxLabel(Number(item.subtotal_tax) || 0)}
 				</Text>
 			)}
 		</VStack>

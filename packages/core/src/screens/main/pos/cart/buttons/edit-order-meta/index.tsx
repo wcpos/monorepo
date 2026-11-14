@@ -14,10 +14,12 @@ interface Props {
 	order: CurrentOrderRecord;
 	/** The autosave's flush, for the sheet's Sync order (see `EditOrderMetaForm`). */
 	flushRef?: React.RefObject<(() => Promise<boolean>) | null>;
+	/** Whether the hand-over has a change not yet sent (see `EditOrderMetaForm`). */
+	onUnsentChange?: (unsent: boolean) => void;
 }
 
 /** The order sheet's Form tab: the fields that save as they change, and the two sends. */
-export function EditOrderMeta({ order, flushRef }: Props) {
+export function EditOrderMeta({ order, flushRef, onUnsentChange }: Props) {
 	/**
 	 * We need to refresh the component when the order data changes
 	 */
@@ -53,6 +55,7 @@ export function EditOrderMeta({ order, flushRef }: Props) {
 					formData={formData as React.ComponentProps<typeof EditOrderMetaForm>['formData']}
 					handOverData={handOverData}
 					flushRef={flushRef}
+					onUnsentChange={onUnsentChange}
 				/>
 			</Suspense>
 		</SavedFieldProvider>

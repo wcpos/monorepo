@@ -394,6 +394,17 @@ export function DialogFooter({
 					{other}
 					{dismiss}
 					{own}
+					{/* Void is never flush under Close; the tablet already sets it apart on the left. */}
+					{losses.length > 0 && count > losses.length && (
+						<View
+							testID={testID ? `${testID}-apart` : 'dialog-footer-apart'}
+							className="h-ctl justify-center"
+							accessibilityElementsHidden
+							importantForAccessibility="no-hide-descendants"
+						>
+							<View className="border-border border-t" />
+						</View>
+					)}
 					{losing}
 				</>
 			) : (
@@ -406,7 +417,8 @@ export function DialogFooter({
 						</View>
 					)}
 					{(dismissable || alternatives.length > 0 || intent) && (
-						<View className={cn(group, fill && 'flex-1')}>
+						// A wrapped row sits at the trailing edge, so the primary never lands alone at the start.
+						<View className={cn(group, 'justify-end', fill && 'flex-1')}>
 							{dismiss}
 							{other}
 							{primary}

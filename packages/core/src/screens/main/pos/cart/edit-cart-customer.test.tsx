@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { useFormControlAria } from '@wcpos/components/form/aria';
@@ -131,8 +131,14 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, onPress }: React.PropsWithChildren<{ onPress?: () => void }>) => (
-		<span onClick={onPress}>{children}</span>
+	Text: ({
+		children,
+		onPress,
+		testID,
+	}: React.PropsWithChildren<{ onPress?: () => void; testID?: string }>) => (
+		<span data-testid={testID} onClick={onPress}>
+			{children}
+		</span>
 	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
@@ -256,7 +262,9 @@ describe('EditCartCustomerForm', () => {
 		customerFindOne.mockReturnValue({ exec: () => lookup });
 
 		render(<EditCartCustomerForm />);
-		expect(screen.getByRole('contentinfo').textContent).toBe('Closepos_cart.update_customer_too');
+		expect(screen.getByRole('contentinfo').textContent).toBe(
+			'pos_cart.changes_save_to_orderClosepos_cart.update_customer_too'
+		);
 		fireEvent.click(screen.getByRole('button', { name: 'pos_cart.update_customer_too' }));
 
 		await waitFor(() => expect(customerFindOne).toHaveBeenCalled());
@@ -474,12 +482,20 @@ describe('EditCartCustomerForm', () => {
 		expect(screen.queryByTestId('cart-address-row-tax_id-1')).toBeNull();
 	});
 
+	const footerButtons = () =>
+		within(screen.getByRole('contentinfo'))
+			.getAllByRole('button')
+			.map((button) => button.textContent);
+
 	it('shows only Close in the footer without customer edit permission', () => {
 		canEditCustomers = false;
 
 		render(<EditCartCustomerForm />);
 
-		expect(screen.getByRole('contentinfo').textContent).toBe('Close');
+		expect(footerButtons()).toEqual(['Close']);
+		expect(screen.getByTestId('cart-address-autosaves').textContent).toBe(
+			'pos_cart.changes_save_to_order'
+		);
 	});
 
 	it.each([null, 0])('shows only Close for a missing or guest customer (%s)', (customerId) => {
@@ -487,7 +503,22 @@ describe('EditCartCustomerForm', () => {
 
 		render(<EditCartCustomerForm />);
 
-		expect(screen.getByRole('contentinfo').textContent).toBe('Close');
+		expect(footerButtons()).toEqual(['Close']);
+		expect(screen.getByTestId('cart-address-autosaves').textContent).toBe(
+			'pos_cart.changes_save_to_order'
+		);
+	});
+
+	it("a saved, editable customer's footer: the autosave line, Close and Also save to customer", () => {
+		render(<EditCartCustomerForm />);
+
+		expect(footerButtons()).toEqual(['Close', 'pos_cart.update_customer_too']);
+		expect(screen.getByTestId('cart-address-update-customer').textContent).toBe(
+			'pos_cart.update_customer_too'
+		);
+		expect(screen.getByTestId('cart-address-autosaves').textContent).toBe(
+			'pos_cart.changes_save_to_order'
+		);
 	});
 });
 

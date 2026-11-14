@@ -23,7 +23,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { PaymentWebview } from './components/payment-webview';
-import { CheckoutTitle } from './components/title';
+import { CheckoutTitle, useAmountToPay } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
 import { PayFrameNotice } from './pay-page/pay-frame-notice';
 import { usePayFrameGate } from './pay-page/use-pay-frame-gate';
@@ -95,6 +95,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const router = useRouter();
 	const phone = useIsPhone();
 	const t = useT();
+	const amountToPay = useAmountToPay(order);
 	// The legacy frame's footer gate (#1024): see usePayFrameGate.
 	const frameGate = usePayFrameGate();
 	const { status: frameStatus, press: pressPaymentFrame } = frameGate;
@@ -176,7 +177,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 						    Pay button's own save — so without a mount HERE the cashier can
 						    take payment having never seen that the store changed the money.
 						    This is the exact moment the ruling names: before goods change
-						    hands. It does not gate Process Payment; the server's totals
+						    hands. It does not gate Charge; the server's totals
 						    stand, and the cashier decides. */}
 						<TotalsChangedBanner orderId={order.uuid} testID="checkout-totals-changed-banner" />
 						{storageDegraded && !showStockRejection ? (
@@ -255,7 +256,7 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 									onPress: () => returnToTill(router, phone, 'cart'),
 								}
 							: {
-									label: t('pos_checkout.process_payment'),
+									label: t('pos_checkout.charge_amount', { amount: amountToPay }),
 									testID: 'process-payment-button',
 									onPress: () => void handleProcessPayment(),
 									disabled:

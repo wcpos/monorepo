@@ -93,7 +93,10 @@ jest.mock('./components/payment-webview', () => ({
 		return null;
 	},
 }));
-jest.mock('./components/title', () => ({ CheckoutTitle: () => null }));
+jest.mock('./components/title', () => ({
+	CheckoutTitle: () => null,
+	useAmountToPay: () => '$45.00',
+}));
 // This suite is about the legacy gateway checkout, which is what a store WITHOUT
 // the payments contract still gets. The contract branch has its own suite
 // (tender/tender-checkout.test.tsx); mounting it here would drag the tab strip →
@@ -209,6 +212,24 @@ describe('Checkout', () => {
 		render(<Checkout resource={{} as never} />);
 
 		expect(screen.getByText('pos_checkout.insufficient_stock_message')).toBeTruthy();
+	});
+
+	it('labels the footer intent with the charge key, not Process Payment', () => {
+		mockUseObservableSuspense.mockReturnValue(makeOrder());
+		mockUseObservableEagerState.mockReturnValueOnce(null);
+		mockUseCheckoutSession.mockReturnValue({
+			mode: 'contract',
+			error: null,
+			loading: false,
+			startCheckout: jest.fn(),
+		});
+
+		render(<Checkout resource={{} as never} />);
+
+		// The mocked `t` returns the key and drops the `{ amount }` params.
+		expect(screen.getByTestId('process-payment-button').textContent).toBe(
+			'pos_checkout.charge_amount'
+		);
 	});
 
 	/**

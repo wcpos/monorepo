@@ -16,6 +16,7 @@ import {
 import { Form, FormField, FormTextarea } from '@wcpos/components/form';
 import { MoneyList } from '@wcpos/components/money-list';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import { Notice } from '@wcpos/components/notice';
 import {
 	Table,
 	TableBody,
@@ -139,6 +140,8 @@ export function RefundOrderForm({ order }: Props) {
 	);
 	const storeHistoryOrderId = React.useRef<number | null>(null);
 	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(orderData.id));
+	const [historyMissing, setHistoryMissing] = React.useState(false);
+	const [historyAttempt, setHistoryAttempt] = React.useState(0);
 	const refundsFallback = JSON.stringify(orderData.refunds || []);
 	const getRefundsFallback = React.useCallback(() => {
 		const refunds = JSON.parse(refundsFallback) as RefundDetail[];
@@ -193,6 +196,7 @@ export function RefundOrderForm({ order }: Props) {
 				if (!mounted) return;
 				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
 				storeHistoryOrderId.current = orderData.id ?? null;
+				setHistoryMissing(false);
 				setRefundDetailsLoading(false);
 			})
 			.catch((error: unknown) => {
@@ -210,13 +214,18 @@ export function RefundOrderForm({ order }: Props) {
 					return;
 				}
 				setRefundDetails(getRefundsFallback());
+				setHistoryMissing(true);
 				setRefundDetailsLoading(false);
 			});
 
 		return () => {
 			mounted = false;
 		};
-	}, [getRefundsFallback, http, orderData.id]);
+	}, [getRefundsFallback, http, orderData.id, historyAttempt]);
+
+	// Without the store's refund rows the lines' refunded quantities are unknown, so only an amount, which the refund totals still cap, may be refunded.
+	const linesLocked = historyMissing && online;
+	const retry = () => setHistoryAttempt((n) => n + 1);
 
 	const previousRefundTotal = React.useMemo(() => {
 		if (!refundDetails.length) return 0;
@@ -231,11 +240,12 @@ export function RefundOrderForm({ order }: Props) {
 	);
 
 	const initialLineItems = React.useMemo(() => {
+		const quantitiesUnknown = refundDetailsLoading || linesLocked;
 		return (orderData.line_items || []).map((item) => ({
 			id: item.id ?? 0,
 			name: item.name || '',
 			quantity: item.quantity ?? 0,
-			remaining_quantity: refundDetailsLoading
+			remaining_quantity: quantitiesUnknown
 				? 0
 				: computeRemainingRefundQuantity({
 						lineItemId: item.id ?? 0,
@@ -250,7 +260,7 @@ export function RefundOrderForm({ order }: Props) {
 			})),
 			refund_qty: 0,
 		}));
-	}, [orderData.line_items, refundDetails, refundDetailsLoading]);
+	}, [orderData.line_items, refundDetails, refundDetailsLoading, linesLocked]);
 
 	const form = useForm<RefundFormValues>({
 		resolver: zodResolver(refundFormSchema as never) as never,
@@ -495,6 +505,22 @@ export function RefundOrderForm({ order }: Props) {
 					)}
 				</MoneyList>
 
+				{linesLocked ? (
+					<Notice
+						tone="warning"
+						testID="refund-history-missing"
+						title={t('orders.refund_history_not_loaded')}
+						actions={[
+							{
+								label: t('common.retry'),
+								onPress: retry,
+								testID: 'refund-history-retry',
+								loading: refundDetailsLoading,
+							},
+						]}
+					/>
+				) : null}
+
 				<Table>
 					<TableHeader>
 						<TableRow>
@@ -536,14 +562,14 @@ export function RefundOrderForm({ order }: Props) {
 										<Text>{unitPrice}</Text>
 									</TableCell>
 									<TableCell className="flex-1">
-										<Text>{field.remaining_quantity}</Text>
+										<Text>{linesLocked ? '–' : field.remaining_quantity}</Text>
 									</TableCell>
 									<TableCell className="flex-1">
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
 											render={({ field: qtyField }) => (
-												<FormAmountField kind="count" live {...qtyField} />
+												<FormAmountField kind="count" live {...qtyField} disabled={linesLocked} />
 											)}
 										/>
 									</TableCell>

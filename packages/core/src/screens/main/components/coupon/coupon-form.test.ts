@@ -3,7 +3,10 @@
  *
  * Tests for the coupon form Zod schema validation.
  */
-import { couponFormSchema } from './coupon-schema';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+import { couponFormErrors, couponFormSchema } from './coupon-schema';
+import { createTestT } from '../../../../../jest/translate';
 
 describe('couponFormSchema', () => {
 	it('should accept a valid coupon with just a code', () => {
@@ -104,5 +107,33 @@ describe('couponFormSchema', () => {
 				limit_usage_to_x_items: null,
 			}).success
 		).toBe(true);
+	});
+});
+
+describe('couponFormErrors', () => {
+	const sentence = 'Enter a coupon code, or tap Generate.';
+	const error = couponFormErrors(createTestT());
+
+	it.each([{}, { code: '' }])('says the cashier sentence for a missing code: %j', (values) => {
+		expect(couponFormSchema.safeParse(values, { error }).error?.issues[0].message).toBe(sentence);
+	});
+
+	it('reaches the form through the resolver', async () => {
+		// Cast needed for direct resolver invocation in tests
+		const resolve = zodResolver(couponFormSchema as never, { error } as never) as never as (
+			...args: unknown[]
+		) => Promise<{ errors: Record<string, { message?: string }> }>;
+		const { errors } = await resolve({}, undefined, {
+			fields: {},
+			shouldUseNativeValidation: false,
+		});
+		expect(errors.code.message).toBe(sentence);
+	});
+
+	it('leaves other fields to zod', () => {
+		const values = { code: 'X', discount_type: 'bogus' };
+		const mapped = couponFormSchema.safeParse(values, { error }).error?.issues[0];
+		expect(mapped?.path).toEqual(['discount_type']);
+		expect(mapped?.message).toBe(couponFormSchema.safeParse(values).error?.issues[0].message);
 	});
 });
