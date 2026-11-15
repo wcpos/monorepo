@@ -24,7 +24,7 @@ const pin = {
 	quantity: 1,
 	share: 1,
 };
-const parts = (row: typeof pin) => ({ parts: [row], unknownLines: 0, totalLines: 1 });
+const parts = (row: typeof pin) => ({ parts: [row], unknownLines: 0, totalLines: 1, total: 1 });
 beforeEach(() => {
 	setOrders([]);
 	mockState.screenSize = 'lg';
@@ -66,10 +66,11 @@ it('Top products reads products.netOfRefunds, and its head reads items', () => {
 	expect(screen.getByTestId('card-products-row-0').textContent).toContain('Pinned');
 	expect(screen.getByTestId('card-products-figure').textContent).toBe('4');
 });
-it('the heads read gross; Taxes, Refunds and Orders read their own figures', () => {
+it("the heads read gross, Categories its rows' total; Taxes, Refunds and Orders read their own figures", () => {
 	render(<PeriodSection />);
-	for (const id of ['payments', 'where-sold', 'categories'])
+	for (const id of ['payments', 'where-sold'])
 		expect(screen.getByTestId(`card-${id}-figure`).textContent).toBe('£3.00');
+	expect(screen.getByTestId('card-categories-figure').textContent).toBe('£1.00');
 	expect(screen.getByTestId('card-taxes-tax').textContent).toBe('£6.00');
 	expect(screen.getByTestId('card-refunds-refunded').textContent).toBe('£7.00');
 	expect(screen.getByTestId('card-orders-average').textContent).toBe('£8.00');

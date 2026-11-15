@@ -261,7 +261,12 @@ export function coverageProjectionWithResult$<R extends QueryResult<RxCollection
 	coverageTarget$: Observable<CoverageTarget | null>,
 	census$: Observable<number | null>,
 	coverage: 'exact' | 'superset' | undefined = 'exact'
-): Observable<{ result: R; total: number | null; laneProgress: QueryLaneProgress | null }> {
+): Observable<{
+	result: R;
+	total: number | null;
+	laneProgress: QueryLaneProgress | null;
+	laneComplete: boolean;
+}> {
 	const verdict$ = coverageTarget$.pipe(
 		distinctUntilChanged(
 			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
@@ -284,6 +289,7 @@ export function coverageProjectionWithResult$<R extends QueryResult<RxCollection
 					result,
 					total: Math.max(serverTotal, localCount),
 					laneProgress: verdict.progress,
+					laneComplete: verdict.complete,
 				};
 			}
 			// No server count anywhere. The resident count is a truthful TOTAL only when the
@@ -295,6 +301,7 @@ export function coverageProjectionWithResult$<R extends QueryResult<RxCollection
 				result,
 				total: verdict.complete ? localCount : null,
 				laneProgress: verdict.progress,
+				laneComplete: verdict.complete,
 			};
 		})
 	);
@@ -535,6 +542,12 @@ export type QuerySnapshot<R extends QueryResult<RxCollection> = QueryResult<RxCo
 	/** The size of the set this query is about, or null when nothing can vouch for one. */
 	total: number | null;
 	laneProgress: QueryLaneProgress | null;
+	/**
+	 * The engine's coverage lane for this read claims the whole matching set is local. Persisted,
+	 * independent of freshness, and kept through a re-walk's pages (a range that was whole stays
+	 * whole while it revalidates). False with no lane, no coverage target, or no projection.
+	 */
+	laneComplete: boolean;
 };
 
 export interface QueryHandle<R extends QueryResult<RxCollection> = QueryResult<RxCollection>> {
@@ -625,6 +638,7 @@ function emptySnapshot<R extends QueryResult<RxCollection>>(result: R): QuerySna
 		exhausted: null,
 		total: null,
 		laneProgress: null,
+		laneComplete: false,
 	};
 }
 
@@ -641,7 +655,8 @@ function sameSnapshot<R extends QueryResult<RxCollection>>(
 		previous.exhausted === current.exhausted &&
 		previous.total === current.total &&
 		previous.laneProgress?.downloaded === current.laneProgress?.downloaded &&
-		previous.laneProgress?.total === current.laneProgress?.total
+		previous.laneProgress?.total === current.laneProgress?.total &&
+		previous.laneComplete === current.laneComplete
 	);
 }
 
@@ -699,7 +714,9 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 					census$,
 					spec.coverage
 				)
-			: result$.pipe(map((result) => ({ result, total: null, laneProgress: null })));
+			: result$.pipe(
+					map((result) => ({ result, total: null, laneProgress: null, laneComplete: false }))
+				);
 	const exhausted$ = primary
 		? exhaustedFromCoverage$(engine, primary.searchLane$, primary.fetched$).pipe(startWith(null))
 		: UNKNOWN_EXHAUSTED$;
@@ -714,6 +731,7 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 					result: last.result,
 					total: last.total,
 					laneProgress: last.laneProgress,
+					laneComplete: last.laneComplete,
 				})
 			),
 			active$,
@@ -722,7 +740,7 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 		]).pipe(
 			map(
 				([
-					{ ready, result, total, laneProgress },
+					{ ready, result, total, laneProgress, laneComplete },
 					active,
 					pending,
 					exhausted,
@@ -740,6 +758,7 @@ export function createQueryHandle<R extends QueryResult<RxCollection>>(
 					exhausted,
 					total,
 					laneProgress,
+					laneComplete,
 				})
 			),
 			distinctUntilChanged(sameSnapshot)

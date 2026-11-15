@@ -294,7 +294,8 @@ export function categories(
 		{ key: string; label: string; amount: number; quantity: number; lines?: OrderLine[] }
 	>();
 	let unknownLines = 0,
-		totalLines = 0;
+		totalLines = 0,
+		sum = 0;
 	for (const order of [...orders, ...refunds])
 		for (const line of order.line_items ?? []) {
 			const product = directory.get(line.product_id ?? undefined),
@@ -309,6 +310,7 @@ export function categories(
 			};
 			(part.lines ??= []).push(line);
 			part.amount += Number(line.total || 0) + Number(line.total_tax || 0);
+			sum += Number(line.total || 0) + Number(line.total_tax || 0);
 			part.quantity += Number.isFinite(line.quantity) ? line.quantity! : 0;
 			parts.set(key, part);
 			totalLines++;
@@ -319,10 +321,11 @@ export function categories(
 			.map((row) => ({
 				...row,
 				amount: round(row.amount, num_decimals),
-				share: totals.total ? row.amount / totals.total : 0,
+				share: sum > 0 ? row.amount / sum : 0,
 			}))
 			.sort((a, b) => b.amount - a.amount),
 		unknownLines,
 		totalLines,
+		total: round(sum, num_decimals),
 	};
 }

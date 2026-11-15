@@ -27,6 +27,7 @@ import {
 	productBrowseWindowQueryKeyFromDimensions,
 } from './scheduler';
 import { memoryEngineStorage } from './testing';
+import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 
@@ -347,6 +348,45 @@ describe('coverageChanges through the public handle', () => {
 
 		await vi.waitFor(() => expect(orders.latest()?.source).toBe('unknown'));
 		expect(orders.latest()?.total).toBeNull();
+
+		orders.stop();
+		await engine.dispose();
+	});
+
+	it('an F8 journal reset demotes a complete ranged orders lane', async () => {
+		const engine = engineWith({ now: () => 1_000_000 });
+		await engine.ready;
+		const key = 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all';
+		await writeLane(engine, {
+			collection: 'orders',
+			queryKey: key,
+			complete: true,
+			freshUntilMs: 1_060_000,
+		});
+		const productsKey = productBrowseWindowQueryKeyFromDimensions({ limit: 100 });
+		await writeLane(engine, {
+			collection: 'products',
+			queryKey: productsKey,
+			freshUntilMs: 1_060_000,
+		});
+		const orders = record(engine, { collection: 'orders', queryKey: key });
+		await vi.waitFor(() => expect(orders.latest()?.complete).toBe(true));
+
+		await new EngineOrderRepository(
+			engine.active()!.database.collections as never
+		).resetForResync();
+
+		await vi.waitFor(() => expect(orders.latest()?.complete).toBe(false));
+		// What the hero gate reads after the reset: no lane, so no walk progress either.
+		expect(orders.latest()?.progress).toBeNull();
+		expect(
+			await collectionOf(engine, 'coverageLanes').findOne(coverageLaneKey('orders', key)).exec()
+		).toBeNull();
+		expect(
+			await collectionOf(engine, 'coverageLanes')
+				.findOne(coverageLaneKey('products', productsKey))
+				.exec()
+		).not.toBeNull();
 
 		orders.stop();
 		await engine.dispose();

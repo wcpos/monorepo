@@ -69,10 +69,9 @@ function read(handle: QueryHandle): QueryResult<RxCollection> {
  * `pending` from the first snapshot, the projections (`total`, `exhausted`, `laneProgress`) only
  * once the read has answered — an unanswered snapshot's `null` is "no answer yet", not a verdict.
  */
-function field$<K extends 'active' | 'pending' | 'total' | 'exhausted' | 'laneProgress'>(
-	handle: QueryHandle,
-	name: K
-): Observable<QuerySnapshot[K]> {
+function field$<
+	K extends 'active' | 'pending' | 'total' | 'exhausted' | 'laneProgress' | 'laneComplete',
+>(handle: QueryHandle, name: K): Observable<QuerySnapshot[K]> {
 	return handle.observe().pipe(
 		filter((snapshot) => name === 'active' || name === 'pending' || snapshot.ready),
 		map((snapshot) => snapshot[name]),
@@ -1086,6 +1085,36 @@ describe('query handles over the engine', () => {
 		expect(await firstValueFrom(field$(result.current, 'laneProgress'))).toBeNull();
 		expect(totals).not.toContain(99);
 		expect(totals).not.toContain(203);
+		subscription.unsubscribe();
+	});
+
+	it("laneComplete follows the lane verdict's complete, independent of progress and freshness", async () => {
+		const target = {
+			collection: 'orders' as const,
+			queryKey:
+				'orders:browser:status=all:store=12:after=1782864000:before=1783987200:search=:limit=all',
+		};
+		const verdict = {
+			total: 7,
+			source: 'query-total' as const,
+			complete: false,
+			fresh: true,
+			progress: { downloaded: 4, total: 7 },
+		};
+		engine.setCoverageVerdict(target, verdict);
+		const { result } = renderHook(() => useCollectionQueryHandle('orders', salesState), {
+			wrapper: Provider,
+		});
+		await waitFor(() => expect(current(result.current)?.count).toBe(0));
+		const completions: boolean[] = [];
+		const subscription = field$(result.current, 'laneComplete').subscribe((complete) =>
+			completions.push(complete)
+		);
+		expect(completions).toEqual([false]);
+		expect(result.current.value).toMatchObject({ total: 7, laneProgress: verdict.progress });
+		act(() => engine.setCoverageVerdict(target, { ...verdict, complete: true, fresh: false }));
+		await waitFor(() => expect(completions).toEqual([false, true]));
+		expect(result.current.value).toMatchObject({ total: 7, laneProgress: verdict.progress });
 		subscription.unsubscribe();
 	});
 
