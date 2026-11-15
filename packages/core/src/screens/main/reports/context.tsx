@@ -30,7 +30,12 @@ import { currencyOf, salesByCurrency, salesFigures } from './report/sales-figure
 import { inRoom, useReportsDirectories, useReportsFilterScope } from './scope';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
-import { useDrawnHandle, useQuerySnapshot, useQueryState } from '../../../query';
+import {
+	useDrawnHandle,
+	useQueryHandleFields,
+	useQuerySnapshot,
+	useQueryState,
+} from '../../../query';
 
 import type { RowSelectionState } from '@tanstack/react-table';
 import type { QueryHandle } from '../../../query';
@@ -438,6 +443,30 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 		<ReportsDataContext.Provider value={{ ...data, live, comparisonOrders, wholeComparisonOrders }}>
 			{children}
 		</ReportsDataContext.Provider>
+	);
+}
+
+/** Whole means a complete lane, or a settled demand with no continuation left, unless this handle's lane was demoted. */
+export function useComparisonSettled(): boolean {
+	// The live handle, not the drawn one: a figure waits for the comparison it is printed against.
+	const { comparisonHandle } = useReportsHandles();
+	// The rows are drawn from the deferred handle: a swap waits until they are the live handle's.
+	const drawn = useDrawnHandle(comparisonHandle);
+	const { ready, pending, laneProgress, laneComplete } = useQueryHandleFields(comparisonHandle, [
+		'pending',
+		'laneProgress',
+		'laneComplete',
+	]);
+	// A lane seen complete on this handle that is no longer complete was demoted (an F8 journal
+	// reset): the range is refilling, so it waits even though the demand settled long ago.
+	const [wholeOnce, setWholeOnce] = React.useState<unknown>(null);
+	if (laneComplete && wholeOnce !== comparisonHandle) setWholeOnce(comparisonHandle);
+	const demoted = !laneComplete && wholeOnce === comparisonHandle;
+	return (
+		drawn === comparisonHandle &&
+		ready &&
+		!demoted &&
+		(laneComplete || (!pending && laneProgress === null))
 	);
 }
 
