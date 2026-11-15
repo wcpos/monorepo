@@ -490,3 +490,24 @@ it("a recovery resumes on the store's own next cycle after a switch back", async
 		{ session_id: id, breakdowns: { register_name: 'Front', transaction_count: 1 } },
 	]);
 });
+
+it('a scope move before the re-render writes no closure', async () => {
+	const { storeDB, id } = await crashAfterCloseSession();
+	await engineDB.collections.orders.insert(sale(id));
+	const release = holdFirstRead();
+	const view = render(<RegisterSessionBridge />);
+	await waitFor(() => expect(http.get).toHaveBeenCalledTimes(1), { timeout: 3000 });
+
+	// `commitStoreSession` has moved the engine's scope; React has not rendered store B yet.
+	const engineB = await createEngineDatabase(['orders', 'refunds']);
+	dbs.push({ remove: () => engineB.close() });
+	const engine = mockApp.engine as { active: () => Record<string, unknown> };
+	const scopeA = engine.active();
+	engine.active = () => ({ ...scopeA, scopeId: 'scope-b', database: engineB });
+	release();
+	await new Promise((resolve) => setTimeout(resolve, 300));
+
+	expect(await storeDB.closures.find().exec()).toHaveLength(0);
+	expect(closurePosts()).toEqual([]);
+	view.unmount();
+});
