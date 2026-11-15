@@ -629,6 +629,47 @@ it('F2 lap 2: a scope or date change waits again', () => {
 	expect(screen.getByTestId('hero-delta').textContent).toBe('+50.0% vs the week before');
 	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('1');
 });
+it("F2 lap 3: a swap to a range walked once shows loading, never the old period's figure", () => {
+	const seen: (string | null)[] = [];
+	const record = () => {
+		seen.push(screen.queryByTestId('hero-delta')?.textContent ?? null);
+	};
+	const { rerender } = render(
+		<React.Profiler id="hero" onRender={record}>
+			{tree({ week: true })}
+		</React.Profiler>
+	);
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	seen.length = 0;
+	const next = fakeQueryHandle(
+		{ laneComplete: true, result: { hits: hitsOf([previous[0]]) } },
+		'next'
+	);
+	rerender(
+		<React.Profiler id="hero" onRender={record}>
+			{tree({ comparison: next, week: true })}
+		</React.Profiler>
+	);
+	expect(seen).not.toContain('−70.0% vs the week before');
+	expect(new Set(seen)).toEqual(new Set([null, '+50.0% vs the week before']));
+	expect(screen.getByTestId('hero-delta').textContent).toBe('+50.0% vs the week before');
+});
+it("F2 lap 3: a journal reset's lane demotion puts the comparison back to waiting", () => {
+	const comparison = handleOf(previous);
+	comparison.set({ laneComplete: true, pending: true, laneProgress: { downloaded: 1, total: 2 } });
+	setup({ comparison, week: true });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	act(() =>
+		comparison.set({
+			laneComplete: false,
+			laneProgress: null,
+			result: { hits: hitsOf([previous[0]]) },
+		})
+	);
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
+	expect(screen.queryByTestId('hero-delta')).toBeNull();
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+});
 // Review 3602 (R1): a changed period swaps the comparison handle; the drawn handle still holds
 // the old period's rows, so the differences must follow the live handle, not the drawn one.
 it('R1: a swapped comparison handle shows loading until the new period settles', () => {

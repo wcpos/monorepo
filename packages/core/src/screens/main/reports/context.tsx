@@ -450,12 +450,16 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 export function useComparisonSettled(): boolean {
 	// The live handle, not the drawn one: a figure waits for the comparison it is printed against.
 	const { comparisonHandle } = useReportsHandles();
+	// The rows are drawn from the deferred handle: a swap waits until they are the live handle's.
+	const drawn = useDrawnHandle(comparisonHandle);
 	const { ready, pending, laneProgress, laneComplete } = useQueryHandleFields(comparisonHandle, [
 		'pending',
 		'laneProgress',
 		'laneComplete',
 	]);
-	return ready && (laneComplete || (!pending && laneProgress === null));
+	return (
+		drawn === comparisonHandle && ready && (laneComplete || (!pending && laneProgress === null))
+	);
 }
 
 /** A secondary read: parent lookup is local-only and never expands the sales demand. */

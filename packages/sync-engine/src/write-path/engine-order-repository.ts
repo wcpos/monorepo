@@ -16,6 +16,7 @@ import {
 import { findAllUncached } from '../collections/find-all-uncached';
 import { engineWarn } from '../engine-logger';
 import { stripOrderManifestDigest } from '../local-coverage/existence-manifest-population';
+import { removeCollectionCoverageLanes } from '../local-coverage/remove-collection-coverage-lanes';
 import {
 	type ManifestCollection,
 	removeManifestByWooIds,
@@ -88,6 +89,8 @@ type SyncCheckpointsCollection = {
 /** Structural: the collections the order repository touches — any engine scope database satisfies it. */
 export type OrderRepositoryDatabase = {
 	recordMutations?: unknown;
+	// The scope database always has it; only structural test fakes omit it.
+	coverageLanes?: Parameters<typeof removeCollectionCoverageLanes>[0];
 	orders: OrdersCollection;
 	refunds: RefundChildrenCollection;
 	existenceManifestOrders: ManifestCollection;
@@ -592,6 +595,8 @@ export class EngineOrderRepository {
 	 * (its uuid in the pending set) stays resident so an offline POS edit survives.
 	 */
 	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string>): Promise<void> {
+		// The orders' lanes claimed records this reset removes; demote them as Clear & Sync does (F2 B2).
+		if (this.db.coverageLanes) await removeCollectionCoverageLanes(this.db.coverageLanes, 'orders');
 		const removable = await this.unprotectedOrders(pendingMutationOrderIds);
 		const counts: Record<string, number> = {};
 		for (const document of removable) {
