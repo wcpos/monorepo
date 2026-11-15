@@ -991,3 +991,147 @@ it('the All-stores sentinel keeps every parentless refund in the register', asyn
 	);
 	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1,2'));
 });
+
+// REVIEW 3600: the production tree mounts ReportsRefunds ABOVE every guard (index.tsx:273).
+describe('REVIEW guard below ReportsRefunds (production order)', () => {
+	function prodRoom(rows: object[], parents: object[], refunds: object[]) {
+		mockLocalParents = parents as never;
+		const read = jest.fn();
+		function GuardProbe() {
+			const data = useReportsData();
+			read(data);
+			return <span data-testid="g">{data.periodRefunds ? 'ready' : 'loading'}</span>;
+		}
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={100}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+				initialFilters={{ store: '9', register: 'front' }}
+			>
+				<Provider
+					handle={handleOf(
+						rows.map((payload: any) => ({ record: { uuid: payload.uuid, payload } }))
+					)}
+					refundsHandle={handleOf(refunds.map((payload) => ({ record: { payload } })))}
+				>
+					<React.Suspense fallback={null}>
+						<ReportsRefunds>
+							<ReportsCurrencyGuard>
+								<GuardProbe />
+							</ReportsCurrencyGuard>
+						</ReportsRefunds>
+					</React.Suspense>
+				</Provider>
+			</QueryStateProvider>
+		);
+		return read;
+	}
+	const rows = [
+		{
+			uuid: 'e1',
+			id: 41,
+			status: 'completed',
+			total: '100.00',
+			currency: 'EUR',
+			meta_data: identity('9'),
+		},
+		{
+			uuid: 'u1',
+			id: 51,
+			status: 'completed',
+			total: '30.00',
+			currency: 'USD',
+			meta_data: identity('9'),
+		},
+	];
+	const refunds = [
+		{ id: 1, parent_id: 41, amount: '10.00', total: '-10.00', meta_data: identity('9') },
+		{ id: 2, parent_id: 51, amount: '7.00', total: '-7.00', meta_data: identity('9') },
+	];
+	it('guarded figures keep the largest currency refunds (EUR 10), and only them', async () => {
+		const read = prodRoom(rows, rows, refunds);
+		await waitFor(() => expect(screen.getByTestId('g').textContent).toBe('ready'));
+		const data = read.mock.calls.at(-1)![0];
+
+		console.log(
+			'REVIEW periodRefunds',
+			data.periodRefunds.map((r: any) => `${r.id}:${r.currency}`),
+			'refundRows',
+			data.figures.refundRows,
+			'refunded',
+			data.figures.refunds.refunded,
+			'gross',
+			data.figures.gross
+		);
+		expect(data.figures.gross).toBe(100);
+		expect(data.periodRefunds.map((r: any) => r.currency)).toEqual(['EUR']);
+		expect(data.figures.refunds.refunded).toBe(10);
+	});
+});
+describe('REVIEW one order currency, refund in another', () => {
+	it('a EUR refund of an earlier EUR order is not netted into a USD-only window', async () => {
+		mockLocalParents = [
+			{
+				uuid: 'e0',
+				id: 40,
+				status: 'completed',
+				total: '100.00',
+				currency: 'EUR',
+				meta_data: identity('9'),
+			},
+		] as never;
+		const read = jest.fn();
+		function GuardProbe() {
+			const data = useReportsData();
+			read(data);
+			return <span data-testid="g1">{data.periodRefunds ? 'ready' : 'loading'}</span>;
+		}
+		const usd = [
+			{
+				uuid: 'u1',
+				id: 51,
+				status: 'completed',
+				total: '30.00',
+				currency: 'USD',
+				meta_data: identity('9'),
+			},
+		];
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={100}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+				initialFilters={{ store: '9', register: 'front' }}
+			>
+				<Provider
+					handle={handleOf(usd.map((payload) => ({ record: { uuid: payload.uuid, payload } })))}
+					refundsHandle={handleOf(
+						[
+							{ id: 1, parent_id: 40, amount: '25.00', total: '-25.00', meta_data: identity('9') },
+							{ id: 2, parent_id: 51, amount: '5.00', total: '-5.00', meta_data: identity('9') },
+						].map((payload) => ({ record: { payload } }))
+					)}
+				>
+					<React.Suspense fallback={null}>
+						<ReportsRefunds>
+							<ReportsCurrencyGuard>
+								<GuardProbe />
+							</ReportsCurrencyGuard>
+						</ReportsRefunds>
+					</React.Suspense>
+				</Provider>
+			</QueryStateProvider>
+		);
+		await waitFor(() => expect(screen.getByTestId('g1').textContent).toBe('ready'));
+		const data = read.mock.calls.at(-1)![0];
+
+		console.log(
+			'REVIEW2',
+			data.periodRefunds.map((r: any) => `${r.id}:${r.currency}`),
+			'refunded',
+			data.figures.refunds.refunded
+		);
+		expect(data.figures.refunds.refunded).toBe(5);
+	});
+});
