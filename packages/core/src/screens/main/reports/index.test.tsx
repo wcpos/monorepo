@@ -7,7 +7,7 @@ import { endOfDay } from 'date-fns/endOfDay';
 import { startOfDay } from 'date-fns/startOfDay';
 import { utc } from '@date-fns/utc';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
 import type { ClosureRow } from '@wcpos/query/register-session';
 import { compileQuery } from '@wcpos/query/query-state';
@@ -66,7 +66,7 @@ jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text 
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 const mockBarScope = jest.fn();
 let mockNextStoreID = 9;
-const mockViewedStores = of([
+const mockViewedStores = new BehaviorSubject<{ id: number; timezone: string }[]>([
 	{ id: 9, timezone: 'UTC' },
 	{ id: 21, timezone: 'America/New_York' },
 ]);
@@ -484,6 +484,21 @@ it('the No store notice counts the same window its View opens', () => {
 	fireEvent.click(screen.getByTestId('no-store-view'));
 	expect(latestState().filters).toMatchObject({ store: 'no-store:21,9', dateRange: counted });
 	mockNextStoreID = 9;
+});
+
+// Revert: keep the No store ids captured when No store was chosen.
+it('No store follows the store directory while it stays selected', () => {
+	const directory = mockViewedStores.getValue();
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('no-store-view'));
+	expect(latestState().filters.store).toBe('no-store:21,9');
+	act(() => mockViewedStores.next([...directory, { id: 33, timezone: 'UTC' }]));
+	expect(latestState().filters.store).toBe('no-store:21,33,9');
+	const comparison = mockUseCollectionQueryHandle.mock.calls
+		.filter(([collection]) => collection === 'orders')
+		.at(-2)![1] as QueryStateOf<'orders'>;
+	expect(comparison.filters.store).toBe('no-store:21,33,9');
+	act(() => mockViewedStores.next(directory));
 });
 
 // Revert: leave the orders provider mounted around both rooms.

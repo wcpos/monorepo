@@ -585,6 +585,19 @@ describe('query-state translator', () => {
 				).toEqual(['free', 'deleted', 'zero']);
 			}
 		);
+		// Revert: drop `complete: false` from the No store read filter.
+		it('a No store read is never complete, so the executor runs the directory check', () => {
+			const { read } = compileQuery(
+				'orders',
+				{ ...base, filters: { store: noStoreFilter([12, 13]) } },
+				{ id: 'orphans', storeScope: 'sales' }
+			);
+			// The created_via prefilter alone also admits store 12's POS orders.
+			expect(
+				withOrphans.filter((row) => new Query(read.prefilter).test(row)).length
+			).toBeGreaterThan(3);
+			expect(read.complete).toBe(false);
+		});
 		it('keeps No store orders out of store 12 and in All stores', () => {
 			for (const store of ['12', 'woocommerce-pos']) {
 				const { read } = compileQuery(
