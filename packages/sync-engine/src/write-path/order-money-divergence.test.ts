@@ -450,6 +450,190 @@ describe('an order compared without an aggregate on either side', () => {
 	});
 });
 
+describe('a pure tax rate-ID rename (WooCommerce Tax rewrites rate rows by position)', () => {
+	function fixture() {
+		const taxLine = (
+			rate_id: number,
+			label: string,
+			rate_percent: number,
+			tax_total: string
+		): Record<string, unknown> => ({
+			rate_id,
+			label,
+			rate_percent,
+			compound: false,
+			tax_total,
+			shipping_tax_total: '0.000000',
+		});
+		const payload = (server: boolean) => ({
+			total: '10.65',
+			tax_lines: server
+				? [
+						taxLine(9, 'City Tax', 0, '0.000000'),
+						taxLine(10, 'County Tax', 0.5, '0.050000'),
+						taxLine(11, 'Special Tax', 0, '0.000000'),
+						taxLine(12, 'State Tax', 6, '0.600000'),
+					]
+				: [taxLine(11, 'County Tax', 0.5, '0.050000'), taxLine(12, 'State Tax', 6, '0.600000')],
+			line_items: [
+				{
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_MONEY_ORACLE_LINE_UUID }],
+					total: '10.000000',
+					total_tax: '0.650000',
+					taxes: [9, 10, 11, 12].map((id) => ({
+						id,
+						total: id === 12 ? '0.600000' : id === (server ? 10 : 11) ? '0.050000' : '0.000000',
+					})),
+				},
+			],
+			shipping_lines: [] as Record<string, unknown>[],
+		});
+		return { pushed: payload(false), acked: payload(true) };
+	}
+
+	it('classifies #52214 while retaining every per-rate divergence', () => {
+		const result = compareOrderMoney(fixture());
+		expect(result?.fields.length).toBeGreaterThan(0);
+		expect(
+			result?.fields.every(
+				({ field }) => field.startsWith('tax_lines[') || field.includes('.taxes[')
+			)
+		).toBe(true);
+		expect(result).toHaveProperty('renameOnly', true);
+	});
+
+	it('also proves the renamed taxes on a shipping line', () => {
+		const input = fixture();
+		for (const payload of [input.pushed, input.acked]) {
+			payload.shipping_lines = [clone(payload.line_items[0]!)];
+			payload.tax_lines.at(-1)!.shipping_tax_total = '0.600000';
+		}
+		expect(compareOrderMoney(input)).toHaveProperty('renameOnly', true);
+	});
+
+	it.each(['0.00', '-0', '', 0, undefined])('accepts server zero spelling %s', (zero) => {
+		const input = fixture();
+		for (const index of [0, 2]) {
+			input.acked.tax_lines[index]!.tax_total = zero;
+			input.acked.tax_lines[index]!.shipping_tax_total = zero;
+			if (zero === undefined) delete input.acked.tax_lines[index]!.shipping_tax_total;
+		}
+		expect(compareOrderMoney(input)).toHaveProperty('renameOnly', true);
+	});
+
+	it.each<[string, (input: ReturnType<typeof fixture>) => void]>([
+		[
+			'amounts differ under the labels',
+			({ acked }) => {
+				acked.tax_lines[1]!.tax_total = acked.line_items[0]!.taxes[1]!.total = '0.060000';
+				acked.tax_lines[3]!.tax_total = acked.line_items[0]!.taxes[3]!.total = '0.590000';
+			},
+		],
+		[
+			'a real jurisdiction swap',
+			({ acked }) => {
+				acked.tax_lines[1]!.label = 'City Tax';
+				acked.tax_lines[0]!.label = 'County Tax';
+			},
+		],
+		[
+			'a label is nonzero on only one side',
+			({ acked }) => {
+				acked.tax_lines[2]!.tax_total = acked.line_items[0]!.taxes[2]!.total = '0.010000';
+				acked.tax_lines[3]!.tax_total = acked.line_items[0]!.taxes[3]!.total = '0.590000';
+			},
+		],
+		[
+			'a microunit is not zero',
+			({ acked }) => {
+				acked.tax_lines[2]!.tax_total = '0.000001';
+			},
+		],
+		[
+			'duplicate server labels',
+			({ acked }) => {
+				acked.tax_lines[1]!.label = 'State Tax';
+			},
+		],
+		[
+			'duplicate POS labels',
+			({ pushed }) => {
+				pushed.tax_lines[0]!.label = 'State Tax';
+			},
+		],
+		[
+			'an empty nonzero label',
+			({ pushed }) => {
+				pushed.tax_lines[0]!.label = '  ';
+			},
+		],
+		[
+			'a different rate percent',
+			({ acked }) => {
+				acked.tax_lines[1]!.rate_percent = 0.75;
+			},
+		],
+		[
+			'a different compound flag',
+			({ acked }) => {
+				acked.tax_lines[1]!.compound = true;
+			},
+		],
+		[
+			'line total_tax also differs',
+			({ acked }) => {
+				acked.line_items[0]!.total_tax = '0.660000';
+			},
+		],
+		[
+			'order total also differs',
+			({ acked }) => {
+				acked.total = '10.660000';
+			},
+		],
+		[
+			'no till aggregate',
+			({ pushed }) => {
+				delete (pushed as Record<string, unknown>).tax_lines;
+			},
+		],
+		[
+			'nonzero line taxes outside the label map',
+			({ pushed, acked }) => {
+				for (const payload of [pushed, acked]) payload.line_items[0]!.taxes[0]!.total = '0.010000';
+			},
+		],
+		[
+			'duplicate POS labels that collapse onto the server label map',
+			({ pushed, acked }) => {
+				pushed.tax_lines[0]!.label = 'State Tax';
+				pushed.tax_lines[0]!.rate_percent = 6;
+				pushed.line_items[0]!.taxes[2]!.total = '0.000000';
+				acked.tax_lines[1]!.tax_total = '0.000000';
+				acked.line_items[0]!.taxes[1]!.total = '0.000000';
+			},
+		],
+		[
+			'a nonzero POS line tax outside the label map',
+			({ pushed }) => {
+				pushed.line_items[0]!.taxes[0]!.total = '0.010000';
+			},
+		],
+		[
+			'a nonzero server line tax outside the label map',
+			({ acked }) => {
+				acked.line_items[0]!.taxes[2]!.total = '0.010000';
+			},
+		],
+	])('does not silence %s', (_name, change) => {
+		const input = fixture();
+		change(input);
+		const result = compareOrderMoney(input);
+		expect(result?.fields.length).toBeGreaterThan(0);
+		expect(result).not.toHaveProperty('renameOnly');
+	});
+});
+
 describe('preserveEquivalentLocalPrecision (the adoption half of the mirror contract)', () => {
 	it('keeps the sub-cent local value when a pre-#1466 ack says the same number at 2dp', () => {
 		const merged = preserveEquivalentLocalPrecision(pos, server2dp);
