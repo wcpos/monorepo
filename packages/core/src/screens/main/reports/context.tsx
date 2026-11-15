@@ -30,7 +30,12 @@ import { currencyOf, salesByCurrency, salesFigures } from './report/sales-figure
 import { inRoom, useReportsDirectories, useReportsFilterScope } from './scope';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
-import { useDrawnHandle, useQuerySnapshot, useQueryState } from '../../../query';
+import {
+	useDrawnHandle,
+	useQueryHandleFields,
+	useQuerySnapshot,
+	useQueryState,
+} from '../../../query';
 
 import type { RowSelectionState } from '@tanstack/react-table';
 import type { QueryHandle } from '../../../query';
@@ -439,6 +444,17 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 			{children}
 		</ReportsDataContext.Provider>
 	);
+}
+
+/** The comparison period is whole: its demand settled and its ranged walk ended (F2). */
+export function useComparisonSettled(): boolean {
+	// The live handle, not the drawn one: a figure waits for the comparison it is printed against.
+	const { comparisonHandle } = useReportsHandles();
+	const { ready, pending, laneProgress } = useQueryHandleFields(comparisonHandle, [
+		'pending',
+		'laneProgress',
+	]);
+	return ready && !pending && laneProgress === null;
 }
 
 /** A secondary read: parent lookup is local-only and never expands the sales demand. */

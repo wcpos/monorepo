@@ -546,6 +546,34 @@ it('keeps the primary chart while comparison is pending then supplies the compar
 	});
 	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
 });
+// F2: a local read over a comparison still downloading is a fraction of the period; its
+// differences are loading, never a figure against that fraction.
+const DIFFERENCES = ['delta', 'orders-delta', 'average-delta', 'items-delta'];
+it('F2: a comparison still downloading shows loading, never the half-downloaded figure', () => {
+	const comparison = handleOf([previous[0]]);
+	comparison.set({ pending: true });
+	// A week is never live: the whole comparison period counts (£30 vs £100 once whole).
+	setup({ comparison, week: true });
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
+	// Absent while pending: the half-downloaded £30 vs £20 ('+50.0%') is never printed.
+	expect(screen.queryByTestId('hero-delta')).toBeNull();
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+	act(() => comparison.set({ pending: false, result: { hits: hitsOf(previous) } }));
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
+});
+it('F2: a ranged comparison with a continuation left shows loading until it ends', () => {
+	const comparison = handleOf([previous[0]]);
+	comparison.set({ pending: false, laneProgress: { downloaded: 1, total: 2 } });
+	// A week is never live: the whole comparison period counts (£30 vs £100 once whole).
+	setup({ comparison, week: true });
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
+	expect(screen.queryByTestId('hero-delta')).toBeNull();
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+	act(() => comparison.set({ laneProgress: null, result: { hits: hitsOf(previous) } }));
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
+});
 
 it('keeps the primary chart and figures when the comparison fails', async () => {
 	const comparison = unanswered();
