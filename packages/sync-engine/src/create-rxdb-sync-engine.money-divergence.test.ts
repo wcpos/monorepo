@@ -381,6 +381,48 @@ describe('(d) no re-push oscillation', () => {
 });
 
 describe('divergence detection at the ack boundary', () => {
+	it('emits one rename-only event for #52214 and drains the write', async () => {
+		const pushed = posPayload();
+		const acked = serverPayload();
+		for (const [payload, server] of [
+			[pushed, false],
+			[acked, true],
+		] as const) {
+			const taxes = [9, 10, 11, 12].map((id) => ({
+				id,
+				total: id === 12 ? '0.600000' : id === (server ? 10 : 11) ? '0.050000' : '0.000000',
+			}));
+			Object.assign(lineOf(payload), { total: '10.000000', total_tax: '0.650000', taxes });
+			payload.tax_lines = taxes
+				.filter(({ total }) => server || total !== '0.000000')
+				.map(({ id, total }) => ({
+					rate_id: id,
+					label:
+						id === 12
+							? 'State Tax'
+							: id === (server ? 10 : 11)
+								? 'County Tax'
+								: id === 9
+									? 'City Tax'
+									: 'Special Tax',
+					rate_percent: id === 12 ? 6 : id === (server ? 10 : 11) ? 0.5 : 0,
+					compound: false,
+					tax_total: total,
+					shipping_tax_total: '0.000000',
+				}));
+		}
+		const run = await saveOracleOrder({ payload: pushed, serialize: () => acked });
+		try {
+			const events = divergenceEvents(run.events);
+			expect(events).toHaveLength(1);
+			expect(events[0]).toMatchObject({ recordId: ORDER_UUID, renameOnly: true });
+			expect(events[0]!.fields.length).toBeGreaterThan(0);
+			expect(await pendingMutationCount(run.engine)).toBe(0);
+		} finally {
+			await run.dispose();
+		}
+	});
+
 	it('is SILENT for the live six-decimal ack — an alert that fires on every sale is never read', async () => {
 		const run = await saveOracleOrder({ serialize: toSixDecimals });
 		try {

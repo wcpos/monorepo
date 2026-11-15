@@ -180,6 +180,8 @@ export type MoneyDivergenceField = {
 export type OrderMoneyDivergence = {
 	mode: MoneyPrecisionMode;
 	fields: MoneyDivergenceField[];
+	/** Every divergent field is per-rate and proven to be the same money under renamed ids; ownership consumers must ignore this. */
+	renameOnly?: true;
 };
 
 type Line = Record<string, unknown>;
@@ -563,6 +565,116 @@ function walkMoneySlots(
 	}
 }
 
+/** Missing, empty, or decimal money with no nonzero digit is zero. */
+function isZeroMoney(value: unknown): boolean {
+	if (value === undefined || value === null || (typeof value === 'string' && value.trim() === ''))
+		return true;
+	const money = moneyString(value);
+	return money !== null && DECIMAL_LITERAL.test(money) && !/[1-9]/.test(money);
+}
+
+/** Compare amounts with the existing tie rules, requiring omitted values to be zero. */
+function sameAmount(pos: unknown, server: unknown, mode: MoneyPrecisionMode): boolean {
+	if (moneyString(pos) === null || moneyString(server) === null)
+		return isZeroMoney(pos) && isZeroMoney(server);
+	return compareSlot('tax_lines[rename]', pos, server, mode) === null;
+}
+
+/** Accept only integer numbers or non-empty strings that represent integers. */
+function intId(raw: unknown): number | null {
+	const id =
+		typeof raw === 'number'
+			? raw
+			: typeof raw === 'string' && raw.trim() !== ''
+				? Number(raw)
+				: NaN;
+	return Number.isInteger(id) ? id : null;
+}
+
+/** Index records only when every key is valid and unique. */
+function uniqueIndex<K>(entries: unknown[], key: (entry: Line) => K | null): Map<K, Line> | null {
+	const index = new Map<K, Line>();
+	for (const entry of entries) {
+		if (!isRecord(entry)) return null;
+		const id = key(entry);
+		if (id === null || index.has(id)) return null;
+		index.set(id, entry);
+	}
+	return index;
+}
+
+/** WooCommerce Tax rewrites rate rows by position; prove a pure rename that ownership ignores. */
+function isRateIdRenameOnly(
+	pushed: Record<string, unknown>,
+	acked: Record<string, unknown>,
+	fields: MoneyDivergenceField[],
+	mode: MoneyPrecisionMode
+): boolean {
+	if (!fields.every(({ field }) => field.startsWith('tax_lines[') || field.includes('.taxes[')))
+		return false;
+	if (!Array.isArray(pushed.tax_lines) || !Array.isArray(acked.tax_lines)) return false;
+	const [posLabels, serverLabels] = [pushed.tax_lines, acked.tax_lines].map((entries) =>
+		uniqueIndex(
+			entries.filter(
+				(entry) => !isRecord(entry) || !TAX_LINE_KEYS.every((key) => isZeroMoney(entry[key]))
+			),
+			(entry) => (typeof entry.label === 'string' && entry.label.trim() !== '' ? entry.label : null)
+		)
+	);
+	if (!posLabels || !serverLabels || posLabels.size !== serverLabels.size) return false;
+	const sigma = new Map<number, number>();
+	for (const [label, pos] of posLabels) {
+		const server = serverLabels.get(label);
+		if (!server) return false;
+		const posId = intId(pos.rate_id),
+			serverId = intId(server.rate_id);
+		if (posId === null || serverId === null || pos.compound !== server.compound) return false;
+		const posRate = moneyString(pos.rate_percent),
+			serverRate = moneyString(server.rate_percent);
+		const posWidth = posRate === null ? null : decimalsOf(posRate),
+			serverWidth = serverRate === null ? null : decimalsOf(serverRate);
+		if (posRate === null || serverRate === null || posWidth === null || serverWidth === null)
+			return false;
+		const width = Math.max(posWidth, serverWidth),
+			rate = roundDecimalString(posRate, width);
+		if (rate === null || rate !== roundDecimalString(serverRate, width)) return false;
+		if (!TAX_LINE_KEYS.every((key) => sameAmount(pos[key], server[key], mode))) return false;
+		sigma.set(posId, serverId);
+	}
+	const range = new Set(sigma.values());
+	if (sigma.size !== posLabels.size || range.size !== sigma.size) return false;
+	for (const arrayName of LINE_ARRAYS) {
+		const posLines = pushed[arrayName],
+			serverLines = acked[arrayName];
+		if (!Array.isArray(posLines) || !Array.isArray(serverLines)) continue;
+		for (const pair of pairLinesByUuid(posLines, serverLines)) {
+			const posTaxes = uniqueIndex(
+				Array.isArray(pair.local.taxes) ? pair.local.taxes : [],
+				(entry) => intId(entry.id)
+			);
+			const serverTaxes = uniqueIndex(
+				Array.isArray(pair.server.taxes) ? pair.server.taxes : [],
+				(entry) => intId(entry.id)
+			);
+			if (!posTaxes || !serverTaxes) return false;
+			for (const [posId, serverId] of sigma) {
+				if (
+					!LINE_TAX_KEYS.every((key) =>
+						sameAmount(posTaxes.get(posId)?.[key], serverTaxes.get(serverId)?.[key], mode)
+					)
+				)
+					return false;
+			}
+			const outsideIsZero = (taxes: Map<number, Line>, ids: Map<number, number> | Set<number>) =>
+				[...taxes].every(
+					([id, tax]) => ids.has(id) || LINE_TAX_KEYS.every((key) => isZeroMoney(tax[key]))
+				);
+			if (!outsideIsZero(posTaxes, sigma) || !outsideIsZero(serverTaxes, range)) return false;
+		}
+	}
+	return true;
+}
+
 /**
  * Detect money the server did not keep.
  *
@@ -584,7 +696,10 @@ export function compareOrderMoney(input: {
 		const row = compareSlot(field, posValue, serverValue, mode);
 		if (row) fields.push(row);
 	});
-	return fields.length === 0 ? null : { mode, fields };
+	if (fields.length === 0) return null;
+	return isRateIdRenameOnly(input.pushed, input.acked, fields, mode)
+		? { mode, fields, renameOnly: true }
+		: { mode, fields };
 }
 
 /**

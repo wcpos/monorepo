@@ -12,6 +12,9 @@ import { useQueryRuntime } from '@wcpos/query';
  * something the POS does not model. All three are the same event here: the
  * server's figures stand, and the cashier is told before goods leave the
  * counter.
+ * Rename-only comparisons still give the server ownership but add no notice or count.
+ * Classification is per comparison, never sticky: a later real divergence shows the notice.
+ * A rename-only comparison leaves any earlier real notice and its detail held.
  *
  * Why a retained, per-order store rather than a toast at the emit site:
  *
@@ -113,6 +116,7 @@ type DivergenceEvent = {
 	recordId?: string;
 	mutationId?: string;
 	fields?: OrderMoneyDivergenceField[];
+	renameOnly?: boolean;
 };
 
 /**
@@ -248,20 +252,26 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 			// reviewing. The COUNT only moves for an order that had not diverged
 			// before — escalation measures how many sales the store disagreed on,
 			// not how many times one sale was saved.
+			const renameOnly = message.renameOnly === true;
 			setState((current) => {
 				const sameEngine = current.engine === runtime.engine;
 				const alreadySeen = sameEngine && current.serverOwnedOrderIds.has(orderId);
 				return {
 					engine: runtime.engine,
-					byOrderId: withinCap(
-						sameEngine
-							? { ...withoutOrder(current.byOrderId, orderId), [orderId]: held }
-							: { [orderId]: held }
-					),
+					byOrderId: renameOnly
+						? sameEngine
+							? current.byOrderId
+							: {}
+						: withinCap(
+								sameEngine
+									? { ...withoutOrder(current.byOrderId, orderId), [orderId]: held }
+									: { [orderId]: held }
+							),
 					serverOwnedOrderIds: new Set(
 						sameEngine ? [...current.serverOwnedOrderIds, orderId] : [orderId]
 					),
-					divergedOrderCount: (sameEngine ? current.divergedOrderCount : 0) + (alreadySeen ? 0 : 1),
+					divergedOrderCount:
+						(sameEngine ? current.divergedOrderCount : 0) + (alreadySeen || renameOnly ? 0 : 1),
 				};
 			});
 		});
