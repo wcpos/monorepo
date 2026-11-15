@@ -326,6 +326,46 @@ beforeEach(() => {
 	mockPrint.mockReset().mockResolvedValue(true);
 });
 afterEach(() => jest.useRealTimers());
+it('two currencies show one total each, never their sum', () => {
+	const { container } = setup({
+		sales: handleOf([
+			{ ...current[0], currency: 'GBP', total: '30.00' },
+			{ ...current[1], currency: 'EUR', total: '100.00' },
+		]),
+	});
+	expect(screen.getByTestId('hero-total').textContent).toBe('€100.00');
+	expect(screen.getByTestId('hero-total-GBP').textContent).toBe('£30.00');
+	expect(container.textContent).not.toContain('£130.00');
+	expect(container.textContent).not.toContain('€130.00');
+	expect(screen.getByTestId('hero-orders').textContent).toBe('1');
+	expect(screen.getByTestId('hero-orders-GBP').textContent).toBe('1');
+	expect(screen.getByTestId('hero-average-GBP').textContent).toBe('£30.00');
+});
+it('the hero compares the largest currency with the same currency', () => {
+	setup({
+		sales: handleOf([
+			{ ...current[0], currency: 'GBP', total: '30.00' },
+			{ ...current[1], currency: 'EUR', total: '100.00' },
+		]),
+		comparison: handleOf([
+			{ ...previous[0], currency: 'GBP', total: '15.00' },
+			{ ...previous[0], uuid: 'eur-before', currency: 'EUR', total: '50.00' },
+		] as ReportOrder[]),
+	});
+	expect(screen.getByTestId('hero-delta').textContent).toBe('+100.0% vs yesterday');
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('1');
+});
+it('one current currency compares only with that currency', () => {
+	setup({
+		sales: handleOf([{ ...current[0], currency: 'GBP', total: '30.00' }]),
+		comparison: handleOf([
+			{ ...previous[0], currency: 'GBP', total: '15.00' },
+			{ ...previous[0], uuid: 'eur-before', currency: 'EUR', total: '1000.00' },
+		] as ReportOrder[]),
+	});
+	expect(screen.getByTestId('hero-delta').textContent).toBe('+100.0% vs yesterday');
+	expect(screen.queryByTestId('hero-total-EUR')).toBeNull();
+});
 // Removing calculateTotals or the live-day cutoff changes all the displayed comparisons.
 it('renders the figure, delta and three companions using the store currency and finite quantities', () => {
 	setup();

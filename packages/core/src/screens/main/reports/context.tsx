@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { addDays } from 'date-fns/addDays';
 import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
@@ -15,6 +16,8 @@ import { startWith } from 'rxjs';
 import { saleMomentOf } from '@wcpos/query/query-state';
 import type { EngineRecord } from '@wcpos/query';
 import { observeLocalRecordsById, useDocField, useQueryRuntime } from '@wcpos/query';
+import { Text } from '@wcpos/components/text';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import {
 	calendarDate,
@@ -23,8 +26,9 @@ import {
 	useViewedStore,
 	zoneOptions,
 } from '../../../hooks/use-store-day';
-import { salesFigures } from './report/sales-figures';
-import { inRoom, useReportsFilterScope } from './scope';
+import { currencyOf, salesByCurrency, salesFigures } from './report/sales-figures';
+import { inRoom, useReportsDirectories, useReportsFilterScope } from './scope';
+import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useDrawnHandle, useQuerySnapshot, useQueryState } from '../../../query';
 
@@ -43,7 +47,11 @@ export type ReportOrder = OrderPayload & {
 	uuid: EngineRecord<'orders'>['uuid'];
 };
 
-export type RefundRow = EngineRecord<'refunds'>['payload'] & { parentNumber?: string };
+export type RefundRow = EngineRecord<'refunds'>['payload'] & {
+	parentNumber?: string;
+	/** The parent order's currency, else its store's (a refund carries none). */
+	currency?: string;
+};
 
 /** The query handles the screen owns. Changes only when the provider is handed new ones. */
 export interface ReportsHandles {
@@ -200,6 +208,79 @@ export function useIncludedStatus() {
 const ReportsHandlesContext = React.createContext<ReportsHandles | undefined>(undefined);
 const ReportsSelectionContext = React.createContext<ReportsSelection | undefined>(undefined);
 const ReportsDataContext = React.createContext<ReportsData | undefined>(undefined);
+const ReportsCurrencyContext = React.createContext<
+	{ code: string; fallback?: string; mixed: boolean } | undefined
+>(undefined);
+const inCurrency = (
+	scope: React.ContextType<typeof ReportsCurrencyContext>,
+	record: { currency?: string }
+) => !scope || currencyOf(record, scope.fallback) === scope.code;
+
+/** The currency a guarded reports subtree reads and formats in; `mixed` when the guard left others out. */
+export const useReportsCurrency = () => React.useContext(ReportsCurrencyContext);
+/** Formats a subtree's money in `code` (the hero's other-currency lines, tests). */
+export function ReportsCurrency({
+	code,
+	fallback,
+	mixed = false,
+	children,
+}: React.PropsWithChildren<{ code: string; fallback?: string; mixed?: boolean }>) {
+	const value = React.useMemo(() => ({ code, fallback, mixed }), [code, fallback, mixed]);
+	return (
+		<ReportsCurrencyContext.Provider value={value}>{children}</ReportsCurrencyContext.Provider>
+	);
+}
+/**
+ * F4a: until the cards, panels and prints show every currency (F4b, F4c), a guarded subtree
+ * reads only the largest currency of the selected orders, formatted in it (ledger 48).
+ */
+export function ReportsCurrencyGuard({
+	note,
+	children,
+}: React.PropsWithChildren<{ note?: boolean }>) {
+	const data = useReportsData();
+	const { storeId } = useReportsPeriod();
+	const store = useViewedStore(storeId);
+	const fallback = useDocField(store, (value) => value.currency);
+	const decimals = useDocField(store, (value) => value.price_num_decimals);
+	const t = useT();
+	const { groups, code, value } = React.useMemo(() => {
+		const groups = salesByCurrency({ orders: data.selectedOrders, decimals, fallback });
+		const code = groups[0]?.currency || fallback || '';
+		const value =
+			groups.length < 2
+				? data
+				: {
+						...data,
+						allOrders: data.allOrders.filter((order) => currencyOf(order, fallback) === code),
+						selectedOrders: data.selectedOrders.filter(
+							(order) => currencyOf(order, fallback) === code
+						),
+						figures: groups[0].figures,
+					};
+		return { groups, code, value };
+	}, [data, fallback, decimals]);
+	if (!code) return children;
+	if (groups.length < 2)
+		return (
+			<ReportsCurrency code={code} fallback={fallback}>
+				{children}
+			</ReportsCurrency>
+		);
+	return (
+		<ReportsCurrency code={code} fallback={fallback} mixed>
+			<ReportsDataContext.Provider value={value}>
+				{note && (
+					<View testID="reports-currency-note" className="flex-row items-center gap-2">
+						<Text variant="key">{t('common.currency')}</Text>
+						<Text className="text-sm font-semibold">{code}</Text>
+					</View>
+				)}
+				{children}
+			</ReportsDataContext.Provider>
+		</ReportsCurrency>
+	);
+}
 
 /** Just the handles — stable across order emissions and selection changes. */
 export const useReportsHandles = (): ReportsHandles => {
@@ -313,6 +394,7 @@ export function ReportsProvider({
 /** Mount only inside a differences-only Suspense boundary: the current figure never suspends. */
 export function ReportsComparison({ children }: React.PropsWithChildren) {
 	const data = useReportsData();
+	const currency = useReportsCurrency();
 	const { comparisonHandle } = useReportsHandles();
 	const { statusMode } = useReportsScope();
 	const { timezone, period, storeId } = useReportsPeriod();
@@ -323,7 +405,7 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 			const order = record as EngineRecord<'orders'>;
 			return { ...order.payload, uuid: order.uuid };
 		})
-		.filter((order) => includedStatus(order, statusMode));
+		.filter((order) => includedStatus(order, statusMode) && inCurrency(currency, order));
 	const clock = (date: Date) => format(inZone(timezone, date), 'HH:mm:ss.SSS');
 	// A live day's cutoff moves with the clock, once a minute while a day is shown; the day
 	// stops being live at the store's midnight, when the whole comparison day counts.
@@ -354,6 +436,8 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 /** A secondary read: parent lookup is local-only and never expands the sales demand. */
 export function ReportsRefunds({ children }: React.PropsWithChildren) {
 	const data = useReportsData();
+	const currency = useReportsCurrency();
+	const { stores } = useReportsDirectories();
 	const { refundsHandle } = useReportsHandles();
 	const { unselectedRowIds } = useReportsSelection();
 	const scope = useReportsFilterScope();
@@ -389,8 +473,19 @@ export function ReportsRefunds({ children }: React.PropsWithChildren) {
 		refunds.flatMap((refund) => {
 			const parent = parents.get(refund.parent_id);
 			if (parent && unselectedRowIds[parent.uuid]) return [];
-			return held.has(refund.parent_id) || inRoom(scope, refund, parent)
-				? [{ ...refund, parentNumber: parent?.number }]
+			const row = {
+				...refund,
+				parentNumber: parent?.number,
+				currency:
+					parent?.currency ||
+					stores?.find(
+						(store) =>
+							String(store.id) === String(wooMetaCarrier.readIdentity(refund.meta_data).storeId)
+					)?.currency,
+			};
+			return (held.has(refund.parent_id) || inRoom(scope, refund, parent)) &&
+				inCurrency(currency, row)
+				? [row]
 				: [];
 		});
 	// The figures that read no refunds keep their answers; the refund figures read these.

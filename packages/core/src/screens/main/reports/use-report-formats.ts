@@ -3,6 +3,7 @@ import { useDocField } from '@wcpos/query';
 import { useViewedStore } from '../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../hooks/use-currency-format';
 import { useNumberFormat } from '../hooks/use-number-format';
+import { useReportsCurrency } from './context';
 
 /**
  * The viewed store's formatters, shared by the hero and every card so they never disagree.
@@ -12,13 +13,17 @@ import { useNumberFormat } from '../hooks/use-number-format';
  * currency formatter an empty prefix and suffix and its symbol would go missing.
  */
 export function useReportFormats(storeId?: number) {
+	const scope = useReportsCurrency();
 	const store = useDocField(useViewedStore(storeId), (value) => value);
 	const separators = {
 		decimalSeparator: store?.price_decimal_sep,
 		thousandSeparator: store?.price_thousand_sep,
 		thousandsGroupStyle: store?.thousands_group_style,
 	};
-	const currency = { currency: store?.currency, currencyPosition: store?.currency_pos };
+	const currency = {
+		currency: scope?.code ?? store?.currency,
+		currencyPosition: store?.currency_pos,
+	};
 	const { format: money } = useCurrencyFormat({
 		...separators,
 		...currency,
