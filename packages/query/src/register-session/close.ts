@@ -85,6 +85,8 @@ async function closeOnce(
 	count: RegisterCount
 ): Promise<CloseResult> {
 	const { storeDB, userDB, siteUuid, credentials } = ctx;
+	// The scope whose orders this close reads; a store switch mid-close must not write its closure.
+	const scope = ctx.engine.active()?.scopeId ?? null;
 	const current = await registerCollections(storeDB).register_sessions.findOne(sessionId).exec();
 	if (!current) throw new RegisterSessionRequiredError();
 	// A retry of a refused close (#3304) closes again, so a corrected count reaches the status
@@ -110,6 +112,9 @@ async function closeOnce(
 		(id === credentials.id ? credentials : cashiers.find((row) => row.id === id))?.display_name ??
 		'';
 	const accounting = await settleSessionAccounting(ctx.engine, closed);
+	// The status transition stands; the bridge recovers the unwritten close on this store's next cycle.
+	if ((ctx.engine.active()?.scopeId ?? null) !== scope)
+		throw new Error('The store changed while the close was settling; the closure was not written');
 	// Read after the accounting's wait, so a movement a refresh stored during it is in the closure.
 	const movements = await registerCollections(storeDB)
 		.cash_movements.find({ selector: { session_id: sessionId } })

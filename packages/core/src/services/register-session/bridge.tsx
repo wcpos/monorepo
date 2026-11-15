@@ -58,6 +58,11 @@ export function RegisterSessionBridge() {
 	React.useEffect(() => {
 		if (!storeDB) return;
 		let ready = false;
+		let disposed = false;
+		// The engine scope this store's effect belongs to. A same-site switch moves the engine's scope
+		// before this effect is cleaned up; a cross-site one disposes it (`active()` is null).
+		let scope = runtime.engine.active()?.scopeId ?? null;
+		const gone = () => disposed || !scope || runtime.engine.active()?.scopeId !== scope;
 		// A streak belongs to one register on one store. AppStack stays mounted across a store
 		// switch, so without this the new scope inherits the old one's count and escalates to
 		// warn on its very first hiccup.
@@ -78,16 +83,22 @@ export function RegisterSessionBridge() {
 			});
 		};
 		// The reused close (`countRecorded`): the closure from the recorded count, no second close.
-		const finishCloses = async () => {
+		// After a store switch it writes nothing (#3531): the store's own next cycle retries it.
+		const finishCloses = async (snapshot: typeof closeRef.current) => {
+			if (gone()) return false;
 			let finished = false;
-			for (const session of registerId ? await findUnwrittenCloses(storeDB, registerId) : []) {
+			const sessions = registerId ? await findUnwrittenCloses(storeDB, registerId) : [];
+			if (gone()) return false;
+			for (const session of sessions) {
+				// Skipped, not attempted: `recovering` is left as it is.
+				if (gone()) break;
 				// A close still running here is no interrupted close; skipping it is not an attempt.
 				if (isCloseInFlight(session.id)) continue;
 				const { attempt = 0, dueAt = 0 } = recovering.get(session.id) ?? {};
 				if (Date.now() < dueAt) continue;
 				// In flight: due again only once this attempt has failed.
 				recovering.set(session.id, { attempt: attempt + 1, dueAt: Infinity });
-				const { registerName: name, ...close } = closeRef.current;
+				const { registerName: name, ...close } = snapshot;
 				try {
 					await closeRegister(
 						{
@@ -129,6 +140,9 @@ export function RegisterSessionBridge() {
 				return;
 			}
 			inFlight.current = true;
+			scope ??= runtime.engine.active()?.scopeId ?? null;
+			// This store's labels, read before any await: a switch updates the ref under the chain.
+			const snapshot = closeRef.current;
 			void runRegisterSessionCycle({
 				storeDB,
 				userDB,
@@ -144,10 +158,11 @@ export function RegisterSessionBridge() {
 					consecutiveFailures.current = 0;
 				}, report)
 				// Then the outbox sends counting, closed and the closure, in order, on the rerun.
-				.then(finishCloses)
+				.then(() => finishCloses(snapshot))
 				.then(
 					(finished) => {
-						if (finished) rerun.current = cycle;
+						// A disposed chain never queues itself over the next store's cycle.
+						if (finished && !disposed) rerun.current = cycle;
 					},
 					(error: unknown) => report(Object.assign(Object(error), { stage: 'close-recovery' }))
 				)
@@ -155,7 +170,7 @@ export function RegisterSessionBridge() {
 					inFlight.current = false;
 					const next = rerun.current;
 					rerun.current = null;
-					next?.();
+					if (!(disposed && next === cycle)) next?.();
 				});
 		};
 		const refreshRequests = sessionRefreshRequests
@@ -175,6 +190,7 @@ export function RegisterSessionBridge() {
 			void cycle();
 		}, 60_000);
 		return () => {
+			disposed = true;
 			if (rerun.current === cycle) rerun.current = null;
 			clearInterval(tick);
 			refreshRequests.unsubscribe();

@@ -222,3 +222,30 @@ it('holds the field row (closed, count recorded, no closure): no POST, the row u
 	const after = (await storeDB.register_sessions.findOne('s1').exec())!.toJSON(true);
 	expect(after).toEqual(before);
 });
+
+it('a close whose engine scope changes during the accounting wait writes no closure', async () => {
+	await insert();
+	await engineDB.collections.refunds.insert(refund);
+	const require = engine.require;
+	let arrive!: () => void;
+	engine.require = (requirement: EngineRequirement) => {
+		const handle = require(requirement);
+		if (requirement.id !== 'register-session:refund-parents') return handle;
+		return { ...handle, ready: new Promise((resolve) => (arrive = () => resolve(handle.ready))) };
+	};
+	const closing = closeRegister(ctx, 's1', { counted: { cash: '100' } });
+	await new Promise((resolve) => setTimeout(resolve, 50));
+
+	// A same-site store switch moves the engine's scope while the close waits.
+	const scope = engine.active()!;
+	engine.active = () => ({ ...scope, scopeId: 'other-scope' });
+	await engineDB.collections.orders.insert(
+		engineOrder({ uuid: 'order-1', id: 1, date_modified_gmt: '2026-10-01T10:00:00', meta_data: [] })
+	);
+	arrive();
+
+	await expect(closing).rejects.toThrow(
+		'The store changed while the close was settling; the closure was not written'
+	);
+	expect(await storeDB.closures.findOne('s1').exec()).toBeNull();
+});

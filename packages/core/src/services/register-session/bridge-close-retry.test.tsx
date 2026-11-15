@@ -24,7 +24,7 @@ jest.mock('@wcpos/query/register-session', () => {
 	};
 });
 jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({ engine: {} }),
+	useQueryRuntime: () => ({ engine: { active: () => ({ scopeId: 'test-scope' }) } }),
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 jest.mock('../../contexts/app-state', () => {
