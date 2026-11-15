@@ -30,6 +30,7 @@ import { ParkedTab } from './parked-tab';
 
 let liveTab: ReturnType<typeof createLiveTab> | undefined;
 let retired = false;
+let lostReason: string | undefined;
 function getLiveTab() {
 	if (liveTab) return liveTab;
 	liveTab = createLiveTab({
@@ -65,13 +66,15 @@ function getLiveTab() {
 			}
 		},
 	});
-	const workerLost = () => {
+	const workerLost = (message: string) => {
+		lostReason ??= message;
 		terminateStorageWorker();
 		liveTab!.park('worker-lost');
 	};
 	onStorageWorkerLost(workerLost);
 	degradedStorage$.subscribe((events) => {
-		if (events.some((event) => event.kind === 'worker-lost')) workerLost();
+		const event = events.find((event) => event.kind === 'worker-lost');
+		if (event) workerLost(event.message);
 	});
 	if (__DEV__ || process.env.EXPO_PUBLIC_WCPOS_E2E === '1') {
 		(
@@ -104,5 +107,5 @@ export function LiveTabGate({ children }: React.PropsWithChildren) {
 	}, [state]);
 	if (state.kind === 'live') return retired ? null : children;
 	if (state.kind === 'acquiring') return null;
-	return <ParkedTab state={state} takeOver={liveTab!.takeOver} />;
+	return <ParkedTab state={state} takeOver={liveTab!.takeOver} detail={lostReason} />;
 }

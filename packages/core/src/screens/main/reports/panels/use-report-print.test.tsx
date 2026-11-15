@@ -38,6 +38,7 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
 jest.mock('../context', () => ({
+	useReportsCurrency: () => undefined,
 	useReportsPeriod: () => ({
 		dateRange: {
 			start: new Date('2026-07-15T00:00:00Z'),

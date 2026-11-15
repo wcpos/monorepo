@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/react';
 
 import { setOrders } from './test-utils';
 import { PaymentsCard } from './payments';
+import { ReportsCurrency } from '../context';
 
 import type { ReportOrder } from '../context';
 it('the Payments card lists tenders with order counts', () => {
@@ -16,4 +17,19 @@ it('the Payments card lists tenders with order counts', () => {
 	expect(screen.getByTestId('card-payments-figure').textContent).toBe('£30.00');
 	expect(screen.getByTestId('card-payments-donut-row-cash').textContent).toContain('2 orders');
 	expect(screen.getByTestId('card-payments-donut-row-cash-value').textContent).toBe('£30.00');
+});
+
+it('a guarded card formats in the guarded currency', () => {
+	setOrders([
+		{ currency: 'EUR', total: '20', payment_method: 'cash', payment_method_title: 'Cash' },
+		{ currency: 'EUR', total: '10', payment_method: 'cash', payment_method_title: 'Cash' },
+	] as ReportOrder[]);
+	const { container } = render(
+		<ReportsCurrency code="EUR">
+			<PaymentsCard />
+		</ReportsCurrency>
+	);
+	expect(screen.getByTestId('card-payments-figure').textContent).toBe('€30.00');
+	expect(screen.getByTestId('card-payments-donut-row-cash-value').textContent).toBe('€30.00');
+	expect(container.textContent).not.toContain('£');
 });

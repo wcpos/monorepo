@@ -7,7 +7,7 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
 
-import { useReportsScope } from './context';
+import { ReportsCurrencyGuard, useReportsScope } from './context';
 import { DetailPanel } from './panels/panel';
 import { Hero, SalesScope } from './hero';
 import { PeriodSection } from './cards';
@@ -43,7 +43,9 @@ export function Reports({
 			<View className="min-h-0 flex-1 flex-row">
 				{phonePanel ? (
 					<ErrorBoundary>
-						<DetailPanel key={detail} />
+						<ReportsCurrencyGuard>
+							<DetailPanel key={detail} />
+						</ReportsCurrencyGuard>
 					</ErrorBoundary>
 				) : (
 					// The page gutter around and between the strip, the hero and the cards.
@@ -54,13 +56,17 @@ export function Reports({
 						<SalesScope date={date} settled />
 						<ErrorBoundary>
 							<Hero />
-							<PeriodSection />
+							<ReportsCurrencyGuard note>
+								<PeriodSection />
+							</ReportsCurrencyGuard>
 						</ErrorBoundary>
 					</ScrollView>
 				)}
 				{detail && !phonePanel && (
 					<ErrorBoundary>
-						<DetailPanel key={detail} />
+						<ReportsCurrencyGuard>
+							<DetailPanel key={detail} />
+						</ReportsCurrencyGuard>
 					</ErrorBoundary>
 				)}
 			</View>

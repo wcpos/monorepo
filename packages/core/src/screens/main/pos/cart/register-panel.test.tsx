@@ -528,10 +528,16 @@ it('Other tenders folds with its total on the row', () => {
 
 it('hides every amount and the X report for blind cashiers', () => {
 	blind = true;
-	render(<RegisterPanel open onOpenChange={jest.fn()} />);
-	expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
-	expect(screen.getByTestId('register-panel').textContent).not.toMatch(/£|155|570/);
-	expect((screen.getByTestId('register-panel-print') as HTMLButtonElement).disabled).toBe(true);
+	jest.useFakeTimers();
+	jest.setSystemTime(new Date('2026-09-11T12:22:00Z'));
+	try {
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-drawer')).toBeNull();
+		expect(screen.getByTestId('register-panel').textContent).not.toMatch(/£|155|570/);
+		expect((screen.getByTestId('register-panel-print') as HTMLButtonElement).disabled).toBe(true);
+	} finally {
+		jest.useRealTimers();
+	}
 });
 // Revert: stringify the session-report failure instead of translating it in this caller too.
 it('translates a failed X-report dispatch in the register panel', async () => {
