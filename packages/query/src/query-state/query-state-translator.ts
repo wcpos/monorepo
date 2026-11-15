@@ -339,6 +339,8 @@ function compileReadFilter(
 		const ids = noStoreFilterIds(value);
 		if (ids !== undefined)
 			return {
+				// The created_via prefilter also admits real stores' POS orders, so the residual must run.
+				complete: false,
 				prefilter: { 'payload.created_via': 'woocommerce-pos' },
 				matches: (document) => {
 					const payload = readEnginePath(document, 'payload') as

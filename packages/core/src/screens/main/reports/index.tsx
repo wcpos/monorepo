@@ -105,7 +105,8 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	const { license } = useAppInfo();
-	const stores = useReportsDirectories().stores ?? [];
+	const directoryStores = useReportsDirectories().stores;
+	const stores = directoryStores ?? [];
 	const storeIds = stores.flatMap((row) => (row.id === undefined ? [] : [row.id]));
 	const noStoreEnabled = !!license?.isPro && stores.length > 1;
 	// The four handles are owned here (the effects retain them), above the refunds and
@@ -207,6 +208,14 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		[state, noStoreEnabled, storeIds, noStoreRange]
 	);
 	const noStoreHandle = useCollectionQueryHandle('orders', noStoreState, { storeScope: 'sales' });
+	const currentNoStoreFilter = noStoreFilter(storeIds);
+	// Stores added or removed while No store stays selected move the sales, comparison and
+	// refunds scope with the directory, as the notice's count already does.
+	React.useEffect(() => {
+		if (noStore && directoryStores !== undefined && state.filters.store !== currentNoStoreFilter) {
+			actions.setFilter('store', currentNoStoreFilter);
+		}
+	}, [noStore, directoryStores, state.filters.store, currentNoStoreFilter, actions]);
 	const date = (
 		<DateButton
 			scope={scope}
