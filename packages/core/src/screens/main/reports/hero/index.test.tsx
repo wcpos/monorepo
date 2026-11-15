@@ -670,6 +670,20 @@ it("F2 lap 3: a journal reset's lane demotion puts the comparison back to waitin
 	expect(screen.queryByTestId('hero-delta')).toBeNull();
 	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
 });
+// The residual: the demand settled long before the reset, so nothing raises `pending` again
+// (createDemand flips it only on a declaration), and an absent lane reads `complete: false,
+// progress: null` (coverage-verdicts.ts, pinned by the engine test 'an F8 journal reset demotes a
+// complete ranged orders lane'). The refilling range must still wait.
+it('F2 lap 3: a journal reset after the demand settled waits for the refill', () => {
+	const comparison = handleOf(previous);
+	comparison.set({ laneComplete: true });
+	setup({ comparison, week: true });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	act(() => comparison.set({ laneComplete: false, result: { hits: hitsOf([previous[0]]) } }));
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
+	expect(screen.queryByTestId('hero-delta')).toBeNull();
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+});
 // Review 3602 (R1): a changed period swaps the comparison handle; the drawn handle still holds
 // the old period's rows, so the differences must follow the live handle, not the drawn one.
 it('R1: a swapped comparison handle shows loading until the new period settles', () => {
