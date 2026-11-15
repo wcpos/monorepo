@@ -1,3 +1,6 @@
+import round from 'lodash/round';
+import sumBy from 'lodash/sumBy';
+
 import {
 	cashiers,
 	categories,
@@ -13,9 +16,10 @@ import {
 	topProducts,
 } from './aggregate';
 import { createTestT } from '../../../../../jest/translate';
+import { brands } from '../margin';
 import { calculateTotals } from '../report/utils';
 
-import type { ReportOrder } from '../context';
+import type { RefundRow, ReportOrder } from '../context';
 
 const orders = (rows: Partial<ReportOrder>[]) => rows as ReportOrder[];
 const totals = (rows: ReportOrder[]) => calculateTotals({ orders: rows });
@@ -409,6 +413,35 @@ describe('registers', () => {
 	});
 });
 describe('categories', () => {
+	it('the total is the rows net of refunds, rounded once, and the shares sum to one', () => {
+		const sales = orders([
+			{
+				total: '0.01',
+				line_items: [
+					{ product_id: 1, total: '0.005', quantity: 1 },
+					{ product_id: 2, total: '0.005', quantity: 1 },
+				],
+			},
+		]);
+		const products = [
+			{ id: 1, categories: [{ id: 2 }], brands: [{ id: 4 }] },
+			{ id: 2, categories: [{ id: 3 }], brands: [{ id: 4 }] },
+		];
+		const refunds = [
+			{ line_items: [{ product_id: 1, total: '-0.006', quantity: -1 }] },
+		] as RefundRow[];
+		const result = categories(sales, products, totals(sales), 2, undefined, undefined, refunds);
+		expect(result.total).toBe(round(0.005 + 0.005 - 0.006, 2));
+		expect(sumBy(result.parts, 'amount')).not.toBe(result.total);
+		expect(sumBy(result.parts, 'share')).toBeCloseTo(1);
+		expect(brands(sales, products, totals(sales), 2, refunds).total).toBe(result.total);
+	});
+	it('no sales and no refunds have a zero total and zero shares', () => {
+		const result = categories([], [], totals([]));
+		expect(result.total).toBe(0);
+		expect(result.parts).toEqual([]);
+		expect(sumBy(result.parts, 'share')).toBe(0);
+	});
 	const rows = orders([
 		{ total: '12', line_items: [{ product_id: 1, total: '10', total_tax: '2', quantity: 1.5 }] },
 	]);

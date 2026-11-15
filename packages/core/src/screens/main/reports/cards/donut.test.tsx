@@ -27,6 +27,29 @@ it('draws one arc per part in order', () => {
 	expect(Number(arcs[0].getAttribute('stroke-dashoffset'))).toBe(0);
 	expect(Number(arcs[1].getAttribute('stroke-dashoffset'))).toBeCloseTo(-2 * Math.PI * 46 * 0.6);
 });
+it('a given total is the denominator of the arcs and Other', () => {
+	const rows = parts.map((part) => ({ ...part, value: 25 }));
+	const { container, rerender } = render(
+		<Donut testID="ring" parts={rows} total={50} centre={{ figure: '£50', label: '2 ways' }} />
+	);
+	const arcs = container.querySelectorAll('circle');
+	expect(Number(arcs[1].getAttribute('stroke-dashoffset'))).toBeCloseTo(-2 * Math.PI * 46 * 0.5);
+	expect(Number(arcs[0].getAttribute('stroke-dasharray')?.split(',')[0])).toBeCloseTo(
+		2 * Math.PI * 46 * 0.5 - 2
+	);
+	rerender(
+		<Donut
+			testID="ring"
+			parts={[
+				rows[0],
+				...Array.from({ length: 5 }, (_, i) => ({ ...rows[1], key: `tail-${i}`, value: 5 })),
+			]}
+			total={50}
+			centre={{ figure: '£50', label: '6 ways' }}
+		/>
+	);
+	expect(screen.getByTestId('ring-row-other').textContent).toContain('10.0%');
+});
 it('folds the sixth part onwards into Other', () => {
 	const { container } = draw(
 		Array.from({ length: 7 }, (_, i) => ({
