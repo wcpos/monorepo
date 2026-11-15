@@ -446,15 +446,16 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 	);
 }
 
-/** The comparison period is whole: its demand settled and its ranged walk ended (F2). */
+/** Whole means the range completed a walk once (its lane is complete), or this demand settled with no continuation left. */
 export function useComparisonSettled(): boolean {
 	// The live handle, not the drawn one: a figure waits for the comparison it is printed against.
 	const { comparisonHandle } = useReportsHandles();
-	const { ready, pending, laneProgress } = useQueryHandleFields(comparisonHandle, [
+	const { ready, pending, laneProgress, laneComplete } = useQueryHandleFields(comparisonHandle, [
 		'pending',
 		'laneProgress',
+		'laneComplete',
 	]);
-	return ready && !pending && laneProgress === null;
+	return ready && (laneComplete || (!pending && laneProgress === null));
 }
 
 /** A secondary read: parent lookup is local-only and never expands the sales demand. */

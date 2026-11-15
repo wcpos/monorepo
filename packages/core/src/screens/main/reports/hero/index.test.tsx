@@ -265,7 +265,7 @@ function Probe() {
 		</>
 	);
 }
-function setup({
+function tree({
 	comparison = handleOf(previous),
 	sales = handleOf(current),
 	refunds = handleOf([]),
@@ -275,7 +275,7 @@ function setup({
 	cashier = undefined as string | undefined,
 	store = '9',
 } = {}) {
-	return render(
+	return (
 		<QueryStateProvider
 			collection="orders"
 			initialPageSize={Number.MAX_SAFE_INTEGER}
@@ -319,6 +319,7 @@ function setup({
 		</QueryStateProvider>
 	);
 }
+const setup = (options?: Parameters<typeof tree>[0]) => render(tree(options));
 beforeEach(() => {
 	mockPhone = true;
 	mockStretch.clear();
@@ -573,6 +574,82 @@ it('F2: a ranged comparison with a continuation left shows loading until it ends
 	act(() => comparison.set({ laneProgress: null, result: { hits: hitsOf(previous) } }));
 	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
 	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
+});
+
+it('F2 lap 2: a warm revisit keeps the figures while the range re-walks', () => {
+	const comparison = handleOf(previous);
+	comparison.set({ laneComplete: true, pending: true, laneProgress: { downloaded: 1, total: 2 } });
+	setup({ comparison, week: true });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
+	for (const id of DIFFERENCES) expect(screen.queryByTestId(`hero-${id}-loading`)).toBeNull();
+});
+it('F2 lap 2: a warm revisit whose re-walk is cut off keeps the figures', () => {
+	const comparison = handleOf(previous);
+	comparison.set({ laneComplete: true, pending: true, laneProgress: { downloaded: 1, total: 2 } });
+	setup({ comparison, week: true });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
+	act(() => comparison.set({ pending: false }));
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
+});
+it('F2 lap 2: a first walk cut off still waits', () => {
+	const comparison = handleOf([previous[0]]);
+	comparison.set({
+		laneComplete: false,
+		pending: false,
+		laneProgress: { downloaded: 1, total: 2 },
+	});
+	setup({ comparison, week: true });
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
+	expect(screen.queryByTestId('hero-delta')).toBeNull();
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+});
+it('F2 lap 2: a scope or date change waits again', () => {
+	const comparison = handleOf(previous);
+	comparison.set({ laneComplete: true, pending: true, laneProgress: { downloaded: 1, total: 2 } });
+	const { rerender } = setup({ comparison, week: true });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	const next = fakeQueryHandle(
+		{
+			pending: true,
+			laneComplete: false,
+			laneProgress: { downloaded: 1, total: 2 },
+			result: { hits: hitsOf([previous[0]]) },
+		},
+		'next'
+	);
+	rerender(tree({ comparison: next, week: true }));
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
+	expect(screen.queryByTestId('hero-delta')).toBeNull();
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+	act(() => next.set({ laneComplete: true }));
+	for (const id of DIFFERENCES) expect(screen.queryByTestId(`hero-${id}-loading`)).toBeNull();
+	expect(screen.getByTestId('hero-delta').textContent).toBe('+50.0% vs the week before');
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('1');
+});
+// Review 3602 (R1): a changed period swaps the comparison handle; the drawn handle still holds
+// the old period's rows, so the differences must follow the live handle, not the drawn one.
+it('R1: a swapped comparison handle shows loading until the new period settles', () => {
+	const { rerender } = setup({ week: true });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+	const next = fakeQueryHandle({ ready: false }, 'next') as FakeHandle;
+	rerender(tree({ comparison: next, week: true }));
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+	act(() => next.set({ ready: true, pending: true, result: { hits: hitsOf([previous[0]]) } }));
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
+	act(() => next.set({ pending: false, result: { hits: hitsOf(previous) } }));
+	expect(screen.getByTestId('hero-delta').textContent).toBe('−70.0% vs the week before');
+});
+// R4: a walk whose resume point outlives a finished demand (progress still set, pending false)
+// keeps the differences loading: probe of the "stays loading forever" path.
+it('R4: progress left on a settled demand keeps the differences loading', () => {
+	const comparison = handleOf(previous);
+	comparison.set({ pending: false, laneProgress: { downloaded: 2, total: 2 } });
+	setup({ comparison, week: true });
+	for (const id of DIFFERENCES) expect(screen.getByTestId(`hero-${id}-loading`)).toBeTruthy();
 });
 
 it('keeps the primary chart and figures when the comparison fails', async () => {
