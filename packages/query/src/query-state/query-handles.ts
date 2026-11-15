@@ -593,6 +593,7 @@ const EVERY_FIELD: SnapshotFields = [
 	'exhausted',
 	'total',
 	'laneProgress',
+	'laneComplete',
 	'count',
 	'searchActive',
 	'searchState',

@@ -26,6 +26,7 @@ import {
 	ReportsComparison,
 	ReportsCurrency,
 	ReportsCurrencyGuard,
+	useComparisonSettled,
 	useIncludedStatus,
 	useReportsData,
 	useReportsHandles,
@@ -135,8 +136,15 @@ function Difference({
 /** Reads the comparison once for the whole group (mounted inside ReportsComparison). */
 function ComparedFigures(props: Omit<React.ComponentProps<typeof Figures>, 'comparison'>) {
 	const { comparisonOrders } = useReportsData();
+	const settled = useComparisonSettled();
+	// A comparison still downloading is a fraction of its period: no difference against it (F2).
+	if (!settled) return <Figures {...props} comparison="loading" />;
 	const figures = salesFigures({ orders: comparisonOrders, decimals: props.numDecimals });
 	return <Figures {...props} comparison={{ count: comparisonOrders.length, figures }} />;
+}
+/** The chart's comparison series, once the comparison period is whole (F2). */
+function ComparedChart() {
+	return useComparisonSettled() ? <Chart comparison /> : <Chart />;
 }
 /** The figure and its companions; the comparison is one value for all four lines. */
 function Figures({
@@ -579,7 +587,7 @@ function HeroCard({ others }: { others: { currency: string; figures: SalesFigure
 				>
 					<React.Suspense fallback={<Chart />}>
 						<ReportsComparison>
-							<Chart comparison />
+							<ComparedChart />
 						</ReportsComparison>
 					</React.Suspense>
 				</ErrorBoundary>

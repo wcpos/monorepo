@@ -22,10 +22,13 @@ export function Donut({
 	parts,
 	centre,
 	testID,
+	total,
 }: {
 	parts: Part[];
 	centre: { figure: string; label: string };
 	testID: string;
+	// The denominator when the parts are not the period's orders.
+	total?: number;
 }) {
 	const t = useT(),
 		{ storeId } = useReportsPeriod(),
@@ -33,6 +36,7 @@ export function Donut({
 	// The period denominator also includes amounts not represented by a category/register.
 	// Read its formats here so Other is formatted from numbers, never parsed from display text.
 	const { gross } = useReportsData().figures;
+	const denominator = total ?? gross;
 	const colors = useCSSVariable([
 		'--color-c1',
 		'--color-c2',
@@ -54,13 +58,20 @@ export function Donut({
 						value: other,
 						valueText: money(other),
 						shareText: t('reports.percent', {
-							value: percent(gross ? (other / gross) * 100 : 0),
+							value: percent(denominator ? (other / denominator) * 100 : 0),
 						}),
 					},
 				]
 			: parts;
 	// r 46 with a 20 stroke leaves a 72-point hole for the centre figure and its label.
 	const circumference = 2 * Math.PI * 46;
+	// A negative row lowers the net total below the drawn arcs; draw them over the positive rows.
+	const arcTotal = rows.some((row) => row.value < 0)
+		? Math.max(
+				denominator,
+				rows.reduce((sum, row) => sum + Math.max(0, row.value), 0)
+			)
+		: denominator;
 	return (
 		<View
 			testID={testID}
@@ -77,7 +88,7 @@ export function Donut({
 						{rows.map((part, index) => {
 							// A part a refund took to zero or below draws no arc; its row still shows the amount.
 							if (part.value <= 0) return null;
-							const share = gross ? part.value / gross : 0;
+							const share = arcTotal ? part.value / arcTotal : 0;
 							const before = rows
 								.slice(0, index)
 								.reduce((sum, row) => sum + Math.max(0, row.value), 0);
@@ -91,7 +102,7 @@ export function Donut({
 									fill="none"
 									stroke={colors[index < 5 ? index : 4]}
 									strokeDasharray={[Math.max(2, circumference * share - 2), circumference]}
-									strokeDashoffset={gross ? (-circumference * before) / gross : 0}
+									strokeDashoffset={arcTotal ? (-circumference * before) / arcTotal : 0}
 								/>
 							);
 						})}

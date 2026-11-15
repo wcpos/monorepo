@@ -228,6 +228,7 @@ it('netting refunds moves the products and categories by exactly the refunded li
 	expect(amountOf(panel('products'))).toBe(gross - 25);
 	expect(sumBy(sales.categories.netOfRefunds(directory).parts, 'amount')).toBe(gross);
 	expect(sumBy(figures.categories.netOfRefunds(directory).parts, 'amount')).toBe(gross - 25);
+	expect(figures.categories.netOfRefunds(directory).total).toBe(gross - 25);
 	expect(amountOf(panel('categories'))).toBe(gross - 25);
 });
 it('the printed Payment methods rows are the tenders, and Taken leaves out what is owed', () => {
@@ -260,7 +261,7 @@ const pin = {
 	share: 1,
 };
 const decoy = { ...pin, key: 'decoy' };
-const parts = (row: typeof pin) => ({ parts: [row], unknownLines: 0, totalLines: 1 });
+const parts = (row: typeof pin) => ({ parts: [row], unknownLines: 0, totalLines: 1, total: 1 });
 describe('each panel reads its named figure', () => {
 	it.each([
 		['payments', { takenByTender: [pin] }],

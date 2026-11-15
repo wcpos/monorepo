@@ -222,6 +222,30 @@ describe('ranged resume cursor ancestry', () => {
 		});
 	});
 
+	it("a re-walk's page publish keeps a completed lane complete", async () => {
+		await writePass({
+			records: ['a', 'b'],
+			complete: true,
+			expected: null,
+			next: null,
+			reset: true,
+			nowMs: 1,
+		});
+		await repository.publishRangedResume({
+			collection: 'orders',
+			queryKey: QUERY_KEY,
+			resume: { ...cursor(2_000, [2]), downloadedRecords: 1 },
+			expected: null,
+			nowMs: 2,
+			freshForMs: 60_000,
+		});
+		expect(await lane()).toMatchObject({
+			complete: true,
+			rangedResume: { downloadedRecords: 1 },
+			expectedRecordIds: ['a', 'b'],
+		});
+	});
+
 	it('does not move an in-flight cursor whose lineage no longer matches', async () => {
 		await repository.publishRangedResume({
 			collection: 'orders',

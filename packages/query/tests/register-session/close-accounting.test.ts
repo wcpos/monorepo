@@ -83,7 +83,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 let storeDB: StoreDatabase;
 let userDB: UserDatabase;
 let ctx: CloseContext;
-const engine = {};
+const engine = { active: () => ({ scopeId: 'test-scope' }) };
 const session = {
 	id: 'session',
 	register_id: 'register',

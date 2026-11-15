@@ -120,13 +120,40 @@ it('categories retain unknown and uncategorised rows and fractional quantities',
 		...data.figures,
 		categories: {
 			...data.figures.categories,
-			netOfRefunds: () => ({ parts, unknownLines: 0, totalLines: 0 }),
+			netOfRefunds: () => ({ parts, unknownLines: 0, totalLines: 0, total: 4 }),
 		},
 	};
 	expect(specOf('categories', data).rows.map((row) => row.cells)).toEqual([
 		['Unknown product', 'qty:1.5', '£3.00', '75.0%'],
 		['Uncategorised', 'qty:1', '£1.00', '25.0%'],
 	]);
+});
+
+it('the categories and brands Total row is the rounded total of the rows, net of refunds (F6)', () => {
+	const data = inputs(
+		[
+			{
+				total: '60.01',
+				line_items: [
+					{ product_id: 1, total: '40.005', quantity: 2 },
+					{ product_id: 2, total: '20.005', quantity: 1 },
+				],
+			},
+		] as ReportOrder[],
+		[{ line_items: [{ product_id: 1, total: '-20', quantity: -1 }] }] as RefundRow[]
+	);
+	const directory = [
+		{ id: 1, categories: [{ id: 2 }], brands: [{ id: 4 }] },
+		{ id: 2, categories: [{ id: 3 }], brands: [{ id: 4 }] },
+	];
+	data.view.directory = directory;
+	const total = data.figures.categories.netOfRefunds(directory).total;
+	expect(total).toBe(40.01);
+	for (const id of ['categories', 'brands'] as const) {
+		const spec = specOf(id, data);
+		expect(spec.totalRaw[2]).toBe(total);
+		expect(spec.total[2]).toBe(money(total));
+	}
 });
 
 it('the margin columns appear only when the feature is on', () => {
@@ -194,7 +221,7 @@ it('the brands spec', () => {
 		'£4.00',
 		'£6.00',
 		'60.0%',
-		'0.0%',
+		'100.0%',
 	]);
 });
 it('category panels keep assigned categories and translated parent chains', () => {
