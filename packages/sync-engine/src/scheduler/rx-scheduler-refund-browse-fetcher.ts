@@ -4,6 +4,7 @@ import { pageBoundary, RANGED_RESUME_MAX_EXCLUDED_IDS } from './rx-scheduler-ord
 import { admitRefundPage, type RefundSchedulerFetcherInput } from './rx-scheduler-refund-fetcher';
 import { DEFAULT_COVERAGE_FRESH_FOR_MS, httpGet } from './rx-scheduler-collection-fetcher';
 import { pullRequestLimit, type SchedulerFetcher } from './replication-policy';
+import { wooGmtDate } from './woo-gmt-date';
 
 import type { WooRefundPayload } from '../collections/refund-schema';
 
@@ -52,8 +53,8 @@ export function createRefundBrowseSchedulerFetcher(
 				descriptor.limit - consumed
 			);
 			const query = new URLSearchParams({
-				after: new Date((descriptor.afterSeconds - 1) * 1000).toISOString(),
-				before: new Date(before * 1000).toISOString(),
+				after: wooGmtDate(descriptor.afterSeconds - 1),
+				before: wooGmtDate(before),
 				dates_are_gmt: 'true',
 				orderby: 'date',
 				order: 'desc',
@@ -83,7 +84,8 @@ export function createRefundBrowseSchedulerFetcher(
 				if (exclude.length > RANGED_RESUME_MAX_EXCLUDED_IDS)
 					throw new Error(`Refund browse boundary exceeds ${RANGED_RESUME_MAX_EXCLUDED_IDS} IDs`);
 			}
-			const applied = await admitRefundPage(input, kept);
+			// Reports admit every store's POS refunds and scope them in the reports screen.
+			const applied = await admitRefundPage(input, kept, { anyStore: true });
 			consumed += kept.length;
 			downloaded += kept.length;
 			documentCount += applied.length;

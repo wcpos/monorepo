@@ -91,6 +91,7 @@ export function figuresOf(data: ReportsData, orders = data.selectedOrders): Sale
 setOrders([]);
 jest.mock('../context', () => ({
 	...jest.requireActual('../context'),
+	ReportsCurrencyGuard: ({ children }: { children: React.ReactNode }) => children,
 	useReportsData: () => ({ ...mockState.data, figures: figuresOf(mockState.data) }),
 	useReportsScope: () => ({ statusMode: mockState.statusMode }),
 	useIncludedStatus: () => (order: { status?: string }) =>

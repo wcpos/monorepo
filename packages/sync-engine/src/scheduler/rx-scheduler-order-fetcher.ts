@@ -34,6 +34,7 @@ import {
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
 import { chunk, httpGet } from './rx-scheduler-collection-fetcher';
+import { wooGmtDate } from './woo-gmt-date';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
@@ -187,6 +188,7 @@ function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => numb
 		...(limit !== undefined ? { limit } : {}),
 		afterSeconds: decision.descriptor.afterSeconds,
 		beforeSeconds: decision.descriptor.beforeSeconds,
+		modifiedAfterSeconds: decision.descriptor.modifiedAfterSeconds,
 		orderby: decision.descriptor.orderby,
 		order: decision.descriptor.order,
 		complete: decision.descriptor.complete,
@@ -802,6 +804,7 @@ async function fetchBrowserOrderQuery(
 	// the lane went stale would restore exactly the never-converging re-download this fixes.
 	const previousResume = descriptor.complete ? await readRangedResumeState(input, task) : null;
 	let remainingTotal: number | null = null;
+	let firstRequestOfPhase = true;
 	// The cursor narrows the descriptor's own upper bound; it never widens it.
 	let cursorBeforeSeconds =
 		previousResume === null
@@ -837,6 +840,13 @@ async function fetchBrowserOrderQuery(
 		//    writes no lane document, so `readBrowseWindowContinuation` has nothing to
 		//    resume from. Its work is still bounded by the window the cashier asked for.
 		if (resumable && requestCount >= BROWSE_WINDOW_MAX_PAGES_PER_DRAIN) break;
+		// Exclusive after=A covers created > A; before=A+1 covers created <= A without overlap or gaps.
+		const paidEarlierPhase =
+			descriptor.complete &&
+			descriptor.modifiedAfterSeconds !== undefined &&
+			descriptor.afterSeconds !== undefined &&
+			cursorBeforeSeconds !== undefined &&
+			cursorBeforeSeconds <= descriptor.afterSeconds + 1;
 		const query = new URLSearchParams();
 		if (descriptor.status) query.set('status', descriptor.status);
 		if (descriptor.search) query.set('search', descriptor.search);
@@ -848,10 +858,12 @@ async function fetchBrowserOrderQuery(
 		if (descriptor.store !== undefined) {
 			query.set(/^\d+$/.test(descriptor.store) ? 'pos_store' : 'created_via', descriptor.store);
 		}
-		if (descriptor.afterSeconds !== undefined)
-			query.set('after', new Date(descriptor.afterSeconds * 1_000).toISOString());
-		if (cursorBeforeSeconds !== undefined)
-			query.set('before', new Date(cursorBeforeSeconds * 1_000).toISOString());
+		if (paidEarlierPhase && descriptor.modifiedAfterSeconds !== undefined)
+			// Woo's modified_after is exclusive; A − 1 keeps an order paid (so modified) exactly at A.
+			query.set('modified_after', wooGmtDate(descriptor.modifiedAfterSeconds - 1));
+		else if (descriptor.afterSeconds !== undefined)
+			query.set('after', wooGmtDate(descriptor.afterSeconds));
+		if (cursorBeforeSeconds !== undefined) query.set('before', wooGmtDate(cursorBeforeSeconds));
 		if (descriptor.afterSeconds !== undefined || cursorBeforeSeconds !== undefined) {
 			query.set('dates_are_gmt', 'true');
 		}
@@ -888,7 +900,7 @@ async function fetchBrowserOrderQuery(
 
 		const totalPagesHeader = response.headers.get('X-WP-TotalPages');
 		const totalPages = Number(totalPagesHeader);
-		if (requestCount === 0) {
+		if (firstRequestOfPhase) {
 			// `X-WP-Total` for THIS pass's (already narrowed) window is the uncovered remainder;
 			// added to what earlier passes covered it gives the range total the progress line needs.
 			// A MISSING header must stay `null`, not become 0 — `Number(null)` is 0, and a zero
@@ -896,7 +908,10 @@ async function fetchBrowserOrderQuery(
 			const totalHeader = response.headers.get('X-WP-Total');
 			const total = Number(totalHeader);
 			remainingTotal =
-				totalHeader !== null && Number.isSafeInteger(total) && total >= 0 ? total : null;
+				totalHeader !== null && Number.isSafeInteger(total) && total >= 0
+					? documentCount + total
+					: null;
+			firstRequestOfPhase = false;
 		}
 		const rawPayloads = (await response.json()) as WooOrderPayload[];
 		// Rows of the resume page the covered prefix already holds — dropped before they
@@ -1004,6 +1019,17 @@ async function fetchBrowserOrderQuery(
 			payloads.length <= remaining &&
 			!(descriptor.complete && documentCount >= RANGED_COMPLETE_MAX_RECORDS)
 		) {
+			if (
+				!paidEarlierPhase &&
+				descriptor.modifiedAfterSeconds !== undefined &&
+				descriptor.afterSeconds !== undefined
+			) {
+				// Switch from exclusive after=A to before=A+1: created <= A fills the gap without overlap.
+				cursorBeforeSeconds = descriptor.afterSeconds + 1;
+				cursorExcludeWooIds = [];
+				firstRequestOfPhase = true;
+				continue;
+			}
 			exhausted = true;
 			break;
 		}
