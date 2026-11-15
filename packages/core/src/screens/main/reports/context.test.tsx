@@ -11,9 +11,12 @@ import { compileQuery } from '@wcpos/query/query-state';
 
 import {
 	ReportsComparison,
+	ReportsCurrency,
+	ReportsCurrencyGuard,
 	ReportsProvider,
 	ReportsRefunds,
 	ReportsScopeProvider,
+	useReportsCurrency,
 	useReportsData,
 	useReportsHandles,
 	useReportsPeriod,
@@ -30,6 +33,12 @@ const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-hand
 let mockZone = 'UTC';
 let mockLocalParents: { uuid?: string; id?: unknown }[] = [];
 const mockRuntime = { engine: {}, locale: 'en' };
+const mockStore = { id: 9, currency: 'GBP', price_num_decimals: 2 };
+const mockStores = [mockStore, { id: 10, currency: 'USD' }];
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeCredentialStores: () => of(mockStores),
+}));
 // The provider reads the viewed store's precision through useDocField; the app-state mock's
 // store is a plain object, so the field is read directly.
 jest.mock('@wcpos/query', () => ({
@@ -47,10 +56,10 @@ jest.mock('@wcpos/query', () => ({
 const mockSession = {
 	site: { populate$: () => jest.requireActual('rxjs').of([]) },
 	wpCredentials: { get$: () => jest.requireActual('rxjs').of([]) },
-	store: {},
+	store: mockStore,
 };
 jest.mock('../../../contexts/app-state', () => ({
-	useAppState: () => ({ site: { timezone_string: mockZone, gmt_offset: '0' }, store: {} }),
+	useAppState: () => ({ site: { timezone_string: mockZone, gmt_offset: '0' }, store: mockStore }),
 	useStoreSession: () => mockSession,
 }));
 jest.mock('../../../services/register/use-register-names', () => ({
@@ -692,6 +701,74 @@ it('detail is device state, initially null', () => {
 	expect(screen.getByTestId('detail').textContent).toBe('null');
 });
 
+describe('ReportsCurrencyGuard', () => {
+	const orders = [
+		{ uuid: 'gbp', status: 'completed', total: '30.00', currency: 'GBP' },
+		{ uuid: 'eur-one', status: 'completed', total: '100.00', currency: 'EUR' },
+		{ uuid: 'eur-two', status: 'completed', total: '50.00', currency: 'EUR' },
+	];
+	const readCurrency = jest.fn<
+		void,
+		[ReturnType<typeof useReportsData>, ReturnType<typeof useReportsCurrency>]
+	>();
+	function CurrencyProbe() {
+		readCurrency(useReportsData(), useReportsCurrency());
+		return null;
+	}
+	function room(children: React.ReactNode, rows = orders) {
+		return render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={100}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+				initialFilters={{ store: '9' }}
+			>
+				<Provider
+					handle={handleOf(rows.map((payload) => ({ record: { uuid: payload.uuid, payload } })))}
+				>
+					{children}
+				</Provider>
+			</QueryStateProvider>
+		);
+	}
+	it('the guard reads only the largest currency when the room holds two', () => {
+		room(
+			<ReportsCurrencyGuard>
+				<CurrencyProbe />
+			</ReportsCurrencyGuard>
+		);
+		const [guarded, currency] = readCurrency.mock.calls.at(-1)!;
+		expect(guarded.selectedOrders.map((order) => order.uuid)).toEqual(['eur-one', 'eur-two']);
+		expect(guarded.allOrders.map((order) => order.uuid)).toEqual(['eur-one', 'eur-two']);
+		expect(guarded.figures.gross).toBe(150);
+		expect(currency).toEqual({ code: 'EUR', mixed: true, fallback: 'GBP' });
+	});
+	it('the guard passes one currency through untouched', () => {
+		const readOutside = jest.fn<void, [ReturnType<typeof useReportsData>]>();
+		function Outside() {
+			readOutside(useReportsData());
+			return (
+				<ReportsCurrencyGuard note>
+					<CurrencyProbe />
+				</ReportsCurrencyGuard>
+			);
+		}
+		room(<Outside />, orders.slice(0, 1));
+		const [guarded, currency] = readCurrency.mock.calls.at(-1)!;
+		expect(guarded).toBe(readOutside.mock.calls.at(-1)![0]);
+		expect(currency?.mixed).toBe(false);
+		expect(screen.queryByTestId('reports-currency-note')).toBeNull();
+	});
+	it('the note names the shown currency when the room holds two', () => {
+		room(
+			<ReportsCurrencyGuard note>
+				<CurrencyProbe />
+			</ReportsCurrencyGuard>
+		);
+		expect(screen.getByTestId('reports-currency-note').textContent).toContain('EUR');
+	});
+});
+
 // Parent scope wins over a refund's metadata; absent parents require matching POS identity.
 function refundRoom(
 	parents: { uuid?: string; [key: string]: unknown }[],
@@ -701,6 +778,7 @@ function refundRoom(
 		register?: string | null;
 		cashier?: number;
 		orders?: { uuid: string; [key: string]: unknown }[];
+		wrapper?: React.ComponentType<React.PropsWithChildren>;
 	} = {}
 ) {
 	mockLocalParents = parents;
@@ -711,11 +789,17 @@ function refundRoom(
 	function RefundProbe() {
 		const { periodRefunds } = useReportsData();
 		return (
-			<span data-testid="period-refunds">
-				{periodRefunds?.map((row) => row.id).join(',') ?? 'loading'}
-			</span>
+			<>
+				<span data-testid="period-refunds">
+					{periodRefunds?.map((row) => row.id).join(',') ?? 'loading'}
+				</span>
+				<span data-testid="refund-currencies">
+					{periodRefunds?.map((row) => `${row.id}:${row.currency}`).join(',')}
+				</span>
+			</>
 		);
 	}
+	const Wrapper = options.wrapper ?? React.Fragment;
 	return render(
 		<QueryStateProvider
 			collection="orders"
@@ -728,12 +812,14 @@ function refundRoom(
 			}}
 		>
 			<Provider handle={sales} refundsHandle={source}>
-				<React.Suspense fallback={<RefundProbe />}>
-					<ReportsRefunds>
-						<Probe />
-						<RefundProbe />
-					</ReportsRefunds>
-				</React.Suspense>
+				<Wrapper>
+					<React.Suspense fallback={<RefundProbe />}>
+						<ReportsRefunds>
+							<Probe />
+							<RefundProbe />
+						</ReportsRefunds>
+					</React.Suspense>
+				</Wrapper>
 			</Provider>
 		</QueryStateProvider>
 	);
@@ -742,6 +828,38 @@ const identity = (store: string, register = 'front') => [
 	{ key: '_pos_store', value: store },
 	{ key: '_wcpos_register', value: register },
 ];
+it("a period refund takes its parent's currency, else its store's", async () => {
+	refundRoom(
+		[{ id: 4, created_via: 'woocommerce-pos', currency: 'EUR', meta_data: identity('9') }],
+		[
+			{ id: 1, parent_id: 4, meta_data: identity('9') },
+			{ id: 2, parent_id: 99, meta_data: identity('10') },
+		],
+		'woocommerce-pos'
+	);
+	await waitFor(() =>
+		expect(screen.getByTestId('refund-currencies').textContent).toBe('1:EUR,2:USD')
+	);
+});
+it('a guarded room leaves out refunds in another currency', async () => {
+	function GBP({ children }: React.PropsWithChildren) {
+		return <ReportsCurrency code="GBP">{children}</ReportsCurrency>;
+	}
+	refundRoom(
+		[
+			{ id: 4, currency: 'EUR', meta_data: identity('9') },
+			{ id: 5, currency: 'GBP', meta_data: identity('9') },
+		],
+		[
+			{ id: 1, parent_id: 4 },
+			{ id: 2, parent_id: 5 },
+		],
+		'9',
+		{ wrapper: GBP }
+	);
+	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('2'));
+	expect(screen.getByTestId('refund-currencies').textContent).toBe('2:GBP');
+});
 // Removing the non-POS parent branch loses refunds from sales made before this period.
 it('a refund of a local online parent outside the period joins the room when no register is selected', async () => {
 	refundRoom(
@@ -860,7 +978,7 @@ it.each([true, false])(
 	}
 );
 
-it('normalizes the store-zero sentinel in the refund fallback', async () => {
+it('the All-stores sentinel keeps every parentless refund in the register', async () => {
 	refundRoom(
 		[],
 		[
@@ -871,5 +989,135 @@ it('normalizes the store-zero sentinel in the refund fallback', async () => {
 		],
 		'woocommerce-pos'
 	);
-	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1'));
+	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1,2'));
+});
+
+// The production tree mounts ReportsRefunds above every guard (index.tsx:273).
+describe('the guard under ReportsRefunds, as on the screen', () => {
+	function prodRoom(
+		rows: { uuid: string }[],
+		parents: object[],
+		refunds: Partial<import('./context').RefundRow>[]
+	) {
+		mockLocalParents = parents as never;
+		const read = jest.fn<void, [import('./context').ReportsData]>();
+		function GuardProbe() {
+			const data = useReportsData();
+			read(data);
+			return <span data-testid="g">{data.periodRefunds ? 'ready' : 'loading'}</span>;
+		}
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={100}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+				initialFilters={{ store: '9', register: 'front' }}
+			>
+				<Provider
+					handle={handleOf(rows.map((payload) => ({ record: { uuid: payload.uuid, payload } })))}
+					refundsHandle={handleOf(refunds.map((payload) => ({ record: { payload } })))}
+				>
+					<React.Suspense fallback={null}>
+						<ReportsRefunds>
+							<ReportsCurrencyGuard>
+								<GuardProbe />
+							</ReportsCurrencyGuard>
+						</ReportsRefunds>
+					</React.Suspense>
+				</Provider>
+			</QueryStateProvider>
+		);
+		return read;
+	}
+	const rows = [
+		{
+			uuid: 'e1',
+			id: 41,
+			status: 'completed',
+			total: '100.00',
+			currency: 'EUR',
+			meta_data: identity('9'),
+		},
+		{
+			uuid: 'u1',
+			id: 51,
+			status: 'completed',
+			total: '30.00',
+			currency: 'USD',
+			meta_data: identity('9'),
+		},
+	];
+	const refunds = [
+		{ id: 1, parent_id: 41, amount: '10.00', total: '-10.00', meta_data: identity('9') },
+		{ id: 2, parent_id: 51, amount: '7.00', total: '-7.00', meta_data: identity('9') },
+	];
+	it("two currencies: the shown figures carry only that currency's refunds", async () => {
+		const read = prodRoom(rows, rows, refunds);
+		await waitFor(() => expect(screen.getByTestId('g').textContent).toBe('ready'));
+		const data = read.mock.calls.at(-1)![0];
+
+		expect(data.figures.gross).toBe(100);
+		expect(data.periodRefunds!.map((r) => r.currency)).toEqual(['EUR']);
+		expect(data.figures.refunds.refunded).toBe(10);
+	});
+});
+describe('the guard with one order currency and a refund in another', () => {
+	it('one order currency: a refund in another currency is never netted in', async () => {
+		mockLocalParents = [
+			{
+				uuid: 'e0',
+				id: 40,
+				status: 'completed',
+				total: '100.00',
+				currency: 'EUR',
+				meta_data: identity('9'),
+			},
+		] as never;
+		const read = jest.fn<void, [import('./context').ReportsData]>();
+		function GuardProbe() {
+			const data = useReportsData();
+			read(data);
+			return <span data-testid="g1">{data.periodRefunds ? 'ready' : 'loading'}</span>;
+		}
+		const usd = [
+			{
+				uuid: 'u1',
+				id: 51,
+				status: 'completed',
+				total: '30.00',
+				currency: 'USD',
+				meta_data: identity('9'),
+			},
+		];
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={100}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+				initialFilters={{ store: '9', register: 'front' }}
+			>
+				<Provider
+					handle={handleOf(usd.map((payload) => ({ record: { uuid: payload.uuid, payload } })))}
+					refundsHandle={handleOf(
+						[
+							{ id: 1, parent_id: 40, amount: '25.00', total: '-25.00', meta_data: identity('9') },
+							{ id: 2, parent_id: 51, amount: '5.00', total: '-5.00', meta_data: identity('9') },
+						].map((payload) => ({ record: { payload } }))
+					)}
+				>
+					<React.Suspense fallback={null}>
+						<ReportsRefunds>
+							<ReportsCurrencyGuard>
+								<GuardProbe />
+							</ReportsCurrencyGuard>
+						</ReportsRefunds>
+					</React.Suspense>
+				</Provider>
+			</QueryStateProvider>
+		);
+		await waitFor(() => expect(screen.getByTestId('g1').textContent).toBe('ready'));
+		const data = read.mock.calls.at(-1)![0];
+
+		expect(data.figures.refunds.refunded).toBe(5);
+	});
 });

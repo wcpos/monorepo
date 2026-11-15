@@ -143,3 +143,30 @@ export function salesFigures(
 	);
 }
 export type SalesFigures = ReturnType<typeof salesFigures>;
+
+/** A record's currency; one with none is in the viewed store's (`fallback`). */
+export const currencyOf = (record: { currency?: string }, fallback?: string): string =>
+	record.currency || fallback || '';
+/** The figures per currency, largest gross first, then by code: money is never summed across currencies (ledger 48). */
+export function salesByCurrency({
+	orders,
+	refunds,
+	decimals,
+	fallback,
+}: {
+	orders: ReportOrder[];
+	refunds?: RefundRow[];
+	decimals?: number;
+	fallback?: string;
+}): { currency: string; figures: SalesFigures }[] {
+	return [...new Set([...orders, ...(refunds ?? [])].map((row) => currencyOf(row, fallback)))]
+		.map((currency) => ({
+			currency,
+			figures: salesFigures({
+				orders: orders.filter((row) => currencyOf(row, fallback) === currency),
+				refunds: refunds?.filter((row) => currencyOf(row, fallback) === currency),
+				decimals,
+			}),
+		}))
+		.sort((a, b) => b.figures.gross - a.figures.gross || a.currency.localeCompare(b.currency));
+}

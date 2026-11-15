@@ -8,7 +8,7 @@ import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useQueryHandleFields } from '../../../../query';
 import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
-import { useReportsHandles, useReportsPeriod } from '../context';
+import { useReportsCurrency, useReportsHandles, useReportsPeriod } from '../context';
 import { periodLabel } from '../date-button';
 import { useReportsFilterScope } from '../scope';
 import { useReportFormats } from '../use-report-formats';
@@ -39,6 +39,7 @@ export function useReportPrint({
 	needsRefunds: boolean;
 }) {
 	const t = useT();
+	const currency = useReportsCurrency();
 	const { dateRange, storeId, timezone } = useReportsPeriod();
 	const formats = useReportFormats(storeId);
 	const { presets } = useStoreDay(storeId),
@@ -50,7 +51,9 @@ export function useReportPrint({
 	const { text: period } = periodLabel({ scope: days, timezone, ranges: presets(), t, formatDate });
 	const { registerId, registerLabel: register } = useReportsFilterScope();
 	const scopeLine = t('reports.panel_scope', { period, register });
-	const label = [scopeLine, ...scope].filter(Boolean).join(' · ');
+	const label = [scopeLine, ...scope, currency?.mixed ? currency.code : undefined]
+		.filter(Boolean)
+		.join(' · ');
 	const [generatedAt] = React.useState(() => new Date().toISOString());
 	const [printError, setPrintError] = React.useState('');
 	const context = useClosureDocumentContext(storeId);

@@ -414,7 +414,7 @@ describe('refund requirements', () => {
 			Response.json(
 				url.searchParams.has('parent')
 					? [{ ...row(1), date_created_gmt: '2025-01-01T00:00:00', meta_data: [] }]
-					: url.searchParams.get('after') === '2026-06-16T00:00:00.000Z'
+					: url.searchParams.get('after') === '2026-06-16T00:00:00'
 						? [row(2)]
 						: []
 			)
@@ -428,7 +428,7 @@ describe('refund requirements', () => {
 		expect((await readRefunds(h, 42)).map((doc) => doc.payload.id)).toEqual([2, 1]);
 		h.clock.advance(100 * 86400000);
 		await expect(refresh(h)).resolves.toMatchObject({ documents: 0 });
-		expect(h.requests.at(-1)?.searchParams.get('after')).toBe('2026-09-24T00:00:00.000Z');
+		expect(h.requests.at(-1)?.searchParams.get('after')).toBe('2026-09-24T00:00:00');
 		expect((await readRefunds(h, 42)).map((doc) => doc.payload.id)).toEqual([2, 1]);
 	});
 
@@ -592,6 +592,30 @@ describe('refund browse requirements', () => {
 		before: 1788393600,
 		limit: 'all',
 	} as const;
+	// Drop anyStore from the browse call: store 1's refund never reaches this store-3 till's Reports.
+	it('the browse lane stores another store’s POS refund that the history lane rejects, and history keeps it', async () => {
+		const h = await harness(() =>
+			Response.json(
+				[1, 3].map((storeId) => ({
+					...row(storeId),
+					meta_data: [{ key: '_pos_store', value: storeId }],
+				})),
+				{ headers: { 'X-WP-Total': '2', 'X-WP-TotalPages': '1' } }
+			)
+		);
+		await refresh(h);
+		expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([3]);
+		const handle = h.engine.require({ ...range, id: 'foreign-store-browse' });
+		try {
+			await handle.ready;
+		} finally {
+			handle.release();
+		}
+		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([1, 3]);
+		await refresh(h);
+		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([1, 3]);
+	});
+
 	it('refunds-browse fetches the window in date order and continues past one page to completion; coverage is recorded cumulatively', async () => {
 		const h = await harness((url) => {
 			const excluded = new Set((url.searchParams.get('exclude') ?? '').split(',').map(Number));
@@ -612,7 +636,7 @@ describe('refund browse requirements', () => {
 		for (const request of h.requests) {
 			expect(request.searchParams.get('orderby')).toBe('date');
 			expect(request.searchParams.get('order')).toBe('desc');
-			expect(request.searchParams.get('after')).toBe('2026-08-31T23:59:59.000Z');
+			expect(request.searchParams.get('after')).toBe('2026-08-31T23:59:59');
 			expect(request.searchParams.get('page')).toBe('1');
 		}
 		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual(

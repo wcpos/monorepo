@@ -4,6 +4,7 @@ import { filter } from 'rxjs';
 import { useObservableState } from 'observable-hooks';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
+import { isNoStore, noStoreFilterIds } from '@wcpos/query/query-state';
 import {
 	observeCredentialStores,
 	observeSiteCredentials,
@@ -25,6 +26,8 @@ import type { OrderPayload } from './context';
 
 /** A POS order's `created_via`, and the `store` filter's whole-site sentinel (store 0). */
 export const POS_SOURCE = 'woocommerce-pos';
+/** The Reports scope's `storeId` for No store, never a real store id. */
+export const NO_STORE_SCOPE_ID = -1;
 
 /** The cashier and store directories, read once for both rooms; undefined until each answers. */
 export interface ReportsDirectories {
@@ -39,6 +42,7 @@ export interface ReportsFilterScope {
 	/** The viewed store's id; undefined for the sentinel, which keeps the bound till's day. */
 	storeId?: number;
 	allStores: boolean;
+	noStore: boolean;
 	registerId?: string;
 	cashierId?: string;
 	/** All stores, the register's name, or All registers: what the printed scope line names. */
@@ -63,6 +67,7 @@ type Identified = Pick<OrderPayload, 'meta_data'>;
  * Whether a record belongs to the scope by its POS identity, read from its local parent when there
  * is one. With no register, a non-POS parent joins the store scope (ledger line 37); the sentinel
  * matches a parent by `created_via`.
+ * The sentinel keeps every parentless refund.
  */
 export function inRoom(
 	{ store, registerId, cashierId }: Pick<ReportsFilterScope, 'store' | 'registerId' | 'cashierId'>,
@@ -70,12 +75,15 @@ export function inRoom(
 	parent?: Identified & Pick<OrderPayload, 'created_via'>
 ) {
 	const identity = wooMetaCarrier.readIdentity((parent ?? record).meta_data);
+	const ids = noStoreFilterIds(store);
 	return (
-		(!store ||
-			(!registerId && !!parent && parent.created_via !== POS_SOURCE) ||
-			(parent && !/^\d+$/.test(String(store))
-				? parent.created_via === store
-				: identity.storeId === String(store === POS_SOURCE ? 0 : store))) &&
+		(ids !== undefined
+			? (!parent || parent.created_via === POS_SOURCE) && isNoStore(identity.storeId, ids)
+			: !store ||
+				(!registerId && !!parent && parent.created_via !== POS_SOURCE) ||
+				(parent && !/^\d+$/.test(String(store))
+					? parent.created_via === store
+					: store === POS_SOURCE || identity.storeId === String(store))) &&
 		(!registerId || identity.registerId === registerId) &&
 		(!cashierId || identity.cashierId === cashierId)
 	);
@@ -121,17 +129,23 @@ export function ReportsFilterScopeProvider({ children }: React.PropsWithChildren
 	const { registerId: boundId, registerName: boundName } = useRegisterBinding();
 	const value = React.useMemo<ReportsFilterScope>(() => {
 		const allStores = isAllStores(store, stores);
+		const noStore = noStoreFilterIds(store) !== undefined;
 		return {
 			store,
 			storeId,
 			allStores,
+			noStore,
 			registerId,
 			cashierId: cashier === undefined ? undefined : String(cashier),
 			registerLabel: allStores
 				? t('reports.all_stores')
-				: registerId
-					? register[registerId] || (boundId === registerId ? boundName : '') || t('common.unknown')
-					: t('reports.all_registers'),
+				: noStore
+					? t('reports.no_store')
+					: registerId
+						? register[registerId] ||
+							(boundId === registerId ? boundName : '') ||
+							t('common.unknown')
+						: t('reports.all_registers'),
 			names: {
 				cashier: Object.fromEntries(
 					(cashiers ?? []).map((row) => [String(row.id), row.display_name || t('common.unknown')])
