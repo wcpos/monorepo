@@ -475,6 +475,8 @@
 	"auth.authentication_configuration_not_found": "Authentication configuration not found",
 	"auth.bad_api_response": "Bad API response",
 	"auth.connect": "Connect",
+	"auth.could_not_send_the_request": "The app couldn't send the request — please try again",
+	"auth.could_not_reach_the_site": "Couldn't reach the site — check the connection and try again",
 	"auth.discovering_wordpress_api": "Discovering WordPress API...",
 	"auth.try_the_demo_store": "Try the demo store",
 	"auth.your_stores_address": "Your store's address",
