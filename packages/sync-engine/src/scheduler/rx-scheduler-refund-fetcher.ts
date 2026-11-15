@@ -9,6 +9,7 @@ import {
 	recordCoverage,
 } from './rx-scheduler-collection-fetcher';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
+import { wooGmtDate } from './woo-gmt-date';
 
 import type { LocalRefundDocument, WooRefundPayload } from '../collections/refund-schema';
 import type { SchedulerFetcher } from './replication-policy';
@@ -86,7 +87,9 @@ export function createRefundsSchedulerFetcher(
 			page: 1,
 			perPage: Math.min(task.limit, WOO_REST_MAX_PER_PAGE),
 			ids: [],
-			after: new Date((input.nowMs?.() ?? Date.now()) - HISTORY_DAYS * 86400000).toISOString(),
+			after: wooGmtDate(
+				Math.floor(((input.nowMs?.() ?? Date.now()) - HISTORY_DAYS * 86400000) / 1000)
+			),
 		};
 		const query = new URLSearchParams({
 			...(lane.kind === 'history' ? { after: walk.after } : { parent: lane.parentRemoteId }),

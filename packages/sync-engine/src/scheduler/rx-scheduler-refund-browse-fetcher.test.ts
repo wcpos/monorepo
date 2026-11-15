@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { parseWooGmtSeconds } from './__fixtures__/woo-gmt-bound';
 import { createRefundBrowseSchedulerFetcher } from './rx-scheduler-refund-browse-fetcher';
 
 import type { RefundSchedulerFetcherInput } from './rx-scheduler-refund-fetcher';
@@ -30,8 +31,8 @@ function fixture(count: number, metaData = [{ key: '_wcpos_session', value: 'ses
 		fetcher: async (url) => {
 			const query = new URL(url);
 			requests.push(query);
-			const after = Date.parse(query.searchParams.get('after')!) / 1000;
-			const before = Date.parse(query.searchParams.get('before')!) / 1000;
+			const after = parseWooGmtSeconds(query.searchParams.get('after')!);
+			const before = parseWooGmtSeconds(query.searchParams.get('before')!);
 			const exclude = new Set((query.searchParams.get('exclude') ?? '').split(',').map(Number));
 			const remaining = Array.from({ length: count }, (_, i) => ({ id: i + 1, seconds: 101 + i }))
 				.filter(({ id, seconds }) => seconds > after && seconds < before && !exclude.has(id))
@@ -74,6 +75,46 @@ function fixture(count: number, metaData = [{ key: '_wcpos_session', value: 'ses
 }
 
 describe('refund browse walker', () => {
+	it.each([
+		{
+			offset: 60,
+			startSeconds: Date.UTC(2026, 10, 8, 23) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 22, 59, 59) / 1000,
+			after: '2026-11-08T22:59:59',
+			before: '2026-11-15T23:00:00',
+		},
+		{
+			offset: 0,
+			startSeconds: Date.UTC(2026, 10, 9) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 23, 59, 59) / 1000,
+			after: '2026-11-08T23:59:59',
+			before: '2026-11-16T00:00:00',
+		},
+		{
+			offset: -300,
+			startSeconds: Date.UTC(2026, 10, 9, 5) / 1000,
+			endSeconds: Date.UTC(2026, 10, 16, 4, 59, 59) / 1000,
+			after: '2026-11-09T04:59:59',
+			before: '2026-11-16T05:00:00',
+		},
+		{
+			offset: 330,
+			startSeconds: Date.UTC(2026, 10, 8, 18, 30) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 18, 29, 59) / 1000,
+			after: '2026-11-08T18:29:59',
+			before: '2026-11-15T18:30:00',
+		},
+	])(
+		'sends bare GMT bounds at site offset $offset minutes',
+		async ({ startSeconds, endSeconds, after, before }) => {
+			const f = fixture(0);
+			const queryKey = `refunds:browser:after=${startSeconds}:before=${endSeconds}:limit=all`;
+			await createRefundBrowseSchedulerFetcher(f.input)({ ...task, queryKey });
+			expect(f.requests[0].searchParams.get('after')).toBe(after);
+			expect(f.requests[0].searchParams.get('before')).toBe(before);
+		}
+	);
+
 	// Pass the till's scope to browse admission: store 2's refund never reaches Reports.
 	it('a store-scoped till stores a POS refund of another store (reports cover every store)', async () => {
 		const f = fixture(2, [
@@ -105,8 +146,8 @@ describe('refund browse walker', () => {
 			3, 2,
 		]);
 		expect(f.lane()?.expectedRecordIds).toEqual(['woo-refund:3', 'woo-refund:2']);
-		expect(f.requests[0].searchParams.get('after')).toBe('1970-01-01T00:01:41.000Z');
-		expect(f.requests[0].searchParams.get('before')).toBe('1970-01-01T00:01:44.000Z');
+		expect(f.requests[0].searchParams.get('after')).toBe('1970-01-01T00:01:41');
+		expect(f.requests[0].searchParams.get('before')).toBe('1970-01-01T00:01:44');
 	});
 
 	it('continues beyond the 10000-record pass budget without re-downloading the prefix', async () => {
@@ -138,7 +179,7 @@ describe('refund browse walker', () => {
 		f.input.refreshBrowseWindowKey = task.queryKey;
 		const fetch = createRefundBrowseSchedulerFetcher(f.input);
 		expect(await fetch(task)).toMatchObject({ completed: false, documentCount: 10000 });
-		expect(f.requests[100].searchParams.get('before')).toBe('1970-01-01T05:33:21.000Z');
+		expect(f.requests[100].searchParams.get('before')).toBe('1970-01-01T05:33:21');
 		expect(await fetch(task)).toMatchObject({ completed: true, documentCount: 1 });
 	});
 });

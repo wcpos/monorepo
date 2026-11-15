@@ -414,7 +414,7 @@ describe('refund requirements', () => {
 			Response.json(
 				url.searchParams.has('parent')
 					? [{ ...row(1), date_created_gmt: '2025-01-01T00:00:00', meta_data: [] }]
-					: url.searchParams.get('after') === '2026-06-16T00:00:00.000Z'
+					: url.searchParams.get('after') === '2026-06-16T00:00:00'
 						? [row(2)]
 						: []
 			)
@@ -428,7 +428,7 @@ describe('refund requirements', () => {
 		expect((await readRefunds(h, 42)).map((doc) => doc.payload.id)).toEqual([2, 1]);
 		h.clock.advance(100 * 86400000);
 		await expect(refresh(h)).resolves.toMatchObject({ documents: 0 });
-		expect(h.requests.at(-1)?.searchParams.get('after')).toBe('2026-09-24T00:00:00.000Z');
+		expect(h.requests.at(-1)?.searchParams.get('after')).toBe('2026-09-24T00:00:00');
 		expect((await readRefunds(h, 42)).map((doc) => doc.payload.id)).toEqual([2, 1]);
 	});
 
@@ -636,7 +636,7 @@ describe('refund browse requirements', () => {
 		for (const request of h.requests) {
 			expect(request.searchParams.get('orderby')).toBe('date');
 			expect(request.searchParams.get('order')).toBe('desc');
-			expect(request.searchParams.get('after')).toBe('2026-08-31T23:59:59.000Z');
+			expect(request.searchParams.get('after')).toBe('2026-08-31T23:59:59');
 			expect(request.searchParams.get('page')).toBe('1');
 		}
 		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual(
