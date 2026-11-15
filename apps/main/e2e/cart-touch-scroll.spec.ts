@@ -30,10 +30,25 @@ async function touchDrag(
 	await session.detach();
 }
 
+// An overlay still animating out (the misc-product drawer's backdrop) swallows the touch.
+async function untilRowIsUnder(page: Page, point: { x: number; y: number }) {
+	await expect
+		.poll(
+			() =>
+				page.evaluate(
+					({ x, y }) =>
+						!!document.elementFromPoint(x, y)?.closest('[data-testid="cart-line-body"]'),
+					point
+				),
+			{ timeout: 5_000 }
+		)
+		.toBe(true);
+}
+
 async function fillCartUntilScrollable(page: Page) {
-	await ensureRegisterOpen(page);
 	const cartTab = page.getByTestId('pos-tab-cart');
 	if (await cartTab.isVisible()) await cartTab.tap();
+	await ensureRegisterOpen(page);
 	const rows = page.getByTestId('cart-line-row');
 	for (let added = 0; added < 20; added++) {
 		const count = await rows.count();
@@ -63,6 +78,7 @@ async function scrollsAndSwipes(page: Page) {
 	const scrollBox = (await scroller.boundingBox())!;
 	const rowBox = (await body.boundingBox())!;
 	const from = { x: rowBox.x + rowBox.width * 0.3, y: rowBox.y + rowBox.height / 2 };
+	await untilRowIsUnder(page, from);
 	await touchDrag(page, from, { x: from.x, y: Math.max(scrollBox.y + 1, from.y - 250) });
 	await expect.poll(scrollTop, { timeout: 5_000 }).toBeGreaterThan(40);
 	const visibleIndex = await bodies.evaluateAll(
@@ -81,6 +97,7 @@ async function scrollsAndSwipes(page: Page) {
 		x: swipeBox.x + swipeBox.width * 0.75,
 		y: swipeBox.y + swipeBox.height / 2,
 	};
+	await untilRowIsUnder(page, swipeFrom);
 	await touchDrag(page, swipeFrom, { x: swipeFrom.x - 150, y: swipeFrom.y });
 	await expect
 		.poll(async () => (await swipeBody.boundingBox())!.x, { timeout: 5_000 })
