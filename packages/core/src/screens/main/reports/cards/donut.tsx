@@ -65,6 +65,13 @@ export function Donut({
 			: parts;
 	// r 46 with a 20 stroke leaves a 72-point hole for the centre figure and its label.
 	const circumference = 2 * Math.PI * 46;
+	// A negative row lowers the net total below the drawn arcs; draw them over the positive rows.
+	const arcTotal = rows.some((row) => row.value < 0)
+		? Math.max(
+				denominator,
+				rows.reduce((sum, row) => sum + Math.max(0, row.value), 0)
+			)
+		: denominator;
 	return (
 		<View
 			testID={testID}
@@ -81,7 +88,7 @@ export function Donut({
 						{rows.map((part, index) => {
 							// A part a refund took to zero or below draws no arc; its row still shows the amount.
 							if (part.value <= 0) return null;
-							const share = denominator ? part.value / denominator : 0;
+							const share = arcTotal ? part.value / arcTotal : 0;
 							const before = rows
 								.slice(0, index)
 								.reduce((sum, row) => sum + Math.max(0, row.value), 0);
@@ -95,7 +102,7 @@ export function Donut({
 									fill="none"
 									stroke={colors[index < 5 ? index : 4]}
 									strokeDasharray={[Math.max(2, circumference * share - 2), circumference]}
-									strokeDashoffset={denominator ? (-circumference * before) / denominator : 0}
+									strokeDashoffset={arcTotal ? (-circumference * before) / arcTotal : 0}
 								/>
 							);
 						})}
