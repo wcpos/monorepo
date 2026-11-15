@@ -308,6 +308,58 @@ describe('store-level escalation (ADR 0032 §5.3)', () => {
 	});
 });
 
+describe('rename-only comparisons', () => {
+	const fields = [{ field: 'tax_lines[11].tax_total', expected: '0.050000', got: '0.000000' }];
+	function Ownership() {
+		const { serverOwnsMoney, divergedOrderCount } = useOrderMoneyDivergence('order-a');
+		return <span data-testid="ownership">{`${serverOwnsMoney}:${divergedOrderCount}`}</span>;
+	}
+
+	it('stays silent while the server owns the money', () => {
+		render(
+			<OrderMoneyDivergenceProvider>
+				<CartTotalsChangedBanner />
+				<Ownership />
+			</OrderMoneyDivergenceProvider>
+		);
+		emit({ ...divergence('order-a', fields), renameOnly: true });
+		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
+		expect(screen.getByTestId('ownership').textContent).toBe('true:0');
+	});
+
+	it('shows a later real divergence on the same order', () => {
+		renderBanner();
+		emit({ ...divergence('order-a', fields), renameOnly: true });
+		emit(divergence('order-a', fields, 'm2'));
+		expect(screen.getByTestId('order-totals-changed-banner-line-amounts').textContent).toBe(
+			'1 line amount also differs'
+		);
+	});
+
+	it('keeps an earlier real notice and its detail', () => {
+		renderBanner();
+		emit(divergence('order-a', [{ field: 'total', expected: '10.65', got: '10.66' }]));
+		emit({ ...divergence('order-a', fields, 'm2'), renameOnly: true });
+		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
+			'Total10.65 → 10.66'
+		);
+		expect(screen.queryByTestId('order-totals-changed-banner-line-amounts')).toBeNull();
+	});
+
+	it('does not count three rename-only orders toward store escalation', () => {
+		render(
+			<OrderMoneyDivergenceProvider>
+				<CartTotalsChangedBanner />
+				<Ownership />
+			</OrderMoneyDivergenceProvider>
+		);
+		for (const id of ['order-a', 'order-b', 'order-c'])
+			emit({ ...divergence(id, fields), renameOnly: true });
+		expect(screen.getByTestId('ownership').textContent).toBe('true:0');
+		expect(screen.queryByTestId('order-totals-changed-banner-store-level')).toBeNull();
+	});
+});
+
 describe('multi-tab scoping', () => {
 	it('does not alert on the order the cashier is looking at when a DIFFERENT order diverged', () => {
 		renderBanner();

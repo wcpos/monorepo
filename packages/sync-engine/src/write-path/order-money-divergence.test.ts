@@ -450,6 +450,190 @@ describe('an order compared without an aggregate on either side', () => {
 	});
 });
 
+describe('a pure tax rate-ID rename (WooCommerce Tax rewrites rate rows by position)', () => {
+	function fixture() {
+		const taxLine = (
+			rate_id: number,
+			label: string,
+			rate_percent: number,
+			tax_total: string
+		): Record<string, unknown> => ({
+			rate_id,
+			label,
+			rate_percent,
+			compound: false,
+			tax_total,
+			shipping_tax_total: '0.000000',
+		});
+		const payload = (server: boolean) => ({
+			total: '10.65',
+			tax_lines: server
+				? [
+						taxLine(9, 'City Tax', 0, '0.000000'),
+						taxLine(10, 'County Tax', 0.5, '0.050000'),
+						taxLine(11, 'Special Tax', 0, '0.000000'),
+						taxLine(12, 'State Tax', 6, '0.600000'),
+					]
+				: [taxLine(11, 'County Tax', 0.5, '0.050000'), taxLine(12, 'State Tax', 6, '0.600000')],
+			line_items: [
+				{
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_MONEY_ORACLE_LINE_UUID }],
+					total: '10.000000',
+					total_tax: '0.650000',
+					taxes: [9, 10, 11, 12].map((id) => ({
+						id,
+						total: id === 12 ? '0.600000' : id === (server ? 10 : 11) ? '0.050000' : '0.000000',
+					})),
+				},
+			],
+			shipping_lines: [] as Record<string, unknown>[],
+		});
+		return { pushed: payload(false), acked: payload(true) };
+	}
+
+	it('classifies #52214 while retaining every per-rate divergence', () => {
+		const result = compareOrderMoney(fixture());
+		expect(result?.fields.length).toBeGreaterThan(0);
+		expect(
+			result?.fields.every(
+				({ field }) => field.startsWith('tax_lines[') || field.includes('.taxes[')
+			)
+		).toBe(true);
+		expect(result).toHaveProperty('renameOnly', true);
+	});
+
+	it('also proves the renamed taxes on a shipping line', () => {
+		const input = fixture();
+		for (const payload of [input.pushed, input.acked]) {
+			payload.shipping_lines = [clone(payload.line_items[0]!)];
+			payload.tax_lines.at(-1)!.shipping_tax_total = '0.600000';
+		}
+		expect(compareOrderMoney(input)).toHaveProperty('renameOnly', true);
+	});
+
+	it.each(['0.00', '-0', '', 0, undefined])('accepts server zero spelling %s', (zero) => {
+		const input = fixture();
+		for (const index of [0, 2]) {
+			input.acked.tax_lines[index]!.tax_total = zero;
+			input.acked.tax_lines[index]!.shipping_tax_total = zero;
+			if (zero === undefined) delete input.acked.tax_lines[index]!.shipping_tax_total;
+		}
+		expect(compareOrderMoney(input)).toHaveProperty('renameOnly', true);
+	});
+
+	it.each<[string, (input: ReturnType<typeof fixture>) => void]>([
+		[
+			'amounts differ under the labels',
+			({ acked }) => {
+				acked.tax_lines[1]!.tax_total = acked.line_items[0]!.taxes[1]!.total = '0.060000';
+				acked.tax_lines[3]!.tax_total = acked.line_items[0]!.taxes[3]!.total = '0.590000';
+			},
+		],
+		[
+			'a real jurisdiction swap',
+			({ acked }) => {
+				acked.tax_lines[1]!.label = 'City Tax';
+				acked.tax_lines[0]!.label = 'County Tax';
+			},
+		],
+		[
+			'a label is nonzero on only one side',
+			({ acked }) => {
+				acked.tax_lines[2]!.tax_total = acked.line_items[0]!.taxes[2]!.total = '0.010000';
+				acked.tax_lines[3]!.tax_total = acked.line_items[0]!.taxes[3]!.total = '0.590000';
+			},
+		],
+		[
+			'a microunit is not zero',
+			({ acked }) => {
+				acked.tax_lines[2]!.tax_total = '0.000001';
+			},
+		],
+		[
+			'duplicate server labels',
+			({ acked }) => {
+				acked.tax_lines[1]!.label = 'State Tax';
+			},
+		],
+		[
+			'duplicate POS labels',
+			({ pushed }) => {
+				pushed.tax_lines[0]!.label = 'State Tax';
+			},
+		],
+		[
+			'an empty nonzero label',
+			({ pushed }) => {
+				pushed.tax_lines[0]!.label = '  ';
+			},
+		],
+		[
+			'a different rate percent',
+			({ acked }) => {
+				acked.tax_lines[1]!.rate_percent = 0.75;
+			},
+		],
+		[
+			'a different compound flag',
+			({ acked }) => {
+				acked.tax_lines[1]!.compound = true;
+			},
+		],
+		[
+			'line total_tax also differs',
+			({ acked }) => {
+				acked.line_items[0]!.total_tax = '0.660000';
+			},
+		],
+		[
+			'order total also differs',
+			({ acked }) => {
+				acked.total = '10.660000';
+			},
+		],
+		[
+			'no till aggregate',
+			({ pushed }) => {
+				delete (pushed as Record<string, unknown>).tax_lines;
+			},
+		],
+		[
+			'nonzero line taxes outside the label map',
+			({ pushed, acked }) => {
+				for (const payload of [pushed, acked]) payload.line_items[0]!.taxes[0]!.total = '0.010000';
+			},
+		],
+		[
+			'duplicate POS labels that collapse onto the server label map',
+			({ pushed, acked }) => {
+				pushed.tax_lines[0]!.label = 'State Tax';
+				pushed.tax_lines[0]!.rate_percent = 6;
+				pushed.line_items[0]!.taxes[2]!.total = '0.000000';
+				acked.tax_lines[1]!.tax_total = '0.000000';
+				acked.line_items[0]!.taxes[1]!.total = '0.000000';
+			},
+		],
+		[
+			'a nonzero POS line tax outside the label map',
+			({ pushed }) => {
+				pushed.line_items[0]!.taxes[0]!.total = '0.010000';
+			},
+		],
+		[
+			'a nonzero server line tax outside the label map',
+			({ acked }) => {
+				acked.line_items[0]!.taxes[2]!.total = '0.010000';
+			},
+		],
+	])('does not silence %s', (_name, change) => {
+		const input = fixture();
+		change(input);
+		const result = compareOrderMoney(input);
+		expect(result?.fields.length).toBeGreaterThan(0);
+		expect(result).not.toHaveProperty('renameOnly');
+	});
+});
+
 describe('preserveEquivalentLocalPrecision (the adoption half of the mirror contract)', () => {
 	it('keeps the sub-cent local value when a pre-#1466 ack says the same number at 2dp', () => {
 		const merged = preserveEquivalentLocalPrecision(pos, server2dp);
@@ -611,5 +795,149 @@ describe('classifyMoneyDivergence', () => {
 		expect(classifyMoneyDivergence([{ ...cent, expected: 'invalid', decimals: null }])).toBe(
 			'material'
 		);
+	});
+});
+
+// Report "Cause 2" (totals-changed-tax 2026-11-14): WooCommerce checkout stores a
+// coupon line's discount_tax rounded HALF-DOWN at the price decimals
+// (WC_DISCOUNT_ROUNDING_MODE), so the POS's 0.275 is kept as 0.27 while the
+// totals are unchanged. A POS value exactly half-way at the (narrower)
+// comparison width accepts either rounding — and nothing else.
+describe('a POS value exactly half-way at a narrower comparison width', () => {
+	const COUPON_UUID = '04ebbc6e-0000-4000-8000-000000000001';
+	const LINE_UUID = '04ebbc6e-0000-4000-8000-000000000002';
+	const uuidMeta = (uuid: string) => [{ key: '_woocommerce_pos_uuid', value: uuid }];
+
+	/** The report's order 12: product $11, 10% tax, fixed_cart coupon 2.75. */
+	function couponOrder(discountTax: string, sixDp: boolean): Record<string, unknown> {
+		const w = (value: string) => (sixDp ? Number(value).toFixed(6) : value);
+		return {
+			line_items: [
+				{
+					subtotal: w('11.00'),
+					subtotal_tax: w('1.10'),
+					total: w('8.25'),
+					total_tax: sixDp ? '0.825000' : '0.825',
+					meta_data: uuidMeta(LINE_UUID),
+				},
+			],
+			coupon_lines: [
+				{
+					code: 'halfcent',
+					discount: w('2.75'),
+					discount_tax: discountTax,
+					meta_data: uuidMeta(COUPON_UUID),
+				},
+			],
+		};
+	}
+	const pushedWith = (discountTax: string) => couponOrder(discountTax, false);
+	const ackWith = (discountTax: string) => ({
+		...couponOrder(discountTax, true),
+		total: '9.080000',
+		discount_tax: '0.280000',
+	});
+	const couponTax = (payload: Record<string, unknown>) =>
+		(payload.coupon_lines as Record<string, unknown>[])[0]!.discount_tax;
+
+	it('is silent on the report pair: 0.275 pushed, 0.270000 acked, totals equal', () => {
+		expect(
+			compareOrderMoney({ pushed: pushedWith('0.275'), acked: ackWith('0.270000') })
+		).toBeNull();
+	});
+
+	it.each([
+		['0.275', '0.270000'],
+		['0.275', '0.280000'],
+		['0.275', '0.27'],
+		['0.275', '0.28'],
+		['0.275000', '0.270000'],
+		['-0.275', '-0.270000'],
+		['-0.275', '-0.280000'],
+	])('accepts POS %s against ack %s', (local, acked) => {
+		expect(compareOrderMoney({ pushed: pushedWith(local), acked: ackWith(acked) })).toBeNull();
+	});
+
+	it.each([
+		// Not a tie: the POS value is not exactly half-way at the width.
+		['0.2751', '0.270000', '0.28', '0.27'],
+		['-0.2751', '-0.270000', '-0.28', '-0.27'],
+		// A tie, but the ack is neither of its two roundings.
+		['0.275', '0.260000', '0.28', '0.26'],
+		['0.275', '0.290000', '0.28', '0.29'],
+		['-0.275', '-0.260000', '-0.28', '-0.26'],
+		['-0.275', '-0.290000', '-0.28', '-0.29'],
+		// Negatives are symmetric: a sign flip is never one of the roundings.
+		['-0.275', '0.270000', '-0.28', '0.27'],
+		['-0.275', '0.280000', '-0.28', '0.28'],
+	])('flags POS %s against ack %s', (local, acked, expected, got) => {
+		const divergence = compareOrderMoney({ pushed: pushedWith(local), acked: ackWith(acked) });
+		expect(divergence?.fields).toEqual([
+			{ field: `coupon_lines[${COUPON_UUID}].discount_tax`, expected, got, decimals: 2 },
+		]);
+	});
+
+	it.each([
+		// Both sides at full width: the comparison runs at six and the rule never applies.
+		['0.275000', '0.270001'],
+		['0.275000', '0.279999'],
+		['0.275000', '0.274998'],
+		['0.275000', '0.275002'],
+	])('never applies at full width: POS %s against ack %s flags', (local, acked) => {
+		const divergence = compareOrderMoney({ pushed: pushedWith(local), acked: ackWith(acked) });
+		expect(divergence?.fields).toHaveLength(1);
+		expect(divergence?.fields[0]?.decimals).toBe(6);
+	});
+
+	it.each([
+		['total', '9.08', '9.070000'],
+		['total', '9.08', '9.100000'],
+		['discount_tax', '0.28', '0.270000'],
+		['discount_tax', '0.27', '0.280000'],
+		['discount_total', '2.75', '2.760000'],
+		['total_tax', '0.55', '0.540000'],
+	])('still flags order-level %s %s against %s', (field, local, acked) => {
+		const divergence = compareOrderMoney({ pushed: { [field]: local }, acked: { [field]: acked } });
+		expect(divergence?.fields).toEqual([
+			{ field, expected: local, got: acked.slice(0, -4), decimals: 2 },
+		]);
+	});
+
+	it.each(['0.270000', '0.280000', '-0.270000', '-0.280000'])(
+		'adoption keeps the local tie against ack %s and settles with no second write',
+		(acked) => {
+			const local = acked.startsWith('-') ? '-0.275' : '0.275';
+			const pushed = pushedWith(local);
+			const ack = ackWith(acked);
+			// compare → adopt → compare
+			expect(compareOrderMoney({ pushed, acked: ack })).toBeNull();
+			const adopted = preserveEquivalentLocalPrecision(pushed, ack);
+			expect(couponTax(adopted)).toBe(local);
+			expect(compareOrderMoney({ pushed: adopted, acked: ack })).toBeNull();
+			// Adopting again changes nothing: the resident is stable, so no patch is enqueued.
+			const again = preserveEquivalentLocalPrecision(adopted, ack);
+			expect(couponTax(again)).toBe(local);
+			expect(again).toEqual(adopted);
+		}
+	);
+
+	it('keeps detection and adoption on the SAME equality across the tie', () => {
+		for (const [local, acked] of [
+			['0.275', '0.270000'],
+			['0.275', '0.280000'],
+			['0.275', '0.260000'],
+			['0.275', '0.290000'],
+			['0.2751', '0.270000'],
+			['-0.275', '-0.270000'],
+			['-0.275', '-0.280000'],
+			['-0.275', '0.270000'],
+			['0.275000', '0.270001'],
+		] as const) {
+			const pushed = pushedWith(local);
+			const ack = ackWith(acked);
+			const flagged = compareOrderMoney({ pushed, acked: ack }) !== null;
+			const adopted = couponTax(preserveEquivalentLocalPrecision(pushed, ack)) !== local;
+			expect({ local, acked, adopted }).toEqual({ local, acked, adopted: flagged });
+		}
 	});
 });

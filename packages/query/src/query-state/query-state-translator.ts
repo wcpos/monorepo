@@ -31,6 +31,26 @@ import type { CompiledQueryRead, CompiledSortPart } from '../engine-adapter/exec
 import type { CollectionKey, FiltersOf, LogKindFilter, QueryStateOf } from './query-state-types';
 import type { PayloadOf } from '../records/engine-record';
 
+/** The `store` filter's No store scope: a POS order whose store is none of these ids. */
+export const NO_STORE_FILTER_PREFIX = 'no-store:';
+/** `no-store:` + the directory's store ids as strings, sorted, comma-joined. */
+export function noStoreFilter(storeIds: readonly (string | number)[]): string {
+	return NO_STORE_FILTER_PREFIX + storeIds.map(String).sort().join(',');
+}
+/** The ids of a No store filter value; undefined for any other value. */
+export function noStoreFilterIds(value: unknown): string[] | undefined {
+	if (typeof value !== 'string' || !value.startsWith(NO_STORE_FILTER_PREFIX)) return undefined;
+	const ids = value.slice(NO_STORE_FILTER_PREFIX.length);
+	return ids ? ids.split(',') : [];
+}
+/** No `_pos_store`, store 0, or a store not in the directory. */
+export function isNoStore(
+	storeId: string | null | undefined,
+	storeIds: readonly string[]
+): boolean {
+	return !storeId || storeId === '0' || !storeIds.includes(storeId);
+}
+
 /** Sales follow captured money; an unpaid order keeps its creation day. */
 export function saleMomentOf(order: Partial<PayloadOf<'orders'>>) {
 	if (order.date_paid_gmt) return order.date_paid_gmt;
@@ -316,6 +336,22 @@ function compileReadFilter(
 		};
 	}
 	if (operator === 'store') {
+		const ids = noStoreFilterIds(value);
+		if (ids !== undefined)
+			return {
+				// The created_via prefilter also admits real stores' POS orders, so the residual must run.
+				complete: false,
+				prefilter: { 'payload.created_via': 'woocommerce-pos' },
+				matches: (document) => {
+					const payload = readEnginePath(document, 'payload') as
+						Record<string, unknown> | undefined;
+					const meta = Array.isArray(payload?.meta_data) ? payload.meta_data : undefined;
+					return (
+						payload?.created_via === 'woocommerce-pos' &&
+						isNoStore(wooMetaCarrier.readIdentity(meta).storeId, ids)
+					);
+				},
+			};
 		const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
 		const identityFilter = identityColumnFilter({
 			storeId: String(value),
@@ -652,6 +688,14 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			state.limit >= Number.MAX_SAFE_INTEGER
 		)
 			dimensions.limit = 'all';
+		// Reports count on the sale moment; an order paid in the window may have been created before it.
+		if (
+			salesRead &&
+			dimensions.limit === 'all' &&
+			dimensions.afterSeconds !== undefined &&
+			dimensions.beforeSeconds !== undefined
+		)
+			dimensions.modifiedAfterSeconds = dimensions.afterSeconds;
 		demand.push({
 			id: requirementId(options.id, 'orders-browse'),
 			collection: 'orders',

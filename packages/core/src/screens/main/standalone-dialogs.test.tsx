@@ -243,6 +243,7 @@ jest.mock('./reports/context', () => ({
 		periodRefunds: [],
 	}),
 	useReportsHandles: () => ({}),
+	useReportsCurrency: () => undefined,
 	useReportsPeriod: () => ({
 		dateRange: { start: new Date(0), end: new Date(0) },
 		storeId: 1,

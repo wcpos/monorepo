@@ -478,6 +478,8 @@ export type EngineEvent =
 			mutationId: string;
 			mode: MoneyPrecisionMode;
 			fields: MoneyDivergenceField[];
+			/** Same money, renamed rate ids; ownership consumers ignore this, only the cashier notice stays silent. */
+			renameOnly?: true;
 	  };
 
 export type EngineStatus = {
