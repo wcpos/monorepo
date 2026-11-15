@@ -11,6 +11,7 @@ import {
 	useQueryRuntime,
 	WriteOutcomeError,
 } from '@wcpos/query';
+import { boundRegisterIdOf } from '@wcpos/query/register-session';
 import { MONEY_ANSWER_CODES, NO_STORE, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
@@ -146,7 +147,7 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 		let meta_data = wooMetaCarrier.stampIdentity(existingMeta, {
 			userId: wpCredentials.id!,
 			tillId: register?.id,
-			registerId: register?.sites[site.uuid!]?.register_id ?? undefined,
+			registerId: boundRegisterIdOf(register, site.uuid!, store.id) ?? undefined,
 			storeId: store.id === NO_STORE ? (existingStoreId ?? NO_STORE) : store.id!,
 		});
 		if (store.id === NO_STORE && existingStoreId === null) {

@@ -14,7 +14,7 @@ import { inZone, useViewedStore } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useNowMs } from '../../health/use-relative-time';
 import { useT } from '../../../../contexts/translations';
-import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
+import { useReportsCurrency, useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { aggregateComparison, aggregateData } from './utils';
 
 // Keep only raw touch state: pixel points belong to the current chart render.
@@ -51,12 +51,13 @@ function Chart({ comparison = false }: { comparison?: boolean }) {
 		figures,
 	} = useReportsData();
 	const { timezone, period: rangePeriod, storeId } = useReportsPeriod();
+	const currency = useReportsCurrency();
 	const period = rangePeriod as 'day' | 'week' | 'month';
 	const { chartView, cmp } = useReportsScope();
 	const run = chartView === 'run';
 	const store = useDocField(useViewedStore(storeId), (value) => value);
 	const { format } = useCurrencyFormat({
-		currency: store?.currency,
+		currency: currency?.code ?? store?.currency,
 		currencyPosition: store?.currency_pos,
 		decimalScale: store?.price_num_decimals,
 		decimalSeparator: store?.price_decimal_sep,
@@ -253,7 +254,8 @@ function Chart({ comparison = false }: { comparison?: boolean }) {
 		);
 	};
 	return (
-		<GestureDetector gesture={gesture}>
+		// On web, the detector defaults to touch-action: none and blocks vertical drags on the chart from scrolling reports; pan-y gives vertical pans to the browser and keeps hover (ignored on native).
+		<GestureDetector gesture={gesture} touchAction="pan-y">
 			<View collapsable={false} className="flex-1">
 				<CartesianChart
 					data={data}

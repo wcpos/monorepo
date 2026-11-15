@@ -189,6 +189,7 @@ function orderMoneyDivergenceEvent(input: {
 		mutationId: mutation.mutationId,
 		mode: divergence.mode,
 		fields: divergence.fields,
+		...(divergence.renameOnly ? { renameOnly: true as const } : {}),
 	};
 }
 
@@ -256,6 +257,8 @@ export type WriteOutcomeEvent =
 			mutationId: string;
 			mode: MoneyPrecisionMode;
 			fields: MoneyDivergenceField[];
+			/** Same money, renamed rate ids; ownership consumers ignore this, only the cashier notice stays silent. */
+			renameOnly?: true;
 	  };
 
 /**

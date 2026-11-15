@@ -83,6 +83,12 @@ test('second tab parks, takes over, and the former holder can take it back', asy
 }) => {
 	const second = await context.newPage();
 	try {
+		// POS-2SZ: closing the parked tab's databases must not re-add collections.
+		const reAddFailures: string[] = [];
+		page.on('console', (message) => {
+			if (message.text().includes('Failed to re-add collection'))
+				reAddFailures.push(message.text());
+		});
 		await second.goto(page.url());
 		await expect(second.getByTestId('parked-tab')).toHaveAttribute(
 			'data-state',
@@ -96,6 +102,8 @@ test('second tab parks, takes over, and the former holder can take it back', asy
 			'data-state',
 			'parked:another-tab-live'
 		);
+		expect(reAddFailures).toEqual([]);
+		await expect(page.getByTestId('toast-SYNC171')).toHaveCount(0);
 		// premium retains the old worker; reverse takeover must replace this document.
 		await page.evaluate(() => {
 			document.documentElement.dataset.formerOwner = 'yes';

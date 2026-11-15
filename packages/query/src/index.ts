@@ -27,7 +27,11 @@ export { setSearchMetaKeys, type SearchMetaKeys } from './search-fields';
 export { useSearchFields } from './use-search-fields';
 export { warmSearchBlobs } from './search-warmup';
 export { resetCollectionsAndRefill } from './requirement-bridge';
-export { OPEN_ORDER_STATUSES, acquireOpenOrdersQueryHandle } from './open-orders-scope';
+export {
+	OPEN_ORDER_STATUSES,
+	acquireOpenOrdersQueryHandle,
+	inOpenOrdersScope,
+} from './open-orders-scope';
 export { acquireOrderRefundsQueryHandle } from './order-refunds';
 export { NOT_ATTEMPTED, queryHandleAnswers$, queryHandleResults$ } from './query-handle';
 export type { QueryHandle, QueryLaneProgress, QuerySnapshot } from './query-handle';

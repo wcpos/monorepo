@@ -435,11 +435,12 @@ function latchDegradedStorage(
 	if (degradedByDatabaseName.has(databaseName)) return;
 
 	const message = error instanceof Error ? error.message : String(error);
+	const reason = (getRemoteErrorDescription(message) ?? message).slice(0, 200);
 	degradedByDatabaseName.set(databaseName, {
 		databaseName,
 		kind: 'worker-lost',
 		methodName,
-		message,
+		message: reason,
 		at: Date.now(),
 	});
 	storageLogger.error(`Storage degraded for database "${databaseName}" in ${methodName}`, {
@@ -447,6 +448,7 @@ function latchDegradedStorage(
 		context: {
 			databaseName,
 			method: methodName,
+			reason,
 		},
 	});
 	publishDegradedStorage();

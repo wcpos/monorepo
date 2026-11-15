@@ -2,11 +2,14 @@
 
 import { act, renderHook } from '@testing-library/react';
 
+import type { CouponContext } from '@wcpos/order-math';
+
 import {
 	OrderMoneyDivergenceProvider,
 	useServerOwnsMoneyReader,
 } from '../contexts/order-money-divergence';
 import { useCartWrite } from './use-cart-write';
+import { settlePayload } from './settle-payload';
 import { config } from '../../../../../jest/cart-write';
 
 // Cart consumers may mock only useAppState, with no session provider.
@@ -19,7 +22,7 @@ jest.mock('../hooks/use-cart-config', () => ({
 	useCartConfigReader: () => () => config,
 }));
 
-let listener: (event: { type: string; recordId?: string }) => void;
+let listener: (event: { type: string; recordId?: string; renameOnly?: boolean }) => void;
 let epoch: string | number = 0;
 const engine = {
 	active: () => ({
@@ -56,6 +59,35 @@ it('reads ownership immediately from an event, before another render, and clears
 		listener({ type: 'scope-switched' });
 		expect(read('target')).toBe(false);
 	});
+});
+
+it('rename-only ownership stops both shipping and coupon settlement patches', () => {
+	const { result } = renderHook(() => useServerOwnsMoneyReader(), {
+		wrapper: OrderMoneyDivergenceProvider,
+	});
+	const read = result.current;
+	act(() => listener({ type: 'order-money-divergence', recordId: 'target', renameOnly: true }));
+	expect(read('target')).toBe(true);
+	const stale = {
+		status: 'pos-open',
+		total: '20',
+		line_items: [{ product_id: 1, quantity: 1, total: '10', subtotal: '10' }],
+	};
+	const coupons: CouponContext = {
+		coupons: new Map([['ten', { code: 'ten', discount_type: 'percent', amount: '10' }]]),
+		productCategories: new Map(),
+	};
+	for (const input of [
+		{ payload: { ...stale, shipping_lines: [{ method_id: 'flat_rate', total: '5' }] } },
+		{ payload: { ...stale, coupon_lines: [{ code: 'ten' }] }, coupons },
+	]) {
+		expect(
+			settlePayload({ ...input, config, owner: { uuid: 'target', serverOwnsMoney: read } })
+		).toEqual({ kind: 'owned' });
+		expect(
+			settlePayload({ ...input, config, owner: { uuid: 'target', serverOwnsMoney: () => false } })
+		).toMatchObject({ kind: 'patch' });
+	}
 });
 
 it('ownership latched for an order survives a change to its _wcpos_money_epoch meta', () => {

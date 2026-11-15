@@ -12,6 +12,8 @@ import {
 	compileQuery,
 	FILTER_TRANSLATORS,
 	normalizeQuerySortField,
+	noStoreFilter,
+	noStoreFilterIds,
 	requirementsForCompiledQuery,
 	translateLogsQueryState,
 } from '../../src/query-state/query-state-translator';
@@ -549,6 +551,92 @@ describe('query-state translator', () => {
 			}),
 			engineOrder({ uuid: 'missing' }),
 		] as EngineDocument[];
+		const deleted = engineOrder({
+			uuid: 'deleted',
+			created_via: 'woocommerce-pos',
+			meta_data: [{ key: '_pos_store', value: '578' }],
+		}) as EngineDocument;
+		const zero = engineOrder({
+			uuid: 'zero',
+			created_via: 'woocommerce-pos',
+			meta_data: [{ key: '_pos_store', value: '0' }],
+		}) as EngineDocument;
+		const withOrphans = [...fixtures, deleted, zero];
+		it('encodes and decodes the No store directory ids', () => {
+			expect(noStoreFilter([13, '12'])).toBe('no-store:12,13');
+			expect(noStoreFilterIds(noStoreFilter([13, '12']))).toEqual(['12', '13']);
+			expect(noStoreFilterIds('no-store:')).toEqual([]);
+			for (const value of ['12', 'woocommerce-pos', undefined, 12]) {
+				expect(noStoreFilterIds(value)).toBeUndefined();
+			}
+		});
+		it.each(['sales', undefined] as const)(
+			'No store selects only POS orphans under %s',
+			(storeScope) => {
+				const { read } = compileQuery(
+					'orders',
+					{ ...base, filters: { store: noStoreFilter([12, 13]) } },
+					{ id: 'orphans', storeScope }
+				);
+				expect(
+					withOrphans
+						.filter((row) => new Query(read.prefilter).test(row) && read.residual(row))
+						.map((row) => row.uuid)
+				).toEqual(['free', 'deleted', 'zero']);
+			}
+		);
+		// Revert: drop `complete: false` from the No store read filter.
+		it('a No store read is never complete, so the executor runs the directory check', () => {
+			const { read } = compileQuery(
+				'orders',
+				{ ...base, filters: { store: noStoreFilter([12, 13]) } },
+				{ id: 'orphans', storeScope: 'sales' }
+			);
+			// The created_via prefilter alone also admits store 12's POS orders.
+			expect(
+				withOrphans.filter((row) => new Query(read.prefilter).test(row)).length
+			).toBeGreaterThan(3);
+			expect(read.complete).toBe(false);
+		});
+		it('keeps No store orders out of store 12 and in All stores', () => {
+			for (const store of ['12', 'woocommerce-pos']) {
+				const { read } = compileQuery(
+					'orders',
+					{ ...base, filters: { store } },
+					{ id: 'sales', storeScope: 'sales' }
+				);
+				const matched = withOrphans.filter(
+					(row) => new Query(read.prefilter).test(row) && read.residual(row)
+				);
+				expect(matched.map((row) => row.uuid)).toEqual(
+					store === '12'
+						? ['local', 'checkout', 'admin', 'missing']
+						: withOrphans.map((row) => row.uuid)
+				);
+			}
+		});
+		it('omits No store from the sales orders-browse demand', () => {
+			const compiled = compileQuery(
+				'orders',
+				{
+					...base,
+					filters: {
+						store: noStoreFilter([12, 13]),
+						cashier: '7',
+						status: 'completed',
+						dateRange: { from: '2026-07-01', to: '2026-07-14' },
+					},
+				},
+				{ id: 'sales', storeScope: 'sales' }
+			);
+			expect(compiled.demand[0]).toMatchObject({
+				kind: 'orders-browse',
+				cashierId: 7,
+				status: 'completed',
+			});
+			expect(compiled.demand[0]).not.toHaveProperty('store');
+			expect(compiled.coverage).toBe('superset');
+		});
 		it("storeScope sales widens a numeric store to the site's non-POS orders (prefilter and residual)", () => {
 			const { read } = compileQuery(
 				'orders',
@@ -636,6 +724,7 @@ describe('query-state translator', () => {
 					status: 'completed',
 					afterSeconds: 1782864000,
 					beforeSeconds: 1783987200,
+					modifiedAfterSeconds: 1782864000,
 					orderby: 'date',
 					order: 'desc',
 					limit: 'all',
@@ -645,6 +734,22 @@ describe('query-state translator', () => {
 			expect(compiled.represented).toBe(false);
 			expect(compiled.coverage).toBe('superset');
 			expect(fixtures.filter(compiled.read.residual)).toEqual([]);
+		});
+		it('adds modifiedAfterSeconds only to the sales-scoped unbounded date range demand', () => {
+			const state = {
+				...base,
+				limit: Number.MAX_SAFE_INTEGER,
+				filters: { dateRange: { from: '2026-07-01', to: '2026-07-14' } },
+			};
+			const sales = compileQuery('orders', state, { id: 'sales', storeScope: 'sales' });
+			const pos = compileQuery('orders', state, { id: 'pos' });
+			expect(sales.demand[0]).toMatchObject({
+				kind: 'orders-browse',
+				limit: 'all',
+				afterSeconds: 1782864000,
+				modifiedAfterSeconds: 1782864000,
+			});
+			expect(pos.demand[0]).not.toHaveProperty('modifiedAfterSeconds');
 		});
 	});
 

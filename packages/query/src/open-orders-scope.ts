@@ -67,6 +67,24 @@ export function openOrdersSelector(
 	} as MangoQuerySelector<EngineDocument>;
 }
 
+/**
+ * Whether an order carrying this `meta_data` falls inside the open-orders scope, read in JS: the
+ * same cashier, store and register rules as `openOrdersSelector`, which it mirrors. Status is not
+ * part of it.
+ */
+export function inOpenOrdersScope(
+	metaData: Parameters<typeof wooMetaCarrier.readIdentity>[0],
+	cashierId: number,
+	storeId: number | undefined,
+	registerId?: string | null
+): boolean {
+	const identity = wooMetaCarrier.readIdentity(metaData);
+	if (identity.cashierId !== String(cashierId)) return false;
+	if (storeId !== undefined && storeId !== NO_STORE && identity.storeId !== String(storeId))
+		return false;
+	return typeof registerId !== 'string' || registerId === '' || identity.registerId === registerId;
+}
+
 /** All resident open carts, not just this cashier's tabs: the engine holds all of them. */
 export function openCartRecordIds$(
 	database: Parameters<typeof engineCollection>[0]

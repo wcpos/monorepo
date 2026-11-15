@@ -1,4 +1,4 @@
-import { describeBareException, prepareEvent } from './sentry-core';
+import { describeBareException, prepareEvent, scrubEvent } from './sentry-core';
 
 describe('describeBareException', () => {
 	it('leaves an error with a message unchanged', () => {
@@ -111,5 +111,34 @@ describe('describeBareException', () => {
 			expect.arrayContaining(['Basic [REDACTED]'])
 		);
 		expect(JSON.stringify(result)).not.toContain('YWRtaW46c2VjcmV0');
+	});
+});
+
+describe('scrubEvent origin stripping', () => {
+	it('leaves log text that parses as a non-http URL intact', () => {
+		const error =
+			'write: orders/8f868cf0 is queued for deletion — sending another change would undo that; discard instead';
+		expect(scrubEvent({ extra: { error } }).extra).toEqual({ error });
+	});
+
+	it('still strips http and https origins', () => {
+		const event = scrubEvent({
+			extra: {
+				url: 'https://shop.example/wp-json/wcpos/v2/orders?x=1',
+				plain: 'http://shop.example/wp-json/wcpos/v2/products?y=2',
+			},
+			request: { url: 'http://shop.example/wp-json/wcpos/v2/customers?z=3' },
+		});
+		expect(event.extra).toEqual({
+			url: '/wp-json/wcpos/v2/orders?x=1',
+			plain: '/wp-json/wcpos/v2/products?y=2',
+		});
+		expect(event.request?.url).toBe('/wp-json/wcpos/v2/customers?z=3');
+	});
+
+	it('still redacts credentials in non-http text', () => {
+		const event = scrubEvent({ extra: { error: 'write: failed with Bearer secret-token' } });
+		expect(event.extra).toEqual({ error: 'write: failed with Bearer [REDACTED]' });
+		expect(JSON.stringify(event)).not.toContain('secret-token');
 	});
 });

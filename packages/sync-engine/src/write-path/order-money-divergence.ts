@@ -180,6 +180,8 @@ export type MoneyDivergenceField = {
 export type OrderMoneyDivergence = {
 	mode: MoneyPrecisionMode;
 	fields: MoneyDivergenceField[];
+	/** Every divergent field is per-rate and proven to be the same money under renamed ids; ownership consumers must ignore this. */
+	renameOnly?: true;
 };
 
 type Line = Record<string, unknown>;
@@ -351,6 +353,26 @@ function withinRoundingTie(
 }
 
 /**
+ * POS value EXACTLY half-way at a narrower comparison width, server kept either
+ * rounding. Woo stores coupon `discount_tax` HALF-DOWN (`WC_DISCOUNT_ROUNDING_MODE`):
+ * POS `0.275` comes back `0.27`. `0.2751` vs `0.27` still differs; never at full
+ * width; digits only. Shared by comparator and adoption, which must agree.
+ */
+function withinHalfwayTie(
+	pos: string,
+	roundedServer: string,
+	width: number,
+	posDecimals: number
+): boolean {
+	if (width >= posDecimals) return false;
+	const fraction = pos.slice(pos.indexOf('.') + 1);
+	if (!/^50*$/.test(fraction.slice(width))) return false;
+	const halfUp = roundDecimalString(pos, width);
+	const halfDown = roundDecimalString(pos.slice(0, -(posDecimals - width)), width);
+	return roundedServer === halfUp || roundedServer === halfDown;
+}
+
+/**
  * THE width at which two spellings of money count as the same number.
  * Server width is EFFECTIVE (trailing fractional zeros stripped); POS width
  * stays authored. A dp-rendered ack padded to contract width claims no
@@ -445,13 +467,14 @@ function compareSlot(
 	if (
 		mode === 'exact-6dp' &&
 		decimals !== null &&
-		withinRoundingTie(
+		(withinRoundingTie(
 			roundedPos,
 			roundedServer,
 			decimals,
 			decimalsOf(pos) ?? -1,
 			decimalsOf(server) ?? -1
-		)
+		) ||
+			withinHalfwayTie(pos, roundedServer, decimals, decimalsOf(pos) ?? -1))
 	) {
 		return null;
 	}
@@ -542,6 +565,116 @@ function walkMoneySlots(
 	}
 }
 
+/** Missing, empty, or decimal money with no nonzero digit is zero. */
+function isZeroMoney(value: unknown): boolean {
+	if (value === undefined || value === null || (typeof value === 'string' && value.trim() === ''))
+		return true;
+	const money = moneyString(value);
+	return money !== null && DECIMAL_LITERAL.test(money) && !/[1-9]/.test(money);
+}
+
+/** Compare amounts with the existing tie rules, requiring omitted values to be zero. */
+function sameAmount(pos: unknown, server: unknown, mode: MoneyPrecisionMode): boolean {
+	if (moneyString(pos) === null || moneyString(server) === null)
+		return isZeroMoney(pos) && isZeroMoney(server);
+	return compareSlot('tax_lines[rename]', pos, server, mode) === null;
+}
+
+/** Accept only integer numbers or non-empty strings that represent integers. */
+function intId(raw: unknown): number | null {
+	const id =
+		typeof raw === 'number'
+			? raw
+			: typeof raw === 'string' && raw.trim() !== ''
+				? Number(raw)
+				: NaN;
+	return Number.isInteger(id) ? id : null;
+}
+
+/** Index records only when every key is valid and unique. */
+function uniqueIndex<K>(entries: unknown[], key: (entry: Line) => K | null): Map<K, Line> | null {
+	const index = new Map<K, Line>();
+	for (const entry of entries) {
+		if (!isRecord(entry)) return null;
+		const id = key(entry);
+		if (id === null || index.has(id)) return null;
+		index.set(id, entry);
+	}
+	return index;
+}
+
+/** WooCommerce Tax rewrites rate rows by position; prove a pure rename that ownership ignores. */
+function isRateIdRenameOnly(
+	pushed: Record<string, unknown>,
+	acked: Record<string, unknown>,
+	fields: MoneyDivergenceField[],
+	mode: MoneyPrecisionMode
+): boolean {
+	if (!fields.every(({ field }) => field.startsWith('tax_lines[') || field.includes('.taxes[')))
+		return false;
+	if (!Array.isArray(pushed.tax_lines) || !Array.isArray(acked.tax_lines)) return false;
+	const [posLabels, serverLabels] = [pushed.tax_lines, acked.tax_lines].map((entries) =>
+		uniqueIndex(
+			entries.filter(
+				(entry) => !isRecord(entry) || !TAX_LINE_KEYS.every((key) => isZeroMoney(entry[key]))
+			),
+			(entry) => (typeof entry.label === 'string' && entry.label.trim() !== '' ? entry.label : null)
+		)
+	);
+	if (!posLabels || !serverLabels || posLabels.size !== serverLabels.size) return false;
+	const sigma = new Map<number, number>();
+	for (const [label, pos] of posLabels) {
+		const server = serverLabels.get(label);
+		if (!server) return false;
+		const posId = intId(pos.rate_id),
+			serverId = intId(server.rate_id);
+		if (posId === null || serverId === null || pos.compound !== server.compound) return false;
+		const posRate = moneyString(pos.rate_percent),
+			serverRate = moneyString(server.rate_percent);
+		const posWidth = posRate === null ? null : decimalsOf(posRate),
+			serverWidth = serverRate === null ? null : decimalsOf(serverRate);
+		if (posRate === null || serverRate === null || posWidth === null || serverWidth === null)
+			return false;
+		const width = Math.max(posWidth, serverWidth),
+			rate = roundDecimalString(posRate, width);
+		if (rate === null || rate !== roundDecimalString(serverRate, width)) return false;
+		if (!TAX_LINE_KEYS.every((key) => sameAmount(pos[key], server[key], mode))) return false;
+		sigma.set(posId, serverId);
+	}
+	const range = new Set(sigma.values());
+	if (sigma.size !== posLabels.size || range.size !== sigma.size) return false;
+	for (const arrayName of LINE_ARRAYS) {
+		const posLines = pushed[arrayName],
+			serverLines = acked[arrayName];
+		if (!Array.isArray(posLines) || !Array.isArray(serverLines)) continue;
+		for (const pair of pairLinesByUuid(posLines, serverLines)) {
+			const posTaxes = uniqueIndex(
+				Array.isArray(pair.local.taxes) ? pair.local.taxes : [],
+				(entry) => intId(entry.id)
+			);
+			const serverTaxes = uniqueIndex(
+				Array.isArray(pair.server.taxes) ? pair.server.taxes : [],
+				(entry) => intId(entry.id)
+			);
+			if (!posTaxes || !serverTaxes) return false;
+			for (const [posId, serverId] of sigma) {
+				if (
+					!LINE_TAX_KEYS.every((key) =>
+						sameAmount(posTaxes.get(posId)?.[key], serverTaxes.get(serverId)?.[key], mode)
+					)
+				)
+					return false;
+			}
+			const outsideIsZero = (taxes: Map<number, Line>, ids: Map<number, number> | Set<number>) =>
+				[...taxes].every(
+					([id, tax]) => ids.has(id) || LINE_TAX_KEYS.every((key) => isZeroMoney(tax[key]))
+				);
+			if (!outsideIsZero(posTaxes, sigma) || !outsideIsZero(serverTaxes, range)) return false;
+		}
+	}
+	return true;
+}
+
 /**
  * Detect money the server did not keep.
  *
@@ -563,7 +696,10 @@ export function compareOrderMoney(input: {
 		const row = compareSlot(field, posValue, serverValue, mode);
 		if (row) fields.push(row);
 	});
-	return fields.length === 0 ? null : { mode, fields };
+	if (fields.length === 0) return null;
+	return isRateIdRenameOnly(input.pushed, input.acked, fields, mode)
+		? { mode, fields, renameOnly: true }
+		: { mode, fields };
 }
 
 /**
@@ -621,13 +757,15 @@ export function preserveEquivalentLocalPrecision(
 		// keep the POS spelling too — adopting the server's microunit would make
 		// use-order-totals recompute the POS value, see a difference, and patch
 		// it back: the write loop this function exists to prevent.
+		// The half-way tie at a narrower width is part of this shared equality too.
 		const width = equivalenceDecimals(posDecimals, server);
 		const roundedPos = roundDecimalString(pos, width);
 		const roundedServer = roundDecimalString(server, width);
 		if (roundedPos === null || roundedServer === null) return;
 		if (
 			roundedPos !== roundedServer &&
-			!withinRoundingTie(roundedPos, roundedServer, width, posDecimals, serverDecimals)
+			!withinRoundingTie(roundedPos, roundedServer, width, posDecimals, serverDecimals) &&
+			!withinHalfwayTie(pos, roundedServer, width, posDecimals)
 		) {
 			return;
 		}

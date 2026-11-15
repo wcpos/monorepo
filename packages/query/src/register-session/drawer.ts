@@ -109,6 +109,10 @@ function deriveDrawer(
 	const live = bucket?.live;
 	const lastClosure =
 		[...closures].sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0] ?? null;
+	const serverOrderIds =
+		session?.server_order_ids != null
+			? new Set(session.server_order_ids)
+			: session?.server_order_ids;
 	return {
 		session,
 		refusedClose,
@@ -125,7 +129,7 @@ function deriveDrawer(
 			session?.server_sales_count != null && session.server_expected_at != null
 				? session.server_sales_count +
 					orders.filter((record) =>
-						outsideBaseline(record, session.server_expected_at, session.server_order_ids)
+						outsideBaseline(record, session.server_expected_at, serverOrderIds)
 					).length
 				: orders.length,
 		/** § 4.9 invariant 1: a seeded session's figures are unknown until the server's baseline. */

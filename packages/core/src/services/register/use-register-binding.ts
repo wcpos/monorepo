@@ -85,6 +85,11 @@ function directory(siteUuid: string, storeId: number | undefined): Directory {
 	return directories.get(key)!;
 }
 
+/** The register the open-orders scope filters on, read at event time without subscribing. */
+export function scopedRegisterId(siteUuid: string, storeId: number | undefined): string | null {
+	return directory(siteUuid, storeId).value.registerId;
+}
+
 function publish(entry: Directory, changes: Partial<Binding>) {
 	entry.value = { ...entry.value, ...changes };
 	entry.listeners.forEach((notify) => notify());

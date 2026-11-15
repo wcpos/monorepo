@@ -17,6 +17,7 @@ jest.mock('@wcpos/components/gate-screen', () => {
 			tone,
 			title,
 			description,
+			detail,
 			primary,
 			secondary,
 		}: {
@@ -24,6 +25,7 @@ jest.mock('@wcpos/components/gate-screen', () => {
 			tone: string;
 			title: string;
 			description: string;
+			detail?: string;
 			primary: { label: string; onPress(): void; testID: string; disabled?: boolean };
 			secondary?: unknown;
 		}) => (
@@ -31,6 +33,7 @@ jest.mock('@wcpos/components/gate-screen', () => {
 				<Text testID={`${testID}-tone`}>{tone}</Text>
 				<Text testID={`${testID}-title`}>{title}</Text>
 				<Text testID={`${testID}-description`}>{description}</Text>
+				{detail ? <Text testID={`${testID}-detail`}>{detail}</Text> : null}
 				<Pressable testID={primary.testID} disabled={primary.disabled} onPress={primary.onPress}>
 					<Text>{primary.label}</Text>
 				</Pressable>
@@ -90,4 +93,26 @@ it.each(cases)('renders %j above providers', async (state, title, description, t
 	if (lost) expect(reloadApp).toHaveBeenCalled();
 	else expect(takeOver).toHaveBeenCalledTimes(state.kind === 'taking-over' ? 0 : 1);
 	if (state.kind === 'taking-over') expect(button).toBeDisabled();
+});
+
+it('shows the worker failure detail', async () => {
+	const screen = await render(
+		<ParkedTab
+			state={{ kind: 'parked', reason: 'worker-lost' }}
+			takeOver={jest.fn()}
+			detail="why"
+		/>
+	);
+	expect(screen.getByTestId('parked-tab-content-detail').props.children).toBe('why');
+});
+
+it('hides the detail when another tab is live', async () => {
+	const screen = await render(
+		<ParkedTab
+			state={{ kind: 'parked', reason: 'another-tab-live' }}
+			takeOver={jest.fn()}
+			detail="why"
+		/>
+	);
+	expect(screen.queryByTestId('parked-tab-content-detail')).toBeNull();
 });
