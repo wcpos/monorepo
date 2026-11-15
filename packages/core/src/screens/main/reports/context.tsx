@@ -446,7 +446,7 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 	);
 }
 
-/** Whole means the range completed a walk once (its lane is complete), or this demand settled with no continuation left. */
+/** Whole means a complete lane, or a settled demand with no continuation left, unless this handle's lane was demoted. */
 export function useComparisonSettled(): boolean {
 	// The live handle, not the drawn one: a figure waits for the comparison it is printed against.
 	const { comparisonHandle } = useReportsHandles();
@@ -457,8 +457,16 @@ export function useComparisonSettled(): boolean {
 		'laneProgress',
 		'laneComplete',
 	]);
+	// A lane seen complete on this handle that is no longer complete was demoted (an F8 journal
+	// reset): the range is refilling, so it waits even though the demand settled long ago.
+	const [wholeOnce, setWholeOnce] = React.useState<unknown>(null);
+	if (laneComplete && wholeOnce !== comparisonHandle) setWholeOnce(comparisonHandle);
+	const demoted = !laneComplete && wholeOnce === comparisonHandle;
 	return (
-		drawn === comparisonHandle && ready && (laneComplete || (!pending && laneProgress === null))
+		drawn === comparisonHandle &&
+		ready &&
+		!demoted &&
+		(laneComplete || (!pending && laneProgress === null))
 	);
 }
 
