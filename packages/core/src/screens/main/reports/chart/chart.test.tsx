@@ -36,6 +36,7 @@ let mockLabel: (n: number) => string;
 jest.mock('../../../../assets/fonts/Inter-Medium.ttf', () => 1);
 jest.mock('../../health/database-logic', () => ({}));
 jest.mock('../context', () => ({
+	useReportsCurrency: () => undefined,
 	useReportsData: () => mockData,
 	useReportsScope: () => ({ chartView: mockView, cmp: 'yesterday' }),
 	useReportsPeriod: () => ({ period: mockPeriod, timezone: 'Europe/London', storeId: 9 }),
