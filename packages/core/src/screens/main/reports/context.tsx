@@ -232,7 +232,7 @@ export function ReportsCurrency({
 }
 /**
  * F4a: until the cards, panels and prints show every currency (F4b, F4c), a guarded subtree
- * reads only the largest currency of the selected orders, formatted in it (ledger 48).
+ * reads only the largest currency of the selected orders and period refunds, formatted in it (ledger 48).
  */
 export function ReportsCurrencyGuard({
 	note,
@@ -245,7 +245,12 @@ export function ReportsCurrencyGuard({
 	const decimals = useDocField(store, (value) => value.price_num_decimals);
 	const t = useT();
 	const { groups, code, value } = React.useMemo(() => {
-		const groups = salesByCurrency({ orders: data.selectedOrders, decimals, fallback });
+		const groups = salesByCurrency({
+			orders: data.selectedOrders,
+			refunds: data.periodRefunds,
+			decimals,
+			fallback,
+		});
 		const code = groups[0]?.currency || fallback || '';
 		const value =
 			groups.length < 2
@@ -255,6 +260,9 @@ export function ReportsCurrencyGuard({
 						allOrders: data.allOrders.filter((order) => currencyOf(order, fallback) === code),
 						selectedOrders: data.selectedOrders.filter(
 							(order) => currencyOf(order, fallback) === code
+						),
+						periodRefunds: data.periodRefunds?.filter(
+							(refund) => currencyOf(refund, fallback) === code
 						),
 						figures: groups[0].figures,
 					};

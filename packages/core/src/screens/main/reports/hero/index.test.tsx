@@ -656,6 +656,21 @@ it('prints the grouped summary of the viewed scope once the refunds lane is comp
 	}
 });
 
+it('the summary print reads the largest currency only', () => {
+	setup({
+		sales: handleOf([
+			{ ...current[0], currency: 'GBP', total: '30.00' },
+			{ ...current[1], currency: 'EUR', total: '100.00' },
+		]),
+	});
+	fireEvent.click(screen.getByTestId('hero-print'));
+	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+	const report = useReceiptDocument.mock.calls.at(-1)[0].localReport.report;
+	expect(JSON.stringify(report)).toContain('"value":"100"');
+	expect(JSON.stringify(report)).toContain('€100.00');
+	expect(JSON.stringify(report)).not.toContain('130');
+});
+
 jest.mock('../../receipt/receipt-body', () => ({
 	ReceiptBody: () => <div data-testid="sheet-preview" />,
 }));

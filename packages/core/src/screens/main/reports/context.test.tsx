@@ -992,11 +992,15 @@ it('the All-stores sentinel keeps every parentless refund in the register', asyn
 	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1,2'));
 });
 
-// REVIEW 3600: the production tree mounts ReportsRefunds ABOVE every guard (index.tsx:273).
-describe('REVIEW guard below ReportsRefunds (production order)', () => {
-	function prodRoom(rows: object[], parents: object[], refunds: object[]) {
+// The production tree mounts ReportsRefunds above every guard (index.tsx:273).
+describe('the guard under ReportsRefunds, as on the screen', () => {
+	function prodRoom(
+		rows: { uuid: string }[],
+		parents: object[],
+		refunds: Partial<import('./context').RefundRow>[]
+	) {
 		mockLocalParents = parents as never;
-		const read = jest.fn();
+		const read = jest.fn<void, [import('./context').ReportsData]>();
 		function GuardProbe() {
 			const data = useReportsData();
 			read(data);
@@ -1010,9 +1014,7 @@ describe('REVIEW guard below ReportsRefunds (production order)', () => {
 				initialFilters={{ store: '9', register: 'front' }}
 			>
 				<Provider
-					handle={handleOf(
-						rows.map((payload: any) => ({ record: { uuid: payload.uuid, payload } }))
-					)}
+					handle={handleOf(rows.map((payload) => ({ record: { uuid: payload.uuid, payload } })))}
 					refundsHandle={handleOf(refunds.map((payload) => ({ record: { payload } })))}
 				>
 					<React.Suspense fallback={null}>
@@ -1049,28 +1051,18 @@ describe('REVIEW guard below ReportsRefunds (production order)', () => {
 		{ id: 1, parent_id: 41, amount: '10.00', total: '-10.00', meta_data: identity('9') },
 		{ id: 2, parent_id: 51, amount: '7.00', total: '-7.00', meta_data: identity('9') },
 	];
-	it('guarded figures keep the largest currency refunds (EUR 10), and only them', async () => {
+	it("two currencies: the shown figures carry only that currency's refunds", async () => {
 		const read = prodRoom(rows, rows, refunds);
 		await waitFor(() => expect(screen.getByTestId('g').textContent).toBe('ready'));
 		const data = read.mock.calls.at(-1)![0];
 
-		console.log(
-			'REVIEW periodRefunds',
-			data.periodRefunds.map((r: any) => `${r.id}:${r.currency}`),
-			'refundRows',
-			data.figures.refundRows,
-			'refunded',
-			data.figures.refunds.refunded,
-			'gross',
-			data.figures.gross
-		);
 		expect(data.figures.gross).toBe(100);
-		expect(data.periodRefunds.map((r: any) => r.currency)).toEqual(['EUR']);
+		expect(data.periodRefunds!.map((r) => r.currency)).toEqual(['EUR']);
 		expect(data.figures.refunds.refunded).toBe(10);
 	});
 });
-describe('REVIEW one order currency, refund in another', () => {
-	it('a EUR refund of an earlier EUR order is not netted into a USD-only window', async () => {
+describe('the guard with one order currency and a refund in another', () => {
+	it('one order currency: a refund in another currency is never netted in', async () => {
 		mockLocalParents = [
 			{
 				uuid: 'e0',
@@ -1081,7 +1073,7 @@ describe('REVIEW one order currency, refund in another', () => {
 				meta_data: identity('9'),
 			},
 		] as never;
-		const read = jest.fn();
+		const read = jest.fn<void, [import('./context').ReportsData]>();
 		function GuardProbe() {
 			const data = useReportsData();
 			read(data);
@@ -1126,12 +1118,6 @@ describe('REVIEW one order currency, refund in another', () => {
 		await waitFor(() => expect(screen.getByTestId('g1').textContent).toBe('ready'));
 		const data = read.mock.calls.at(-1)![0];
 
-		console.log(
-			'REVIEW2',
-			data.periodRefunds.map((r: any) => `${r.id}:${r.currency}`),
-			'refunded',
-			data.figures.refunds.refunded
-		);
 		expect(data.figures.refunds.refunded).toBe(5);
 	});
 });
