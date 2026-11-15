@@ -114,6 +114,17 @@ function createRefundFormSchema(dp: number) {
 
 type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
+// One column map for the heads and the cells (F62). The number columns' floors are spacing units
+// sized for Compact (3.5 px, a phone), where the unit and px-3 shrink but the 12 px caption does
+// not: n ≥ longest English head word / spacing + 6. The product column gives way.
+const REFUND_COLUMNS = {
+	product: 'min-w-0 flex-[3]',
+	price: 'min-w-17 flex-1',
+	qty: 'min-w-14 flex-1',
+	refundQty: 'min-w-21 flex-1',
+	refundAmount: 'min-w-23 flex-1',
+} as const;
+
 /** Renders the form used to calculate and submit an order refund. */
 export function RefundOrderForm({ order }: Props) {
 	const t = useT();
@@ -138,6 +149,8 @@ export function RefundOrderForm({ order }: Props) {
 	const [refundDetails, setRefundDetails] = React.useState<RefundDetail[]>(() =>
 		normalizeRefundDetails(orderData.refunds || [])
 	);
+	const storeHistoryOrderId = React.useRef<number | null>(null);
+	const storeHistoryRefundIds = React.useRef<number[]>([]);
 	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(orderData.id));
 	const [historyMissing, setHistoryMissing] = React.useState(false);
 	const [historyAttempt, setHistoryAttempt] = React.useState(0);
@@ -193,7 +206,12 @@ export function RefundOrderForm({ order }: Props) {
 					)
 				);
 				if (!mounted) return;
-				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
+				const details = normalizeRefundDetails([...firstPage, ...remainingPages.flat()]);
+				setRefundDetails(details);
+				storeHistoryOrderId.current = orderData.id ?? null;
+				storeHistoryRefundIds.current = details
+					.map((refund) => refund.id)
+					.filter((id): id is number => typeof id === 'number');
 				setHistoryMissing(false);
 				setRefundDetailsLoading(false);
 			})
@@ -204,6 +222,20 @@ export function RefundOrderForm({ order }: Props) {
 					context: { orderId: orderData.id, error: getErrorMessage(error) },
 				});
 				if (!mounted) return;
+				// A reconnect reloads with a new client; the saved refunds carry no line detail.
+				// A failed reload keeps the history already read from the store for this order
+				// rather than show already-refunded units as refundable.
+				// Only while that history holds every refund the order lists: one synced in since makes it stale.
+				const heldIds = storeHistoryRefundIds.current;
+				if (
+					storeHistoryOrderId.current === orderData.id &&
+					getRefundsFallback().every(
+						(refund) => typeof refund.id === 'number' && heldIds.includes(refund.id)
+					)
+				) {
+					setRefundDetailsLoading(false);
+					return;
+				}
 				setRefundDetails(getRefundsFallback());
 				setHistoryMissing(true);
 				setRefundDetailsLoading(false);
@@ -515,19 +547,19 @@ export function RefundOrderForm({ order }: Props) {
 				<Table>
 					<TableHeader>
 						<TableRow>
-							<TableHead className="flex-[3]">
+							<TableHead className={REFUND_COLUMNS.product}>
 								<Text>{t('common.product')}</Text>
 							</TableHead>
-							<TableHead className="flex-1">
+							<TableHead className={REFUND_COLUMNS.price}>
 								<Text>{t('common.price')}</Text>
 							</TableHead>
-							<TableHead className="flex-1">
+							<TableHead className={REFUND_COLUMNS.qty}>
 								<Text>{t('pos_cart.qty_abbrev')}</Text>
 							</TableHead>
-							<TableHead className="flex-1">
+							<TableHead className={REFUND_COLUMNS.refundQty}>
 								<Text>{t('orders.refund_qty')}</Text>
 							</TableHead>
-							<TableHead className="flex-1">
+							<TableHead className={REFUND_COLUMNS.refundAmount}>
 								<Text>{t('orders.refund_amount')}</Text>
 							</TableHead>
 						</TableRow>
@@ -546,16 +578,16 @@ export function RefundOrderForm({ order }: Props) {
 
 							return (
 								<TableRow key={field.id}>
-									<TableCell className="flex-[3]">
-										<Text numberOfLines={1}>{field.name}</Text>
+									<TableCell className={REFUND_COLUMNS.product}>
+										<Text numberOfLines={2}>{field.name}</Text>
 									</TableCell>
-									<TableCell className="flex-1">
+									<TableCell className={REFUND_COLUMNS.price}>
 										<Text>{unitPrice}</Text>
 									</TableCell>
-									<TableCell className="flex-1">
+									<TableCell className={REFUND_COLUMNS.qty}>
 										<Text>{linesLocked ? '–' : field.remaining_quantity}</Text>
 									</TableCell>
-									<TableCell className="flex-1">
+									<TableCell className={REFUND_COLUMNS.refundQty}>
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
@@ -564,7 +596,7 @@ export function RefundOrderForm({ order }: Props) {
 											)}
 										/>
 									</TableCell>
-									<TableCell className="flex-1">
+									<TableCell className={REFUND_COLUMNS.refundAmount}>
 										<Text>{itemRefundWithTax}</Text>
 									</TableCell>
 								</TableRow>

@@ -153,13 +153,13 @@ jest.mock('@wcpos/components/dialog', () => ({
 jest.mock('@wcpos/components/table', () => ({
 	Table: ({ children }: any) => <table>{children}</table>,
 	TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-	TableCell: ({ children }: any) => <td>{children}</td>,
-	TableHead: ({ children }: any) => <th>{children}</th>,
+	TableCell: ({ children, className }: any) => <td data-classes={className}>{children}</td>,
+	TableHead: ({ children, className }: any) => <th data-classes={className}>{children}</th>,
 	TableHeader: ({ children }: any) => <thead>{children}</thead>,
 	TableRow: ({ children }: any) => <tr>{children}</tr>,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: any) => <span>{children}</span>,
+	Text: ({ children, numberOfLines }: any) => <span data-lines={numberOfLines}>{children}</span>,
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: any) => <div>{children}</div>,
@@ -473,6 +473,48 @@ describe('RefundOrderForm', () => {
 
 		await waitFor(() => expect(pendingRefund).toHaveBeenCalledTimes(1));
 		expect(processLabel()).toHaveAttribute('data-loading', 'true');
+	});
+
+	it('gives the number columns a floor and lets the product name wrap to two lines', async () => {
+		const orderWithLine = {
+			...order,
+			line_items: [
+				{
+					id: 77,
+					name: 'Aim Analog Watch',
+					quantity: 2,
+					total: '20.00',
+					total_tax: '0.00',
+					taxes: [],
+				},
+			],
+		} as never;
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+			return Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '1' } });
+		});
+
+		await act(async () => {
+			render(<RefundOrderForm order={orderWithLine} />);
+		});
+
+		const columns = [
+			'min-w-0 flex-[3]',
+			'min-w-17 flex-1',
+			'min-w-14 flex-1',
+			'min-w-21 flex-1',
+			'min-w-23 flex-1',
+		];
+		expect(
+			screen.getAllByRole('columnheader').map((head) => head.getAttribute('data-classes'))
+		).toEqual(columns);
+		const row = screen.getAllByRole('row')[1];
+		expect(
+			within(row)
+				.getAllByRole('cell')
+				.map((cell) => cell.getAttribute('data-classes'))
+		).toEqual(columns);
+		expect(screen.getByText('Aim Analog Watch')).toHaveAttribute('data-lines', '2');
 	});
 
 	it('holds line quantities at zero until detailed refund rows load', async () => {
@@ -815,6 +857,47 @@ describe('RefundOrderForm', () => {
 			);
 		});
 
+		it('keeps the remaining quantities read from the store when a reload fails offline', async () => {
+			const lineOrder = {
+				...order,
+				payment_method: 'pos_cash',
+				refunds: [{ id: 5, total: '-10.00' }],
+				line_items: [
+					{ id: 77, name: 'Belt', quantity: 2, total: '20.00', total_tax: '0.00', taxes: [] },
+				],
+			} as never;
+			mockGet.mockImplementation((url: string) => {
+				if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+				if (mockOnlineStatus !== 'online-website-available') {
+					return Promise.reject(new Error('offline'));
+				}
+				return Promise.resolve({
+					data: [{ id: 5, total: '-10.00', line_items: [{ id: 77, quantity: 1 }] }],
+					headers: { 'x-wp-totalpages': '1' },
+				});
+			});
+
+			const { rerender } = render(<RefundOrderForm order={lineOrder} />);
+			await waitFor(() => {
+				const row = screen.getByText('Belt').closest('tr') as HTMLElement;
+				expect(within(row).getByText('1')).toBeInTheDocument();
+			});
+
+			mockOnlineStatus = 'offline';
+			rerender(<RefundOrderForm order={lineOrder} />);
+			await waitFor(() =>
+				expect(
+					mockGet.mock.calls.filter(([url]) => url === 'orders/23858/refunds').length
+				).toBeGreaterThanOrEqual(2)
+			);
+			await waitFor(() => {
+				const row = screen.getByText('Belt').closest('tr') as HTMLElement;
+				expect(within(row).getByText('1')).toBeInTheDocument();
+			});
+			const row = screen.getByText('Belt').closest('tr') as HTMLElement;
+			expect(within(row).queryByText('2')).toBeNull();
+		});
+
 		it('disables the confirm when the refund falls to nothing while it is open', async () => {
 			mockGateways(Promise.resolve({ data: [] }));
 			render(<RefundOrderForm order={cashOrder} />);
@@ -942,6 +1025,46 @@ describe('RefundOrderForm', () => {
 			);
 			expect(screen.getByTestId('refund-history-missing')).toBeInTheDocument();
 			expect(qtyField()).toBeDisabled();
+		});
+
+		it('a refund synced in before a failed reload locks the lines', async () => {
+			mockRefundsGets(
+				() => Promise.resolve({ data: [historyRow], headers: { 'x-wp-totalpages': '1' } }),
+				storeError
+			);
+			const { rerender } = render(<RefundOrderForm order={lockedOrder} />);
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('2'));
+
+			const synced = {
+				...lockedOrder,
+				refunds: [...lockedOrder.refunds, { id: 10, total: '-20.00' }],
+			};
+			rerender(<RefundOrderForm order={synced} />);
+
+			expect(await screen.findByTestId('refund-history-missing')).toBeInTheDocument();
+			expect(qtyField()).toBeDisabled();
+			expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+				'orders.previously_refunded-€40.00'
+			);
+		});
+
+		it('a synced order holding the same refunds keeps the history read', async () => {
+			mockRefundsGets(
+				() => Promise.resolve({ data: [historyRow], headers: { 'x-wp-totalpages': '1' } }),
+				storeError
+			);
+			const { rerender } = render(<RefundOrderForm order={lockedOrder} />);
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('2'));
+
+			rerender(
+				<RefundOrderForm
+					order={{ ...lockedOrder, refunds: [{ id: 9, total: '-20.00', reason: 'Damaged' }] }}
+				/>
+			);
+			await waitFor(() => expect(refundsGets()).toBe(2));
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('2'));
+			expect(screen.queryByTestId('refund-history-missing')).not.toBeInTheDocument();
+			expect(qtyField()).toBeEnabled();
 		});
 
 		it('no saved refunds: the lines still lock', async () => {
