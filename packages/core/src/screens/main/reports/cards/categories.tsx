@@ -53,13 +53,14 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 			onOpen={() => setDetail(group)}
 			testID={`card-${group}`}
 			name={name}
-			figure={money(figures.gross)}
+			figure={money(summary.total)}
 		>
 			{summary.parts.length ? (
 				<Donut
 					testID={`card-${group}-donut`}
+					total={summary.total}
 					centre={{
-						figure: moneyWhole(Math.round(figures.gross)),
+						figure: moneyWhole(Math.round(summary.total)),
 						label:
 							group === 'brands' ? t('reports.n_brands', count) : t('reports.n_categories', count),
 					}}
