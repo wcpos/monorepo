@@ -83,7 +83,8 @@ export function createRefundBrowseSchedulerFetcher(
 				if (exclude.length > RANGED_RESUME_MAX_EXCLUDED_IDS)
 					throw new Error(`Refund browse boundary exceeds ${RANGED_RESUME_MAX_EXCLUDED_IDS} IDs`);
 			}
-			const applied = await admitRefundPage(input, kept);
+			// Reports admit every store's POS refunds and scope them in the reports screen.
+			const applied = await admitRefundPage(input, kept, { anyStore: true });
 			consumed += kept.length;
 			downloaded += kept.length;
 			documentCount += applied.length;
