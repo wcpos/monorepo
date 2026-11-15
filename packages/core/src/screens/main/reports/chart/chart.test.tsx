@@ -70,7 +70,14 @@ jest.mock('react-native-gesture-handler', () => {
 	};
 	return {
 		Gesture: { Hover: () => gesture },
-		GestureDetector: ({ children }: React.PropsWithChildren) => <>{children}</>,
+		GestureDetector: ({
+			children,
+			touchAction,
+		}: React.PropsWithChildren<{ touchAction?: string }>) => (
+			<div data-testid="hover-target" data-touch-action={touchAction}>
+				{children}
+			</div>
+		),
 	};
 });
 jest.mock('@shopify/react-native-skia', () => ({
@@ -145,6 +152,12 @@ beforeEach(() => {
 	mockData = dayData;
 });
 afterEach(() => jest.useRealTimers());
+it('U2: gives vertical touch pans to the browser', async () => {
+	await act(async () => {
+		render(<Chart comparison />);
+	});
+	expect(screen.getByTestId('hover-target').getAttribute('data-touch-action')).toBe('pan-y');
+});
 // Removing the comparison or drawing future primary bars breaks this encoding.
 it('draws period bars, the peak, dashed comparison and faint future comparison bars', async () => {
 	await act(async () => {
