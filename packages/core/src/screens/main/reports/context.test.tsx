@@ -860,7 +860,7 @@ it.each([true, false])(
 	}
 );
 
-it('normalizes the store-zero sentinel in the refund fallback', async () => {
+it('the All-stores sentinel keeps every parentless refund in the register', async () => {
 	refundRoom(
 		[],
 		[
@@ -871,5 +871,5 @@ it('normalizes the store-zero sentinel in the refund fallback', async () => {
 		],
 		'woocommerce-pos'
 	);
-	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1'));
+	await waitFor(() => expect(screen.getByTestId('period-refunds').textContent).toBe('1,2'));
 });
