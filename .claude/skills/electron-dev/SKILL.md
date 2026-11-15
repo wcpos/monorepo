@@ -19,6 +19,20 @@ The desktop app is no longer a submodule of this repo. The renderer (`@wcpos/mai
 
 Run each step sequentially. Do NOT skip steps. Do NOT use `run_in_background`.
 
+**"Spin up Electron" ALWAYS means the newest head of the lane, in both repos, in freshly started servers**
+(Paul, 2026-10-30, after a session relaunched Electron against a renderer that had been running since the
+night before and a worktree 30 commits behind `origin/next`). Every time, even when the worktrees and the
+Terminal windows already exist: fetch both repos (step 1), compare each worktree's HEAD with `origin/<lane>`
+and reset it when it differs (`git -C <worktree> reset --hard origin/<lane>` — the session branch carries
+nothing of its own; if `git status --porcelain` shows edits, STOP and ask), reinstall if the lockfile or
+`patches/` moved, then KILL the running renderer (port 8088), Forge (port 9000) and the Electron process and
+relaunch both windows (step 6). A long-running Metro keeps serving the bundle it compiled at start; a reset
+alone changes nothing on screen. Kill Electron by its full path, then confirm nothing is left:
+`pkill -9 -f '<electron-worktree>/node_modules/electron/dist/Electron.app'; pgrep -f '<electron-worktree>/node_modules/electron'`
+— a surviving instance (window gone, process alive) holds the single-instance lock and the next launch logs
+`Another WCPOS process already owns this install; quitting this one` and shows nothing (2026-10-30). After
+launching, read the Forge window's tail for that line. Tell Paul the two SHAs the app is running.
+
 ### 1. Fetch latest from the target lane in BOTH repos
 
 Lane: `next` = in-development electron work (default); `main` = stable fixes. If unsure which lane the task is, ask the user first, then use it as `<lane>` below. The electron clone lives at `~/Projects/electron`; if it is missing, `git clone https://github.com/wcpos/electron.git ~/Projects/electron` first.
