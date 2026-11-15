@@ -603,6 +603,28 @@ describe('a pure tax rate-ID rename (WooCommerce Tax rewrites rate rows by posit
 				for (const payload of [pushed, acked]) payload.line_items[0]!.taxes[0]!.total = '0.010000';
 			},
 		],
+		[
+			'duplicate POS labels that collapse onto the server label map',
+			({ pushed, acked }) => {
+				pushed.tax_lines[0]!.label = 'State Tax';
+				pushed.tax_lines[0]!.rate_percent = 6;
+				pushed.line_items[0]!.taxes[2]!.total = '0.000000';
+				acked.tax_lines[1]!.tax_total = '0.000000';
+				acked.line_items[0]!.taxes[1]!.total = '0.000000';
+			},
+		],
+		[
+			'a nonzero POS line tax outside the label map',
+			({ pushed }) => {
+				pushed.line_items[0]!.taxes[0]!.total = '0.010000';
+			},
+		],
+		[
+			'a nonzero server line tax outside the label map',
+			({ acked }) => {
+				acked.line_items[0]!.taxes[2]!.total = '0.010000';
+			},
+		],
 	])('does not silence %s', (_name, change) => {
 		const input = fixture();
 		change(input);
