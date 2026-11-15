@@ -48,6 +48,7 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: jest.requireActual('react-error-boundary').ErrorBoundary,
 }));
 jest.mock('../sync-progress', () => ({ ReportsSyncProgress: () => null }));
+jest.mock('../no-store', () => ({ NoStoreNotice: () => null }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: mockStore, site: { populate$: () => mockCashiers } }),
 	useStoreSession: () => ({

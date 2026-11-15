@@ -5,6 +5,7 @@ import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import { noStoreFilter } from '@wcpos/query/query-state';
 
 import {
 	inRoom,
@@ -202,6 +203,29 @@ const read = () =>
 	renderHook(() => ({ ...useReportsFilterScope(), directories: useReportsDirectories() }), {
 		wrapper: Scope,
 	});
+
+it.each([
+	[{ created_via: 'woocommerce-pos', meta_data: [] }, true],
+	[posParent('578'), true],
+	[posParent('7'), false],
+	[{ created_via: 'checkout', meta_data: [] }, false],
+	[undefined, true],
+])('No store inRoom for parent %j is %s', (parent, expected) => {
+	expect(
+		inRoom({ store: noStoreFilter([7, 9]) }, { meta_data: [] } as never, parent as never)
+	).toBe(expected);
+});
+
+it('decodes No store using the bound till formats and label', () => {
+	mockState.filters = { store: noStoreFilter([7, 9]) };
+	mockStores.next(twoStores);
+	expect(read().result.current).toMatchObject({
+		noStore: true,
+		allStores: false,
+		storeId: undefined,
+		registerLabel: 'reports.no_store',
+	});
+});
 
 it('decodes the filters once, with names Unknown until each directory answers', () => {
 	mockState.filters = { store: '9', register: 'r', cashier: 7 };
