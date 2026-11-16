@@ -135,18 +135,33 @@ function scrubText(value: string): string {
 const PHONE_KEY = /phone|tel|mobile/i;
 // The SDK normalizes far shallower; drop deeper data rather than send it unscrubbed.
 const MAX_SCRUB_DEPTH = 10;
+const UNSCRUBBABLE = '[Unscrubbable]';
+
+function orUnscrubbable<T>(scrub: () => T): T | typeof UNSCRUBBABLE {
+	// A throwing getter, proxy trap or toString must not escape a Sentry hook or pass raw data through.
+	try {
+		return scrub();
+	} catch {
+		return UNSCRUBBABLE;
+	}
+}
 
 function scrubTextValues(value: unknown, ancestors: object[] = []): unknown {
+	return orUnscrubbable(() => walkTextValues(value, ancestors));
+}
+
+function walkTextValues(value: unknown, ancestors: object[] = []): unknown {
 	if (typeof value === 'string') return scrubText(value);
+	if (typeof value === 'symbol') return scrubText(String(value));
 	if (value === null || typeof value !== 'object') return value;
 	if (ancestors.includes(value)) return '[Circular]';
 	if (ancestors.length >= MAX_SCRUB_DEPTH) return '[Depth]';
 	const next = [...ancestors, value];
 	if (value instanceof Error) {
 		return {
-			name: scrubText(value.name),
-			message: scrubText(value.message),
-			...(typeof value.stack === 'string' ? { stack: scrubText(value.stack) } : {}),
+			name: scrubText(String(value.name)),
+			message: scrubText(String(value.message)),
+			...(value.stack !== undefined ? { stack: scrubText(String(value.stack)) } : {}),
 		};
 	}
 	if (Array.isArray(value)) return value.map((item) => scrubTextValues(item, next));
@@ -174,16 +189,21 @@ function stripOrigin(url: string): string {
 }
 
 function scrubUrlValues(value: unknown, ancestors: object[] = []): unknown {
+	return orUnscrubbable(() => walkUrlValues(value, ancestors));
+}
+
+function walkUrlValues(value: unknown, ancestors: object[] = []): unknown {
 	if (typeof value === 'string') return stripOrigin(value);
+	if (typeof value === 'symbol') return scrubText(String(value));
 	if (value === null || typeof value !== 'object') return value;
 	if (ancestors.includes(value)) return '[Circular]';
 	if (ancestors.length >= MAX_SCRUB_DEPTH) return '[Depth]';
 	const next = [...ancestors, value];
 	if (value instanceof Error) {
 		return {
-			name: scrubText(value.name),
-			message: scrubText(value.message),
-			...(typeof value.stack === 'string' ? { stack: scrubText(value.stack) } : {}),
+			name: scrubText(String(value.name)),
+			message: scrubText(String(value.message)),
+			...(value.stack !== undefined ? { stack: scrubText(String(value.stack)) } : {}),
 		};
 	}
 	if (Array.isArray(value)) return value.map((item) => scrubUrlValues(item, next));
@@ -204,8 +224,14 @@ function scrubComponentStack(stack: string): string {
 /**
  * Also the SDK's beforeBreadcrumb: React Native copies each breadcrumb to the native SDK
  * as it is added; native crashes, hangs and watchdog events never pass JS beforeSend.
+ * A breadcrumb that cannot be scrubbed is dropped.
  */
-export function scrubBreadcrumb<T extends SentryBreadcrumbLike>(breadcrumb: T): T {
+export function scrubBreadcrumb<T extends SentryBreadcrumbLike>(breadcrumb: T): T | null {
+	const result = orUnscrubbable(() => scrubBreadcrumbFields(breadcrumb));
+	return result === UNSCRUBBABLE || (result.data as unknown) === UNSCRUBBABLE ? null : result;
+}
+
+function scrubBreadcrumbFields<T extends SentryBreadcrumbLike>(breadcrumb: T): T {
 	if (typeof breadcrumb.message === 'string') breadcrumb.message = scrubText(breadcrumb.message);
 	if (breadcrumb.data)
 		breadcrumb.data = scrubTextValues(breadcrumb.data) as Record<string, unknown>;
@@ -216,6 +242,28 @@ export function scrubBreadcrumb<T extends SentryBreadcrumbLike>(breadcrumb: T): 
 }
 
 export function scrubEvent<T extends SentryEventLike>(event: T): T {
+	try {
+		return scrubEventSections(event);
+	} catch {
+		// beforeSend drops an event that throws; send it without sections that may be unscrubbed.
+		const sections = [
+			'message',
+			'exception',
+			'request',
+			'breadcrumbs',
+			'extra',
+			'contexts',
+			'fingerprint',
+		];
+		const result = orUnscrubbable(
+			() =>
+				Object.fromEntries(Object.entries(event).filter(([key]) => !sections.includes(key))) as T
+		);
+		return result === UNSCRUBBABLE ? ({} as T) : result;
+	}
+}
+
+function scrubEventSections<T extends SentryEventLike>(event: T): T {
 	// The title Sentry shows is the message or the exception value; a log line can
 	// embed a Bearer token or a `user:pass@host` URL, and `extra` being scrubbed
 	// does nothing for the copy in the title.
@@ -235,9 +283,10 @@ export function scrubEvent<T extends SentryEventLike>(event: T): T {
 	if (event.request?.url) {
 		event.request.url = stripOrigin(event.request.url);
 	}
-	for (const breadcrumb of event.breadcrumbs ?? []) {
-		scrubBreadcrumb(breadcrumb);
-	}
+	if (event.breadcrumbs)
+		event.breadcrumbs = event.breadcrumbs.filter(
+			(breadcrumb) => scrubBreadcrumb(breadcrumb) !== null
+		);
 	if (event.extra) {
 		event.extra = Object.fromEntries(
 			Object.entries(event.extra).map(([key, value]) => [key, scrubUrlValues(value)])
