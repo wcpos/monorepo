@@ -38,11 +38,13 @@ export function createPendingCaptures() {
 export const SENTRY_DSN =
 	'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733';
 
+export type SentryBreadcrumbLike = { message?: string; data?: Record<string, unknown> };
+
 type SentryEventLike = {
 	message?: string;
 	exception?: { values?: { type?: string; value?: string }[] };
 	request?: { url?: string };
-	breadcrumbs?: { message?: string; data?: Record<string, unknown> }[];
+	breadcrumbs?: SentryBreadcrumbLike[];
 	fingerprint?: string[];
 	extra?: Record<string, unknown>;
 	contexts?: Record<string, unknown>;
@@ -110,12 +112,19 @@ function scrubText(value: string): string {
 	return redactPersonalData(redactSensitiveText(value));
 }
 
+const PHONE_KEY = /phone|tel|mobile/i;
+
 function scrubTextValues(value: unknown): unknown {
 	if (typeof value === 'string') return scrubText(value);
 	if (Array.isArray(value)) return value.map(scrubTextValues);
 	if (value === null || typeof value !== 'object' || value instanceof Error) return value;
 	return Object.fromEntries(
-		Object.entries(value).map(([key, nestedValue]) => [key, scrubTextValues(nestedValue)])
+		Object.entries(value).map(([key, nestedValue]) => [
+			key,
+			PHONE_KEY.test(key) && typeof nestedValue === 'string'
+				? '[PHONE]'
+				: scrubTextValues(nestedValue),
+		])
 	);
 }
 
@@ -137,12 +146,31 @@ function scrubUrlValues(value: unknown): unknown {
 	if (Array.isArray(value)) return value.map(scrubUrlValues);
 	if (value === null || typeof value !== 'object' || value instanceof Error) return value;
 	return Object.fromEntries(
-		Object.entries(value).map(([key, nestedValue]) => [key, scrubUrlValues(nestedValue)])
+		Object.entries(value).map(([key, nestedValue]) => [
+			key,
+			PHONE_KEY.test(key) && typeof nestedValue === 'string'
+				? '[PHONE]'
+				: scrubUrlValues(nestedValue),
+		])
 	);
 }
 
 function scrubComponentStack(stack: string): string {
 	return scrubText(stack.replace(URL_ORIGIN, '{}'));
+}
+
+/**
+ * Also the SDK's beforeBreadcrumb: React Native copies each breadcrumb to the native SDK
+ * as it is added; native crashes, hangs and watchdog events never pass JS beforeSend.
+ */
+export function scrubBreadcrumb<T extends SentryBreadcrumbLike>(breadcrumb: T): T {
+	if (typeof breadcrumb.message === 'string') breadcrumb.message = scrubText(breadcrumb.message);
+	if (breadcrumb.data)
+		breadcrumb.data = scrubTextValues(breadcrumb.data) as Record<string, unknown>;
+	if (typeof breadcrumb.data?.url === 'string') {
+		breadcrumb.data.url = stripOrigin(breadcrumb.data.url);
+	}
+	return breadcrumb;
 }
 
 export function scrubEvent<T extends SentryEventLike>(event: T): T {
@@ -166,12 +194,7 @@ export function scrubEvent<T extends SentryEventLike>(event: T): T {
 		event.request.url = stripOrigin(event.request.url);
 	}
 	for (const breadcrumb of event.breadcrumbs ?? []) {
-		if (typeof breadcrumb.message === 'string') breadcrumb.message = scrubText(breadcrumb.message);
-		if (breadcrumb.data)
-			breadcrumb.data = scrubTextValues(breadcrumb.data) as Record<string, unknown>;
-		if (typeof breadcrumb.data?.url === 'string') {
-			breadcrumb.data.url = stripOrigin(breadcrumb.data.url);
-		}
+		scrubBreadcrumb(breadcrumb);
 	}
 	if (event.extra) {
 		event.extra = Object.fromEntries(

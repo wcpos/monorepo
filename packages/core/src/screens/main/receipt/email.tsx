@@ -169,7 +169,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 						context: {
 							blockCode: failure.blockCode,
 							orderId: orderID,
-							email,
+							hasRecipient: email.length > 0,
 							status: failure.status,
 							error: failure.reason,
 							serverCode: failure.code,

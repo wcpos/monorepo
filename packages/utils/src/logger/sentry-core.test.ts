@@ -1,4 +1,4 @@
-import { describeBareException, prepareEvent, scrubEvent } from './sentry-core';
+import { describeBareException, prepareEvent, scrubBreadcrumb, scrubEvent } from './sentry-core';
 
 describe('scrubEvent personal data', () => {
 	const email = 'jane@example.com';
@@ -6,6 +6,19 @@ describe('scrubEvent personal data', () => {
 	const message = `${email} ${phone}`;
 	const masked = '[EMAIL] [PHONE]';
 	it.each([
+		[
+			'phone fields and numeric order ids',
+			{
+				extra: { context: { orderId: 1234567, billing: { phone: '0612345678' } } },
+				contexts: { customer: { mobile: '0612345678' } },
+				breadcrumbs: [{ data: { tel: '0612345678' } }],
+			},
+			{
+				extra: { context: { orderId: 1234567, billing: { phone: '[PHONE]' } } },
+				contexts: { customer: { mobile: '[PHONE]' } },
+				breadcrumbs: [{ data: { tel: '[PHONE]' } }],
+			},
+		],
 		[
 			'message and exception',
 			{ message, exception: { values: [{ value: message }] } },
@@ -53,6 +66,22 @@ describe('scrubEvent personal data', () => {
 		expect(event).toEqual(expected);
 		expect(JSON.stringify(event)).not.toContain('jane@example.com');
 		expect(JSON.stringify(event)).not.toContain('412 345 678');
+	});
+	it('scrubs a breadcrumb before it reaches the native SDK', () => {
+		expect(
+			scrubBreadcrumb({
+				category: 'fetch',
+				message: 'jane@example.com',
+				data: {
+					method: 'GET',
+					url: 'https://shop.example.com/wp-json/wcpos/v1/customers?email=jane%40example.com',
+				},
+			})
+		).toEqual({
+			category: 'fetch',
+			message: '[EMAIL]',
+			data: { method: 'GET', url: '/wp-json/wcpos/v1/customers?email=[EMAIL]' },
+		});
 	});
 });
 

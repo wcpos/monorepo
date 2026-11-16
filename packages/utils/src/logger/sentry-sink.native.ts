@@ -7,6 +7,7 @@ import {
 	buildCaptureOptions,
 	createPendingCaptures,
 	prepareEvent,
+	scrubBreadcrumb,
 	SENTRY_DSN,
 } from './sentry-core';
 
@@ -65,6 +66,7 @@ function initialize(): void {
 		environment: AppInfo.platform,
 		sendDefaultPii: false,
 		beforeSend: prepareEvent,
+		beforeBreadcrumb: scrubBreadcrumb,
 		enableWatchdogTerminationTracking: true,
 	});
 	isInitialized = true;
