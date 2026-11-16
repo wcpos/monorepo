@@ -150,6 +150,21 @@ describe('scrubBreadcrumb hardening', () => {
 
 describe('scrub hooks never throw', () => {
 	const email = 'jane@example.com';
+	it('replaces a toJSON function in breadcrumb data', () => {
+		const result = scrubBreadcrumb({
+			category: 'console',
+			data: { arguments: [{ toJSON: () => email }] },
+		});
+		expect(JSON.stringify(result)).not.toContain(email);
+		expect(result?.data.arguments).toEqual([{ toJSON: '[Function]' }]);
+	});
+
+	it('replaces a toJSON function in event extra', () => {
+		const result = scrubEvent({ extra: { x: { toJSON: () => email } } });
+		expect(JSON.stringify(result)).not.toContain(email);
+		expect(result.extra).toEqual({ x: { toJSON: '[Function]' } });
+	});
+
 	it.each([
 		['an Error with a numeric name', () => Object.assign(new Error(email), { name: 42 })],
 		[

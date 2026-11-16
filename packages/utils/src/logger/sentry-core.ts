@@ -153,6 +153,7 @@ function scrubTextValues(value: unknown, ancestors: object[] = []): unknown {
 function walkTextValues(value: unknown, ancestors: object[] = []): unknown {
 	if (typeof value === 'string') return scrubText(value);
 	if (typeof value === 'symbol') return scrubText(String(value));
+	if (typeof value === 'function') return '[Function]';
 	if (value === null || typeof value !== 'object') return value;
 	if (ancestors.includes(value)) return '[Circular]';
 	if (ancestors.length >= MAX_SCRUB_DEPTH) return '[Depth]';
@@ -195,6 +196,7 @@ function scrubUrlValues(value: unknown, ancestors: object[] = []): unknown {
 function walkUrlValues(value: unknown, ancestors: object[] = []): unknown {
 	if (typeof value === 'string') return stripOrigin(value);
 	if (typeof value === 'symbol') return scrubText(String(value));
+	if (typeof value === 'function') return '[Function]';
 	if (value === null || typeof value !== 'object') return value;
 	if (ancestors.includes(value)) return '[Circular]';
 	if (ancestors.length >= MAX_SCRUB_DEPTH) return '[Depth]';
@@ -227,8 +229,11 @@ function scrubComponentStack(stack: string): string {
  * A breadcrumb that cannot be scrubbed is dropped.
  */
 export function scrubBreadcrumb<T extends SentryBreadcrumbLike>(breadcrumb: T): T | null {
-	const result = orUnscrubbable(() => scrubBreadcrumbFields(breadcrumb));
-	return result === UNSCRUBBABLE || (result.data as unknown) === UNSCRUBBABLE ? null : result;
+	const result = orUnscrubbable(() => {
+		const scrubbed = scrubBreadcrumbFields(breadcrumb);
+		return (scrubbed.data as unknown) === UNSCRUBBABLE ? UNSCRUBBABLE : scrubbed;
+	});
+	return result === UNSCRUBBABLE ? null : result;
 }
 
 function scrubBreadcrumbFields<T extends SentryBreadcrumbLike>(breadcrumb: T): T {
