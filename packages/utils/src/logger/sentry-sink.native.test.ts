@@ -187,6 +187,7 @@ describe('sentry-sink.native', () => {
 				environment: platform,
 				sendDefaultPii: false,
 				enableWatchdogTerminationTracking: true,
+				enableNetworkBreadcrumbs: false,
 				beforeSend: expect.any(Function),
 				beforeBreadcrumb: expect.any(Function),
 			})
