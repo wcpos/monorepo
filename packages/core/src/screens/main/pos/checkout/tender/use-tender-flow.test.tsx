@@ -292,6 +292,7 @@ let mockPayload: {
 } = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
 let mockMethodsLoaded = true;
 let mockMethods: PaymentMethodDescriptor[] = methods;
+let mockDefaultMethodId: string | null = null;
 let mockOnlineStatus = 'online-website-available';
 let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
@@ -354,6 +355,7 @@ jest.mock('../../../hooks/use-currency-format', () => ({
 jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({
 		methods: mockMethods,
+		defaultMethodId: mockDefaultMethodId,
 		byId: new Map(mockMethods.map((method) => [method.id, method])),
 		contract: 'payments-v1',
 		loaded: mockMethodsLoaded,
@@ -515,6 +517,7 @@ describe('useTenderFlow', () => {
 		// A store order: a manual leg journals against `orders/{id}/payments` (ADR 0040 Decided 1).
 		mockPayload = { id: 42, total: '92.95', meta_data: [] };
 		mockMethods = methods;
+		mockDefaultMethodId = null;
 		mockMethodsLoaded = true;
 		mockOnlineStatus = 'online-website-available';
 		mockTaxDisplayCart = 'excl';
@@ -924,6 +927,28 @@ describe('useTenderFlow', () => {
 		await act(async () => {});
 	});
 
+	it('preselects the store default over list order', async () => {
+		mockMethods = [cash, card];
+		mockDefaultMethodId = 'pos_card';
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.state.methodId).toBe('pos_card');
+		await act(async () => {});
+	});
+	it('a disabled or unknown default falls back to the first available', async () => {
+		for (const defaultMethodId of ['not_offered', 'device_card']) {
+			mockDefaultMethodId = defaultMethodId;
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			expect(result.current.state.methodId).toBe('pos_cash');
+			await act(async () => {});
+		}
+	});
+	it('a stored method beats the store default', async () => {
+		setTenderMethod(order.uuid, 'pos_cash');
+		mockDefaultMethodId = 'pos_card';
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.state.methodId).toBe('pos_cash');
+		await act(async () => {});
+	});
 	it('publishes a picked method to the URL store', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.commands.pickMethod('pos_cash'));

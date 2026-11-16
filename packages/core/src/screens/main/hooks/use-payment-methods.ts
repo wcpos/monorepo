@@ -9,6 +9,7 @@ export interface PaymentMethodsState {
 	methods: PaymentMethodDescriptor[];
 	byId: ReadonlyMap<string, PaymentMethodDescriptor>;
 	contract: string | null;
+	defaultMethodId: string | null;
 	loaded: boolean;
 	/** Contract §13: schema !== 1 → the app must refuse to take payments until updated. */
 	unsupportedSchema: boolean;
@@ -59,6 +60,7 @@ export function usePaymentMethods(): PaymentMethodsState {
 				methods: [],
 				byId: new Map<string, PaymentMethodDescriptor>(),
 				contract: null,
+				defaultMethodId: null,
 				loaded: false,
 				unsupportedSchema: false,
 			};
@@ -71,6 +73,7 @@ export function usePaymentMethods(): PaymentMethodsState {
 				methods: [],
 				byId: new Map<string, PaymentMethodDescriptor>(),
 				contract: value.contract,
+				defaultMethodId: null,
 				loaded: false,
 				unsupportedSchema: value.schema !== 1,
 			};
@@ -79,6 +82,10 @@ export function usePaymentMethods(): PaymentMethodsState {
 			methods,
 			byId: new Map(methods.map((method) => [method.id, method])),
 			contract: value.contract,
+			defaultMethodId:
+				typeof (value as { default_method?: unknown }).default_method === 'string'
+					? ((value as { default_method?: unknown }).default_method as string)
+					: null,
 			loaded: true,
 			unsupportedSchema: value.schema !== 1,
 		};
