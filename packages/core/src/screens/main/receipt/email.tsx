@@ -145,7 +145,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 							showToast: true,
 							context: {
 								orderId: orderID,
-								email,
+								hasRecipient: email.length > 0,
 							},
 						});
 						return closeDialog();

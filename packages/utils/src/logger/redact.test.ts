@@ -20,6 +20,12 @@ describe('redactPersonalData', () => {
 		['555-123-4567', '[PHONE]'],
 		['+1 (555) 123-4567', '[PHONE]'],
 		['call 0412 345 678.', 'call [PHONE].'],
+		['2026-11-16 612 345 678', '2026-11-16 [PHONE]'],
+		['call 612 345 678 699 111 222', 'call [PHONE]'],
+		['+34\u00a0612\u00a0345\u00a0678', '[PHONE]'],
+		['+34\u202f612\u202f345\u202f678', '[PHONE]'],
+		['jane%2540example.com', '[EMAIL]'],
+		['/orders?email=jane%2540example.com', '/orders?email=[EMAIL]'],
 	])('masks %s', (input, expected) => {
 		expect(redactPersonalData(input)).toBe(expected);
 	});
@@ -48,6 +54,7 @@ describe('redactPersonalData', () => {
 		'HTTP 503',
 		'1234567.89',
 		'https://[REDACTED]@shop.example.com/wp-json',
+		'192.168.100.200 10.10.10.10',
 	])('preserves %s', (input) => {
 		expect(redactPersonalData(input)).toBe(input);
 	});
