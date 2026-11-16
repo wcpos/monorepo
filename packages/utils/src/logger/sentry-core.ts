@@ -108,22 +108,54 @@ export function prepareEvent<T extends SentryEventLike>(
 	return scrubEvent(describeBareException(event, hint));
 }
 
-function scrubText(value: string): string {
+function scrubPlainText(value: string): string {
 	return redactPersonalData(redactSensitiveText(value));
 }
 
-const PHONE_KEY = /phone|tel|mobile/i;
+// Encoded values hide phones and emails; only changed values use their scrubbed decoded form.
+const QUERY_VALUE = /([?&][^=&#\s]{1,64}=)([^&#\s]{1,2048})/g;
 
-function scrubTextValues(value: unknown): unknown {
+function scrubQueryValues(text: string): string {
+	return text.replace(QUERY_VALUE, (match, key: string, value: string) => {
+		let decoded: string;
+		try {
+			decoded = decodeURIComponent(value.replace(/\+/g, ' '));
+		} catch {
+			return match;
+		}
+		const scrubbed = scrubPlainText(key + decoded);
+		return scrubbed === key + decoded ? match : scrubbed;
+	});
+}
+
+function scrubText(value: string): string {
+	return scrubPlainText(scrubQueryValues(value));
+}
+
+const PHONE_KEY = /phone|tel|mobile/i;
+// The SDK normalizes far shallower; drop deeper data rather than send it unscrubbed.
+const MAX_SCRUB_DEPTH = 10;
+
+function scrubTextValues(value: unknown, ancestors: object[] = []): unknown {
 	if (typeof value === 'string') return scrubText(value);
-	if (Array.isArray(value)) return value.map(scrubTextValues);
-	if (value === null || typeof value !== 'object' || value instanceof Error) return value;
+	if (value === null || typeof value !== 'object') return value;
+	if (ancestors.includes(value)) return '[Circular]';
+	if (ancestors.length >= MAX_SCRUB_DEPTH) return '[Depth]';
+	const next = [...ancestors, value];
+	if (value instanceof Error) {
+		return {
+			name: scrubText(value.name),
+			message: scrubText(value.message),
+			...(typeof value.stack === 'string' ? { stack: scrubText(value.stack) } : {}),
+		};
+	}
+	if (Array.isArray(value)) return value.map((item) => scrubTextValues(item, next));
 	return Object.fromEntries(
 		Object.entries(value).map(([key, nestedValue]) => [
 			key,
 			PHONE_KEY.test(key) && typeof nestedValue === 'string'
 				? '[PHONE]'
-				: scrubTextValues(nestedValue),
+				: scrubTextValues(nestedValue, next),
 		])
 	);
 }
@@ -141,16 +173,26 @@ function stripOrigin(url: string): string {
 	}
 }
 
-function scrubUrlValues(value: unknown): unknown {
+function scrubUrlValues(value: unknown, ancestors: object[] = []): unknown {
 	if (typeof value === 'string') return stripOrigin(value);
-	if (Array.isArray(value)) return value.map(scrubUrlValues);
-	if (value === null || typeof value !== 'object' || value instanceof Error) return value;
+	if (value === null || typeof value !== 'object') return value;
+	if (ancestors.includes(value)) return '[Circular]';
+	if (ancestors.length >= MAX_SCRUB_DEPTH) return '[Depth]';
+	const next = [...ancestors, value];
+	if (value instanceof Error) {
+		return {
+			name: scrubText(value.name),
+			message: scrubText(value.message),
+			...(typeof value.stack === 'string' ? { stack: scrubText(value.stack) } : {}),
+		};
+	}
+	if (Array.isArray(value)) return value.map((item) => scrubUrlValues(item, next));
 	return Object.fromEntries(
 		Object.entries(value).map(([key, nestedValue]) => [
 			key,
 			PHONE_KEY.test(key) && typeof nestedValue === 'string'
 				? '[PHONE]'
-				: scrubUrlValues(nestedValue),
+				: scrubUrlValues(nestedValue, next),
 		])
 	);
 }

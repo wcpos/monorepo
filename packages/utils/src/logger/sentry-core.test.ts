@@ -85,6 +85,69 @@ describe('scrubEvent personal data', () => {
 	});
 });
 
+describe('scrubBreadcrumb hardening', () => {
+	it('replaces an Error argument with a scrubbed plain copy', () => {
+		const error = new Error('email exists jane@example.com');
+		const result = scrubBreadcrumb({
+			message: 'x',
+			data: { arguments: [error], logger: 'console' },
+		});
+		expect(result.data.arguments[0]).not.toBeInstanceOf(Error);
+		expect(result.data.arguments[0]).toEqual(
+			expect.objectContaining({ name: 'Error', message: 'email exists [EMAIL]' })
+		);
+		expect(JSON.stringify(result)).not.toContain('jane@example.com');
+		expect(error.message).toBe('email exists jane@example.com');
+	});
+
+	it('survives a circular argument', () => {
+		const loop: Record<string, unknown> = { email: 'jane@example.com' };
+		loop.self = loop;
+		const result = scrubBreadcrumb({ data: { arguments: [loop] } });
+		expect(result.data.arguments[0]).toEqual({ email: '[EMAIL]', self: '[Circular]' });
+	});
+
+	it('drops data nested past the depth limit', () => {
+		let payload: Record<string, unknown> = { email: 'jane@example.com' };
+		for (let i = 0; i < 20; i++) payload = { next: payload };
+		const result = scrubBreadcrumb({ data: { payload } });
+		expect(JSON.stringify(result)).toContain('[Depth]');
+		expect(JSON.stringify(result)).not.toContain('jane@example.com');
+	});
+
+	it.each([
+		[
+			'https://shop.example/wp-json/wcpos/v1/customers?search=%2B34+612+345+678&per_page=10',
+			'/wp-json/wcpos/v1/customers?search=[PHONE]&per_page=10',
+		],
+		[
+			'https://shop.example/wp-json/wcpos/v1/customers?per_page=10&search=j%C3%A4ne%40ex%C3%A4mple.de',
+			'/wp-json/wcpos/v1/customers?per_page=10&search=[EMAIL]',
+		],
+		[
+			'https://shop.example/wp-json/wcpos/v1/customers?search=612+345+678',
+			'/wp-json/wcpos/v1/customers?search=[PHONE]',
+		],
+	])('masks the encoded query value in %s', (url, expected) => {
+		expect(scrubBreadcrumb({ data: { url } }).data.url).toBe(expected);
+	});
+
+	it('leaves unmatched query values encoded', () => {
+		const url =
+			'https://shop.example/wp-json/wcpos/v2/orders?after=2026-11-16T10%3A00%3A00&include=12%2C34';
+		expect(scrubBreadcrumb({ data: { url } }).data.url).toBe(
+			'/wp-json/wcpos/v2/orders?after=2026-11-16T10%3A00%3A00&include=12%2C34'
+		);
+	});
+
+	it('masks an encoded query value in message text', () => {
+		const result = scrubBreadcrumb({
+			message: 'GET https://shop.example/x?search=612+345+678 failed',
+		});
+		expect(result.message).toBe('GET https://shop.example/x?search=[PHONE] failed');
+	});
+});
+
 describe('describeBareException', () => {
 	it('leaves an error with a message unchanged', () => {
 		const event = { exception: { values: [{ value: 'Something failed' }] } };
