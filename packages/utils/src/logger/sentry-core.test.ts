@@ -92,8 +92,8 @@ describe('scrubBreadcrumb hardening', () => {
 			message: 'x',
 			data: { arguments: [error], logger: 'console' },
 		});
-		expect(result.data.arguments[0]).not.toBeInstanceOf(Error);
-		expect(result.data.arguments[0]).toEqual(
+		expect(result?.data.arguments[0]).not.toBeInstanceOf(Error);
+		expect(result?.data.arguments[0]).toEqual(
 			expect.objectContaining({ name: 'Error', message: 'email exists [EMAIL]' })
 		);
 		expect(JSON.stringify(result)).not.toContain('jane@example.com');
@@ -104,7 +104,7 @@ describe('scrubBreadcrumb hardening', () => {
 		const loop: Record<string, unknown> = { email: 'jane@example.com' };
 		loop.self = loop;
 		const result = scrubBreadcrumb({ data: { arguments: [loop] } });
-		expect(result.data.arguments[0]).toEqual({ email: '[EMAIL]', self: '[Circular]' });
+		expect(result?.data.arguments[0]).toEqual({ email: '[EMAIL]', self: '[Circular]' });
 	});
 
 	it('drops data nested past the depth limit', () => {
@@ -129,13 +129,13 @@ describe('scrubBreadcrumb hardening', () => {
 			'/wp-json/wcpos/v1/customers?search=[PHONE]',
 		],
 	])('masks the encoded query value in %s', (url, expected) => {
-		expect(scrubBreadcrumb({ data: { url } }).data.url).toBe(expected);
+		expect(scrubBreadcrumb({ data: { url } })?.data.url).toBe(expected);
 	});
 
 	it('leaves unmatched query values encoded', () => {
 		const url =
 			'https://shop.example/wp-json/wcpos/v2/orders?after=2026-11-16T10%3A00%3A00&include=12%2C34';
-		expect(scrubBreadcrumb({ data: { url } }).data.url).toBe(
+		expect(scrubBreadcrumb({ data: { url } })?.data.url).toBe(
 			'/wp-json/wcpos/v2/orders?after=2026-11-16T10%3A00%3A00&include=12%2C34'
 		);
 	});
@@ -144,7 +144,91 @@ describe('scrubBreadcrumb hardening', () => {
 		const result = scrubBreadcrumb({
 			message: 'GET https://shop.example/x?search=612+345+678 failed',
 		});
-		expect(result.message).toBe('GET https://shop.example/x?search=[PHONE] failed');
+		expect(result?.message).toBe('GET https://shop.example/x?search=[PHONE] failed');
+	});
+});
+
+describe('scrub hooks never throw', () => {
+	const email = 'jane@example.com';
+	it('replaces a toJSON function in breadcrumb data', () => {
+		const result = scrubBreadcrumb({
+			category: 'console',
+			data: { arguments: [{ toJSON: () => email }] },
+		});
+		expect(JSON.stringify(result)).not.toContain(email);
+		expect(result?.data.arguments).toEqual([{ toJSON: '[Function]' }]);
+	});
+
+	it('replaces a toJSON function in event extra', () => {
+		const result = scrubEvent({ extra: { x: { toJSON: () => email } } });
+		expect(JSON.stringify(result)).not.toContain(email);
+		expect(result.extra).toEqual({ x: { toJSON: '[Function]' } });
+	});
+
+	it.each([
+		['an Error with a numeric name', () => Object.assign(new Error(email), { name: 42 })],
+		[
+			'an Error with a throwing stack getter',
+			() =>
+				Object.defineProperty(new Error(email), 'stack', {
+					get() {
+						throw new Error(email);
+					},
+				}),
+		],
+		[
+			'an object with a throwing getter',
+			() => ({
+				email,
+				get boom(): never {
+					throw new Error(email);
+				},
+			}),
+		],
+		[
+			'a revoked Proxy',
+			() => {
+				const { proxy, revoke } = Proxy.revocable({ email }, {});
+				revoke();
+				return proxy;
+			},
+		],
+		['BigInt and Symbol values', () => ({ big: 10n, sym: Symbol(email) })],
+	])('scrubs %s', (_name, makeValue) => {
+		const value = makeValue();
+		const breadcrumb = scrubBreadcrumb({ message: email, data: { value } });
+		const event = scrubEvent({ message: email, extra: { value }, contexts: { value: { value } } });
+		const replacer = (_key: string, v: unknown) =>
+			typeof v === 'bigint' || typeof v === 'symbol' ? String(v) : v;
+		expect(JSON.stringify([breadcrumb, event], replacer)).not.toContain(email);
+		expect(event.message).toBe('[EMAIL]');
+	});
+
+	it('coerces a numeric Error name before scrubbing', () => {
+		expect(
+			scrubBreadcrumb({ data: { value: Object.assign(new Error(email), { name: 42 }) } })?.data
+				.value
+		).toEqual(expect.objectContaining({ name: '42', message: '[EMAIL]' }));
+	});
+
+	it('drops a breadcrumb whose data cannot be scrubbed', () => {
+		const { proxy, revoke } = Proxy.revocable({ email }, {});
+		revoke();
+		expect(scrubBreadcrumb({ message: email, data: proxy })).toBeNull();
+		expect(
+			scrubEvent({ breadcrumbs: [{ message: email, data: proxy }, { message: 'kept' }] })
+				.breadcrumbs
+		).toEqual([{ message: 'kept' }]);
+	});
+
+	it('sends the event without its scrubbed sections when the scrub throws', () => {
+		expect(
+			scrubEvent({
+				message: email,
+				request: { url: 42 as unknown as string },
+				tags: { area: 'pos' },
+			})
+		).toEqual({ tags: { area: 'pos' } });
 	});
 });
 
