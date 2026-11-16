@@ -1,4 +1,4 @@
-import { redactSensitiveText } from './redact';
+import { redactPersonalData, redactSensitiveText } from './redact';
 
 export type SentryCaptureInput = {
 	message: string;
@@ -42,7 +42,8 @@ type SentryEventLike = {
 	message?: string;
 	exception?: { values?: { type?: string; value?: string }[] };
 	request?: { url?: string };
-	breadcrumbs?: { data?: Record<string, unknown> }[];
+	breadcrumbs?: { message?: string; data?: Record<string, unknown> }[];
+	fingerprint?: string[];
 	extra?: Record<string, unknown>;
 	contexts?: Record<string, unknown>;
 };
@@ -105,16 +106,29 @@ export function prepareEvent<T extends SentryEventLike>(
 	return scrubEvent(describeBareException(event, hint));
 }
 
+function scrubText(value: string): string {
+	return redactPersonalData(redactSensitiveText(value));
+}
+
+function scrubTextValues(value: unknown): unknown {
+	if (typeof value === 'string') return scrubText(value);
+	if (Array.isArray(value)) return value.map(scrubTextValues);
+	if (value === null || typeof value !== 'object' || value instanceof Error) return value;
+	return Object.fromEntries(
+		Object.entries(value).map(([key, nestedValue]) => [key, scrubTextValues(nestedValue)])
+	);
+}
+
 function stripOrigin(url: string): string {
 	try {
 		const parsedUrl = new URL(url);
 		// Log text like `write: orders/…` parses with a `write:` scheme; only web URLs carry an origin.
 		if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-			return redactSensitiveText(url);
+			return scrubText(url);
 		}
-		return redactSensitiveText(`${parsedUrl.pathname}${parsedUrl.search}`);
+		return scrubText(`${parsedUrl.pathname}${parsedUrl.search}`);
 	} catch {
-		return redactSensitiveText(url);
+		return scrubText(url);
 	}
 }
 
@@ -128,7 +142,7 @@ function scrubUrlValues(value: unknown): unknown {
 }
 
 function scrubComponentStack(stack: string): string {
-	return redactSensitiveText(stack.replace(URL_ORIGIN, '{}'));
+	return scrubText(stack.replace(URL_ORIGIN, '{}'));
 }
 
 export function scrubEvent<T extends SentryEventLike>(event: T): T {
@@ -136,22 +150,25 @@ export function scrubEvent<T extends SentryEventLike>(event: T): T {
 	// embed a Bearer token or a `user:pass@host` URL, and `extra` being scrubbed
 	// does nothing for the copy in the title.
 	if (typeof event.message === 'string') {
-		event.message = redactSensitiveText(event.message);
+		event.message = scrubText(event.message);
 	}
 	for (const exception of event.exception?.values ?? []) {
 		// Sentry copies Error.name into `type`, so a credential smuggled through a custom
 		// error name needs the same scrub as the message.
 		if (typeof exception.type === 'string') {
-			exception.type = redactSensitiveText(exception.type);
+			exception.type = scrubText(exception.type);
 		}
 		if (typeof exception.value === 'string') {
-			exception.value = redactSensitiveText(exception.value);
+			exception.value = scrubText(exception.value);
 		}
 	}
 	if (event.request?.url) {
 		event.request.url = stripOrigin(event.request.url);
 	}
 	for (const breadcrumb of event.breadcrumbs ?? []) {
+		if (typeof breadcrumb.message === 'string') breadcrumb.message = scrubText(breadcrumb.message);
+		if (breadcrumb.data)
+			breadcrumb.data = scrubTextValues(breadcrumb.data) as Record<string, unknown>;
 		if (typeof breadcrumb.data?.url === 'string') {
 			breadcrumb.data.url = stripOrigin(breadcrumb.data.url);
 		}
@@ -165,6 +182,8 @@ export function scrubEvent<T extends SentryEventLike>(event: T): T {
 	// that URL is the merchant's origin. The stack is not itself a URL, so the
 	// per-value stripper above never fires on it; strip the origins embedded in
 	// it, in both places the boundary report puts it.
+	if (event.contexts) event.contexts = scrubTextValues(event.contexts) as Record<string, unknown>;
+	if (event.fingerprint) event.fingerprint = event.fingerprint.map(scrubText);
 	const react = event.contexts?.react;
 	if (react && typeof react === 'object' && 'componentStack' in react) {
 		const stack = (react as { componentStack?: unknown }).componentStack;

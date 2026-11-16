@@ -1,5 +1,61 @@
 import { describeBareException, prepareEvent, scrubEvent } from './sentry-core';
 
+describe('scrubEvent personal data', () => {
+	const email = 'jane@example.com';
+	const phone = '+61 412 345 678';
+	const message = `${email} ${phone}`;
+	const masked = '[EMAIL] [PHONE]';
+	it.each([
+		[
+			'message and exception',
+			{ message, exception: { values: [{ value: message }] } },
+			{ message: masked, exception: { values: [{ value: masked }] } },
+		],
+		[
+			'extra and contexts',
+			{
+				extra: { message, context: { orderId: 42, customer: { email, phone } } },
+				contexts: { thrown: { string: message } },
+			},
+			{
+				extra: {
+					message: masked,
+					context: { orderId: 42, customer: { email: '[EMAIL]', phone: '[PHONE]' } },
+				},
+				contexts: { thrown: { string: masked } },
+			},
+		],
+		[
+			'console breadcrumbs and fingerprint',
+			{
+				breadcrumbs: [
+					{
+						category: 'console',
+						message: `ERROR : Failed | Context: {"email":"${email}","phone":"${phone}"}`,
+						data: { arguments: [email, phone], logger: 'console' },
+					},
+				],
+				fingerprint: ['code', email],
+			},
+			{
+				breadcrumbs: [
+					{
+						category: 'console',
+						message: 'ERROR : Failed | Context: {"email":"[EMAIL]","phone":"[PHONE]"}',
+						data: { arguments: ['[EMAIL]', '[PHONE]'], logger: 'console' },
+					},
+				],
+				fingerprint: ['code', '[EMAIL]'],
+			},
+		],
+	])('masks %s', (_name, input, expected) => {
+		const event = prepareEvent(input);
+		expect(event).toEqual(expected);
+		expect(JSON.stringify(event)).not.toContain('jane@example.com');
+		expect(JSON.stringify(event)).not.toContain('412 345 678');
+	});
+});
+
 describe('describeBareException', () => {
 	it('leaves an error with a message unchanged', () => {
 		const event = { exception: { values: [{ value: 'Something failed' }] } };

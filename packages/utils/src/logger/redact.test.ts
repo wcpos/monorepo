@@ -1,4 +1,37 @@
-import { redactSensitiveFields, redactSensitiveText } from './redact';
+import { redactPersonalData, redactSensitiveFields, redactSensitiveText } from './redact';
+
+describe('redactPersonalData', () => {
+	it.each([
+		['jane.doe+pos@example.co.uk', '[EMAIL]'],
+		['+61 412 345 678', '[PHONE]'],
+		['0412 345 678', '[PHONE]'],
+		['0412345678', '[PHONE]'],
+		['(02) 9876 5432', '[PHONE]'],
+		['555-123-4567', '[PHONE]'],
+		['+1 (555) 123-4567', '[PHONE]'],
+		['call 0412 345 678.', 'call [PHONE].'],
+	])('masks %s', (input, expected) => {
+		expect(redactPersonalData(input)).toBe(expected);
+	});
+	it.each([
+		'2026-11-16',
+		'2026-11-16T10:12:20.123Z',
+		'2026-11-16 10:12:20',
+		'123e4567-e89b-12d3-a456-426614174000',
+		'1.10.18',
+		'order 12345',
+		'HTTP 503',
+		'1234567.89',
+		'https://[REDACTED]@shop.example.com/wp-json',
+	])('preserves %s', (input) => {
+		expect(redactPersonalData(input)).toBe(input);
+	});
+	it('leaves personal data in local logs unchanged', () => {
+		expect(redactSensitiveFields({ email: 'jane@example.com' })).toEqual({
+			email: 'jane@example.com',
+		});
+	});
+});
 
 describe('redactSensitiveFields', () => {
 	it.each([

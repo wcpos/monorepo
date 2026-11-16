@@ -69,6 +69,17 @@ function isBasicCredential(token: string): boolean {
 	);
 }
 
+export function redactPersonalData(value: string): string {
+	return value
+		.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g, '[EMAIL]')
+		.replace(/(^|[^\w+.-])(\+?\(?\d[\d ()-]{5,}\d)(?![\w-]|\.\d)/g, (match, prefix, phone) => {
+			const digits = phone.replace(/\D/g, '').length;
+			return digits >= 7 && digits <= 15 && !/^\d{4}-\d{2}-\d{2}(?!\d)/.test(phone)
+				? `${prefix}[PHONE]`
+				: match;
+		});
+}
+
 export function redactSensitiveText(value: string): string {
 	return value
 		.replace(/(https?:\/\/)[^/\s@]+@/gi, '$1[REDACTED]@')
