@@ -22,10 +22,15 @@
  *    matched pair recurses. A pushed element WITHOUT an id is an append Woo will
  *    add, never an overwrite. Id-less arrays compare positionally and report a
  *    length difference once (`taxes.length`).
+ *  - an `id` leaf is the same id as an integer or its decimal-integer string
+ *    (`42` and `"42"`: the bare wc/v3 409 body stringifies some ids).
+ *  - a server-only row in a nested `meta_data` (a line's meta) is not reported,
+ *    for the same merge-by-key reason as the skipped top-level `meta_data`.
  *  - total over any JSON-ish input: a malformed shape yields paths, never a throw.
  */
 const MAX_DEPTH = 6;
 const DECIMAL_LITERAL = /^-?(0|[1-9]\d*)(\.\d+)?$/;
+const INTEGER_LITERAL = /^-?(0|[1-9]\d*)$/;
 const ORDER_MONEY_PATHS = new Set([
 	'total',
 	'total_tax',
@@ -66,6 +71,12 @@ function decimalText(value: unknown): string | null {
 	if (decimalAt >= digits.length) return `${sign}${digits}${'0'.repeat(decimalAt - digits.length)}`;
 	return `${sign}${digits.slice(0, decimalAt)}.${digits.slice(decimalAt)}`;
 }
+function idText(value: unknown): string | null {
+	if (typeof value === 'number') return Number.isSafeInteger(value) ? String(value) : null;
+	return typeof value === 'string' && INTEGER_LITERAL.test(value) ? value : null;
+}
+const idEqual = (left: unknown, right: unknown, path: string): boolean =>
+	/(?:^|\.)id$/.test(path) && idText(left) !== null && idText(left) === idText(right);
 function moneyEqual(left: unknown, right: unknown, path: string): boolean {
 	if (
 		!ORDER_MONEY_PATHS.has(path) &&
@@ -92,7 +103,8 @@ function moneyEqual(left: unknown, right: unknown, path: string): boolean {
 export function diffConflictOverwrite(pushed: ObjectValue, server: ObjectValue): string[] {
 	const paths: string[] = [];
 	const compare = (left: unknown, right: unknown, path: string, depth: number): void => {
-		if (depth > MAX_DEPTH || Object.is(left, right) || moneyEqual(left, right, path)) return;
+		if (depth > MAX_DEPTH || Object.is(left, right)) return;
+		if (moneyEqual(left, right, path) || idEqual(left, right, path)) return;
 		if (Array.isArray(left) && Array.isArray(right)) {
 			if (depth === MAX_DEPTH) return;
 			if (right.every(identified) && left.every(objectValue)) {
@@ -104,7 +116,9 @@ export function diffConflictOverwrite(pushed: ObjectValue, server: ObjectValue):
 					else paths.push(itemPath);
 				}
 				for (const id of serverById.keys()) {
-					if (!pushedById.has(id)) paths.push(`${path}[${String(id)}]`);
+					// Woo merges meta by key on PUT: a server-only line meta row is kept, not overwritten.
+					if (!pushedById.has(id) && !path.endsWith('.meta_data'))
+						paths.push(`${path}[${String(id)}]`);
 				}
 				return;
 			}

@@ -9,6 +9,7 @@ import {
 	recordCoverage,
 } from './rx-scheduler-collection-fetcher';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
+import { wooGmtDate } from './woo-gmt-date';
 
 import type { LocalRefundDocument, WooRefundPayload } from '../collections/refund-schema';
 import type { SchedulerFetcher } from './replication-policy';
@@ -27,16 +28,21 @@ export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDo
 	heldParentIds(ids: number[]): Promise<Map<number, number[] | null>>;
 };
 
+// Reports browse passes anyStore (front desk ruling F3b, 2026-11-14: reports cover every store).
+// Till lanes keep #2122's store veto: a store-scoped till never holds a parentless
+// refund of another store.
 export async function admitRefundPage(
 	input: RefundSchedulerFetcherInput,
-	rows: WooRefundPayload[]
+	rows: WooRefundPayload[],
+	options: { anyStore?: boolean } = {}
 ) {
+	const scope = options.anyStore ? undefined : input.scope;
 	const held = await input.heldParentIds([...new Set(rows.map((row) => row.parent_id))]);
 	const documents = rows
 		.filter((row) => {
 			const listed = held.get(row.parent_id);
 			if (listed !== undefined) return listed === null || listed.includes(row.id);
-			return hasPosRefundStamp(row.meta_data, input.scope);
+			return hasPosRefundStamp(row.meta_data, scope);
 		})
 		.map((raw) => materializeRefund(raw).storedDocument);
 	let applied = (await input.repository.upsertMany(documents)) ?? documents;
@@ -47,7 +53,7 @@ export async function admitRefundPage(
 		const removed = applied.filter(({ payload }) => {
 			const listed = current.get(payload.parent_id);
 			if (listed !== undefined) return Array.isArray(listed) && !listed.includes(payload.id);
-			return !hasPosRefundStamp(payload.meta_data, input.scope);
+			return !hasPosRefundStamp(payload.meta_data, scope);
 		});
 		if (removed.length > 0) {
 			await input.repository.removeMany(removed);
@@ -81,7 +87,9 @@ export function createRefundsSchedulerFetcher(
 			page: 1,
 			perPage: Math.min(task.limit, WOO_REST_MAX_PER_PAGE),
 			ids: [],
-			after: new Date((input.nowMs?.() ?? Date.now()) - HISTORY_DAYS * 86400000).toISOString(),
+			after: wooGmtDate(
+				Math.floor(((input.nowMs?.() ?? Date.now()) - HISTORY_DAYS * 86400000) / 1000)
+			),
 		};
 		const query = new URLSearchParams({
 			...(lane.kind === 'history' ? { after: walk.after } : { parent: lane.parentRemoteId }),

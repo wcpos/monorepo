@@ -21,7 +21,12 @@ import {
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
-import { isoGmt, remintRegister } from '../../src/register-session/register-document';
+import {
+	adoptCounters,
+	isoGmt,
+	remintRegister,
+	reviseClosureReservation,
+} from '../../src/register-session/register-document';
 import {
 	adoptSessionRow,
 	drainRegisterSessionQueue,
@@ -70,6 +75,21 @@ const open = () =>
 		openedBy: 7,
 		businessDay: { year: 2026, month: 9, day: 16 },
 	});
+/** The closure `closeRegister` writes before its close may leave (#3289), from the recorded count. */
+async function seedClosure(id: string) {
+	const session = (await db.register_sessions.findOne(id).exec())!.toJSON(true);
+	const { cash = '0', ...otherTenders } = (session.counted ?? {}) as Record<string, string>;
+	await writeClosure({
+		storeDB: db,
+		userDB,
+		siteUuid: 'site',
+		session,
+		counted: cash,
+		otherTenders,
+		movements: [],
+		orders: [],
+	});
+}
 const drain = (storeDB = { collections: db.collections }) =>
 	drainRegisterSessionQueue({
 		storeDB,
@@ -743,6 +763,7 @@ it('closes a predecessor before creating its successor on the same register', as
 		status_at: new Date().toISOString(),
 		closed_at_gmt: new Date().toISOString(),
 	});
+	await seedClosure(predecessor.id);
 	const successor = await open();
 	http.post.mockImplementation(async (url) => ({
 		data: {
@@ -755,12 +776,14 @@ it('closes a predecessor before creating its successor on the same register', as
 	expect(http.post.mock.calls.map(([url]) => url)).toEqual([
 		`sessions/${predecessor.id}/status`,
 		`sessions/${predecessor.id}/status`,
+		'closures',
 	]);
 
 	await drain();
 	expect(http.post.mock.calls.map(([url]) => url)).toEqual([
 		`sessions/${predecessor.id}/status`,
 		`sessions/${predecessor.id}/status`,
+		'closures',
 		'sessions',
 	]);
 });
@@ -787,6 +810,7 @@ it('recovers a refused close to counting, preserving counts and machine-readable
 		approved_counted: { cash: '80', card: '10' },
 	});
 	await closeSession(db, row.id, { counted: { cash: '80', card: '10' } });
+	await seedClosure(row.id);
 	http.post.mockRejectedValue({
 		response: {
 			status: 403,
@@ -1030,6 +1054,7 @@ it('names a refused open and a refused close apart', async () => {
 		sync_status: 'synced',
 	});
 	await closeSession(db, other.id, { counted: { cash: '100' } });
+	await seedClosure(other.id);
 	http.post.mockRejectedValueOnce({
 		response: { status: 400, data: { code: 'rest_invalid_param' } },
 	});
@@ -1097,6 +1122,7 @@ it.each([
 				sync_status: 'synced',
 			});
 			await closeSession(db, row.id, { counted: { cash: '100' } });
+			await seedClosure(row.id);
 		},
 	],
 	[
@@ -1219,6 +1245,7 @@ it('records a refused manager approval, which today leaves no trace at all', asy
 		status: 'counting',
 	});
 	await closeSession(db, row.id, { counted: { cash: '80' } });
+	await seedClosure(row.id);
 	http.post.mockRejectedValue({
 		response: {
 			status: 403,
@@ -1264,6 +1291,7 @@ it('does not let a permanently failed close block a successor', async () => {
 	const predecessor = await open();
 	await predecessor.incrementalPatch({ server_status: 'counting', status: 'counting' });
 	await closeSession(db, predecessor.id, { counted: { cash: '100' } });
+	await seedClosure(predecessor.id);
 	http.post.mockRejectedValueOnce({ response: { status: 403, data: { code: 'close_refused' } } });
 	await drain();
 	expect(predecessor.getLatest().sync_status).toBe('failed');
@@ -1823,6 +1851,87 @@ it('stores the ISO opening time when it adopts a server row in the server form',
 	expect((await db.register_sessions.findOne('served').exec())?.opened_at_gmt).toBe(
 		'2026-09-16T09:05:07.000Z'
 	);
+});
+
+describe('#3307: a delivered closure is counted once in the register totals', () => {
+	type Period = { period_sales_total?: string; period_refunds_total?: string };
+	const server = (sales: string, refunds: string) => ({
+		last_closure_number: 1,
+		perpetual_sales_total: sales,
+		perpetual_refunds_total: refunds,
+	});
+	async function totals() {
+		const register = (await readRegister(userDB))!.sites.site.registers!.register;
+		const row = register.closure_reservation!.row;
+		return {
+			register: [register.perpetual_sales_total, register.perpetual_refunds_total],
+			reservation: [row.perpetual_sales_total, row.perpetual_refunds_total],
+		};
+	}
+	/** A closed session whose applied closure has a period of 10 on totals of 0: the register carries 10. */
+	async function applied(period: Period) {
+		const { session, row } = await closure();
+		await session.incrementalPatch({
+			sync_status: 'synced',
+			server_status: 'closed',
+			pending_status: null,
+		});
+		const reserved = await reviseClosureReservation(userDB, 'site', 'register', {
+			...row.toJSON(),
+			...period,
+		});
+		await row.incrementalPatch({
+			...period,
+			perpetual_sales_total: reserved.perpetual_sales_total,
+			perpetual_refunds_total: reserved.perpetual_refunds_total,
+		});
+		return row;
+	}
+	async function deliver(period: Period, counters: ReturnType<typeof server>) {
+		const row = await applied(period);
+		http.post.mockImplementation(async () => ({
+			data: { ...row.getLatest().toJSON(), number: 1, counters },
+		}));
+		await drain();
+		expect(row.getLatest().sync_status).toBe('synced');
+	}
+
+	it.each([
+		['sales', { period_sales_total: '10' }, server('10.0000', '0.0000'), ['10.0000', '0.0000']],
+		['refunds', { period_refunds_total: '10' }, server('0.0000', '10.0000'), ['0.0000', '10.0000']],
+	])(
+		'a delivered period of %s is already in the server counters it echoes',
+		async (_, period, counters, expected) => {
+			await deliver(period, counters);
+			expect(await totals()).toEqual({ register: expected, reservation: expected });
+		}
+	);
+
+	it('a binding refresh after the delivery adopts the same counters without doubling', async () => {
+		await deliver({ period_sales_total: '10' }, server('10.0000', '0.0000'));
+		await adoptCounters(userDB, 'site', 'register', server('10.0000', '0.0000'));
+		expect(await totals()).toEqual({
+			register: ['10.0000', '0.0000'],
+			reservation: ['10.0000', '0.0000'],
+		});
+	});
+
+	it('a closure the server already has (409 wcpos_closure_exists) is not counted again by a refresh', async () => {
+		const row = await applied({ period_sales_total: '10' });
+		http.post.mockRejectedValue({
+			response: {
+				status: 409,
+				data: { code: 'wcpos_closure_exists', data: { closure_id: 'winner' } },
+			},
+		});
+		await drain();
+		expect(row.getLatest().sync_status).toBe('superseded');
+		await adoptCounters(userDB, 'site', 'register', server('10.0000', '0.0000'));
+		expect(await totals()).toEqual({
+			register: ['10.0000', '0.0000'],
+			reservation: ['10.0000', '0.0000'],
+		});
+	});
 });
 
 describe('#2016: a refused close keeps its count', () => {

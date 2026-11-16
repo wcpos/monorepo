@@ -7,7 +7,7 @@ import { endOfDay } from 'date-fns/endOfDay';
 import { startOfDay } from 'date-fns/startOfDay';
 import { utc } from '@date-fns/utc';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
 import type { ClosureRow } from '@wcpos/query/register-session';
 import { compileQuery } from '@wcpos/query/query-state';
@@ -67,9 +67,10 @@ jest.mock('../../../hooks/use-app-info', () => ({
 }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 const mockBarScope = jest.fn();
 let mockNextStoreID = 9;
-const mockViewedStores = of([
+const mockViewedStores = new BehaviorSubject<{ id: number; timezone: string }[]>([
 	{ id: 9, timezone: 'UTC' },
 	{ id: 21, timezone: 'America/New_York' },
 ]);
@@ -133,6 +134,7 @@ jest.mock('./bar', () => ({
 		onBack: () => void;
 		onScopeChange: (scope: unknown) => void;
 	}) => {
+		const summary = jest.requireActual('./no-store').useNoStoreSummary();
 		mockBarScope(scope);
 		return (
 			<>
@@ -148,6 +150,7 @@ jest.mock('./bar', () => ({
 						})
 					}
 				/>
+				<button data-testid="no-store-view" onClick={() => summary?.view()} />
 			</>
 		);
 	},
@@ -286,9 +289,10 @@ jest.mock('../contexts/ui-settings', () => ({
 }));
 
 function latestState(): QueryStateOf<'orders'> {
+	// Each render acquires orders handles in order: sales, comparison, no-store.
 	const call = mockUseCollectionQueryHandle.mock.calls
 		.filter(([collection]) => collection === 'orders')
-		.at(-2);
+		.at(-3);
 	if (!call) throw new Error('reports orders handle was not acquired');
 	return call[1] as QueryStateOf<'orders'>;
 }
@@ -355,7 +359,15 @@ describe('ReportsScreen query-state wiring', () => {
 			expect(queryState.filters.register).toBe('r');
 			const sales = compileQuery('orders', queryState, { id: 'report', ...options });
 			const pos = compileQuery('orders', queryState, { id: 'report' });
-			expect(sales.demand).toEqual(pos.demand);
+			// Reports count on the sale moment, so the sales lane also walks orders created before
+			// the window and modified in it; nothing else about the demand differs from pos.
+			expect(sales.demand).toEqual(
+				pos.demand.map((item) => ({
+					...item,
+					modifiedAfterSeconds: (item as { afterSeconds?: number }).afterSeconds,
+				}))
+			);
+			expect(pos.demand[0]).not.toHaveProperty('modifiedAfterSeconds');
 			// Store scoping stays pos; only the date clause moves to the local sale-moment predicate.
 			const { $and: clauses } = pos.read.prefilter as { $and: Record<string, unknown>[] };
 			expect(sales.read.prefilter).toEqual({
@@ -456,6 +468,42 @@ it('uses the viewed store midnight for Sales immediately on a cross-store select
 		expect.objectContaining({ storeId: 21, from: '2026-07-14', to: '2026-07-14' })
 	);
 	mockNextStoreID = 9;
+});
+
+// Revert: count the No store notice over the viewed store's day instead of the bound till's.
+it('the No store notice counts the same window its View opens', () => {
+	mockStoreID = 9;
+	mockNextStoreID = 21;
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('past-scope'));
+	const noStoreCall = mockUseCollectionQueryHandle.mock.calls
+		.filter(
+			([collection, state]) =>
+				collection === 'orders' &&
+				String((state as QueryStateOf<'orders'>).filters.store).startsWith('no-store:')
+		)
+		.at(-1)!;
+	const counted = (noStoreCall[1] as QueryStateOf<'orders'>).filters.dateRange;
+	// Store 21 (America/New_York) is viewed; No store keeps the bound store 9's UTC day.
+	expect(counted).toEqual({ from: '2026-07-14T00:00:00.000Z', to: '2026-07-14T23:59:59.999Z' });
+	fireEvent.click(screen.getByTestId('no-store-view'));
+	expect(latestState().filters).toMatchObject({ store: 'no-store:21,9', dateRange: counted });
+	mockNextStoreID = 9;
+});
+
+// Revert: keep the No store ids captured when No store was chosen.
+it('No store follows the store directory while it stays selected', () => {
+	const directory = mockViewedStores.getValue();
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('no-store-view'));
+	expect(latestState().filters.store).toBe('no-store:21,9');
+	act(() => mockViewedStores.next([...directory, { id: 33, timezone: 'UTC' }]));
+	expect(latestState().filters.store).toBe('no-store:21,33,9');
+	const comparison = mockUseCollectionQueryHandle.mock.calls
+		.filter(([collection]) => collection === 'orders')
+		.at(-2)![1] as QueryStateOf<'orders'>;
+	expect(comparison.filters.store).toBe('no-store:21,33,9');
+	act(() => mockViewedStores.next(directory));
 });
 
 // Revert: leave the orders provider mounted around both rooms.
@@ -727,7 +775,7 @@ it('binds the comparison with the same filters and a shifted date range', () => 
 	const current = latestState();
 	const comparison = mockUseCollectionQueryHandle.mock.calls
 		.filter(([collection]) => collection === 'orders')
-		.at(-1)![1] as QueryStateOf<'orders'>;
+		.at(-2)![1] as QueryStateOf<'orders'>;
 	expect(comparison.filters).toEqual({ ...current.filters, dateRange: expect.any(Object) });
 	expect(comparison.filters.dateRange).not.toEqual(current.filters.dateRange);
 	expect(comparison.limit).toBe(current.limit);

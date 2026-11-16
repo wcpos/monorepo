@@ -400,9 +400,11 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
 		>
 			{/* The body carries the row surface; the strip's window paints over its trailing cells. */}
-			<GestureDetector gesture={pan}>
+			{/* On web, the detector defaults to touch-action: none and blocks vertical drags on rows from scrolling the cart; pan-y gives vertical pans to the browser and keeps horizontal swipes (ignored on native). */}
+			<GestureDetector gesture={pan} touchAction="pan-y">
 				<Animated.View
 					ref={bodyRef}
+					testID="cart-line-body"
 					className={
 						dragging ? 'web:select-none bg-card min-h-row flex-row' : 'bg-card min-h-row flex-row'
 					}

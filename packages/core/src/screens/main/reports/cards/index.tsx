@@ -9,6 +9,7 @@ import { useRoomy } from '../../../../hooks/use-roomy';
 import { useT } from '../../../../contexts/translations';
 import { useReportsData } from '../context';
 import { LocalProductsContext, useLocalProducts } from './use-local-products';
+import { useReportLinesLoaded, useReportProductDemand } from './use-report-product-demand';
 import { BrandsCard } from './brands';
 import { CardSkeleton } from './card';
 import { PaymentsCard } from './payments';
@@ -38,11 +39,11 @@ const TWO_COLUMNS_MIN_WIDTH = 600;
 export function PeriodSection() {
 	const { selectedOrders, periodRefunds, figures } = useReportsData();
 	// The products the period's sale and refund lines name, as the grouped panels read them.
-	const products = useLocalProducts(
-		[...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
-			(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
-		)
+	const productIds = [...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
+		(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 	);
+	const products = useLocalProducts(productIds);
+	useReportProductDemand(productIds, products, useReportLinesLoaded());
 	// The Brands slot reads the margin its panel reads: costs on a period refund line count too.
 	const enabled = figures.margin.shownNetOfRefunds(products ?? []);
 	// Brands follows the brands, not the costs: a store that labels its products by brand expects

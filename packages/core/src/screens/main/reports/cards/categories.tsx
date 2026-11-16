@@ -10,6 +10,9 @@ import { Donut } from './donut';
 import { LocalProductsContext } from './use-local-products';
 import { useLocalCategories } from './use-local-categories';
 
+// These buckets are not real brands or categories.
+const NON_GROUP_KEYS = new Set(['unknown', 'nobrand', 'uncategorised']);
+
 export function CategoriesCard({ group = 'categories' }: { group?: 'categories' | 'brands' }) {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
@@ -38,7 +41,8 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 	const name = group === 'brands' ? t('reports.card_brands') : t('reports.card_categories');
 	if (!store || !products || !tree || !periodRefunds)
 		return <CardSkeleton testID={`card-${group}`} name={name} />;
-	const count = { count: summary.parts.length, n: quantity(summary.parts.length) };
+	const groups = summary.parts.filter((row) => !NON_GROUP_KEYS.has(row.key)).length;
+	const count = { count: groups, n: quantity(groups) };
 	const labels: Record<string, string> = {
 		unknown: t('reports.unknown_product'),
 		uncategorised: t('reports.uncategorised'),
@@ -49,13 +53,14 @@ export function CategoriesCard({ group = 'categories' }: { group?: 'categories' 
 			onOpen={() => setDetail(group)}
 			testID={`card-${group}`}
 			name={name}
-			figure={money(figures.gross)}
+			figure={money(summary.total)}
 		>
 			{summary.parts.length ? (
 				<Donut
 					testID={`card-${group}-donut`}
+					total={summary.total}
 					centre={{
-						figure: moneyWhole(Math.round(figures.gross)),
+						figure: moneyWhole(Math.round(summary.total)),
 						label:
 							group === 'brands' ? t('reports.n_brands', count) : t('reports.n_categories', count),
 					}}

@@ -45,6 +45,23 @@ it('names the lines without a local product', () => {
 		'1 of 1 lines have no local product'
 	);
 });
+it('counts only real brands in the centre, not the products off this device or without a brand', () => {
+	mockProducts.next([{ id: 1, brands: [{ id: 2, name: 'Acme' }] }, { id: 3 }]);
+	setOrders([
+		{
+			uuid: 'a',
+			total: '30',
+			line_items: [
+				{ product_id: 1, total: '10', quantity: 1 },
+				{ product_id: 3, total: '10', quantity: 1 },
+				{ product_id: 9, total: '10', quantity: 1 },
+			],
+		},
+	] as ReportOrder[]);
+	render(<PeriodSection />);
+	expect(screen.getByTestId('card-brands-donut').textContent).toContain('1 brand');
+	expect(screen.getByTestId('card-brands-donut').textContent).not.toContain('3 brands');
+});
 it('appears from a joined product alone between Categories and Cashiers', () => {
 	setOrders([
 		{ uuid: 'a', total: '10', line_items: [{ product_id: 1, total: '10' }] },

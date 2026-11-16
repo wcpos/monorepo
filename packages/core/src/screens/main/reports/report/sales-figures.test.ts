@@ -2,7 +2,7 @@ import sumBy from 'lodash/sumBy';
 
 import { createTestT } from '../../../../../jest/translate';
 import { panelSpec } from '../panels/specs';
-import { salesFigures } from './sales-figures';
+import { salesByCurrency, salesFigures } from './sales-figures';
 import { summarySpec } from './summary';
 
 import type { DetailId, RefundRow, ReportOrder } from '../context';
@@ -96,6 +96,70 @@ const printed = (over: SalesFigures = figures, storeNames?: Record<string, strin
 const group = (key: string, over?: SalesFigures, storeNames?: Record<string, string>) =>
 	printed(over, storeNames).groups!.find((row) => row.key === key);
 
+describe('salesByCurrency', () => {
+	it('never sums two currencies', () => {
+		const groups = salesByCurrency({
+			orders: [
+				{ ...orders[0], currency: 'USD', total: '100.00' },
+				{ ...orders[1], currency: 'USD', total: '50.00' },
+				{ ...orders[2], currency: 'EUR', total: '30.00' },
+			],
+		});
+		expect(groups.map(({ currency, figures }) => [currency, figures.gross, figures.count])).toEqual(
+			[
+				['USD', 150, 2],
+				['EUR', 30, 1],
+			]
+		);
+		expect(groups.some(({ figures }) => figures.gross === 180)).toBe(false);
+	});
+	it('an order with no currency counts in the fallback currency', () => {
+		const groups = salesByCurrency({
+			orders: [orders[0], { ...orders[1], currency: 'USD' }],
+			fallback: 'USD',
+		});
+		expect(groups).toHaveLength(1);
+		expect(groups[0].currency).toBe('USD');
+		expect(groups[0].figures.count).toBe(2);
+	});
+	it('one currency gives the same figures as salesFigures', () => {
+		const args = { orders, refunds, decimals: 2 };
+		const groups = salesByCurrency({ ...args, fallback: 'GBP' });
+		const expected = salesFigures(args);
+		expect(groups).toHaveLength(1);
+		for (const key of ['gross', 'net', 'tax', 'items', 'average', 'count'] as const)
+			expect(groups[0].figures[key]).toBe(expected[key]);
+	});
+	it('refunds in a second currency stay in their own currency', () => {
+		const groups = salesByCurrency({
+			orders: [
+				{ ...orders[0], currency: 'USD', total: '100.00' },
+				{ ...orders[1], currency: 'EUR', total: '30.00' },
+			],
+			refunds: [
+				{ ...refunds[0], currency: 'USD', amount: '10.00' },
+				{ ...refunds[0], id: 10, parent_id: 2, currency: 'EUR', amount: '5.00' },
+				{ ...refunds[0], id: 11, parent_id: 4, currency: 'CHF', amount: '3.00' },
+			],
+		});
+		expect(
+			groups.map(({ currency, figures }) => [
+				currency,
+				figures.count,
+				figures.refunds.refunded,
+				figures.refunds.ordersWithRefunds,
+			])
+		).toEqual([
+			['USD', 1, 10, 1],
+			['EUR', 1, 5, 1],
+			['CHF', 0, 3, 1],
+		]);
+	});
+	it('an empty window has no groups', () => {
+		expect(salesByCurrency({ orders: [], fallback: 'GBP' })).toEqual([]);
+	});
+});
+
 // A surface that sums its own way, or reads a different set of orders, falls out of these.
 describe('every part sums to the period figure', () => {
 	it.each([
@@ -164,6 +228,7 @@ it('netting refunds moves the products and categories by exactly the refunded li
 	expect(amountOf(panel('products'))).toBe(gross - 25);
 	expect(sumBy(sales.categories.netOfRefunds(directory).parts, 'amount')).toBe(gross);
 	expect(sumBy(figures.categories.netOfRefunds(directory).parts, 'amount')).toBe(gross - 25);
+	expect(figures.categories.netOfRefunds(directory).total).toBe(gross - 25);
 	expect(amountOf(panel('categories'))).toBe(gross - 25);
 });
 it('the printed Payment methods rows are the tenders, and Taken leaves out what is owed', () => {
@@ -196,7 +261,7 @@ const pin = {
 	share: 1,
 };
 const decoy = { ...pin, key: 'decoy' };
-const parts = (row: typeof pin) => ({ parts: [row], unknownLines: 0, totalLines: 1 });
+const parts = (row: typeof pin) => ({ parts: [row], unknownLines: 0, totalLines: 1, total: 1 });
 describe('each panel reads its named figure', () => {
 	it.each([
 		['payments', { takenByTender: [pin] }],

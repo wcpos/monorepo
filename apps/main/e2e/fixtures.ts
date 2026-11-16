@@ -33,6 +33,17 @@ import {
 } from './probe-credential';
 import { restoreLocalStorageAsClone, type SavedAuthState } from './indexeddb-helpers';
 import { quarantineGate } from './quarantine';
+import {
+	assertStillBound,
+	boundRegister,
+	createRegisterReadRecorder,
+	isSuiteRegister,
+	pickSuiteRegister,
+	registerIdOf,
+	type RegisterName,
+	type RegisterReadRecorder,
+	SUITE_REGISTER_NAME,
+} from './suite-register';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
@@ -170,7 +181,9 @@ export async function setBrowseBy(
  * header renders (this runs several times per checkout), and a slow register
  * hydration still gets the normal readiness budget instead of a short timer
  * that would return just before the card appears. A store with several
- * registers asks the device which one it is at first, and the first row is taken.
+ * registers asks the device which one it is at first: the suite's own row is
+ * taken (`pickSuiteRegister`), and a session is never opened on a register the
+ * suite did not create (`assertSuiteRegisterBound`).
  * Resolves true only when this call opened the session, so a caller that must
  * leave a shared store as it found it knows whether to close it again.
  */
@@ -185,19 +198,93 @@ export async function ensureRegisterOpen(
 		timeout: CATALOGUE_READY_TIMEOUT_MS,
 	});
 	if (await picker.first().isVisible()) {
-		await picker.first().click();
-		await expect(picker.first()).toBeHidden({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+		await pickSuiteRegister(page, CATALOGUE_READY_TIMEOUT_MS);
 		await afterPicking?.();
 		await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
 	}
 	if (!(await card.isVisible())) return false;
+	const bound = await assertSuiteRegisterBound(page);
 	const amount = page.getByTestId('open-register-amount');
 	await amount.fill((await amount.inputValue()) || '100');
+	assertStillBound(bound.id, await barRegisterAttribute(page));
 	await page.getByTestId('open-register-button').click();
 	await expect(card).toBeHidden({ timeout: 30_000 });
 	// A healthy open register has no warning pill; its cart header is ready instead.
 	await expect(page.getByTestId('add-cart-item-menu')).toBeVisible({ timeout: 30_000 });
 	return true;
+}
+
+/**
+ * How long the register steps wait for the binding to settle (the picker, or a bound register). The
+ * catalogue is already in by then and the list is read at boot, so this is a ceiling for a store
+ * that never answers it; on timeout the spec goes on as it did before the picker existed.
+ */
+const REGISTER_SETTLE_TIMEOUT_MS = 30_000;
+
+/** Register names each page's app read, keyed by id across all stores. */
+const registerDirectories = new WeakMap<Page, RegisterReadRecorder>();
+
+async function barRegisterAttribute(page: Page): Promise<string | null> {
+	try {
+		return await page.getByTestId('register-bar-place').first().getAttribute('data-register-id');
+	} catch {
+		return null;
+	}
+}
+
+/** Record the app's register reads; attached before boot by `hydrateAuthenticatedPage`. */
+function observeRegisterDirectory(page: Page): void {
+	const recorder = createRegisterReadRecorder();
+	registerDirectories.set(page, recorder);
+	page.on('response', (response) => {
+		recorder.observe(wcposRestRoute(response.url()), () => response.json());
+	});
+}
+
+/** The register the device is bound to, or null until the app's reads and the bar settle. */
+async function readBoundRegister(page: Page): Promise<RegisterName | null> {
+	const directory = registerDirectories.get(page)?.current();
+	if (!directory) return null;
+	return boundRegister(await barRegisterAttribute(page), directory.names);
+}
+
+/** Throws, before any click, unless the bound register is one the suite created (`isSuiteRegister`). */
+async function assertSuiteRegisterBound(page: Page): Promise<RegisterName> {
+	// A restored binding shows the card before the app's register list answers: wait for it.
+	const bound = await expect
+		.poll(() => readBoundRegister(page), { timeout: REGISTER_SETTLE_TIMEOUT_MS })
+		.not.toBeNull()
+		.then(
+			() => readBoundRegister(page),
+			() => null
+		);
+	if (bound && isSuiteRegister(bound)) return bound;
+	const id = registerIdOf(await barRegisterAttribute(page));
+	const unknown = `a register whose name was never read${id ? ` (bar states "${id}")` : ''}`;
+	throw new Error(
+		`[register] refusing to open a session on ${bound ? `"${bound.name}" (${bound.id})` : unknown}: the suite sells only on "${SUITE_REGISTER_NAME}" or the docs register`
+	);
+}
+
+/** When the app asks which register this device is at, answer with the suite's; else do nothing. */
+async function pickSuiteRegisterIfShown(page: Page): Promise<void> {
+	const rows = page.locator('[data-testid^="register-picker-row-"]');
+	const state = async () => {
+		if ((await rows.count()) > 0) return 'picker';
+		const directory = registerDirectories.get(page)?.current();
+		return registerIdOf(await barRegisterAttribute(page)) || directory?.smallList
+			? 'bound'
+			: 'pending';
+	};
+	const settled = await expect
+		.poll(state, { timeout: REGISTER_SETTLE_TIMEOUT_MS })
+		.not.toBe('pending')
+		.then(
+			() => true,
+			() => false
+		);
+	if (settled && (await rows.count()) > 0)
+		await pickSuiteRegister(page, CATALOGUE_READY_TIMEOUT_MS);
 }
 
 /**
@@ -1278,6 +1365,7 @@ export async function hydrateAuthenticatedPage(
 	const { waitForCatalogue = true, beforeBoot } = options;
 	// Before anything boots, so a spec can wait on a cadence.start that already printed.
 	recordCadenceStart(page);
+	observeRegisterDirectory(page);
 	const variant = getStoreVariant(testInfo);
 	const cashierAuth = getE2ECashierAuth(variant, currentShardIndex(testInfo.config));
 	await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
@@ -1496,6 +1584,9 @@ export const authenticatedTest = base.extend<{
 			page.getByTestId('screen-pos').filter({ visible: true }).first(),
 			'testID="screen-pos" is missing from the rendered POS layout — see #1106'
 		).toBeVisible({ timeout: 30_000 });
+		// A store with several registers asks an unbound device which one it is at: answer with the
+		// suite's, so the spec lands on a bound device as on a one-register store. No session opens.
+		await pickSuiteRegisterIfShown(page);
 
 		try {
 			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook

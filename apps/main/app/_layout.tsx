@@ -19,6 +19,7 @@ import { ScaleProvider } from '@wcpos/core/contexts/scale';
 import { ThemeSettingProvider } from '@wcpos/core/contexts/theme-setting';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
+import { markRedirectHandedToOpener } from '@wcpos/core/hooks/use-wcpos-auth/redirect-result';
 import { setToast } from '@wcpos/utils/logger';
 
 import {
@@ -33,7 +34,8 @@ import { useObserveConsent } from '../lib/observe';
 import '../global.css';
 import '../polyfills';
 
-WebBrowser.maybeCompleteAuthSession();
+const authSession = WebBrowser.maybeCompleteAuthSession();
+if (authSession.type === 'success') markRedirectHandedToOpener();
 
 /**
  * Determines the appropriate toast theme based on the current Uniwind theme.

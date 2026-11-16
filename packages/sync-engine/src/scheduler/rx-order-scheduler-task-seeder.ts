@@ -77,6 +77,7 @@ export type SeedOrderFilterSchedulerTaskInput = {
 	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
+	modifiedAfterSeconds?: number;
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
 	complete?: boolean;
@@ -149,6 +150,7 @@ function orderFilterWindow(input: SeedOrderFilterSchedulerTaskInput): {
 		store: input.store,
 		afterSeconds: input.afterSeconds,
 		beforeSeconds: input.beforeSeconds,
+		modifiedAfterSeconds: input.modifiedAfterSeconds,
 		orderby: input.orderby,
 		order: input.order,
 	};

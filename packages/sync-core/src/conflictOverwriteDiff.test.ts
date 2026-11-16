@@ -94,6 +94,35 @@ describe('diffConflictOverwrite', () => {
 		).toEqual(['billing.phone', 'billing.postcode']);
 	});
 
+	it('ignores a numeric-string id and a server-only line meta row (POS-2VT probe)', () => {
+		const size = () => ({ id: 501, key: 'pa_size', value: 'L' });
+		const appended = { key: '_wcpos_x', value: '1' };
+		const reduced = { id: 502, key: '_reduced_stock', value: '1' };
+		const pushed = { id: 11, image: { id: 42, src: 'a' }, meta_data: [size(), appended] };
+		const server = { id: 11, image: { id: '42', src: 'a' }, meta_data: [size(), reduced] };
+		expect(diffConflictOverwrite({ line_items: [pushed] }, { line_items: [server] })).toEqual([]);
+	});
+
+	it('still reports a different id across number and string', () => {
+		expect(
+			diffConflictOverwrite(
+				{ line_items: [{ id: 11, image: { id: 42 } }] },
+				{ line_items: [{ id: 11, image: { id: '43' } }] }
+			)
+		).toEqual(['line_items[11].image.id']);
+	});
+
+	it('still reports a changed line meta row and a pushed meta row the server lacks', () => {
+		const size = { id: 501, value: 'L' };
+		const extra = { id: 503, value: 'x' };
+		const pushed = { id: 11, meta_data: [size, extra] };
+		const server = { id: 11, meta_data: [{ id: 501, value: 'M' }] };
+		expect(diffConflictOverwrite({ line_items: [pushed] }, { line_items: [server] })).toEqual([
+			'line_items[11].meta_data[501].value',
+			'line_items[11].meta_data[503]',
+		]);
+	});
+
 	it('never throws on malformed JSON-ish shapes', () => {
 		expect(() =>
 			diffConflictOverwrite(

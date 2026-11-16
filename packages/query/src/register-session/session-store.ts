@@ -1,6 +1,7 @@
 import { tz } from '@date-fns/tz';
 import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
+import { firstValueFrom } from 'rxjs';
 
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import {
@@ -38,6 +39,7 @@ import { registerCollections, type RegisterStoreDatabase } from './store-databas
 import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
 import { baselineContains } from './baseline';
 import {
+	countRecorded,
 	currentSession,
 	isSessionOrder,
 	isUnsyncedMovement,
@@ -765,6 +767,27 @@ export async function recoverClosureReservation(
 		refunds: row.period_refunds_total,
 		closureId: row.id,
 	});
+}
+
+/**
+ * A register's closes whose closure write a restart interrupted (#3289): this device's own close,
+ * pending and unacknowledged, with a recorded count and no closure row. A session adopted from
+ * the server (`adoptSessionRow`: `pending_status: null`, synced) never matches.
+ */
+export async function findUnwrittenCloses(storeDB: RegisterStoreDatabase, registerId: string) {
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
+	const selector = { register_id: registerId, status: 'closed', pending_status: 'closed' } as const;
+	const rows = await firstValueFrom(sessions.find({ selector }).$);
+	const unwritten = [];
+	for (const row of rows)
+		if (
+			row.sync_status === 'pending' &&
+			row.server_status !== 'closed' &&
+			countRecorded(row) &&
+			!(await closures.findOne(row.id).exec())
+		)
+			unwritten.push(row);
+	return unwritten;
 }
 
 type ClosureOrder = {

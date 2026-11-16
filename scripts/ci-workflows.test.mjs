@@ -1691,13 +1691,13 @@ test('the web E2E test step stops before the job limit so the reports still uplo
 });
 
 test('the shared-store queue stays removed', () => {
-	// The queue job (2026-08-12 → 2026-08-18) starved every merge gate once
-	// 2+ PRs were active: holders kept the store 25–45 min, the gate polls a
-	// bounded window, and agent evenings queued PRs for hours (#1265). Cross-
-	// run safety is the SPECS' job (run-private probe records, relative count
-	// assertions, CI retries). If contention flakes reappear, fix that spec's
-	// isolation — do not resurrect a cross-run mutex; these pins are the
-	// tripwire that makes reintroduction a deliberate, reviewed act.
+	// A queue JOB that held the whole store for a run stays removed: the
+	// 2026-08-12 → 2026-08-18 one starved every merge gate under a 40-, then
+	// 70-minute poll (#1265). Since 2026-11-13 the shards queue instead: dev-pro
+	// hit pm.max_children=32 58 times in one day whenever two or more web E2E
+	// runs overlapped, so each shard now queues per lane and shard index
+	// through `concurrency.queue: max` (pinned in the main-lane test below).
+	// These pins are the tripwire that keeps a whole-run queue job out.
 	const workflow = readWorkflow('deploy.yml');
 
 	assert.ok(!('queue' in workflow.jobs), 'deploy.yml grew a queue job again');
@@ -1713,15 +1713,35 @@ test('the shared-store queue stays removed', () => {
 	assert.ok(!('QUEUE_RESULT' in gate.steps[0].env), 'e2e-gate re-grew QUEUE_RESULT');
 	assert.doesNotMatch(gate.steps[0].run, /QUEUE_RESULT/);
 
-	// The merge gate must out-wait a full E2E phase: deploy (~6 min) plus a
-	// shard running to its 60-minute timeout. 140 × 30s ≈ 70 min. The old
-	// 40-minute default timed out on runs that were still legitimately in
-	// flight — that, multiplied by the queue, was the doom loop.
+	// Queued runs pipeline shard by shard instead of holding the store whole,
+	// so the merge gate must out-wait the runs ahead of it: 300 × 30s ≈ 150 min,
+	// sized for four queued runs. A gate must wait, not go red and need a rerun.
 	const mergeGate = readWorkflow('merge-gate.yml');
 	const gateStep = mergeGate.jobs['merge-gate'].steps.find(
 		({ name }) => name === 'Evaluate merge policy'
 	);
-	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '140');
+	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '300');
+});
+
+test('main-lane web E2E shards queue across runs per dev store', () => {
+	const { concurrency } = readWorkflow('deploy.yml').jobs.e2e;
+	assert.equal(concurrency.queue, 'max');
+	assert.equal(concurrency['cancel-in-progress'], false);
+	assert.ok(
+		concurrency.group.includes(
+			"format('e2e-store-{0}-shard-{1}', needs.changes.outputs.lane, matrix.shardIndex)"
+		)
+	);
+	assert.match(concurrency.group, /github\.event_name == 'schedule'/);
+	assert.match(concurrency.group, /inputs\.quarantine_only/);
+	assert.match(concurrency.group, /needs\.changes\.outputs\.lane == ''/);
+});
+
+test('main web E2E tests its own production deploy, never the alias', () => {
+	const workflow = readWorkflow('deploy.yml');
+	assert.match(findStep(workflow, 'deploy', '🚀 Deploy production').run, /DEPLOY_JSON=\$\(eas deploy --export-dir \.\/build --production --json\)\n[\s\S]*deploy_url=\$\(echo "\$DEPLOY_JSON" \| jq -r '\.url \/\/ empty'/);
+	assert.match(findStep(workflow, 'deploy', '📝 Get deployment URL').run, /else\n\s+echo "url=\$\{\{ steps\.deploy-production\.outputs\.deploy_url \}\}"/);
+	assert.match(findStep(workflow, 'e2e-gate', 'Check shard results').run, /\[ -n "\$DEPLOY_URL" \] \|\| \{ echo "::error::Production deployed, but its own URL was not captured/);
 });
 
 test('a failed shared login fails e2e-setup and the shards refuse to start', () => {
@@ -2192,7 +2212,7 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	// never fire (review on #1687): the workflow group is run-unique on main.
 	assert.match(workflow.concurrency.group, /deploy-main-run-\{0\}', github\.run_id/);
 
-	for (const jobName of ['e2e', 'e2e-report', 'cold-start']) {
+	for (const jobName of ['e2e-report', 'cold-start']) {
 		const concurrency = workflow.jobs[jobName].concurrency;
 		assert.ok(concurrency, `${jobName} is missing job-level concurrency`);
 		assert.match(concurrency.group, /github\.ref == 'refs\/heads\/main'/);
@@ -2579,12 +2599,12 @@ test('the weekly quarantine-only run (#2284) tests main in one shard and reports
 	}
 	// Schedules run from the default branch and test it: no checkout pin (until #3192 they pinned
 	// `next`; #3218 deleted it until the GA re-cut), a preview deploy, and none of main's groups,
-	// for the schedule AND a quarantine-only dispatch, which now also runs on main.
+	// for the schedule AND a quarantine-only dispatch, which now also runs on main (e2e's own queue guards: the main-lane queue test).
 	for (const job of ['deploy', 'e2e', 'quarantine-report']) {
 		const checkout = workflow.jobs[job].steps.find(({ uses }) => uses?.includes('checkout@'));
 		assert.equal(checkout.with?.ref, undefined, job);
 	}
-	for (const job of ['deploy', 'e2e', 'e2e-report']) {
+	for (const job of ['deploy', 'e2e-report']) {
 		assert.match(
 			workflow.jobs[job].concurrency.group,
 			/main' && github\.event_name != 'schedule' && !inputs\.quarantine_only &&/,
@@ -3466,6 +3486,58 @@ test('the Android suite keeps adb reverse alive for the life of the run', () => 
 	// The emulator-runner action executes the script LINE BY LINE: one line, no
 	// continuation backslash.
 	assert.doesNotMatch(lines[refresher], /\\$/);
+});
+
+test('the Android suite samples emulator load and the app view tree for the life of the run', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const lines = (step.with?.script ?? step.run).split('\n');
+	const refresher = lines.findIndex(
+		(line) => line.startsWith('nohup sh -c') && line.includes('adb reverse tcp:8081 tcp:8081')
+	);
+	const sampler = lines.findIndex(
+		(line) => line.startsWith('nohup sh -c') && line.includes('android-sampler.log')
+	);
+	const suite = lines.findIndex((line) => line.startsWith('{ maestro test'));
+	assert.ok(sampler >= 0, 'missing the Android load sampler loop');
+	assert.ok(sampler > refresher, 'the sampler starts after the adb reverse refresher');
+	assert.ok(sampler < suite, 'the sampler must start before the suite');
+	// FINDINGS e2e-native-red-2026-11-11 §Harness: 5–12 s hierarchy dumps on the
+	// POS screen; the log tells tree size (app) from emulator CPU (runner).
+	assert.match(lines[sampler], /top -b -n 1 -m 8/);
+	assert.match(lines[sampler], /dumpsys activity top/);
+	assert.match(lines[sampler], /stop-screenrecord/);
+	// Maestro's driver holds the one UiAutomation connection; a second client
+	// is refused or disturbs it mid-flow.
+	assert.doesNotMatch(lines[sampler], /uiautomator/);
+	// ONE line, no continuation backslash (the action runs the script line by line).
+	assert.doesNotMatch(lines[sampler], /\\$/);
+});
+
+test('flow 10 switches to the cart tab with a retried tap on phones', () => {
+	const flow = readMaestroFlow('10-cart-add-burst.yml');
+	const tapped = flow.findIndex(
+		(step) => typeof step?.evalScript === 'string' && step.evalScript.includes('burstTappedAt')
+	);
+	assert.ok(tapped >= 0, 'missing the burstTappedAt evalScript');
+	// Runs 43074681482 and 43086880258 (iOS phone): all twenty adds landed, but
+	// a single `when visible` look SKIPPED the tab switch on the busy screen.
+	const { runFlow } = flow[tapped + 1];
+	assert.ok(runFlow, 'the step after burstTappedAt must be a runFlow');
+	assert.match(runFlow.when.true, /DEVICE_CLASS === 'phone'/);
+	assert.equal(runFlow.when.visible, undefined);
+	const { retry } = runFlow.commands[0];
+	assert.equal(retry.maxRetries, 2);
+	assert.deepEqual(retry.commands[0], { tapOn: { id: 'pos-tab-cart' } });
+	assert.equal(retry.commands[1].extendedWaitUntil?.visible?.id, 'cart-quantity-input');
+	// An undeclared DEVICE_CLASS (local run) keeps the layout look (Codex r4544040095).
+	const fallback = flow[tapped + 2].runFlow;
+	assert.match(fallback.when.true, /typeof DEVICE_CLASS === 'undefined'/);
+	assert.equal(fallback.when.visible.id, 'pos-tab-cart');
+	assert.deepEqual(fallback.commands, [{ tapOn: { id: 'pos-tab-cart' } }]);
 });
 
 test('the Android emulator resolves DNS through public resolvers and proves connectivity before the suite', () => {

@@ -382,6 +382,29 @@ it.each([
 			mockReconcile.mock.invocationCallOrder[0]
 		);
 });
+// Codex r4543471493 on #3513: a record another sender settled carries the resident's summary, so
+// a press that predicted a partial payment completes when the store's ledger cleared the balance.
+it('a settled-elsewhere record predicted partial whose order clears the balance completes: audit and stock refresh run (POS-31A)', async () => {
+	const summary: OrderPaymentSummary = {
+		status: 'completed',
+		total: '100.00',
+		paid: '100.00',
+		balance: '0.00',
+		payment_method: 'pos_cash',
+		payment_method_title: 'Cash',
+	};
+	const settled = { ...manual, remainingMinor: 500 } as const;
+	const modal = { host: 'modal', autoPrintReceipt: false } as const;
+
+	// Without the summary the press's prediction decides: a partial sale, nothing finished.
+	expect(await completeSale(ctx, order, { ...settled, order: null }, modal)).toBe('partial');
+	expect(mockReconcile).not.toHaveBeenCalled();
+	expect(mockActionLog).not.toHaveBeenCalled();
+
+	expect(await completeSale(ctx, order, { ...settled, order: summary }, modal)).toBe('completed');
+	expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, order, true, ctx.stockAdjustment);
+	expect(mockActionLog).toHaveBeenCalledTimes(1);
+});
 describe("the poster's post-answer adoption stands in for the completion's refresh", () => {
 	const settled = [
 		manual,
@@ -423,6 +446,9 @@ describe("the poster's post-answer adoption stands in for the completion's refre
 		[{ source: 'gateway-contract', status: 'completed' }],
 	] as [SaleOutcome][])('%j refreshes whatever the resident holds', async (outcome) => {
 		mockAnswerAdopted.mockResolvedValue(true);
+		// A replay finishes a journaled attempt; one already resolved completes nothing (POS-31A).
+		if (outcome.source === 'replay')
+			await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
 		await completeSale(ctx, order, outcome, { host: 'modal', autoPrintReceipt: false });
 		expect(mockAnswerAdopted).not.toHaveBeenCalled();
 		expect(mockReconcile).toHaveBeenCalledTimes(1);
@@ -481,9 +507,13 @@ describe('the print that follows a sale with no receipt on screen', () => {
 	});
 	it('a replay queues nothing', async () => {
 		const replay = { source: 'replay', refreshed: true } as const;
+		const journaled = () =>
+			recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
+		await journaled();
 		expect(await completeSale(ctx, order, replay, { host: 'modal', autoPrintReceipt: true })).toBe(
 			'completed'
 		);
+		await journaled();
 		expect(
 			await completeSale(ctx, order, replay, {
 				host: 'stage',
@@ -1018,6 +1048,8 @@ it.each([
 			: kind === 'terminal'
 				? { source: kind, row, order: { balance: '0' } as never }
 				: { source: kind };
+	if (kind === 'replay')
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'terminal' });
 	try {
 		await completeSale({ ...ctx, actor: { id: '7', name: 'Pat' } }, order, outcome, presentation);
 		expect(dispatch).toHaveBeenCalledWith(
@@ -1407,4 +1439,196 @@ describe('isSettledOrderStatus', () => {
 			expect(isSettledOrderStatus(status, null)).toBe(false);
 		}
 	);
+});
+
+/**
+ * Sentry POS-31A: the recovery re-sent the tender's lost record and the store answered 200 while
+ * the tender's own retry loop still held the order's slot. The bridge's replay
+ * (`completion-journal-bridge.tsx`, `replay`) and the tender's landing (`landAnswer` →
+ * `completeOrderFlow`) are two `completeSale` calls for one sale. The checkout mode is the real
+ * store here (receipt tabs, selection, the headless print queue); the receipt pane's auto-print is
+ * modelled by its claim (`claimReceiptAutoPrint`), taken whenever the sale's receipt is on screen.
+ */
+describe('POS-31A: the recovery and the tender both complete one sale', () => {
+	const mode = jest.requireActual<typeof import('./checkout-mode')>('./checkout-mode');
+	const uuid = 'pos31a';
+	const sale = { uuid, getLatest: () => ({ payload }) } as never;
+	let current = uuid;
+	let panePrints = 0;
+	let dispatch: jest.SpyInstance;
+	let resolve: jest.SpyInstance;
+	let record: jest.SpyInstance;
+	/** The tender's stage completion, as `useCompleteOrderFlow` builds it (show on, print on). */
+	const stage = {
+		host: 'stage',
+		autoShowReceipt: true,
+		autoPrintReceipt: true,
+		canSelectReceipt: () => {
+			const { selectedReceiptOrder } = mode.getCheckoutModeSnapshot();
+			return current === uuid && (selectedReceiptOrder === null || selectedReceiptOrder === uuid);
+		},
+	} as const;
+	/** The receipt pane mounts for the sale it shows and auto-prints once per claim. */
+	const pane = () => {
+		const snapshot = mode.getCheckoutModeSnapshot();
+		const shown = current === uuid || snapshot.selectedReceiptOrder === uuid;
+		if (shown && mode.isReceiptStage(uuid, snapshot, payload.status))
+			if (mode.claimReceiptAutoPrint(uuid)) panePrints += 1;
+	};
+	const tenderLands = async (queue?: Parameters<typeof completeSale>[4]) => {
+		const result = await completeSale(ctx, sale, manual, stage, queue);
+		pane();
+		return result;
+	};
+	const bridgeReplays = async () => {
+		const result = await completeSale(ctx, sale, { source: 'replay' }, { host: 'background' });
+		pane();
+		return result;
+	};
+	/** The cashier taps "New sale": the receipt tab is finished and another order is current. */
+	const newSale = () => {
+		mode.finishReceipt(uuid);
+		current = 'next-sale';
+	};
+	const counts = () => {
+		const events = dispatch.mock.calls
+			.map(([call]) => call)
+			.filter((call) => call.event === CHECKOUT_COMPLETE_EVENT && call.input.orderId === uuid)
+			.map((call) => call.input.source as string);
+		const audits = mockActionLog.mock.calls
+			.map(([, , options]) => options?.context)
+			.filter((context) => context?.type === 'checkout.completed' && context.orderUUID === uuid);
+		const snapshot = mode.getCheckoutModeSnapshot();
+		return {
+			prints: mockQueuePrint.mock.calls.length + panePrints,
+			receiptEntries: mockReceipt.mock.calls.map((args) => args.slice(1)),
+			receiptTabOpen: snapshot.receiptOrders.has(uuid),
+			selected: snapshot.selectedReceiptOrder,
+			nonReplayEvents: events.filter((source) => source !== 'replay').length,
+			replayEvents: events.filter((source) => source === 'replay').length,
+			nonReplayAudits: audits.filter((context) => !context.replayed).length,
+			replayedAudits: audits.filter((context) => context.replayed).length,
+			stockCalls: jest.mocked(ctx.stockAdjustment!).mock.calls.length,
+			recorded: record.mock.calls.length,
+			resolved: resolve.mock.calls.length,
+		};
+	};
+
+	beforeEach(async () => {
+		current = uuid;
+		panePrints = 0;
+		mockReceipt.mockImplementation(mode.enterReceipt);
+		mockQueuePrint.mockImplementation(mode.queueHeadlessPrint);
+		mockReconcile.mockImplementation(async (_runtime, _order, refresh, adjust) => {
+			adjust([]);
+			return refresh ? 'refreshed' : 'skipped';
+		});
+		dispatch = jest.spyOn(actions, 'dispatchAction');
+		// The tender's completing attempt, journaled before its record was sent (`recordSaleAttempt`).
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: uuid, source: 'manual' });
+		record = jest.spyOn(journal, 'recordCompletionAttempt');
+		resolve = jest.spyOn(journal, 'resolveCompletionAttempt');
+		mode.enterCheckout(uuid);
+	});
+	afterEach(() => {
+		mockReceipt.mockReset();
+		mockQueuePrint.mockReset();
+		mockReconcile.mockReset();
+		dispatch.mockRestore();
+		record.mockRestore();
+		resolve.mockRestore();
+	});
+
+	// The order the field's code runs them in: the tender's commit holds the order's slot
+	// (`commit-sale.ts`, `enqueueOrderMutation`) through its record retries, so the bridge's replay,
+	// called with no queue, waits behind it and completes second. Inside the slot it finds the
+	// attempt the tender resolved gone, and completes nothing.
+	it('the queue runs the tender landing first and the bridge replay behind it: one paid moment (POS-31A)', async () => {
+		let release!: () => void;
+		const held = new Promise<void>((resolveHeld) => (release = resolveHeld));
+		const tender = mutationQueue.enqueueOrderMutation(uuid, async (queue) => {
+			await held;
+			return tenderLands(queue);
+		});
+		const replay = bridgeReplays();
+		release();
+		expect(await tender).toBe('completed');
+		expect(await replay).toBe('completed');
+
+		const seen = counts();
+		expect(seen).toMatchObject({
+			prints: 1,
+			receiptTabOpen: true,
+			selected: uuid,
+			nonReplayEvents: 1,
+			replayEvents: 0,
+			nonReplayAudits: 1,
+			replayedAudits: 0,
+			stockCalls: 1,
+			recorded: 0,
+			resolved: 1,
+		});
+		expect(mode.getCheckoutModeSnapshot().receiptOrders.size).toBe(1);
+		expect(seen.receiptEntries).toHaveLength(1);
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+	});
+
+	it('the queue runs the tender landing first; a cashier who finished before the replay gets no receipt back and no print (POS-31A)', async () => {
+		expect(await tenderLands()).toBe('completed');
+		newSale();
+		const before = counts();
+		expect(await bridgeReplays()).toBe('completed');
+
+		const seen = counts();
+		expect(seen.receiptEntries).toEqual(before.receiptEntries);
+		expect(seen.receiptTabOpen).toBe(false);
+		expect(seen.prints).toBe(before.prints);
+		expect(seen).toMatchObject({
+			nonReplayEvents: 1,
+			replayEvents: 0,
+			nonReplayAudits: 1,
+			replayedAudits: 0,
+			stockCalls: 1,
+			resolved: 1,
+		});
+	});
+
+	// The spec's other order (the replay completing first, then the tender) cannot happen in one tab
+	// while the tender holds the slot: a replay called with no queue does not start its run until
+	// the slot is released.
+	it('a replay with no queue starts its run only once the slot the tender holds is released (POS-31A)', async () => {
+		let release!: () => void;
+		const held = new Promise<void>((resolveHeld) => (release = resolveHeld));
+		const released = jest.fn();
+		const slot = mutationQueue.enqueueOrderMutation(uuid, async () => {
+			await held;
+			released();
+		});
+		const replay = bridgeReplays();
+		await new Promise((resolveTick) => setTimeout(resolveTick, 20));
+		expect(counts().replayEvents).toBe(0);
+		release();
+		await slot;
+		expect(await replay).toBe('completed');
+		expect(counts().replayEvents).toBe(1);
+		expect(released.mock.invocationCallOrder[0]).toBeLessThan(dispatch.mock.invocationCallOrder[0]);
+	});
+
+	// ADR 0040 Decided 1 rule 3: an offline record completes at the till and keeps its attempt; the
+	// bridge's finish once the paid order is adopted (`finishOne`) is its one replayed completion.
+	it('an offline record awaiting adoption is finished by exactly one replayed completion (POS-31A)', async () => {
+		expect(await completeSale(ctx, sale, { ...manual, via: 'offline' }, stage)).toBe('completed');
+		expect((await pendingCompletions(ctx.storeDB))[uuid]).toMatchObject({ awaitingAdoption: true });
+		const finish = { source: 'replay', refreshed: true } as const;
+		expect(await completeSale(ctx, sale, finish, { host: 'background' })).toBe('completed');
+
+		expect(counts()).toMatchObject({
+			nonReplayEvents: 1,
+			replayEvents: 1,
+			nonReplayAudits: 1,
+			replayedAudits: 1,
+			resolved: 1,
+		});
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+	});
 });

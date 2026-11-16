@@ -6,6 +6,7 @@ import {
 	createSearchProbe,
 	deleteSearchProbe,
 	productWriterCredentialsConfigured,
+	renewProductWriterIfExpiring,
 	searchAndWaitForServer,
 } from './search-probe';
 import {
@@ -254,6 +255,7 @@ test.describe('POS visibility (online-only products)', () => {
 		test.skip(!productWriter, 'E2E product-writer credentials are not configured');
 		test.setTimeout(VISIBILITY_TEST_TIMEOUT_MS);
 		const storeUrl = getStoreUrl(testInfo);
+		await renewProductWriterIfExpiring(productProbeRequest, storeUrl, productWriter!);
 
 		// A probe of this spec's own, never the shared `runPrivateSimpleProducts`
 		// fixture: those are reused by the worker's later tests, and this one mutates

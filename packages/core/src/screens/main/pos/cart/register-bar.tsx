@@ -41,7 +41,8 @@ export function RegisterBar({
 	const { wpCredentials } = useStoreSession();
 	const menu = useBarMenu();
 	const stores = useDocField(wpCredentials, (value) => value.stores) as string[];
-	const { place, pillLabel } = useRegisterBarState();
+	const { place, pillLabel, registerId } = useRegisterBarState();
+	const placeData = registerId ? { dataSet: { registerId } } : {};
 	// The title bar carries the place and the pill (Paul, 2026-10-30): the row hides under it.
 	const underStrip = useTitleBarStrip().height > 0;
 	// The sheets live beside the bar, not in it: a closed Dialog still mounts an empty root,
@@ -70,6 +71,7 @@ export function RegisterBar({
 							{/* The bar's title, not a quiet action: it keeps the foreground over the ghost's muted label. */}
 							<Text
 								testID="register-bar-place"
+								{...placeData}
 								className="text-foreground text-base font-semibold"
 								numberOfLines={1}
 							>
@@ -77,7 +79,12 @@ export function RegisterBar({
 							</Text>
 						</Button>
 					) : (
-						<Text testID="register-bar-place" className="text-base font-semibold" numberOfLines={1}>
+						<Text
+							testID="register-bar-place"
+							{...placeData}
+							className="text-base font-semibold"
+							numberOfLines={1}
+						>
 							{place}
 						</Text>
 					)}

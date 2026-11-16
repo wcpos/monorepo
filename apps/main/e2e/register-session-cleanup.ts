@@ -6,6 +6,7 @@ import {
 
 import { storeRequestOptions } from './probe-credential';
 import { storeLoginAuthorization } from './search-probe';
+import { isSuiteRegister } from './suite-register';
 
 import type { StoreRequestAuth } from './order-cleanup';
 
@@ -37,6 +38,8 @@ import type { StoreRequestAuth } from './order-cleanup';
  * run shares, and only PR runs queue for the shared store, so a close can land under another run
  * still selling on it. Two hours bounds that to once per two hours and a session to roughly 250
  * E2E sales (~130 an hour on 11-09), well under the ~700 that broke the 128 MB limit.
+ * This floor holds on the suite's own register only: a session an E2E cashier opened on any other
+ * (ui-climb's "Climb Register", 2026-11-12) is closed whatever its age, since no run sells there.
  */
 const SESSION_MIN_AGE_MS = 2 * 60 * 60 * 1000;
 
@@ -48,7 +51,7 @@ export interface SessionResponse {
 	body: unknown;
 }
 
-/** Routes are relative to `wp-json/`, e.g. `wcpos/v2/sessions`. */
+/** Routes are relative to `wp-json/`, e.g. `wcpos/v2/sessions`, `wcpos/v2/registers/{id}`. */
 export interface SessionTransport {
 	get(route: string, params?: Record<string, string>): Promise<SessionResponse>;
 	post(route: string, data: unknown): Promise<SessionResponse>;
@@ -121,9 +124,18 @@ async function closeSession(transport: SessionTransport, row: SessionRow, at: st
 	await ok(transport.post(`${route}/status`, { status: 'closed', at, counted }), 'close');
 }
 
+/** The register's name as the app reads it (`registers/{id}`); null when the store does not say. */
+async function registerName(transport: SessionTransport, id: string): Promise<string | null> {
+	const { status, body } = await transport.get(`wcpos/v2/registers/${id}`);
+	const name = (body as { name?: unknown } | null)?.name;
+	return status < 300 && typeof name === 'string' ? name : null;
+}
+
 /**
- * Close every open or counting session that one of `usernames` opened over `SESSION_MIN_AGE_MS`
- * ago. Sessions other people opened are never touched: the store may be shared with humans.
+ * Close every open or counting session that one of `usernames` opened, on any register: over
+ * `SESSION_MIN_AGE_MS` ago on the suite's own, at any age on a register the suite did not create.
+ * A register whose name cannot be read counts as the suite's. Sessions other people opened are
+ * never touched: the store may be shared with humans.
  */
 export async function closeOpenRegisterSessions(
 	transport: SessionTransport,
@@ -138,6 +150,8 @@ export async function closeOpenRegisterSessions(
 	};
 	const users = await transport.get('wp/v2/users', {
 		slug: usernames.join(','),
+		// Both cashier bands and the run's own logins: more than the default page of 10.
+		per_page: '100',
 		_fields: 'id,slug',
 	});
 	const usersSkip = skipReason('wp/v2/users', users);
@@ -146,6 +160,7 @@ export async function closeOpenRegisterSessions(
 	if (openers.size === 0) return skip(`no user named ${usernames.join(', ')}`);
 
 	// One page, newest first: E2E runs on a handful of tills, each with at most one open session.
+	// The list is store-wide (no register_id), so it reaches a stray session on any register.
 	const rows: SessionRow[] = [];
 	for (const status of ['open', 'counting']) {
 		const listed = await transport.get('wcpos/v2/sessions', { status, per_page: '100' });
@@ -157,8 +172,12 @@ export async function closeOpenRegisterSessions(
 	for (const row of rows) {
 		const openedAt = Date.parse(`${row.opened_at_gmt?.replace(' ', 'T')}Z`);
 		if (row.status !== 'open' && row.status !== 'counting') continue;
-		if (!openers.has(row.opened_by) || !(now - openedAt >= SESSION_MIN_AGE_MS)) continue;
+		if (!openers.has(row.opened_by)) continue;
 		try {
+			if (!(now - openedAt >= SESSION_MIN_AGE_MS)) {
+				const name = await registerName(transport, row.register_id);
+				if (name === null || isSuiteRegister({ id: row.register_id, name })) continue;
+			}
 			await closeSession(transport, row, at);
 			result.closed.push(row.id);
 			console.log(

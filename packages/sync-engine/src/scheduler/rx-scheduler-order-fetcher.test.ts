@@ -12,6 +12,7 @@ import {
 
 import { remoteId } from '../testing';
 import { hydrateResponse } from '../transport/response-envelope';
+import { parseWooGmtSeconds } from './__fixtures__/woo-gmt-bound';
 import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -2135,11 +2136,11 @@ describe('createOrdersSchedulerFetcher', () => {
 	const gmtSeconds = (epochSeconds: number) =>
 		new Date(epochSeconds * 1_000).toISOString().slice(0, 19);
 	const beforeParam = (epochSeconds: number) =>
-		encodeURIComponent(new Date(epochSeconds * 1_000).toISOString());
-	const rangedOrder = (wooId: number, epochSeconds: number) => ({
+		encodeURIComponent(new Date(epochSeconds * 1_000).toISOString().slice(0, 19));
+	const rangedOrder = (wooId: number, epochSeconds: number, modifiedSeconds = epochSeconds) => ({
 		id: wooId,
 		date_created_gmt: gmtSeconds(epochSeconds),
-		date_modified_gmt: gmtSeconds(epochSeconds),
+		date_modified_gmt: gmtSeconds(modifiedSeconds),
 		meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(wooId) }],
 	});
 	const rangedResponse = (payload: unknown[], headers: Record<string, string> = {}) =>
@@ -2150,18 +2151,23 @@ describe('createOrdersSchedulerFetcher', () => {
 
 	/**
 	 * A Woo `/orders` stand-in that honours exactly the params the ranged walk cursors on —
-	 * `after`/`before` (exclusive, `dates_are_gmt`), `exclude`, `per_page`, `page` — and
+	 * `after`/`before`/`modified_after` (exclusive, `dates_are_gmt`), `exclude`, `per_page`, `page` — and
 	 * advertises `X-WP-Total` / `X-WP-TotalPages` for the window it just answered. Orders can
 	 * be removed between requests, which is how the "trashed mid-walk" case is exercised.
 	 */
-	function rangedOrderServer(orders: { wooId: number; seconds: number }[]) {
+	function rangedOrderServer(
+		orders: { wooId: number; seconds: number; modifiedSeconds?: number }[]
+	) {
 		const live = new Map(orders.map((order) => [order.wooId, order] as const));
 		const fetcher = vi.fn(async (url: string) => {
 			const params = new URL(url).searchParams;
 			const beforeParamValue = params.get('before');
-			const before = beforeParamValue === null ? Infinity : Date.parse(beforeParamValue) / 1_000;
+			const before = beforeParamValue === null ? Infinity : parseWooGmtSeconds(beforeParamValue);
 			const afterParamValue = params.get('after');
-			const after = afterParamValue === null ? -Infinity : Date.parse(afterParamValue) / 1_000;
+			const after = afterParamValue === null ? -Infinity : parseWooGmtSeconds(afterParamValue);
+			const modifiedParamValue = params.get('modified_after');
+			const modifiedAfter =
+				modifiedParamValue === null ? -Infinity : parseWooGmtSeconds(modifiedParamValue);
 			const excluded = new Set(
 				(params.get('exclude') ?? '')
 					.split(',')
@@ -2172,12 +2178,16 @@ describe('createOrdersSchedulerFetcher', () => {
 			const page = Number(params.get('page'));
 			const matching = [...live.values()]
 				.filter(
-					(order) => order.seconds < before && order.seconds >= after && !excluded.has(order.wooId)
+					(order) =>
+						order.seconds < before &&
+						order.seconds > after &&
+						(order.modifiedSeconds ?? order.seconds) > modifiedAfter &&
+						!excluded.has(order.wooId)
 				)
 				.sort((left, right) => right.seconds - left.seconds || right.wooId - left.wooId);
 			const slice = matching.slice((page - 1) * perPage, page * perPage);
 			return rangedResponse(
-				slice.map((order) => rangedOrder(order.wooId, order.seconds)),
+				slice.map((order) => rangedOrder(order.wooId, order.seconds, order.modifiedSeconds)),
 				{
 					'X-WP-Total': String(matching.length),
 					'X-WP-TotalPages': String(Math.max(1, Math.ceil(matching.length / perPage))),
@@ -2246,6 +2256,209 @@ describe('createOrdersSchedulerFetcher', () => {
 			fetcher: overrides.fetcher as never,
 		});
 	}
+
+	const PAID_WINDOW_START = 1782864000;
+	const PAID_RANGE_QUERY_KEY = RANGE_QUERY_KEY.replace(
+		':search=',
+		`:modified_after=${PAID_WINDOW_START}:search=`
+	);
+
+	it.each([
+		{
+			offset: 60,
+			startSeconds: Date.UTC(2026, 10, 8, 23) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 22, 59, 59) / 1000,
+			after: '2026-11-08T23:00:00',
+			before: '2026-11-15T22:59:59',
+			modifiedAfter: '2026-11-08T22:59:59',
+			paidBefore: '2026-11-08T23:00:01',
+		},
+		{
+			offset: 0,
+			startSeconds: Date.UTC(2026, 10, 9) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 23, 59, 59) / 1000,
+			after: '2026-11-09T00:00:00',
+			before: '2026-11-15T23:59:59',
+			modifiedAfter: '2026-11-08T23:59:59',
+			paidBefore: '2026-11-09T00:00:01',
+		},
+		{
+			offset: -300,
+			startSeconds: Date.UTC(2026, 10, 9, 5) / 1000,
+			endSeconds: Date.UTC(2026, 10, 16, 4, 59, 59) / 1000,
+			after: '2026-11-09T05:00:00',
+			before: '2026-11-16T04:59:59',
+			modifiedAfter: '2026-11-09T04:59:59',
+			paidBefore: '2026-11-09T05:00:01',
+		},
+		{
+			offset: 330,
+			startSeconds: Date.UTC(2026, 10, 8, 18, 30) / 1000,
+			endSeconds: Date.UTC(2026, 10, 15, 18, 29, 59) / 1000,
+			after: '2026-11-08T18:30:00',
+			before: '2026-11-15T18:29:59',
+			modifiedAfter: '2026-11-08T18:29:59',
+			paidBefore: '2026-11-08T18:30:01',
+		},
+	])(
+		'sends bare GMT bounds in both phases at site offset $offset minutes',
+		async ({ startSeconds, endSeconds, after, before, modifiedAfter, paidBefore }) => {
+			const coverageRepository = rangedLaneStore();
+			const { fetcher } = rangedOrderServer([{ wooId: 1, seconds: startSeconds + 10 }]);
+			const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+			const queryKey = `orders:browser:status=completed:after=${startSeconds}:before=${endSeconds}:modified_after=${startSeconds}:search=:limit=all`;
+
+			await schedulerFetcher(orderTask({ queryKey }));
+
+			const first = new URL(fetcher.mock.calls[0][0]).searchParams;
+			expect(first.get('after')).toBe(after);
+			expect(first.get('before')).toBe(before);
+			const second = new URL(fetcher.mock.calls[1][0]).searchParams;
+			expect(second.get('modified_after')).toBe(modifiedAfter);
+			expect(second.get('before')).toBe(paidBefore);
+		}
+	);
+
+	it('switches to a modified_after request after the created-in-range phase is short', async () => {
+		const coverageRepository = rangedLaneStore();
+		const { fetcher } = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+
+		await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+		const params = new URL(fetcher.mock.calls[1][0]).searchParams;
+		expect(params.has('after')).toBe(false);
+		expect(params.get('modified_after')).toBe(gmtSeconds(PAID_WINDOW_START - 1));
+		expect(params.get('before')).toBe(gmtSeconds(PAID_WINDOW_START + 1));
+		expect(params.get('dates_are_gmt')).toBe('true');
+		expect(params.get('orderby')).toBe('date');
+		expect(params.get('order')).toBe('desc');
+		expect(params.get('page')).toBe('1');
+		expect(params.get('per_page')).toBe('25');
+		expect(params.has('exclude')).toBe(false);
+	});
+
+	it('downloads earlier-created orders modified after the window start and completes only after phase 2', async () => {
+		const coverageRepository = rangedLaneStore();
+		const repository = { upsertMany: vi.fn(async (_documents: OrderDocument[]) => undefined) };
+		const server = rangedOrderServer([
+			{ wooId: 1, seconds: PAID_WINDOW_START + 1 },
+			{ wooId: 2, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START + 10 },
+			{ wooId: 3, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START - 1 },
+			{ wooId: 4, seconds: PAID_WINDOW_START, modifiedSeconds: PAID_WINDOW_START + 10 },
+			{ wooId: 5, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START },
+		]);
+		const fetcher = vi.fn(async (url: string) => {
+			expect(coverageRepository.recordCumulativeQueryResult).not.toHaveBeenCalled();
+			return server.fetcher(url);
+		});
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+
+		const result = await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+		expect(result).toMatchObject({ documentCount: 4, requestCount: 2, completed: true });
+		expect(
+			repository.upsertMany.mock.calls.flatMap(([docs]) => docs.map((doc) => doc.uuid))
+		).toEqual([uuidFor(1), uuidFor(4), uuidFor(5), uuidFor(2)]);
+		expect(coverageRepository.recordCumulativeQueryResult).toHaveBeenCalledTimes(1);
+		expect(coverageRepository.lane()).toMatchObject({ complete: true });
+		expect(coverageRepository.lane()?.rangedResume).toBeUndefined();
+		expect(coverageRepository.publishRangedResume).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				resume: expect.objectContaining({ totalRecords: 4, downloadedRecords: 4 }),
+			})
+		);
+	});
+
+	it('downloads an earlier-created order whose modified time equals the window start', async () => {
+		const coverageRepository = rangedLaneStore();
+		const repository = { upsertMany: vi.fn(async (_documents: OrderDocument[]) => undefined) };
+		const { fetcher } = rangedOrderServer([
+			{ wooId: 7, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START },
+		]);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+
+		const result = await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+		expect(result).toMatchObject({ documentCount: 1, requestCount: 2, completed: true });
+		expect(
+			repository.upsertMany.mock.calls.flatMap(([docs]) => docs.map((doc) => doc.uuid))
+		).toEqual([uuidFor(7)]);
+	});
+
+	it('keeps a rangedResume and never records complete when the phase-2 request fails', async () => {
+		const coverageRepository = rangedLaneStore();
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const fetcher = vi.fn(async (url: string) =>
+			new URL(url).searchParams.has('modified_after')
+				? new Response(null, { status: 500 })
+				: server.fetcher(url)
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+
+		await expect(schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }))).rejects.toThrow(
+			'Woo REST browser order query request failed: 500'
+		);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(coverageRepository.recordCumulativeQueryResult).not.toHaveBeenCalledWith(
+			expect.objectContaining({ complete: true })
+		);
+		expect(coverageRepository.lane()).toMatchObject({
+			complete: false,
+			rangedResume: { beforeSeconds: PAID_WINDOW_START + 11 },
+		});
+	});
+
+	it.each([PAID_WINDOW_START + 1, PAID_WINDOW_START - 10])(
+		'resumes directly into phase 2 from persisted beforeSeconds=%s',
+		async (beforeSeconds) => {
+			const coverageRepository = rangedLaneStore();
+			await coverageRepository.publishRangedResume({
+				resume: { beforeSeconds, excludeWooIds: [], totalRecords: null, downloadedRecords: 0 },
+				expected: null,
+			});
+			const { fetcher } = rangedOrderServer([
+				{ wooId: 1, seconds: PAID_WINDOW_START - 100, modifiedSeconds: PAID_WINDOW_START + 10 },
+			]);
+			const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+
+			const result = await schedulerFetcher(orderTask({ queryKey: PAID_RANGE_QUERY_KEY }));
+
+			const params = new URL(fetcher.mock.calls[0][0]).searchParams;
+			expect(params.has('after')).toBe(false);
+			expect(params.get('modified_after')).toBe(gmtSeconds(PAID_WINDOW_START - 1));
+			expect(params.get('before')).toBe(gmtSeconds(beforeSeconds));
+			expect(result).toMatchObject({ documentCount: 1, requestCount: 1, completed: true });
+		}
+	);
+
+	it('persists an incomplete phase-2 cursor at the per-pass record bound', async () => {
+		const coverageRepository = rangedLaneStore();
+		const { fetcher } = rangedOrderServer([
+			{ wooId: 25_001, seconds: PAID_WINDOW_START + 10 },
+			...Array.from({ length: 25_000 }, (_, index) => ({
+				wooId: 25_000 - index,
+				seconds: PAID_WINDOW_START - index,
+				modifiedSeconds: PAID_WINDOW_START + 10,
+			})),
+		]);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+
+		const result = await schedulerFetcher(
+			orderTask({ queryKey: PAID_RANGE_QUERY_KEY, limit: 200 })
+		);
+
+		expect(result).toMatchObject({ documentCount: 10_000, completed: false });
+		expect(coverageRepository.lane()).toMatchObject({
+			complete: false,
+			rangedResume: {
+				beforeSeconds: PAID_WINDOW_START - 9_998 + 1,
+				excludeWooIds: [15_002],
+				totalRecords: 25_001,
+				downloadedRecords: 10_000,
+			},
+		});
+	});
 
 	it.each(['header-only', 'body-only', 'both'] as const)(
 		'produces the same ranged outcome from a %s response',
@@ -2320,13 +2533,13 @@ describe('createOrdersSchedulerFetcher', () => {
 		// A fetch-to-completion lane walks `date desc` — the dimension its cursor is expressed in.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=2026-07-14T23%3A59%3A59.000Z&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=2026-07-14T23%3A59%3A59&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc'
 		);
 		// The second request RE-CURSORS instead of asking for page 2: the window now ends one
 		// second past the oldest record page 1 returned, with that record excluded.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=${beforeParam(
+			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=${beforeParam(
 				RANGE_BASE_SECONDS - 24 + 1
 			)}&dates_are_gmt=true&exclude=976&per_page=25&page=1&orderby=date&order=desc`
 		);
@@ -2456,7 +2669,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledTimes(1);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=${beforeParam(
+			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=${beforeParam(
 				cursorBeforeSeconds
 			)}&dates_are_gmt=true&exclude=15001&per_page=100&page=1&orderby=date&order=desc`
 		);
@@ -2495,7 +2708,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		// The descriptor's own upper bound, with no narrowing and no exclusions.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=2026-07-14T23%3A59%3A59.000Z&dates_are_gmt=true&per_page=100&page=1&orderby=date&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=2026-07-14T23%3A59%3A59&dates_are_gmt=true&per_page=100&page=1&orderby=date&order=desc'
 		);
 		expect(coverageRepository.recordCumulativeQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({ resetCumulativeExpectedIds: true })
@@ -2624,9 +2837,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		// The second request re-asks for the SAME second with the 25 ids already taken excluded.
 		const secondRequest = new URL(fetcher.mock.calls[1][0] as string).searchParams;
 		expect(secondRequest.get('exclude')?.split(',')).toHaveLength(25);
-		expect(secondRequest.get('before')).toBe(
-			new Date((RANGE_BASE_SECONDS + 1) * 1_000).toISOString()
-		);
+		expect(secondRequest.get('before')).toBe(gmtSeconds(RANGE_BASE_SECONDS + 1));
 
 		expect(coverageRepository.lane()).toMatchObject({ complete: true });
 		expect(upserted).toHaveLength(40);

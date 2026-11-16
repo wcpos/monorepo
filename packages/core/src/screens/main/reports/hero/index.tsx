@@ -24,6 +24,9 @@ import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
 import {
 	ReportsComparison,
+	ReportsCurrency,
+	ReportsCurrencyGuard,
+	useComparisonSettled,
 	useIncludedStatus,
 	useReportsData,
 	useReportsHandles,
@@ -31,13 +34,14 @@ import {
 	useReportsScope,
 	useReportsSelection,
 } from '../context';
-import { salesFigures } from '../report/sales-figures';
+import { salesByCurrency, salesFigures, type SalesFigures } from '../report/sales-figures';
 import { summarySpec } from '../report/summary';
 import { useReportCashier } from '../report/use-report-cashier';
 import { useReportPrint } from '../panels/use-report-print';
 import { useReportsDirectories, useReportsFilterScope } from '../scope';
 import { PrintSheet } from '../../receipt/print-sheet';
 import { ReportsSyncProgress } from '../sync-progress';
+import { NoStoreNotice } from '../no-store';
 import { ScopeRow } from '../scope-row';
 import { MenuChip } from '../menu-chip';
 
@@ -132,8 +136,15 @@ function Difference({
 /** Reads the comparison once for the whole group (mounted inside ReportsComparison). */
 function ComparedFigures(props: Omit<React.ComponentProps<typeof Figures>, 'comparison'>) {
 	const { comparisonOrders } = useReportsData();
+	const settled = useComparisonSettled();
+	// A comparison still downloading is a fraction of its period: no difference against it (F2).
+	if (!settled) return <Figures {...props} comparison="loading" />;
 	const figures = salesFigures({ orders: comparisonOrders, decimals: props.numDecimals });
 	return <Figures {...props} comparison={{ count: comparisonOrders.length, figures }} />;
+}
+/** The chart's comparison series, once the comparison period is whole (F2). */
+function ComparedChart() {
+	return useComparisonSettled() ? <Chart comparison /> : <Chart />;
 }
 /** The figure and its companions; the comparison is one value for all four lines. */
 function Figures({
@@ -393,7 +404,9 @@ export function SalesScope({ date, settled }: { date: React.ReactNode; settled: 
 			actions={
 				settled ? (
 					<React.Suspense fallback={disabledPrint}>
-						<HeroPrint storeId={storeId} />
+						<ReportsCurrencyGuard>
+							<HeroPrint storeId={storeId} />
+						</ReportsCurrencyGuard>
 					</React.Suspense>
 				) : (
 					disabledPrint
@@ -402,7 +415,51 @@ export function SalesScope({ date, settled }: { date: React.ReactNode; settled: 
 		/>
 	);
 }
+/** The card reads the largest currency; every other one gets its own line, never added in (ledger 48). */
 export function Hero() {
+	const { storeId } = useReportsPeriod();
+	const { store } = useReportFormats(storeId);
+	const { selectedOrders } = useReportsData();
+	const groups = salesByCurrency({
+		orders: selectedOrders,
+		decimals: store?.price_num_decimals,
+		fallback: store?.currency,
+	});
+	return (
+		<ReportsCurrencyGuard>
+			<HeroCard others={groups.slice(1)} />
+		</ReportsCurrencyGuard>
+	);
+}
+/** Another currency's sales in its own symbol, beside the figure, never in it (ledger 48). */
+function OtherCurrency({
+	storeId,
+	currency,
+	figures,
+}: {
+	storeId?: number;
+	currency: string;
+	figures: SalesFigures;
+}) {
+	const t = useT();
+	const { money, number } = useReportFormats(storeId);
+	return (
+		<View testID={`hero-currency-${currency}`} className="flex-row flex-wrap items-baseline gap-4">
+			<Text testID={`hero-total-${currency}`} className="text-2xl font-semibold tabular-nums">
+				{money(figures.gross)}
+			</Text>
+			<Text variant="key">{t('common.orders')}</Text>
+			<Text testID={`hero-orders-${currency}`} className="tabular-nums">
+				{number(figures.count)}
+			</Text>
+			<Text variant="key">{t('reports.average_order')}</Text>
+			<Text testID={`hero-average-${currency}`} className="tabular-nums">
+				{money(figures.average)}
+			</Text>
+		</View>
+	);
+}
+function HeroCard({ others }: { others: { currency: string; figures: SalesFigures }[] }) {
 	const t = useT();
 	const phone = useIsPhone();
 	const { cmp, setCmp, statusMode, chartView, setChartView } = useReportsScope();
@@ -504,6 +561,12 @@ export function Hero() {
 					</ReportsComparison>
 				</React.Suspense>
 			</ErrorBoundary>
+			{others.map(({ currency, figures }) => (
+				<ReportsCurrency key={currency} code={currency}>
+					<OtherCurrency storeId={storeId} currency={currency} figures={figures} />
+				</ReportsCurrency>
+			))}
+			<NoStoreNotice />
 			<ReportsSyncProgress lane="comparison" />
 			{phone ? (
 				<>
@@ -524,7 +587,7 @@ export function Hero() {
 				>
 					<React.Suspense fallback={<Chart />}>
 						<ReportsComparison>
-							<Chart comparison />
+							<ComparedChart />
 						</ReportsComparison>
 					</React.Suspense>
 				</ErrorBoundary>

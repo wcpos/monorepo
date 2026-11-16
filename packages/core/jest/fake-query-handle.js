@@ -34,6 +34,7 @@ function fakeQueryHandle(initial = {}, key = 'fake') {
 			exhausted: null,
 			total: null,
 			laneProgress: null,
+			laneComplete: false,
 		},
 		initial
 	);

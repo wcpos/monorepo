@@ -60,9 +60,10 @@ export function panelSpec(
 	const productRows = once(() =>
 		figures.products.netOfRefunds(directory, view.productLines?.orders, view.productLines?.refunds)
 	);
-	const groupParts = once(
-		() => (id === 'brands' ? figures.brands : figures.categories).netOfRefunds(directory).parts
+	const groupResult = once(() =>
+		(id === 'brands' ? figures.brands : figures.categories).netOfRefunds(directory)
 	);
+	const groupParts = once(() => groupResult().parts);
 	const { money, number, quantity, percent } = formats;
 	const share = (value: number) => t('reports.percent', { value: percent(value * 100) });
 	const unknown = t('common.unknown'),
@@ -279,15 +280,10 @@ export function panelSpec(
 				[
 					total,
 					quantity(grouping.reduce((sum, row) => sum + row.quantity, 0)),
-					money(grouping.reduce((sum, row) => sum + row.amount, 0)),
+					money(groupResult().total),
 					'',
 				],
-				[
-					total,
-					grouping.reduce((sum, row) => sum + row.quantity, 0),
-					grouping.reduce((sum, row) => sum + row.amount, 0),
-					'',
-				]
+				[total, grouping.reduce((sum, row) => sum + row.quantity, 0), groupResult().total, '']
 			);
 		}
 		case 'channels':

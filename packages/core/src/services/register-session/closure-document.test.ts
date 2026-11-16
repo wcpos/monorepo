@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import type { ClosureRow, RegisterSessionRow } from '@wcpos/database';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 
-import { buildClosureDocument, buildXReportDocument } from './closure-document';
+import {
+	buildClosureDocument,
+	buildXReportDocument,
+	formatClosureDate,
+	resetDateFormatterCache,
+} from './closure-document';
 // Copied key contract from plugin templates/gallery/preview-data/closure.json (closure-template).
 const dateKeys = [
 	'datetime',
@@ -493,4 +498,108 @@ it('prints the persisted closer and cashier names', () => {
 			document
 		)
 	).toBe('Pat;Alex;99;');
+});
+
+/** The pre-cache Intl keys: a new Intl.DateTimeFormat for every one. */
+function uncachedClosureDate(
+	value: string | null | undefined,
+	context: { timezone: string; locale: string }
+) {
+	const date = value
+		? new Date(/[Zz]|[+-]\d\d:\d\d$/.test(value) ? value : `${value.replace(' ', 'T')}Z`)
+		: null;
+	const options = context.timezone === 'device' ? {} : { timeZone: context.timezone };
+	const display = (settings: Intl.DateTimeFormatOptions) =>
+		date
+			? new Intl.DateTimeFormat(context.locale, { ...options, ...settings, hour12: false }).format(
+					date
+				)
+			: '';
+	const result: Record<string, string> = {
+		datetime: display({ dateStyle: 'medium', timeStyle: 'short' }),
+		date: display({ dateStyle: 'medium' }),
+		time: display({ timeStyle: 'short' }),
+	};
+	for (const style of ['short', 'long', 'full'] as const) {
+		result[`datetime_${style}`] = display({ dateStyle: style, timeStyle: style });
+		result[`date_${style}`] = display({ dateStyle: style });
+	}
+	for (const style of ['short', 'long'] as const) {
+		result[`weekday_${style}`] = display({ weekday: style });
+		result[`month_${style}`] = display({ month: style });
+	}
+	return result;
+}
+
+describe('formatClosureDate formatter cache', () => {
+	afterEach(() => jest.restoreAllMocks());
+
+	// Revert: key the cache on less than the locale and every option (a key would be served
+	// another style's or zone's formatter).
+	it.each([
+		['en-US', 'Europe/Madrid'],
+		['de-DE', 'Asia/Tokyo'],
+		['ja-JP', 'device'],
+		['ar-EG', 'America/New_York'],
+	])('formats %s in %s exactly as an uncached formatter does', (locale, timezone) => {
+		for (const value of ['2026-09-11T08:05:00Z', '2026-12-31 23:59:00', null]) {
+			const expected = uncachedClosureDate(value, { locale, timezone });
+			for (let pass = 0; pass < 2; pass++) {
+				expect(formatClosureDate(value, { locale, timezone })).toMatchObject(expected);
+			}
+		}
+		expect(formatClosureDate(null, { locale, timezone })).toMatchObject(
+			Object.fromEntries(dateKeys.map((key) => [key, '']))
+		);
+	});
+
+	// Revert: build a new Intl.DateTimeFormat per key again.
+	it('builds no new formatter for a repeat locale and zone', () => {
+		const zone = { locale: 'en-GB', timezone: 'Europe/London' };
+		// The spy replaces Intl.DateTimeFormat, which starts the cache over, so warm under it.
+		const spy = jest.spyOn(Intl, 'DateTimeFormat');
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		spy.mockClear();
+		const repeat = formatClosureDate('2026-10-01T12:30:00Z', zone);
+		expect(spy).not.toHaveBeenCalled();
+		expect(repeat.time).toBe('13:30');
+	});
+
+	// Revert: key the cache on the zone alone.
+	it('builds new formatters for another locale', () => {
+		formatClosureDate('2026-09-11T08:00:00Z', { locale: 'en-GB', timezone: 'Europe/Paris' });
+		const spy = jest.spyOn(Intl, 'DateTimeFormat');
+		const french = formatClosureDate('2026-09-11T08:00:00Z', {
+			locale: 'fr-FR',
+			timezone: 'Europe/Paris',
+		});
+		expect(spy.mock.calls.filter(([locale]) => locale === 'fr-FR')).toHaveLength(13);
+		expect(french.month_long).toBe('septembre');
+	});
+
+	// Revert: serve a cached formatter after Intl.DateTimeFormat changes.
+	it('throws, as the uncached code does, when Intl.DateTimeFormat starts throwing', () => {
+		const zone = { locale: 'en-GB', timezone: 'Europe/London' };
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		const spy = jest.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+			throw new RangeError('Intl date formatting unavailable');
+		});
+		expect(() => uncachedClosureDate('2026-09-11T08:00:00Z', zone)).toThrow(RangeError);
+		expect(() => formatClosureDate('2026-09-11T08:00:00Z', zone)).toThrow(RangeError);
+		spy.mockRestore();
+		expect(formatClosureDate('2026-09-11T08:00:00Z', zone).time).toBe('09:00');
+	});
+
+	// Revert: make resetDateFormatterCache leave its entries behind.
+	it('builds afresh after resetDateFormatterCache, then caches again', () => {
+		const zone = { locale: 'en-GB', timezone: 'Europe/London' };
+		const spy = jest.spyOn(Intl, 'DateTimeFormat');
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		resetDateFormatterCache();
+		spy.mockClear();
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		formatClosureDate('2026-09-11T08:00:00Z', zone);
+		// One construction per Intl key (13) for the first call, none for the repeat.
+		expect(spy.mock.calls.filter(([locale]) => locale === 'en-GB')).toHaveLength(13);
+	});
 });

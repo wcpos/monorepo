@@ -20,9 +20,11 @@ export const PARKED_TAB_COPY = {
 export function ParkedTab({
 	state,
 	takeOver,
+	detail,
 }: {
 	state: Extract<LiveTabState, { kind: 'parked' | 'taking-over' }>;
 	takeOver(): void;
+	detail?: string;
 }) {
 	const waiting = state.kind === 'taking-over';
 	const lost = state.kind === 'parked' && state.reason === 'worker-lost';
@@ -45,6 +47,7 @@ export function ParkedTab({
 				tone={tone}
 				title={title}
 				description={description}
+				detail={lost ? detail : undefined}
 				primary={
 					lost
 						? { label: PARKED_TAB_COPY.reload, onPress: reloadApp, testID: 'parked-tab-reload' }

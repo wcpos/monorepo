@@ -9,11 +9,16 @@ import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
 import { describeRegisterBar } from './register-bar.helpers';
 
 /**
- * What the till's bar says, read once: the place (`Store` or `Store · Register`) and the register
- * pill's words. The POS register bar and the desktop title bar both draw it (Paul, 2026-10-30);
+ * What the till's bar says, read once: the place (`Store` or `Store · Register`), the register
+ * pill's words and the bound register's id (null unless bound; the web E2E guard reads it).
+ * The POS register bar and the desktop title bar both draw it (Paul, 2026-10-30);
  * every read is the store session's, so it works outside the till.
  */
-export function useRegisterBarState(): { place: string; pillLabel: string | undefined } {
+export function useRegisterBarState(): {
+	place: string;
+	pillLabel: string | undefined;
+	registerId: string | null;
+} {
 	const { session, sessionsOn, overdue } = useRegisterStatus();
 	const { store } = useStoreSession();
 	const t = useT();
@@ -50,5 +55,9 @@ export function useRegisterBarState(): { place: string; pillLabel: string | unde
 		'register.closed': t('register.closed', { count: awaitingStore }),
 		'register.awaiting_store': t('register.awaiting_store', { count: awaitingStore }),
 	};
-	return { place, pillLabel: pill ? pillLabels[pill] : undefined };
+	return {
+		place,
+		pillLabel: pill ? pillLabels[pill] : undefined,
+		registerId: binding.status === 'bound' ? binding.registerId : null,
+	};
 }

@@ -593,7 +593,12 @@ describe('query handle', () => {
 		demandOnly.retain();
 		expect(engine.requireCalls).toHaveLength(1);
 		expect(engine.coverageSubscribeCalls).toEqual([]);
-		expect(demandOnly.value).toMatchObject({ ready: true, total: null, laneProgress: null });
+		expect(demandOnly.value).toMatchObject({
+			ready: true,
+			total: null,
+			laneProgress: null,
+			laneComplete: false,
+		});
 
 		// The control: the same demand on a reading handle asks the engine for its verdict.
 		acquire('r', of(EMPTY), [refreshPlan()]).retain();

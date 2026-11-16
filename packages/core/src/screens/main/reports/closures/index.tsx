@@ -36,7 +36,7 @@ export function ClosuresExportButton({
 		<Button
 			testID="closures-export"
 			variant="outline"
-			leftIcon="document"
+			leftIcon="download"
 			disabled={disabled}
 			onPress={onPress}
 		>
