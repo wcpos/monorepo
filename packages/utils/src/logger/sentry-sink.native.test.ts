@@ -188,9 +188,13 @@ describe('sentry-sink.native', () => {
 				sendDefaultPii: false,
 				enableWatchdogTerminationTracking: true,
 				beforeSend: expect.any(Function),
+				beforeBreadcrumb: expect.any(Function),
 			})
 		);
 		const initOptions = jest.mocked(Sentry.init).mock.calls[0]?.[0];
+		expect(initOptions?.beforeBreadcrumb?.({ message: 'jane@example.com' })).toEqual({
+			message: '[EMAIL]',
+		});
 		expect(initOptions?.enabled).not.toBe(false);
 		// The SDK's derived `<applicationId>@<version>+<build>` is the key the native
 		// upload steps file symbols under; a custom release here would never match.

@@ -107,7 +107,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
 						orderId: orderID,
-						email,
+						hasRecipient: email.length > 0,
 						reason,
 						error: getErrorMessage(error),
 					},
@@ -169,7 +169,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 						context: {
 							blockCode: failure.blockCode,
 							orderId: orderID,
-							email,
+							hasRecipient: email.length > 0,
 							status: failure.status,
 							error: failure.reason,
 							serverCode: failure.code,

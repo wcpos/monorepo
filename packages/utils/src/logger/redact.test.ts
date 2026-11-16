@@ -1,4 +1,73 @@
-import { redactSensitiveFields, redactSensitiveText } from './redact';
+import { redactPersonalData, redactSensitiveFields, redactSensitiveText } from './redact';
+
+describe('redactPersonalData', () => {
+	it.each([
+		['jane.doe+pos@example.co.uk', '[EMAIL]'],
+		['+61 412 345 678', '[PHONE]'],
+		['0412 345 678', '[PHONE]'],
+		['+34 612 345 678', '[PHONE]'],
+		['+34612345678', '[PHONE]'],
+		['(555) 123-4567', '[PHONE]'],
+		['06 12 34 56 78', '[PHONE]'],
+		['06.12.34.56.78', '[PHONE]'],
+		['555.123.4567', '[PHONE]'],
+		['jane%40example.com', '[EMAIL]'],
+		['/orders?email=jane%40example.com', '/orders?email=[EMAIL]'],
+		['jane@exämple.de', '[EMAIL]'],
+		['Context: {"phone":"0612345678"}', 'Context: {"phone":"[PHONE]"}'],
+		['?mobile=0612345678', '?mobile=[PHONE]'],
+		['(02) 9876 5432', '[PHONE]'],
+		['555-123-4567', '[PHONE]'],
+		['+1 (555) 123-4567', '[PHONE]'],
+		['call 0412 345 678.', 'call [PHONE].'],
+	])('masks %s', (input, expected) => {
+		expect(redactPersonalData(input)).toBe(expected);
+	});
+	it.each([
+		'0412345678',
+		'1234567',
+		'/orders/1234567',
+		'1763287940123',
+		'Build 20261116',
+		'Mon Nov 16 2026 10:12:20 GMT+0100 (Central European Standard Time)',
+		'index.js:2:1234567',
+		'(1234567)',
+		'550e8400-e29b-41d4-a716-446655440000',
+		'12345678-1234-1234-1234-123456789012',
+		'2.0.4',
+		'2026.11.19',
+		'192.168.100.200',
+		'192.168.1.10:8080',
+		'telemetry: allowed',
+		'2026-11-16',
+		'2026-11-16T10:12:20.123Z',
+		'2026-11-16 10:12:20',
+		'123e4567-e89b-12d3-a456-426614174000',
+		'1.10.18',
+		'order 12345',
+		'HTTP 503',
+		'1234567.89',
+		'https://[REDACTED]@shop.example.com/wp-json',
+	])('preserves %s', (input) => {
+		expect(redactPersonalData(input)).toBe(input);
+	});
+	it.each([
+		'a'.repeat(100_000),
+		'1-'.repeat(50_000),
+		'1 '.repeat(50_000),
+		'1.'.repeat(50_000),
+		'tel'.repeat(33_334),
+	])('scrubs long input %# within 50 ms', (input) => {
+		const start = performance.now();
+		redactPersonalData(input);
+		expect(performance.now() - start).toBeLessThan(50);
+	});
+	it('leaves personal data in local logs unchanged', () => {
+		expect(redactSensitiveFields({ email: 'jane@example.com' })).toEqual({
+			email: 'jane@example.com',
+		});
+	});
+});
 
 describe('redactSensitiveFields', () => {
 	it.each([
