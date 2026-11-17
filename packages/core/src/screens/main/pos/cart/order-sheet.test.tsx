@@ -160,6 +160,12 @@ jest.mock('@wcpos/components/icon-button', () => ({
 		<button data-testid={testID} onClick={onPress} />
 	),
 }));
+// The foot's ⋮ tooltip reaches the safe-area native module; pass it through.
+jest.mock('@wcpos/components/tooltip', () => ({
+	Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 // The cart root's wiring, as `pos/cart/index.tsx` does it: the foot asks, the root pins the
 // sheet to the order it opened for.
 function FootWithSheet() {
