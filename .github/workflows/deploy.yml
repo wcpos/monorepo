@@ -259,7 +259,7 @@ jobs:
     runs-on: ubuntu-latest
     # One shared login per lane at a time: every setup logs in as the same free-store user (2026-11-17 AUTH101 race).
     concurrency:
-      group: e2e-setup-${{ needs.changes.outputs.lane || github.run_id }}
+      group: ${{ format('deploy-e2e-setup-{0}', needs.changes.outputs.lane || github.run_id) }}
       cancel-in-progress: false
       queue: max
     # The queue step lists runs.
