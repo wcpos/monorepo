@@ -416,7 +416,6 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			testID="checkout-keypad-pane"
 			className="web:outline-none flex-1"
 			tabIndex={isWeb ? -1 : undefined}
-			onKeyDown={isWeb ? onKeyDown : undefined}
 			// A declared field leaves the keyboard open: the first tap on Send must reach it.
 			keyboardShouldPersistTaps="handled"
 			onLayout={(event) => setPaneHeight(event.nativeEvent.layout.height)}
@@ -1047,7 +1046,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	);
 
 	return (
-		<View className="bg-card flex-1 gap-2">
+		<View className="bg-card flex-1 gap-2" onKeyDown={isWeb ? onKeyDown : undefined}>
 			{scroll}
 			{/* On a phone the full-size dialog keeps this 8 above the bottom inset: the shell's `fill` pads the inset and the panel keeps `py-2` (`lib/overlay`, `dialog/index.tsx`). */}
 			<View className="w-full">

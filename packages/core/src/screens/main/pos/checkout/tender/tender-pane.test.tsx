@@ -1134,6 +1134,33 @@ describe('the physical keyboard presses the tender keypad (#3645)', () => {
 			unmount();
 		}
 	});
+	// S13 pins Take outside the scroll: the keys still edit the entry while it has focus.
+	it('with Take focused, 5 and Backspace move the entry as they do on the pane (S13)', () => {
+		const seen: Record<string, string[]> = {};
+		for (const target of ['checkout-keypad-pane', 'checkout-commit']) {
+			const { unmount } = render(<Stateful />);
+			const node = screen.getByTestId(target);
+			node.focus();
+			expect(document.activeElement).toBe(node);
+			seen[target] = ['5', 'Backspace'].map((key) => {
+				expect(fireEvent.keyDown(node, { key })).toBe(false);
+				return screen.getByTestId('checkout-entry').textContent!;
+			});
+			unmount();
+		}
+		expect(seen['checkout-commit']).toEqual(['5', '0']);
+		expect(seen['checkout-commit']).toEqual(seen['checkout-keypad-pane']);
+	});
+	it.each(['checkout-keypad-pane', 'checkout-commit'])(
+		'one key on %s dispatches exactly one key (S13)',
+		(target) => {
+			const flow = live();
+			render(<TenderPane flow={flow} format={String} />);
+			fireEvent.keyDown(screen.getByTestId(target), { key: '5' });
+			expect(flow.commands.dispatch).toHaveBeenCalledTimes(1);
+			expect(flow.commands.dispatch).toHaveBeenCalledWith({ type: 'key', key: '5' });
+		}
+	);
 });
 
 describe('split V1: the pane builds each payment', () => {
