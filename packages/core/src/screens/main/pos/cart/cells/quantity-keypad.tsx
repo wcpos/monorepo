@@ -13,6 +13,7 @@ import { useSplitLineItem } from '../../hooks/use-split-line-item';
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { UnitStepper } from '../../checkout/tender/unit-stepper';
 import { readOnlyLineKey, readOnlyTestID, useCartTableReadOnly } from './read-only';
+import { signedQuantityAllowed } from '../signed-quantity';
 type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
@@ -87,6 +88,7 @@ function EditableQuantity({ row, column }: CellContext<Props, 'quantity'>) {
 				className="web:px-1 web:max-w-14 rounded-control min-w-9 items-center justify-center"
 				textClassName="px-1 text-center font-semibold"
 				tone={overStock ? 'attention' : undefined}
+				signed={signedQuantityAllowed()}
 				value={item.quantity}
 				// Web: whether the store took it (a refusal, the stock guard's, is presented by
 				// the queue and resolves `false`), so the keypad's − and + can take it back.

@@ -201,3 +201,25 @@ describe('rowsSince', () => {
 		);
 	});
 });
+
+describe('splitView with a returned line (a negative quantity)', () => {
+	// A +1 × 10.00 and B −1 × 4.00: the sale owes 6.00, so picking A alone would ask for 10.00.
+	const returned = [
+		{ id: 1, product_id: 11, name: 'A', quantity: 1, total: '10.00', total_tax: '0.00' },
+		{ id: 2, product_id: 12, name: 'B', quantity: -1, total: '-4.00', total_tax: '0.00' },
+	] as SplitFacts['payload']['line_items'];
+
+	it('picks nothing: no line has an unpaid unit, so a share never exceeds the due', () => {
+		const view = splitView(facts({ payload: { meta_data: [], line_items: returned } }));
+		expect(view.lines).toEqual([
+			{ id: 1, name: 'A', quantity: 1, totalMinor: 1000 },
+			{ id: 2, name: 'B', quantity: -1, totalMinor: -400 },
+		]);
+		expect(view.pickable).toBe(false);
+		expect(view.unpaidUnits).toEqual({ 1: 0, 2: 0 });
+	});
+
+	it('a cart of positive lines still picks', () => {
+		expect(splitView(facts()).pickable).toBe(true);
+	});
+});

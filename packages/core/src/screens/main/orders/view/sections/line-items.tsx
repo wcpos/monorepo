@@ -39,8 +39,9 @@ function LineItemRow({
 	const total = toNumber(item.total);
 	const discounted = subtotal > total;
 	const qty = item.quantity ?? 0;
-	const originalUnit = qty > 0 ? subtotal / qty : toNumber(item.price);
-	const unit = qty > 0 ? (discounted ? total / qty : subtotal / qty) : toNumber(item.price);
+	// A returned line (a negative quantity) divides to its positive unit price, as the receipt.
+	const originalUnit = qty !== 0 ? subtotal / qty : toNumber(item.price);
+	const unit = qty !== 0 ? (discounted ? total / qty : subtotal / qty) : toNumber(item.price);
 	const variations = visibleMeta(item.meta_data);
 
 	return (

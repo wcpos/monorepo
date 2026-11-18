@@ -762,7 +762,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							count={pickerOpen ? pickedCount : undefined}
 							on={pickerOpen}
 							testID="checkout-pick-items"
-							disabled={busy}
+							disabled={busy || !flow.split.pickable}
 							onPress={() => flow.commands.dispatch({ type: 'toggle-picker' })}
 						/>
 					) : null}

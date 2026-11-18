@@ -80,7 +80,9 @@ export function AmountField(props: AmountFieldProps) {
 					decrease: t('pos_cart.quantity_decrease'),
 					increase: t('pos_cart.quantity_increase'),
 					remove: t('common.remove'),
+					sign: t('common.change_sign'),
 				}}
+				signed={props.signed}
 				onChange={commit}
 				onRemove={props.onRemove}
 			/>

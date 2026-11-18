@@ -17,14 +17,23 @@ const KEY_NAMES: Record<string, string> = { Backspace: 'backspace', Enter: 'done
 type GrowDisplay = { display: React.ReactNode; span?: number };
 export type GrowCell = KeypadKey | GrowDisplay;
 
-/** The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel. */
+/**
+ * The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel. Given
+ * a `sign` label (a signed quantity), the last row is `± | ✓` with ✓ spanning the other two cells.
+ */
 export function closingRows(
 	decimalSeparator: string | undefined,
-	labels: { backspace: string; done: string }
+	labels: { backspace: string; done: string; sign?: string }
 ): KeypadKey[][] {
+	const done: KeypadKey = { name: 'done', label: labels.done, icon: 'check', variant: 'primary' };
 	return [
 		decimalRow(decimalSeparator, labels.backspace),
-		[{ name: 'done', label: labels.done, icon: 'check', variant: 'primary', span: 3 }],
+		labels.sign === undefined
+			? [{ ...done, span: 3 }]
+			: [
+					{ name: 'sign', label: labels.sign, text: '±' },
+					{ ...done, span: 2 },
+				],
 	];
 }
 
@@ -258,6 +267,8 @@ function Keys({
 									key="done"
 									testID="keypad-key-done"
 									className="flex-1"
+									// Beside ± (a signed quantity), Done keeps the two cells it spans anchored.
+									style={row.length > 1 ? { flex: key.span } : undefined}
 									onPress={() => onPress('done')}
 								>
 									{key.label}

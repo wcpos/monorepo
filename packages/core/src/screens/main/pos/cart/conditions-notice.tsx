@@ -25,7 +25,9 @@ export function CartConditionsNotice() {
 					<Pressable
 						key={`${lineUuid}:${index}`}
 						testID={`cart-condition-row-${lineUuid || index}`}
-						accessibilityRole="button"
+						// The total's row names the whole sale: no line to reach, so nothing to press.
+						accessibilityRole={lineUuid ? 'button' : undefined}
+						disabled={!lineUuid}
 						onPress={() =>
 							lineUuid &&
 							(fix === 'reduce'
@@ -38,10 +40,12 @@ export function CartConditionsNotice() {
 						)}
 					>
 						<Icon name="product" className="text-foreground" />
-						<Text variant="subheading" className="flex-1" numberOfLines={1}>
-							{reasonKey === 'pos_cart.only_n_available'
-								? t('pos_cart.only_n_available', params)
-								: t('pos_products.out_of_stock', params)}
+						<Text variant="subheading" className="flex-1" numberOfLines={lineUuid ? 1 : undefined}>
+							{reasonKey === 'pos.checkout_negative_total'
+								? t('pos.checkout_negative_total')
+								: reasonKey === 'pos_cart.only_n_available'
+									? t('pos_cart.only_n_available', params)
+									: t('pos_products.out_of_stock', params)}
 						</Text>
 						{!!lineUuid && (
 							<Text variant="subheading" className="text-primary">
