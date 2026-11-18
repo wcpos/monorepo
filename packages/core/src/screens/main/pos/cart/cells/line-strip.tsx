@@ -437,7 +437,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 						className="bg-primary flex-row items-stretch"
 						style={editStyle}
 						onLayout={(e) => setEditWidth(e.nativeEvent.layout.width)}
-						pointerEvents={armed ? 'none' : 'auto'}
+						pointerEvents={armed || !open ? 'none' : 'auto'}
 						aria-hidden={armed}
 					>
 						{/* The grey reaches a little under the body: react-native-web reports layout widths

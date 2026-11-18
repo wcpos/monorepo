@@ -220,6 +220,19 @@ it('the Edit slot is the solid primary beside it, not the muted surface grey (Pa
 	expect(classes).toMatch(/\bbg-primary\b/);
 	expect(classes).not.toMatch(/\bbg-muted\b/);
 });
+it('closed, the peeking Edit slot takes no pointer; open, it does', () => {
+	renderStrip();
+	// The rule text on the slot's own class: jsdom's cascade drops `!important`, so the strip's `>*` wins.
+	const pointer = () => {
+		const slot = screen.getByTestId('cart-line-edit-slot');
+		const cls = Array.from(slot.classList).find((c) => c.startsWith('r-pointerEvents-'));
+		const all = Array.from(document.styleSheets).flatMap((s) => Array.from(s.cssRules));
+		return all.find((r) => (r as CSSStyleRule).selectorText === `.${cls}`)?.cssText;
+	};
+	expect(pointer()).toContain('pointer-events: none');
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	expect(pointer()).toContain('pointer-events: auto');
+});
 it('fine keeps the hover nudge and takes the held mouse as the pan', () => {
 	mockPointer = 'fine';
 	renderStrip();
