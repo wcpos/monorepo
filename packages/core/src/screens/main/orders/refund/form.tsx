@@ -253,6 +253,8 @@ export function RefundOrderForm({ order }: Props) {
 					setRefundDetailsLoading(false);
 					return;
 				}
+				storeHistoryOrderId.current = null;
+				storeHistoryRefundIds.current = [];
 				setRefundDetails(fallback);
 				setHistoryMissing(true);
 				setRefundDetailsLoading(false);

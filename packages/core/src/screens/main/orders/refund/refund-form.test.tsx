@@ -1142,6 +1142,29 @@ describe('RefundOrderForm', () => {
 			);
 		});
 
+		it('a refund synced then deleted across two failed reloads after an empty history is not kept', async () => {
+			const noRefunds = { ...lockedOrder, refunds: [] };
+			mockRefundsGets(
+				() => Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '1' } }),
+				storeError,
+				storeError
+			);
+			const { rerender } = render(<RefundOrderForm order={noRefunds} />);
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('3'));
+
+			rerender(
+				<RefundOrderForm order={{ ...noRefunds, refunds: [{ id: 10, total: '-20.00' }] }} />
+			);
+			await screen.findByTestId('refund-history-missing');
+
+			rerender(<RefundOrderForm order={noRefunds} />);
+			await waitFor(() => expect(refundsGets()).toBe(3));
+			// €0.00 previously refunded: the form hides the row rather than show €20.00 for refund 10.
+			await waitFor(() =>
+				expect(screen.queryByTestId('refund-previously-refunded')).not.toBeInTheDocument()
+			);
+		});
+
 		it('no saved refunds: the lines still lock', async () => {
 			mockRefundsGets(storeError);
 			render(<RefundOrderForm order={{ ...lockedOrder, refunds: [] }} />);
