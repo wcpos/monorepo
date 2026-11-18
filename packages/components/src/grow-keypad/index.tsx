@@ -2,7 +2,7 @@ import * as React from 'react';
 import { type KeyDownEvent, View, type ViewInstance } from 'react-native';
 
 import { Button } from '../button';
-import { decimalRow, Key, type KeypadKey } from '../keypad';
+import { decimalRow, Key, type KeypadKey, keypadKeyName } from '../keypad';
 import { isWeb, useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover';
@@ -141,12 +141,15 @@ export function GrowKeypad({
 		}
 		// A focused key takes its own Enter; the panel's Enter is Done.
 		if (key === 'Enter' && event.target !== event.currentTarget) return;
-		// Both: a numeric keypad types '.' on a ',' store.
-		const name = /^[0-9]$/.test(key)
-			? key
-			: key === '.' || key === ',' || key === decimalSeparator
-				? 'decimal'
-				: (KEY_NAMES[key] ?? keyNames?.[key]);
+		// A digit, then the separators, then KEY_NAMES, then the caller's: later spreads win.
+		const name = keypadKeyName(key, {
+			...keyNames,
+			...KEY_NAMES,
+			// Both: a numeric keypad types '.' on a ',' store.
+			'.': 'decimal',
+			',': 'decimal',
+			[decimalSeparator]: 'decimal',
+		});
 		if (!name) return;
 		event.preventDefault();
 		press(name, true);
