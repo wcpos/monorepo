@@ -23,11 +23,18 @@ export function markCompletedTier(isPro: boolean): boolean {
 }
 
 /** The store's refusal reasons (`wcpos_order_not_completable`, Pro `Order_Complete_Controller`). */
-const REASON_TITLES: Record<string, string> = {
-	not_processing: 'orders.mark_completed_not_processing',
-	payment_in_motion: 'orders.mark_completed_payment_in_motion',
-	not_paid: 'orders.mark_completed_not_paid',
-};
+function reasonTitle(t: ReturnType<typeof useT>, reason: string | null): string | undefined {
+	switch (reason) {
+		case 'not_processing':
+			return t('orders.mark_completed_not_processing');
+		case 'payment_in_motion':
+			return t('orders.mark_completed_payment_in_motion');
+		case 'not_paid':
+			return t('orders.mark_completed_not_paid');
+		default:
+			return undefined;
+	}
+}
 /** Refused before or by the journal: the store never completed the order. */
 const LOCAL_REFUSALS: readonly string[] = [
 	'order_changed',
@@ -97,15 +104,9 @@ export function useMarkCompleted(order: EngineRecord<'orders'>) {
 				await post.settle();
 				const reason = typeof refusal?.data?.reason === 'string' ? refusal.data.reason : null;
 				const title =
-					reason && refusal?.code === 'wcpos_order_not_completable'
-						? REASON_TITLES[reason]
-						: undefined;
+					refusal?.code === 'wcpos_order_not_completable' ? reasonTitle(t, reason) : undefined;
 				if (title)
-					return reportRefusal(
-						t(title),
-						reason === 'not_paid' ? refusal?.message : undefined,
-						reason
-					);
+					return reportRefusal(title, reason === 'not_paid' ? refusal?.message : undefined, reason);
 				return reportRefusal(
 					t('pos_checkout.order_refused'),
 					refusal?.message ?? refusal?.code,
