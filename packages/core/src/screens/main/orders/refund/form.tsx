@@ -16,6 +16,7 @@ import {
 import { Form, FormField, FormTextarea } from '@wcpos/components/form';
 import { MoneyList } from '@wcpos/components/money-list';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 import { Notice } from '@wcpos/components/notice';
 import {
 	Table,
@@ -124,6 +125,16 @@ const REFUND_COLUMNS = {
 	refundQty: 'min-w-21 flex-1',
 	refundAmount: 'min-w-23 flex-1',
 } as const;
+// Main's widths, for a table too narrow for the floors and the product column's own minimum.
+const MAIN_COLUMNS = {
+	product: 'flex-[3]',
+	price: 'flex-1',
+	qty: 'flex-1',
+	refundQty: 'flex-1',
+	refundAmount: 'flex-1',
+} as const;
+// The product column's own minimum, in spacing units, beside the floors' 17 + 14 + 21 + 23.
+const PRODUCT_MIN_UNITS = 20;
 
 /** Renders the form used to calculate and submit an order refund. */
 export function RefundOrderForm({ order }: Props) {
@@ -154,6 +165,12 @@ export function RefundOrderForm({ order }: Props) {
 	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(orderData.id));
 	const [historyMissing, setHistoryMissing] = React.useState(false);
 	const [historyAttempt, setHistoryAttempt] = React.useState(0);
+	const spacingUnit = useSpacingUnit();
+	const [tableWidth, setTableWidth] = React.useState<number>();
+	// Until the table's first layout, the floors.
+	const floored =
+		!tableWidth || (17 + 14 + 21 + 23 + PRODUCT_MIN_UNITS) * spacingUnit <= tableWidth;
+	const columns = floored ? REFUND_COLUMNS : MAIN_COLUMNS;
 	const refundsFallback = JSON.stringify(orderData.refunds || []);
 	const getRefundsFallback = React.useCallback(() => {
 		const refunds = JSON.parse(refundsFallback) as RefundDetail[];
@@ -544,22 +561,22 @@ export function RefundOrderForm({ order }: Props) {
 					/>
 				) : null}
 
-				<Table>
+				<Table onLayout={(event) => setTableWidth(event.nativeEvent.layout.width)}>
 					<TableHeader>
 						<TableRow>
-							<TableHead className={REFUND_COLUMNS.product}>
+							<TableHead className={columns.product}>
 								<Text>{t('common.product')}</Text>
 							</TableHead>
-							<TableHead className={REFUND_COLUMNS.price}>
+							<TableHead className={columns.price}>
 								<Text>{t('common.price')}</Text>
 							</TableHead>
-							<TableHead className={REFUND_COLUMNS.qty}>
+							<TableHead className={columns.qty}>
 								<Text>{t('pos_cart.qty_abbrev')}</Text>
 							</TableHead>
-							<TableHead className={REFUND_COLUMNS.refundQty}>
+							<TableHead className={columns.refundQty}>
 								<Text>{t('orders.refund_qty')}</Text>
 							</TableHead>
-							<TableHead className={REFUND_COLUMNS.refundAmount}>
+							<TableHead className={columns.refundAmount}>
 								<Text>{t('orders.refund_amount')}</Text>
 							</TableHead>
 						</TableRow>
@@ -578,16 +595,16 @@ export function RefundOrderForm({ order }: Props) {
 
 							return (
 								<TableRow key={field.id}>
-									<TableCell className={REFUND_COLUMNS.product}>
-										<Text numberOfLines={2}>{field.name}</Text>
+									<TableCell className={columns.product}>
+										<Text numberOfLines={floored ? 2 : 1}>{field.name}</Text>
 									</TableCell>
-									<TableCell className={REFUND_COLUMNS.price}>
+									<TableCell className={columns.price}>
 										<Text>{unitPrice}</Text>
 									</TableCell>
-									<TableCell className={REFUND_COLUMNS.qty}>
+									<TableCell className={columns.qty}>
 										<Text>{linesLocked ? '–' : field.remaining_quantity}</Text>
 									</TableCell>
-									<TableCell className={REFUND_COLUMNS.refundQty}>
+									<TableCell className={columns.refundQty}>
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
@@ -596,7 +613,7 @@ export function RefundOrderForm({ order }: Props) {
 											)}
 										/>
 									</TableCell>
-									<TableCell className={REFUND_COLUMNS.refundAmount}>
+									<TableCell className={columns.refundAmount}>
 										<Text>{itemRefundWithTax}</Text>
 									</TableCell>
 								</TableRow>

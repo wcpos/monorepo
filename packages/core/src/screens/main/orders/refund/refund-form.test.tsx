@@ -20,6 +20,11 @@ function mockWebProps({ testID, ...props }: any) {
 
 let mockEnableRefundActions = false;
 let mockOnlineStatus = 'online-website-available';
+let mockSpacingUnit = 4;
+let mockTableLayout: ((event: unknown) => void) | undefined;
+jest.mock('@wcpos/components/lib/use-spacing-unit', () => ({
+	useSpacingUnit: () => mockSpacingUnit,
+}));
 
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnlineStatus }),
@@ -151,7 +156,10 @@ jest.mock('@wcpos/components/dialog', () => ({
 	},
 }));
 jest.mock('@wcpos/components/table', () => ({
-	Table: ({ children }: any) => <table>{children}</table>,
+	Table: ({ children, onLayout }: any) => {
+		mockTableLayout = onLayout;
+		return <table>{children}</table>;
+	},
 	TableBody: ({ children }: any) => <tbody>{children}</tbody>,
 	TableCell: ({ children, className }: any) => <td data-classes={className}>{children}</td>,
 	TableHead: ({ children, className }: any) => <th data-classes={className}>{children}</th>,
@@ -265,6 +273,7 @@ describe('RefundOrderForm', () => {
 		jest.clearAllMocks();
 		mockEnableRefundActions = false;
 		mockOnlineStatus = 'online-website-available';
+		mockSpacingUnit = 4;
 	});
 
 	it('formats the summary totals and enables original-method refunds when supported', async () => {
@@ -515,6 +524,47 @@ describe('RefundOrderForm', () => {
 				.map((cell) => cell.getAttribute('data-classes'))
 		).toEqual(columns);
 		expect(screen.getByText('Aim Analog Watch')).toHaveAttribute('data-lines', '2');
+	});
+
+	describe('on a 390px phone', () => {
+		// The width the dialog body leaves the table at 390px.
+		const PHONE_TABLE_WIDTH = 350;
+		async function renderColumns(spacingUnit: number) {
+			mockSpacingUnit = spacingUnit;
+			mockGet.mockImplementation((url: string) => {
+				if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+				return Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '1' } });
+			});
+			const lineItem = { id: 77, name: 'Aim Analog Watch', quantity: 2, total: '20.00', taxes: [] };
+			await act(async () => {
+				render(<RefundOrderForm order={{ ...order, line_items: [lineItem] }} />);
+			});
+			await act(async () =>
+				mockTableLayout?.({ nativeEvent: { layout: { width: PHONE_TABLE_WIDTH } } })
+			);
+			const classes = (nodes: HTMLElement[]) => nodes.map((n) => n.getAttribute('data-classes'));
+			return {
+				heads: classes(screen.getAllByRole('columnheader')),
+				cells: classes(within(screen.getAllByRole('row')[1]).getAllByRole('cell')),
+				lines: screen.getByText('Aim Analog Watch').getAttribute('data-lines'),
+			};
+		}
+
+		it('Spacious: the floors do not fit, so the row takes main’s widths', async () => {
+			const main = ['flex-[3]', 'flex-1', 'flex-1', 'flex-1', 'flex-1'];
+			expect(await renderColumns(5)).toEqual({ heads: main, cells: main, lines: '1' });
+		});
+
+		it('Compact: the floors fit and stay', async () => {
+			const floored = [
+				'min-w-0 flex-[3]',
+				'min-w-17 flex-1',
+				'min-w-14 flex-1',
+				'min-w-21 flex-1',
+				'min-w-23 flex-1',
+			];
+			expect(await renderColumns(3.5)).toEqual({ heads: floored, cells: floored, lines: '2' });
+		});
 	});
 
 	it('holds line quantities at zero until detailed refund rows load', async () => {
