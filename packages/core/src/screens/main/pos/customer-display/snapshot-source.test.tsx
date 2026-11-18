@@ -186,6 +186,45 @@ test('publishes the canonical receipt shape the display template reads', () => {
 	);
 });
 
+test('counts |qty| on the display so an even exchange keeps its panels; the receipt stays net', () => {
+	// +1 Mug −1 Opener nets to 0, and every display template gates its item
+	// rows and totals on `{{#totals.total_qty}}` (#3652).
+	const exchange = [
+		{ ...line, name: 'Mug' },
+		{
+			...line,
+			id: 2,
+			product_id: 12,
+			name: 'Opener',
+			quantity: -1,
+			subtotal: '-5.00',
+			total: '-5.00',
+		},
+	];
+	withPayload({ line_items: exchange, total: '0.00' });
+	render(<CustomerDisplaySnapshotSource />);
+
+	expect(mockPublish).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			action: 'cart.updated',
+			payload: expect.objectContaining({
+				order: expect.objectContaining({
+					lines: [
+						expect.objectContaining({ name: 'Mug', qty: 1 }),
+						expect.objectContaining({ name: 'Opener', qty: -1 }),
+					],
+					totals: expect.objectContaining({ total_qty: 2 }),
+				}),
+			}),
+		})
+	);
+
+	const receipt = buildReceiptData(mockOrder.payload, mockStore, 2, {
+		getStatusLabel: mockGetStatusLabel,
+	});
+	expect(receipt.totals.total_qty).toBe(0);
+});
+
 test('keeps the store logo through the display snapshot', () => {
 	// The real mapReceiptData and formatReceiptData run here (no mocks), so the
 	// templates' `{{#store.logo}}` guard sees the URL Pro advertised.
