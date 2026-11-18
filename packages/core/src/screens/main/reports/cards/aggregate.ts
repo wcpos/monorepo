@@ -1,6 +1,6 @@
 import round from 'lodash/round';
 
-import { isSettledPaymentRow, readLedger } from '@wcpos/order-math';
+import { effectiveRows, isSettledPaymentRow, readLedger } from '@wcpos/order-math';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import type { OrderLine } from '../margin';
@@ -157,7 +157,8 @@ export function tenders(orders: ReportOrder[], totals: Totals, num_decimals = 2)
 		// or voided is still the ledger: nothing is attributed to the order's method, and what the
 		// order still needs is the unpaid part. Only an order with no ledger at all (a sale from
 		// before the ledger, or from elsewhere) is read from its payment method.
-		const settled = ledger.filter(isSettledPaymentRow);
+		// A corrected leg and its reversal are not tenders; the correction is (#3647).
+		const settled = effectiveRows(ledger).filter(isSettledPaymentRow);
 		const taken = settled.reduce((sum, row) => sum + Number(row.amount), 0);
 		const rows = ledger.length
 			? [

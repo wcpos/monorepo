@@ -15,6 +15,7 @@ type LedgerRow = {
 	status: string;
 	amount: string;
 	refunded_amount: string;
+	entry?: string; // `tender_correction` on both halves of a tender correction (#3647)
 };
 type Movement = {
 	reason?: string | null;
@@ -37,6 +38,7 @@ type ServerTerms = {
 	cash_refunds?: { amount?: string; count?: number };
 	no_sales?: number;
 	voids?: number;
+	cash_corrections?: string;
 };
 export function refundSessionId(refund: RefundDocumentType): string | undefined {
 	const stamp = refund.meta_data?.find(({ key }) => key === POS_META_KEYS.session)?.value;
@@ -172,6 +174,7 @@ type BaselineHas = (id: string | number | null | undefined) => boolean;
 const sumMinor = (rows: readonly { amount?: string | null }[]) =>
 	rows.reduce((total, row) => total + toMinor(row.amount, 4), 0);
 const display = (amount: string | null | undefined) => fromMinor(toMinor(amount, 4), 4);
+const isCorrection = (row: LedgerRow) => row.entry === 'tender_correction';
 
 /** The terms over one view of the rows, in four-decimal minor units. */
 function localTerms(input: Parameters<typeof deriveExpected>[0]) {
@@ -181,13 +184,16 @@ function localTerms(input: Parameters<typeof deriveExpected>[0]) {
 	const voids = own.filter(
 		(row) => row.type === 'void' && !row.voided_by && !own.some((entry) => entry.voids === row.id)
 	);
-	const cash = ledgerRowsBySession.filter(
+	const drawer = ledgerRowsBySession.filter(
 		(row) => row.session_id === session.id && row.status === 'captured' && row.kind === 'cash'
 	);
+	// A correction leg moves the drawer as a correction, signed, never as a cash sale (#3647).
+	const cash = drawer.filter((row) => !isCorrection(row));
 	const refunds = attributeRefunds(session.id, ledgerRowsBySession, refundRecords);
 	return {
 		float: toMinor(session.counted_float, 4),
 		cashSales: sumMinor(cash),
+		cashCorrections: sumMinor(drawer.filter(isCorrection)),
 		// Distinct orders when rows carry their order; a split cash payment is one sale.
 		cashSalesCount: cash.every((row) => row.order)
 			? new Set(cash.map((row) => row.order)).size
@@ -225,6 +231,7 @@ export function deriveDrawerTerms(
 				note: full.paidOut.length === 1 ? full.paidOut[0].reason : undefined,
 			},
 			cashRefunds: { amount: fromMinor(full.cashRefunds, 4), count: full.cashRefundsCount },
+			cashCorrections: fromMinor(full.cashCorrections, 4),
 			noSales: full.noSales,
 			voids: full.voids,
 			expected,
@@ -246,6 +253,7 @@ export function deriveDrawerTerms(
 		},
 		no_sales: terms.no_sales ?? 0,
 		voids: terms.voids ?? 0,
+		cash_corrections: terms.cash_corrections ?? '0',
 	};
 	const known = localTerms(baselineView(input, baselineHas));
 	const plus = (amount: string, delta: number) => fromMinor(toMinor(amount, 4) + delta, 4);
@@ -256,7 +264,8 @@ export function deriveDrawerTerms(
 	 * leg here is the server's sale, whichever leg now carries it, so a void-and-retender on one
 	 * order adds nothing. A leg without its order is its own sale.
 	 */
-	const own = (row: LedgerRow) => row.session_id === input.session.id && row.kind === 'cash';
+	const own = (row: LedgerRow) =>
+		row.session_id === input.session.id && row.kind === 'cash' && !isCorrection(row);
 	const sale = (row: LedgerRow) => row.order ?? `leg:${row.id}`;
 	const ordersNow = new Set(
 		input.ledgerRowsBySession.filter((row) => own(row) && row.status === 'captured').map(sale)
@@ -335,6 +344,7 @@ export function deriveDrawerTerms(
 			amount: plus(server.cash_refunds.amount, full.cashRefunds - known.cashRefunds),
 			count: server.cash_refunds.count + full.cashRefundsCount - known.cashRefundsCount,
 		},
+		cashCorrections: plus(server.cash_corrections, full.cashCorrections - known.cashCorrections),
 		noSales: server.no_sales + full.noSales - known.noSales,
 		voids: server.voids + full.voids - known.voids,
 		expected,

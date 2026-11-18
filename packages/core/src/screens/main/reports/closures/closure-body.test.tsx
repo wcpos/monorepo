@@ -203,6 +203,16 @@ it('shows only the Counted tile and keeps blind ladder labels and counts without
 	expect(ladder.textContent).toContain('Cash sales');
 	expect(within(ladder).getByText('1')).toBeTruthy();
 });
+it('draws a Corrections row from the cash tender’s corrections and none when absent', () => {
+	const props = { doc, ...deriveSettled(row, []), corrections: [], blind: false, context };
+	const { unmount } = render(<ClosureBody row={row} {...props} />);
+	expect(screen.queryByTestId('closure-drawer-corrections')).toBeNull();
+	unmount();
+	const cash = { sales: '30', refunds: '10', corrections: '-10.0000' };
+	const corrected = { ...row, breakdowns: { ...row.breakdowns, payment_methods: { cash } } };
+	render(<ClosureBody row={corrected} {...props} />);
+	expect(screen.getByTestId('closure-drawer-corrections').textContent).toBe('Corrections−$10.00');
+});
 
 // Confusing the signature with the opener, local time with store time, or numbering precedence is visible here.
 it('names the closer in bold and the opener beside Float in the store zone', () => {

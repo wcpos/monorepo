@@ -17,7 +17,13 @@ import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { ToneDisc } from '@wcpos/components/tone-disc';
-import { activeAwaitingCustomer, derive, isSettledPaymentRow, readLedger } from '@wcpos/order-math';
+import {
+	activeAwaitingCustomer,
+	derive,
+	effectiveRows,
+	isSettledPaymentRow,
+	readLedger,
+} from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 import { useEngineRecord } from '@wcpos/query/record-readers';
@@ -191,8 +197,8 @@ function ReceiptStageDocument({
 	const rows = readLedger(payload.meta_data);
 	const derived = derive(payload.total, rows, methods, { dp });
 	// A split sale names every method that took money, in ledger order; `derive` only
-	// reports the primary one.
-	const settledRows = rows.filter(isSettledPaymentRow);
+	// reports the primary one. A corrected leg and its reversal took no money (#3647).
+	const settledRows = effectiveRows(rows).filter(isSettledPaymentRow);
 	const methodTitles = Array.from(
 		new Set(
 			settledRows.map(

@@ -2,7 +2,7 @@
  * Pure derivation mirrors the server ledger so balance and order status have one contract.
  */
 
-import { isLivePaymentStatus } from './ledger';
+import { isLivePaymentStatus, reversedPaymentIds } from './ledger';
 import { fromMinor, toMinor } from './money';
 
 import type { DerivedOrderView, PaymentMethodDescriptor, PaymentRow } from './types';
@@ -15,14 +15,28 @@ export function countsTowardPaid(row: Pick<PaymentRow, 'status'>): boolean {
 	return COUNTING_STATUSES.has(row.status);
 }
 
+/**
+ * The rows minus every R- and every row an R- reverses (#3647), and nothing else: each reader
+ * applies its own status predicate to the result. Mirrors the plugin's receipt and Projection
+ * reading. Paid alone nets the pair over every counting row; change, tenders and legs read these.
+ */
+export function effectiveRows<T extends PaymentRow>(rows: readonly T[]): T[] {
+	const reversed = reversedPaymentIds(rows);
+	return rows.filter((row) => !row.reverses && !reversed.has(row.id.toLowerCase()));
+}
+
 /** Server ledger amounts have six decimal places, independent of currency display precision. */
 function toMicro(value: string): number {
 	const numeric = Number(value);
 	return Number.isFinite(numeric) ? Math.round(numeric * 1e6) : 0;
 }
 
-/** Remaining major currency units after pending and succeeded allocations, compared in micro-units. */
-export function availableForRefund(row: PaymentRow): number {
+/**
+ * Remaining major currency units after pending and succeeded allocations, compared in micro-units.
+ * `Ledger::refund()` refuses an R- and a row an R- reverses (#3647), so with `rows` both are 0.
+ */
+export function availableForRefund(row: PaymentRow, rows: readonly PaymentRow[] = []): number {
+	if (row.reverses || reversedPaymentIds(rows).has(row.id.toLowerCase())) return 0;
 	const allocated = (Array.isArray(row.refunds) ? row.refunds : [])
 		.filter((entry) => entry?.status === 'pending' || entry?.status === 'succeeded')
 		.reduce((sum, entry) => sum + toMicro(entry.amount), 0);
@@ -31,7 +45,7 @@ export function availableForRefund(row: PaymentRow): number {
 
 /** Whether any paid row still has refundable money at the server's six-decimal precision. */
 export function hasRefundableMoney(rows: readonly PaymentRow[]): boolean {
-	return rows.some((row) => countsTowardPaid(row) && availableForRefund(row) > 0);
+	return rows.some((row) => countsTowardPaid(row) && availableForRefund(row, rows) > 0);
 }
 
 /** Bound by order remainder and captured money. A ledger allocation is written inside its Woo refund,
@@ -46,7 +60,10 @@ export function netRefundable(
 		0
 	);
 	const captured = rows.filter(countsTowardPaid);
-	let available = captured.reduce((sum, row) => sum + toMicro(String(availableForRefund(row))), 0);
+	let available = captured.reduce(
+		(sum, row) => sum + toMicro(String(availableForRefund(row, rows))),
+		0
+	);
 	const representedAllocated = captured
 		.flatMap((row) => (Array.isArray(row.refunds) ? row.refunds : []))
 		.filter((entry) => entry?.status === 'pending' || entry?.status === 'succeeded')
@@ -112,12 +129,15 @@ export function derive(
 	// Server `Ledger::signed_balance`: a succeeded refund on a reopened sale is due again. A pending
 	// refund allocation is a reservation, never added.
 	const dueMinor = totalMinor - paidMinor + refunded(payments, dp);
-	const changeMinor = counting.reduce((sum, { row, amount }) => {
+	// Change and the primary method read the effective counting rows: a corrected leg's change and
+	// method went with it (#3647).
+	const effective = new Set(effectiveRows(payments));
+	const named = counting.filter(({ row }) => effective.has(row));
+	const changeMinor = named.reduce((sum, { row, amount }) => {
 		return row.tendered === null ? sum : sum + Math.max(0, toMinor(row.tendered, dp) - amount);
 	}, 0);
-
-	const nonStoredValue = counting.filter(({ row }) => row.kind !== 'stored_value');
-	const candidates = nonStoredValue.length > 0 ? nonStoredValue : counting;
+	const nonStoredValue = named.filter(({ row }) => row.kind !== 'stored_value');
+	const candidates = nonStoredValue.length > 0 ? nonStoredValue : named;
 	const primary = candidates.reduce<(typeof candidates)[number] | undefined>((selected, item) => {
 		if (!selected || item.amount > selected.amount) return item;
 		if (item.amount < selected.amount) return selected;
@@ -129,7 +149,7 @@ export function derive(
 
 	const titles: string[] = [];
 	const seenTitles = new Set<string>();
-	for (const { row } of counting) {
+	for (const { row } of named) {
 		const title = descriptorById[row.method_id]?.title ?? row.method_id;
 		if (!seenTitles.has(title)) {
 			seenTitles.add(title);

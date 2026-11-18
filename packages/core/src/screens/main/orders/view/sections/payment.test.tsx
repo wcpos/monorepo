@@ -42,6 +42,10 @@ jest.mock('./_section', () => ({
 		</section>
 	),
 }));
+// Change tender has its own suite (change-tender.test.tsx); this one reads the ledger alone.
+jest.mock('./change-tender', () => ({
+	useChangeTender: () => ({ legAction: undefined, sheet: null }),
+}));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => mockT }));
 jest.mock('../../../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ formatDate: () => '12:48' }),

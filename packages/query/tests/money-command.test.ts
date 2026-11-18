@@ -5,7 +5,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { readLedger, withLedger } from '@wcpos/order-math';
+import { derive, readLedger, withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 
@@ -46,7 +46,7 @@ function httpError(status: number, code: string, data?: Record<string, unknown>)
 /** The money routes, as the store serves them (free `API/V2/Payments_Controller.php`). */
 function routeOf(url: string): { kind: MoneyCommandKind; target: string | null } {
 	const match =
-		/^orders\/\d+\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/.exec(
+		/^orders\/\d+\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund|correct))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/.exec(
 			url
 		)!;
 	const kind = (match[2] ?? match[4] ?? match[5] ?? 'record') as MoneyCommandKind;
@@ -595,6 +595,26 @@ describe('sendMoneyCommand: the answer', () => {
 		store.modes = ['otherRow'];
 		await expect(send(url, body)).rejects.toThrow('money_command_malformed_answer');
 		expect(await entries()).toHaveLength(1);
+	});
+
+	it('a correct is answered by the R+ that corrects its leg, never by another row (#3647)', async () => {
+		const answer = (corrects: string) => ({
+			data: {
+				payment: { ...cash('r-plus'), corrects },
+				order: store.summary(),
+				revision: store.revision,
+			},
+		});
+		store.post.mockResolvedValueOnce(answer('other-leg'));
+		await expect(send('orders/5/payments/leg/correct', { method_id: 'pos_card' })).rejects.toThrow(
+			'money_command_malformed_answer'
+		);
+		store.post.mockResolvedValueOnce(answer('LEG'));
+		await expect(
+			send('orders/5/payments/leg/correct', { method_id: 'pos_card' })
+		).resolves.toMatchObject({
+			data: { payment: { id: 'r-plus', corrects: 'LEG' } },
+		});
 	});
 
 	it('a recorded submit answered with another attempt’s row is never answered', async () => {
@@ -1220,6 +1240,33 @@ describe('Try again: resendOpenCommands', () => {
 		expect(store.rows.size).toBe(1);
 		expect(await ledgerIds()).toEqual(['row-1']);
 		expect(await entries()).toEqual([]);
+	});
+
+	// #3647: the answer carries R+ alone. Mirroring it without its R- reads as paid twice, with the
+	// original still correctable; the refresh brings R+ and R- together.
+	it('a re-sent correct mirrors only the order summary, never its R+ (#3647)', async () => {
+		const original = cash('leg', '20.00');
+		store.rows.set('leg', original);
+		await writeResident((doc) => ({
+			...doc,
+			payload: { ...doc.payload, meta_data: withLedger(doc.payload.meta_data, [original]) },
+		}));
+		store.post.mockRejectedValueOnce(new Error('Network Error'));
+		await expect(
+			poster()('orders/5/payments/leg/correct', { method_id: 'pos_card' })
+		).rejects.toThrow('Network Error');
+		refreshWorks = false; // the follow-up refresh fails offline
+		store.post.mockResolvedValueOnce({
+			data: {
+				payment: { ...cash('r-plus', '20.00'), corrects: 'leg' },
+				order: store.summary(),
+				revision: store.revision,
+			},
+		});
+		expect(await restart()).toEqual([expect.objectContaining({ kind: 'correct' })]);
+		expect(await ledgerIds()).not.toContain('r-plus');
+		const rows = readLedger((await residentJSON()).payload.meta_data as never);
+		expect(derive('20.00', rows, []).paid).toBe('20.00');
 	});
 
 	it('lost answer, then wcpos_payment_locked: the entry survives and the next re-send makes exactly one row', async () => {
