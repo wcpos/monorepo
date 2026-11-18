@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import {
+	type KeyDownEvent,
+	Platform,
+	ScrollView,
+	type ScrollViewInstance,
+	View,
+} from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { decode } from 'html-entities';
@@ -8,7 +14,7 @@ import { useCSSVariable } from 'uniwind';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Chip } from '@wcpos/components/chip';
 import { DocsLink } from '@wcpos/components/docs-link';
-import { DIGIT_ROWS, Keypad, type KeypadKey } from '@wcpos/components/keypad';
+import { DIGIT_ROWS, Keypad, type KeypadKey, keypadKeyName } from '@wcpos/components/keypad';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -179,6 +185,14 @@ const keypadRows = (backspace: string): KeypadKey[][] => [
 	],
 ];
 
+/** Web: the physical keys beyond the digits; `Clear` is the macOS numeric keypad's C. Never Enter. */
+const PHYSICAL_KEYS: Record<string, TenderKey> = { Backspace: 'backspace', Clear: 'clear' };
+const isWeb = Platform.OS === 'web';
+/** A field keeps its own typing and Backspace. */
+const editable = (node: unknown) =>
+	node instanceof Element &&
+	!!node.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+
 /**
  * Digits shift in from the right, till-style: the entry is pre-filled with the
  * balance and the first keypress starts a fresh number. There is no decimal key
@@ -189,6 +203,15 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const KEYPAD_ROWS = keypadRows(t('common.backspace'));
 	const phone = useIsPhone();
 	const busy = flow.busy || saving;
+	const pane = React.useRef<ScrollViewInstance>(null);
+	// Focus is the browser's, outside React: the pane takes the keys as the stage opens, so typing
+	// works at once, unless a field in it already has focus. Mount only.
+	React.useEffect(() => {
+		if (!isWeb) return;
+		const node = pane.current as unknown as HTMLElement | null;
+		const held = document.activeElement;
+		if (node && !(node.contains(held) && editable(held))) node.focus({ preventScroll: true });
+	}, []);
 	const tile = useCSSVariable('--spacing-tile');
 	const ctl = useCSSVariable('--spacing-ctl');
 	const scale = Object.values(SCALE_STEPS).find((step) => step[4] === parseFloat(String(tile)));
@@ -337,6 +360,17 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		missing || noChange || figures.entryChangeMinor > 0 ? hint : splitHint || hint || rounding;
 	// While the taken payments are unfolded, their list has the keypad's place and no helpers.
 	const showDone = doneOpen && counted.length >= 1;
+	// Web: the physical keyboard presses the on-screen keys, from anywhere in the pane, only while
+	// they are drawn and live; a shortcut (Cmd, Ctrl, Alt) stays the browser's.
+	const onKeyDown = (event: KeyDownEvent) => {
+		const { key, metaKey, ctrlKey, altKey } = event.nativeEvent;
+		if (showDone || pickList || busy || fixedAmount || metaKey || ctrlKey || altKey) return;
+		if (editable(event.target)) return;
+		const name = keypadKeyName(key, PHYSICAL_KEYS);
+		if (!name) return;
+		event.preventDefault();
+		flow.commands.dispatch({ type: 'key', key: name as TenderKey });
+	};
 	const legs: (PlanLeg & { index: number; run: number })[] = [];
 	(plan
 		? [...flow.rows.slice(0, plan.from).filter(countsTowardPaid).map(doneLeg), ...figures.legs]
@@ -378,8 +412,11 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 
 	const scroll = (
 		<ScrollView
+			ref={pane}
 			testID="checkout-keypad-pane"
-			className="flex-1"
+			className="web:outline-none flex-1"
+			tabIndex={isWeb ? -1 : undefined}
+			onKeyDown={isWeb ? onKeyDown : undefined}
 			// A declared field leaves the keyboard open: the first tap on Send must reach it.
 			keyboardShouldPersistTaps="handled"
 			onLayout={(event) => setPaneHeight(event.nativeEvent.layout.height)}
