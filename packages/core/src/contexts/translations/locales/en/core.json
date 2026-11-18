@@ -253,6 +253,7 @@
 	"register.cash_sales": "Cash sales",
 	"register.cash_refunds": "Cash refunds",
 	"register.cash_corrections": "Corrections",
+	"register.tender_changed": "Tender changed",
 	"register.expected_in_drawer": "Expected in the drawer",
 	"register.no_sales": "No sales",
 	"register.opened_suffix": "opened {time}",

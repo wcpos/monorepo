@@ -487,6 +487,7 @@ export function RegisterPanel({
 									<DerivationStep
 										testID="register-panel-corrections"
 										label={t('register.cash_corrections')}
+										title={t('register.tender_changed')}
 										trailing={trailing(signed(terms.cashCorrections))}
 									/>
 								)}
