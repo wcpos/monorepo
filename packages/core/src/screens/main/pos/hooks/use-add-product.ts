@@ -34,11 +34,20 @@ export function showCountingNotice(t: ReturnType<typeof useT>) {
 	});
 }
 
+/** A refused add while the register is closed: one notice, shared id so repeated taps update it in place. */
+export function showPriceCheckNotice(t: ReturnType<typeof useT>) {
+	Toast.show({
+		id: 'pos-price-check-refused',
+		type: 'info',
+		title: t('pos_products.price_check_only_until_open'),
+	});
+}
+
 /**
  *
  */
 export const useAddProduct = () => {
-	const { addItemToOrder, readCounting } = useAddItemToOrder();
+	const { addItemToOrder, readCounting, readPriceCheck } = useAddItemToOrder();
 	const cartConfig = useCartConfig();
 	/**
 	 * Resolved when the button is pressed, NOT subscribed during render.
@@ -67,6 +76,11 @@ export const useAddProduct = () => {
 			// The drawer is being counted: nothing joins the cart until the count ends (#2001).
 			if (await readCounting()) {
 				showCountingNotice(t);
+				return false;
+			}
+			// The register is closed: browsing is a price check, nothing joins the cart.
+			if (await readPriceCheck()) {
+				showPriceCheckNotice(t);
 				return false;
 			}
 			const timingStart = process.env.EXPO_PUBLIC_WCPOS_E2E === '1' ? performance.now() : 0;
@@ -189,6 +203,7 @@ export const useAddProduct = () => {
 		},
 		[
 			readCounting,
+			readPriceCheck,
 			getCurrentOrderRecord,
 			incrementLineItem,
 			metaDataKeys,

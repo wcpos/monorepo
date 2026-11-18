@@ -11,6 +11,7 @@ const mockReadBoundRegister = jest.fn();
 const mockFindOpenSession = jest.fn();
 const mockIncrementalPatch = jest.fn();
 const mockFindSession = jest.fn();
+const mockReadCurrentSession = jest.fn();
 
 jest.mock('@wcpos/query', () => {
 	const runtime = { engine: { active: () => undefined } };
@@ -53,6 +54,7 @@ jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
 	readBoundRegister: (...args: unknown[]) => mockReadBoundRegister(...args),
 	findOpenSession: (...args: unknown[]) => mockFindOpenSession(...args),
+	readCurrentSession: (...args: unknown[]) => mockReadCurrentSession(...args),
 	// The writing helper, stubbed to write visibly: if the resolver ever used it, the
 	// "never writes" assertion below is what fails, not a fixture type error.
 	requireOpenSession: async (...args: unknown[]) => {
@@ -129,4 +131,22 @@ it('reads at event time whether the bound register is being counted', async () =
 	mockReadBoundRegister.mockResolvedValueOnce(null);
 	await expect(result.current.readCounting()).resolves.toBe(false);
 	expect(mockFindSession).toHaveBeenCalledTimes(2);
+});
+
+it('reads at event time whether the bound register is closed (price check)', async () => {
+	const { result } = renderHook(() => useActionContext());
+	expect(mockReadCurrentSession).not.toHaveBeenCalled();
+	mockReadCurrentSession.mockResolvedValueOnce(null);
+	await expect(result.current.readPriceCheck()).resolves.toBe(true);
+	const { storeDB } = jest.requireMock('../../../../contexts/app-state').useStoreSession();
+	expect(mockReadCurrentSession).toHaveBeenCalledWith(storeDB, 'register-1');
+	mockReadCurrentSession.mockResolvedValueOnce({ id: 'session-1', status: 'open' });
+	await expect(result.current.readPriceCheck()).resolves.toBe(false);
+	// Unreadable collections fail open: the add goes through.
+	mockReadCurrentSession.mockResolvedValueOnce(undefined);
+	await expect(result.current.readPriceCheck()).resolves.toBe(false);
+	// No bound register: nothing to refuse.
+	mockReadBoundRegister.mockResolvedValueOnce(null);
+	await expect(result.current.readPriceCheck()).resolves.toBe(false);
+	expect(mockReadCurrentSession).toHaveBeenCalledTimes(3);
 });
