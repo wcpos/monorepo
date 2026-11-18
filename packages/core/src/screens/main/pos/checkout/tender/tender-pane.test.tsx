@@ -10,7 +10,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
-import { initialTenderState, tenderReducer } from './tender-state';
+import { initialTenderState, type TenderFlowAction, tenderReducer } from './tender-state';
 import { gatesCheckout } from './checkout-body';
 import { splitWith, withFigures } from './tender-figures.test-utils';
 import { TenderPane, UnansweredGate } from './tender-pane';
@@ -1048,6 +1048,82 @@ it('preserves every keypad selector and dispatches the original key action', () 
 	expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'key', key: '5' });
 });
 
+describe('the physical keyboard presses the tender keypad (#3645)', () => {
+	const live = () => ({ ...makeFlow(), saveState: null });
+	it('focuses the pane as the stage opens', () => {
+		render(<TenderPane flow={live()} format={String} />);
+		expect(document.activeElement).toBe(screen.getByTestId('checkout-keypad-pane'));
+	});
+	it.each([
+		[{ key: '5' }, '5'],
+		[{ key: '7', code: 'Numpad7' }, '7'],
+		[{ key: 'Backspace' }, 'backspace'],
+		[{ key: 'Clear', code: 'NumpadClear' }, 'clear'],
+	])('%o dispatches its on-screen key once, and takes the default', (init, key) => {
+		const flow = live();
+		render(<TenderPane flow={flow} format={String} />);
+		expect(fireEvent.keyDown(document.activeElement!, init)).toBe(false);
+		expect(flow.commands.dispatch).toHaveBeenCalledTimes(1);
+		expect(flow.commands.dispatch).toHaveBeenCalledWith({ type: 'key', key });
+	});
+	it.each([
+		['Enter, Escape or a letter', {}, [{ key: 'Enter' }, { key: 'Escape' }, { key: 'a' }]],
+		['a shortcut', {}, ['metaKey', 'ctrlKey', 'altKey'].map((mod) => ({ key: '5', [mod]: true }))],
+		['anything while busy', { busy: true }, [{ key: '5' }, { key: 'Backspace' }]],
+	])('%s dispatches nothing and keeps the default', (_, over, events) => {
+		const flow = { ...live(), ...over };
+		render(<TenderPane flow={flow} format={String} />);
+		const pane = screen.getByTestId('checkout-keypad-pane');
+		for (const init of events) expect(fireEvent.keyDown(pane, init)).toBe(true);
+		expect(flow.commands.dispatch).not.toHaveBeenCalled();
+	});
+	it('a key that has focus after a click still types through the pane', () => {
+		const flow = live();
+		render(<TenderPane flow={flow} format={String} />);
+		const key = screen.getByTestId('checkout-keypad-key-5');
+		fireEvent.click(key);
+		key.focus();
+		expect(document.activeElement).toBe(key);
+		expect(fireEvent.keyDown(key, { key: '0' })).toBe(false);
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'key', key: '0' });
+		expect(flow.commands.dispatch).toHaveBeenCalledTimes(2);
+	});
+	// The real reducer: the keyboard and the on-screen keys move the entry the same way.
+	function Stateful() {
+		const base = live();
+		const [state, dispatch] = React.useReducer(tenderReducer, {
+			...initialTenderState,
+			view: 'amount',
+			methodId: method.id,
+			entryMinor: 9295,
+		});
+		// The pane sends only key actions here; the reducer takes those as the hook passes them on.
+		const keys = (action: TenderFlowAction) => {
+			if (action.type === 'key') dispatch(action);
+		};
+		const flow = withFigures({ ...base, state, commands: { ...base.commands, dispatch: keys } });
+		return <TenderPane flow={flow} format={String} />;
+	}
+	it('typing 5, 0, 0, Backspace moves the entry as pressing 5, 0, 0, ⌫ does', () => {
+		const steps = [
+			['5', '5', '5'],
+			['0', '0', '50'],
+			['0', '0', '500'],
+			['Backspace', 'backspace', '50'],
+		];
+		for (const onScreen of [false, true]) {
+			const { unmount } = render(<Stateful />);
+			expect(screen.getByTestId('checkout-entry').textContent).toBe('9295');
+			for (const [key, name, shown] of steps) {
+				if (onScreen) fireEvent.click(screen.getByTestId(`checkout-keypad-key-${name}`));
+				else fireEvent.keyDown(screen.getByTestId('checkout-keypad-pane'), { key });
+				expect(screen.getByTestId('checkout-entry').textContent).toBe(shown);
+			}
+			unmount();
+		}
+	});
+});
+
 describe('split V1: the pane builds each payment', () => {
 	const lines = [
 		{ id: 'l1', name: 'Lemonade', quantity: 4, totalMinor: 2000 },
@@ -1453,6 +1529,9 @@ jest.mock('react-native', () => {
 		contentContainerStyle,
 		horizontal,
 		contentContainerClassName,
+		ref,
+		tabIndex,
+		onKeyDown,
 	}: React.PropsWithChildren<{
 		testID?: string;
 		className?: string;
@@ -1460,6 +1539,10 @@ jest.mock('react-native', () => {
 		contentContainerStyle?: unknown;
 		horizontal?: boolean;
 		contentContainerClassName?: string;
+		// As RNW: the ref is the DOM node, and the pane's focus and keys reach it.
+		ref?: React.Ref<HTMLDivElement>;
+		tabIndex?: number;
+		onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
 	}>) {
 		// The jsdom host has no layout engine; expose its committed layout callback to the test.
 		React.useLayoutEffect(() => {
@@ -1471,6 +1554,9 @@ jest.mock('react-native', () => {
 		}, [testID, contentContainerStyle]);
 		return (
 			<div
+				ref={ref}
+				tabIndex={tabIndex}
+				onKeyDown={onKeyDown}
 				data-testid={testID}
 				className={className}
 				data-horizontal={horizontal ? '' : undefined}
@@ -1652,6 +1738,30 @@ describe('declared UI (contract 1.2)', () => {
 		);
 		fireEvent.click(screen.getByTestId('checkout-commit'));
 		expect(flow.commands.takeTender).toHaveBeenCalled();
+	});
+	it('a declared field keeps its own keys; the pane around it still types (#3645)', () => {
+		const partial = {
+			...invoice,
+			capabilities: { ...invoice.capabilities, amount: { partial: true } },
+		};
+		const flow = invoiceFlow({
+			method: partial,
+			tiles: [{ ...invoiceFlow().tiles[0], method: partial }],
+		});
+		render(<TenderPane flow={flow} format={String} />);
+		const email = screen.getByTestId('checkout-field-woocommerce_pos_invoice_email_address');
+		email.focus();
+		for (const key of ['5', 'Backspace']) expect(fireEvent.keyDown(email, { key })).toBe(true);
+		expect(flow.commands.dispatch).not.toHaveBeenCalled();
+		expect(fireEvent.keyDown(screen.getByTestId('checkout-keypad-pane'), { key: '5' })).toBe(false);
+		expect(flow.commands.dispatch).toHaveBeenCalledWith({ type: 'key', key: '5' });
+	});
+	it('a fixed amount takes no physical key (#3645)', () => {
+		const flow = invoiceFlow();
+		render(<TenderPane flow={flow} format={String} />);
+		const pane = screen.getByTestId('checkout-keypad-pane');
+		for (const key of ['5', 'Backspace']) expect(fireEvent.keyDown(pane, { key })).toBe(true);
+		expect(flow.commands.dispatch).not.toHaveBeenCalled();
 	});
 	it('an amount typed over the balance on another pill is not an overpayment here', () => {
 		render(
