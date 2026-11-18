@@ -471,8 +471,10 @@ export async function resendOpenCommands(
 			await poster.abandon();
 			throw new Error('money_command_unconfirmed');
 		}
+		// A correct's answer carries R+ without its R-: mirrored alone it reads as paid twice, so only
+		// the summary is mirrored and the refresh brings the pair together (#3647).
 		await poster.mirror({
-			payment: data.payment as PaymentRow | undefined,
+			payment: entry.kind === 'correct' ? undefined : (data.payment as PaymentRow | undefined),
 			order: data.order as OrderPaymentSummary | undefined,
 		});
 		answers.push({ kind: entry.kind, data });

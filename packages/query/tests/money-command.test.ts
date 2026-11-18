@@ -5,7 +5,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { readLedger, withLedger } from '@wcpos/order-math';
+import { derive, readLedger, withLedger } from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 
@@ -1240,6 +1240,33 @@ describe('Try again: resendOpenCommands', () => {
 		expect(store.rows.size).toBe(1);
 		expect(await ledgerIds()).toEqual(['row-1']);
 		expect(await entries()).toEqual([]);
+	});
+
+	// #3647: the answer carries R+ alone. Mirroring it without its R- reads as paid twice, with the
+	// original still correctable; the refresh brings R+ and R- together.
+	it('a re-sent correct mirrors only the order summary, never its R+ (#3647)', async () => {
+		const original = cash('leg', '20.00');
+		store.rows.set('leg', original);
+		await writeResident((doc) => ({
+			...doc,
+			payload: { ...doc.payload, meta_data: withLedger(doc.payload.meta_data, [original]) },
+		}));
+		store.post.mockRejectedValueOnce(new Error('Network Error'));
+		await expect(
+			poster()('orders/5/payments/leg/correct', { method_id: 'pos_card' })
+		).rejects.toThrow('Network Error');
+		refreshWorks = false; // the follow-up refresh fails offline
+		store.post.mockResolvedValueOnce({
+			data: {
+				payment: { ...cash('r-plus', '20.00'), corrects: 'leg' },
+				order: store.summary(),
+				revision: store.revision,
+			},
+		});
+		expect(await restart()).toEqual([expect.objectContaining({ kind: 'correct' })]);
+		expect(await ledgerIds()).not.toContain('r-plus');
+		const rows = readLedger((await residentJSON()).payload.meta_data as never);
+		expect(derive('20.00', rows, []).paid).toBe('20.00');
 	});
 
 	it('lost answer, then wcpos_payment_locked: the entry survives and the next re-send makes exactly one row', async () => {
