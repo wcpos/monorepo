@@ -176,7 +176,7 @@ beforeEach(() => {
 	mockMethods = [card, cheque, cash, terminal];
 	mockCapable = true;
 	mockStatus = 'online-website-available';
-	mockCorrect.mockResolvedValue(true);
+	mockCorrect.mockResolvedValue('done');
 });
 
 describe('PaymentSection change tender (#3647 test 10)', () => {
@@ -218,6 +218,24 @@ describe('PaymentSection change tender (#3647 test 10)', () => {
 		expect(mockCorrect).toHaveBeenCalledWith(order, 'orig', { id: 'pos_cheque', title: 'Cheque' });
 		await waitFor(() => expect(screen.queryByTestId('change-tender-sheet')).toBeNull());
 		expect(screen.queryByTestId('change-tender-sheet')).toBeNull();
+	});
+
+	it('E5: an unconfirmed outcome closes the sheet; a refusal keeps it open', async () => {
+		mockCorrect.mockResolvedValueOnce('unconfirmed').mockResolvedValueOnce('refused');
+		render(<PaymentSection order={order} canChangeTender />);
+		fireEvent.click(changeTender()!);
+		fireEvent.click(screen.getByTestId('change-tender-method-pos_cheque'));
+		fireEvent.click(screen.getByTestId('change-tender-confirm'));
+		await waitFor(() => expect(screen.queryByTestId('change-tender-sheet')).toBeNull());
+
+		fireEvent.click(changeTender()!);
+		fireEvent.click(screen.getByTestId('change-tender-method-pos_cheque'));
+		fireEvent.click(screen.getByTestId('change-tender-confirm'));
+		await waitFor(() => expect(mockCorrect).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(screen.getByTestId('change-tender-confirm').hasAttribute('disabled')).toBe(false)
+		);
+		expect(screen.getByTestId('change-tender-sheet')).toBeTruthy();
 	});
 
 	it('a corrected original reads Corrected with no action; R- is not a leg; R+ names its source', () => {

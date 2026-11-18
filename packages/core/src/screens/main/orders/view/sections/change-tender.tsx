@@ -73,9 +73,9 @@ export function useChangeTender(
 	const confirm = async () => {
 		if (!open || !target || busy) return;
 		setBusy(true);
-		const done = await correct(order, open.id, { id: target.id, title: target.title });
+		const outcome = await correct(order, open.id, { id: target.id, title: target.title });
 		setBusy(false);
-		if (done) show(null);
+		if (outcome !== 'refused') show(null);
 	};
 	const titleOf = (id: string) => methods.find((method) => method.id === id)?.title ?? id;
 	const sheet =

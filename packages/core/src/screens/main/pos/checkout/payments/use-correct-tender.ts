@@ -61,7 +61,7 @@ export function useCorrectTender(): (
 	order: EngineRecord<'orders'>,
 	paymentId: string,
 	method: { id: string; title: string }
-) => Promise<boolean> {
+) => Promise<'done' | 'refused' | 'unconfirmed'> {
 	const t = useT();
 	const http = useRestHttpClient();
 	const onlineStatus = useOnlineStatus();
@@ -75,7 +75,7 @@ export function useCorrectTender(): (
 			const context = { orderUUID: order.uuid, orderId, paymentId, method: method.id };
 			if (onlineStatus.status !== 'online-website-available' || !orderId) {
 				logger.warn(t('orders.change_tender_offline'), { showToast: true, context });
-				return false;
+				return 'refused';
 			}
 			const post = moneyCommandPoster({
 				runtime: manager,
@@ -101,15 +101,17 @@ export function useCorrectTender(): (
 					showToast: true,
 					context,
 				});
-				return true;
+				return 'done';
 			} catch (error) {
 				const { refused, message } = correctionFailureMessage(error, t);
+				// Unconfirmed carries no code: PAYMENT201's terminal hint would become the description.
 				logger.warn(message, {
-					code: refused ? ERROR_CODES.PAYMENT_RECORD_REFUSED : ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					code: refused ? ERROR_CODES.PAYMENT_RECORD_REFUSED : undefined,
+					toast: refused ? undefined : { title: t('orders.change_tender_unconfirmed') },
 					showToast: true,
 					context: { ...context, error: getErrorMessage(error) },
 				});
-				return false;
+				return refused ? 'refused' : 'unconfirmed';
 			} finally {
 				// A refusal settles too: its corrective refresh brings what the store holds.
 				await post.settle().catch(() => undefined);

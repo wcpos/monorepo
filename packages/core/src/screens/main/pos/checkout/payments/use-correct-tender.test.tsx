@@ -5,6 +5,7 @@ import { derive, type PaymentRow, upsertPaymentRow } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { createTestT } from '../../../../../../jest/translate';
+import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
 import { correctionFailureMessage, useCorrectTender } from './use-correct-tender';
 
 const mockT = createTestT();
@@ -53,6 +54,16 @@ jest.mock('../../../../../contexts/app-state', () => {
 	return { useStoreSession: () => session };
 });
 
+type WarnCall = [string, { code?: string; toast?: { title?: string; text2?: string } }];
+/** The toast a warn call shows: the logger's `merchantCopy` seam, resolved as the app resolves it. */
+const toastOf = ([message, options]: WarnCall) => {
+	const text = resolveMerchantToastText(mockT, {
+		explicitTitle: options.toast?.title,
+		errorCode: options.code,
+		logMessage: message,
+	});
+	return { ...text, description: options.toast?.text2 ?? text.description };
+};
 const order = (id: number | undefined) =>
 	({ uuid: 'order-uuid', payload: { id, meta_data: [] } }) as unknown as EngineRecord<'orders'>;
 const cash = { id: 'pos_cash', title: 'Cash' };
@@ -77,11 +88,11 @@ describe('useCorrectTender (test 8)', () => {
 		const answer = { payment: { id: 'r-plus', corrects: 'leg-1' }, order: { status: 'completed' } };
 		mockPost.mockResolvedValue({ data: answer });
 		const { result } = renderHook(() => useCorrectTender());
-		let done = false;
+		let done = '';
 		await act(async () => {
 			done = await result.current(order(42), 'leg-1', cash);
 		});
-		expect(done).toBe(true);
+		expect(done).toBe('done');
 		expect(mockPost).toHaveBeenCalledTimes(1);
 		expect(mockPost).toHaveBeenCalledWith('orders/42/payments/leg-1/correct', {
 			method_id: 'pos_cash',
@@ -128,8 +139,8 @@ describe('useCorrectTender (test 8)', () => {
 		mockStatus = 'online-website-unavailable';
 		const { result: offline } = renderHook(() => useCorrectTender());
 		await act(async () => {
-			expect(await offline.current(order(42), 'leg-1', cash)).toBe(false);
-			expect(await result.current(order(undefined), 'leg-1', cash)).toBe(false);
+			expect(await offline.current(order(42), 'leg-1', cash)).toBe('refused');
+			expect(await result.current(order(undefined), 'leg-1', cash)).toBe('refused');
 		});
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(mockMirror).not.toHaveBeenCalled();
@@ -141,13 +152,28 @@ describe('useCorrectTender (test 8)', () => {
 		);
 		const { result } = renderHook(() => useCorrectTender());
 		await act(async () => {
-			expect(await result.current(order(42), 'leg-1', cash)).toBe(false);
+			expect(await result.current(order(42), 'leg-1', cash)).toBe('refused');
 		});
 		expect(mockMirror).not.toHaveBeenCalled();
 		expect(mockLog.warn).toHaveBeenCalledWith(
 			mockT('orders.change_tender_already_corrected'),
 			expect.objectContaining({ showToast: true })
 		);
+	});
+
+	it('E5: an unanswered post toasts the unconfirmed change, with no terminal wording', async () => {
+		mockPost.mockRejectedValue(new Error('Network Error'));
+		const { result } = renderHook(() => useCorrectTender());
+		await act(async () => {
+			expect(await result.current(order(42), 'leg-1', cash)).toBe('unconfirmed');
+		});
+		const toast = toastOf(mockLog.warn.mock.calls[0]);
+		expect(toast.title).toBe(
+			"Couldn't confirm the payment method change. It will be retried when the connection is back."
+		);
+		expect(toast.description).toBeUndefined();
+		expect(`${toast.title} ${toast.description ?? ''}`).not.toMatch(/terminal/i);
+		expect(mockSettle).toHaveBeenCalled();
 	});
 });
 

@@ -981,6 +981,7 @@
 	"orders.change_tender_corrected": "Corrected",
 	"orders.change_tender_corrected_from": "Corrected from {method}",
 	"orders.change_tender_offline": "Changing the tender needs a connection to the store.",
+	"orders.change_tender_unconfirmed": "Couldn't confirm the payment method change. It will be retried when the connection is back.",
 	"orders.change_tender_unknown": "The store hasn't confirmed the change yet. The order will refresh with what it holds.",
 	"orders.change_tender_unavailable": "Changing a tender is turned off on this store.",
 	"orders.change_tender_not_captured": "This payment isn't captured yet, so its tender can't be changed.",
