@@ -110,10 +110,26 @@ export function partitionVoidableRows(meta: readonly MetaDataEntry[] | null | un
 	retained: PaymentRow[];
 } {
 	const counted = new Set(readCompletions(meta).flatMap(({ payment_ids }) => payment_ids ?? []));
-	const voidable = ({ id, status, capture_mode }: PaymentRow) =>
-		status !== 'captured' || (capture_mode === 'manual' && !counted.has(id));
-	const live = readLedger(meta).filter(({ status }) => isLivePaymentStatus(status));
+	const rows = readLedger(meta);
+	const reversed = reversedPaymentIds(rows);
+	// The store never voids either half of a tender correction, nor the row it reversed (#3647).
+	const voidable = ({ id, status, capture_mode, entry }: PaymentRow) =>
+		status !== 'captured' ||
+		(capture_mode === 'manual' &&
+			!counted.has(id) &&
+			entry !== 'tender_correction' &&
+			!reversed.has(id.toLowerCase()));
+	const live = rows.filter(({ status }) => isLivePaymentStatus(status));
 	return { voidable: live.filter(voidable), retained: live.filter((row) => !voidable(row)) };
+}
+
+/** Lowercased ids some captured R- (`reverses`, #3647) has reversed: they no longer count. */
+export function reversedPaymentIds(rows: readonly PaymentRow[]): Set<string> {
+	const ids = new Set<string>();
+	for (const { status, reverses } of rows)
+		if (status === 'captured' && typeof reverses === 'string' && reverses)
+			ids.add(reverses.toLowerCase());
+	return ids;
 }
 
 export function withLedger(

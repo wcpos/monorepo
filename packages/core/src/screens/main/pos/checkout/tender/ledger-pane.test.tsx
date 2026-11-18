@@ -228,3 +228,23 @@ it('leads with the balance under its caption, and what was paid of the total onc
 	expect(screen.getByTestId('checkout-balance').textContent).toBe('£10');
 	expect(document.body.textContent).toContain('Remaining£10');
 });
+// #3647 test 11: Change tender is the order modal's alone; the checkout pane's legs draw none.
+it('draws no Change tender by default, and a corrected pair as Corrected with no R- leg', () => {
+	const minus = {
+		...row,
+		id: 'r-minus',
+		amount: '-10',
+		entry: 'tender_correction',
+		reverses: 'cash',
+	};
+	const plus = { ...row, id: 'r-plus', method_id: 'card', kind: 'card', corrects: 'cash' };
+	render(
+		<LedgerLegs view={{ ...view, rows: [row, minus, plus] as PaymentRow[] }} format={format} />
+	);
+	expect(document.querySelector('[data-testid^="order-payment-change-tender-"]')).toBeNull();
+	expect(screen.queryByTestId('checkout-leg-r-minus')).toBeNull();
+	expect(screen.getByTestId('checkout-leg-corrected-cash').textContent).toBe('Corrected');
+	expect(screen.getByTestId('checkout-leg-corrected-from-r-plus').textContent).toBe(
+		'Corrected from cash'
+	);
+});

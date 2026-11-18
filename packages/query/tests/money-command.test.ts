@@ -46,7 +46,7 @@ function httpError(status: number, code: string, data?: Record<string, unknown>)
 /** The money routes, as the store serves them (free `API/V2/Payments_Controller.php`). */
 function routeOf(url: string): { kind: MoneyCommandKind; target: string | null } {
 	const match =
-		/^orders\/\d+\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/.exec(
+		/^orders\/\d+\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund|correct))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/.exec(
 			url
 		)!;
 	const kind = (match[2] ?? match[4] ?? match[5] ?? 'record') as MoneyCommandKind;
@@ -595,6 +595,26 @@ describe('sendMoneyCommand: the answer', () => {
 		store.modes = ['otherRow'];
 		await expect(send(url, body)).rejects.toThrow('money_command_malformed_answer');
 		expect(await entries()).toHaveLength(1);
+	});
+
+	it('a correct is answered by the R+ that corrects its leg, never by another row (#3647)', async () => {
+		const answer = (corrects: string) => ({
+			data: {
+				payment: { ...cash('r-plus'), corrects },
+				order: store.summary(),
+				revision: store.revision,
+			},
+		});
+		store.post.mockResolvedValueOnce(answer('other-leg'));
+		await expect(send('orders/5/payments/leg/correct', { method_id: 'pos_card' })).rejects.toThrow(
+			'money_command_malformed_answer'
+		);
+		store.post.mockResolvedValueOnce(answer('LEG'));
+		await expect(
+			send('orders/5/payments/leg/correct', { method_id: 'pos_card' })
+		).resolves.toMatchObject({
+			data: { payment: { id: 'r-plus', corrects: 'LEG' } },
+		});
 	});
 
 	it('a recorded submit answered with another attempt’s row is never answered', async () => {

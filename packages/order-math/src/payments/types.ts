@@ -193,6 +193,10 @@ export interface PaymentRow {
 	// This is when the reader approved the hold; captured_at_gmt is when the money was taken.
 	authorized_at_gmt?: string | null;
 	updated_at_gmt: string;
+	// Tender correction (#3647): R- has `reverses`, R+ has `corrects`, both naming the original.
+	entry?: 'tender_correction' | (string & {});
+	reverses?: string;
+	corrects?: string;
 	[extra: string]: unknown;
 }
 
