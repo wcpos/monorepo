@@ -56,13 +56,14 @@ export function MovementSheet({
 	onDone: (id: string, type: MovementType, amount: string) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const { actions, expected, blind, binding } = useRegisterSession();
+	const { actions, expected, blind, binding, figuresPending } = useRegisterSession();
 	const phone = useIsPhone();
 	const invalidId = React.useId();
 	const { openDrawer } = useSessionReport();
 	const { format } = useCurrencyFormat();
 	const [amount, setAmount] = React.useState('');
 	const [reason, setReason] = React.useState('');
+	const [asked, setAsked] = React.useState(false);
 	// Two taps before a render must not mint two paid-out rows.
 	const { busy, exclusive } = useExclusive();
 	const noteRef = React.useRef<TextInputInstance>(null);
@@ -102,6 +103,9 @@ export function MovementSheet({
 	const delta = (type === 'paid_in' ? 1 : -1) * toMinor(typed, 4);
 	const after = format(Number(fromMinor(drawer + delta, 4)));
 	const holds = format(Number(fromMinor(drawer, 4)));
+	// Blind cashiers must not learn the figure, and a pending figure is not yet known.
+	const known = !blind && !figuresPending && expected.cash != null;
+	const overdraw = known && type === 'paid_out' && hasAmount && drawer + delta < 0;
 	const [beforeAfter, afterTail = ''] = t('register.in_the_drawer_after', {
 		drawer: holds,
 		after: AFTER_MARK,
@@ -115,15 +119,20 @@ export function MovementSheet({
 		decimalRow(places > 0 ? separator : undefined, t('common.backspace')),
 	];
 	// The keypad and the hardware keyboard edit the same string.
-	const press = (key: string) => setAmount((prev) => typeDecimal(prev, key, places));
+	const press = (key: string) => {
+		setAsked(false);
+		setAmount((prev) => typeDecimal(prev, key, places));
+	};
 	let verb = t('register.open_the_drawer');
 	if (type === 'paid_in') {
 		verb = hasAmount ? t('register.put_in', { amount: figure }) : t('register.put_cash_in');
 	} else if (type === 'paid_out') {
 		verb = hasAmount ? t('register.take_out', { amount: figure }) : t('register.take_cash_out');
+		if (overdraw && asked) verb = t('register.take_out_anyway', { amount: figure });
 	}
 	const runConfirm = async () => {
 		if (!type || invalid) return;
+		if (overdraw && !asked) return setAsked(true);
 		const normalized = type === 'no_sale' ? '0' : normalizeAmount(amount);
 		// Send exactly what was validated. The length check is on the trimmed reason, so 500
 		// characters and a trailing space passes here and 400s on arrival if sent raw.
@@ -159,7 +168,10 @@ export function MovementSheet({
 							{hasAmount ? (
 								<>
 									{beforeAfter}
-									<Text className="text-foreground text-sm font-semibold tabular-nums">
+									<Text
+										testID="movement-after-figure"
+										className={`${overdraw ? 'text-bad' : 'text-foreground'} text-sm font-semibold tabular-nums`}
+									>
 										{after}
 										{afterTail}
 									</Text>
@@ -180,7 +192,10 @@ export function MovementSheet({
 								aria-invalid={invalid === 'amount'}
 								aria-describedby={invalid === 'amount' ? invalidId : undefined}
 								value={amount.replace('.', separator)}
-								onChangeText={(value) => setAmount(value.replace(separator, '.'))}
+								onChangeText={(value) => {
+									setAsked(false);
+									setAmount(value.replace(separator, '.'));
+								}}
 							/>
 							<Keypad
 								rows={keypadRows}
@@ -226,15 +241,17 @@ export function MovementSheet({
 				<DialogFooter
 					size="lg"
 					aside={
-						!!invalid && (
+						(!!invalid || overdraw) && (
 							<HStack className="items-center gap-1">
 								<Icon name="info" size="sm" className="text-muted-foreground" />
 								<Text
-									testID="movement-invalid"
+									testID={invalid ? 'movement-invalid' : 'movement-over-drawer'}
 									nativeID={invalidId}
 									className="text-muted-foreground"
 								>
-									{words[invalid]}
+									{invalid
+										? words[invalid]
+										: t('register.more_than_drawer_holds', { drawer: holds })}
 								</Text>
 							</HStack>
 						)
