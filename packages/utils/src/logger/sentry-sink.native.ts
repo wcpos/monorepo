@@ -7,6 +7,7 @@ import {
 	buildCaptureOptions,
 	createPendingCaptures,
 	prepareEvent,
+	scrubBreadcrumb,
 	SENTRY_DSN,
 } from './sentry-core';
 
@@ -65,7 +66,10 @@ function initialize(): void {
 		environment: AppInfo.platform,
 		sendDefaultPii: false,
 		beforeSend: prepareEvent,
+		beforeBreadcrumb: scrubBreadcrumb,
 		enableWatchdogTerminationTracking: true,
+		// iOS native request breadcrumbs bypass beforeBreadcrumb, so a URL query could reach Sentry unmasked.
+		enableNetworkBreadcrumbs: false,
 	});
 	isInitialized = true;
 	const file = installIdFile();
