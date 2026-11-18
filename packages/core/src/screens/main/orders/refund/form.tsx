@@ -225,18 +225,18 @@ export function RefundOrderForm({ order }: Props) {
 				// A reconnect reloads with a new client; the saved refunds carry no line detail.
 				// A failed reload keeps the history already read from the store for this order
 				// rather than show already-refunded units as refundable.
-				// Only while that history holds every refund the order lists: one synced in since makes it stale.
+				// Only while that history holds exactly the refunds the order lists.
 				const heldIds = storeHistoryRefundIds.current;
+				const fallback = getRefundsFallback();
 				if (
 					storeHistoryOrderId.current === orderData.id &&
-					getRefundsFallback().every(
-						(refund) => typeof refund.id === 'number' && heldIds.includes(refund.id)
-					)
+					heldIds.length === fallback.length &&
+					fallback.every((refund) => typeof refund.id === 'number' && heldIds.includes(refund.id))
 				) {
 					setRefundDetailsLoading(false);
 					return;
 				}
-				setRefundDetails(getRefundsFallback());
+				setRefundDetails(fallback);
 				setHistoryMissing(true);
 				setRefundDetailsLoading(false);
 			});

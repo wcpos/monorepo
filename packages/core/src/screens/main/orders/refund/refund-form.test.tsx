@@ -1067,6 +1067,31 @@ describe('RefundOrderForm', () => {
 			expect(qtyField()).toBeEnabled();
 		});
 
+		it('a refund gone from the synced order before a failed reload locks the lines', async () => {
+			const secondRefund = { id: 10, total: '-20.00' };
+			const bothRefunds = { ...lockedOrder, refunds: [...lockedOrder.refunds, secondRefund] };
+			mockRefundsGets(
+				() =>
+					Promise.resolve({
+						data: [historyRow, { ...secondRefund, line_items: [{ id: 77, quantity: -1 }] }],
+						headers: { 'x-wp-totalpages': '1' },
+					}),
+				storeError
+			);
+			const { rerender } = render(<RefundOrderForm order={bothRefunds} />);
+			await waitFor(() => expect(qtyCell()).toHaveTextContent('1'));
+
+			// Refund 10 was deleted in WooCommerce admin; the synced order lists only refund 9.
+			rerender(<RefundOrderForm order={lockedOrder} />);
+
+			expect(await screen.findByTestId('refund-history-missing')).toBeInTheDocument();
+			expect(screen.getByTestId('refund-history-retry')).toBeInTheDocument();
+			expect(qtyField()).toBeDisabled();
+			expect(screen.getByTestId('refund-previously-refunded').textContent).toBe(
+				'orders.previously_refunded-€20.00'
+			);
+		});
+
 		it('no saved refunds: the lines still lock', async () => {
 			mockRefundsGets(storeError);
 			render(<RefundOrderForm order={{ ...lockedOrder, refunds: [] }} />);
