@@ -301,6 +301,33 @@ it('sums cash-row tendered values for a mixed split', () => {
 		'Paid $100.00 · tendered $50.00 in cash · 2 payments'
 	);
 });
+describe('B4: a split whose cash leg was corrected to card', () => {
+	const card = { status: 'captured', method_id: 'pos_card', kind: 'card', tendered: null };
+	const cash = { id: 'cash', status: 'captured', method_id: 'pos_cash', kind: 'cash' };
+	const ledger = (payments: object[]) =>
+		[{ key: '_wcpos_payments', value: { schema: 1, payments } }] as never;
+	beforeEach(() => {
+		mockOrder.payload.total = '15.00';
+	});
+	it('reads Card, with no tendered-in-cash line', () => {
+		mockOrder.payload.meta_data = ledger([
+			{ ...card, id: 'card', amount: '10.00' },
+			{ ...cash, amount: '5.00', tendered: '10.00' },
+			{ ...cash, id: 'rminus', amount: '-5.00', tendered: '-5.00', reverses: 'cash' },
+			{ ...card, id: 'rplus', amount: '5.00', tendered: '5.00', corrects: 'cash' },
+		]);
+		render(<ReceiptStage orderUuid="paid" compact={false} />);
+		expect(screen.getByTestId('receipt-paid-with').textContent).toBe('Card · 2 payments');
+	});
+	it('an uncorrected split still reads Card + Cash', () => {
+		mockOrder.payload.meta_data = ledger([
+			{ ...card, id: 'card', amount: '10.00' },
+			{ ...cash, amount: '5.00', tendered: '5.00' },
+		]);
+		render(<ReceiptStage orderUuid="paid" compact={false} />);
+		expect(screen.getByTestId('receipt-paid-with').textContent).toBe('Card + Cash · 2 payments');
+	});
+});
 it('counts recorded-offline authorizations as settled payments', () => {
 	mockOrder.payload.meta_data = [
 		{

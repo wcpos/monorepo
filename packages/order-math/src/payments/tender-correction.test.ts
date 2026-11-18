@@ -97,6 +97,15 @@ describe('correctionOf and effectiveRows (test 2)', () => {
 		expect(effectiveRows(corrected)).toEqual([plus]);
 	});
 
+	it('drops only the pair’s reversed halves; status is each reader’s own predicate', () => {
+		const pending = row({ id: 'pending', status: 'pending' });
+		const voided = row({ id: 'voided', status: 'voided' });
+		expect(effectiveRows([pending, ...corrected, voided])).toEqual([pending, plus, voided]);
+		// A failed R- reversed nothing, but it is still an R-.
+		const failedMinus = { ...minus, status: 'failed' as const };
+		expect(effectiveRows([original, failedMinus])).toEqual([original]);
+	});
+
 	it('reads a re-correction through the R+', () => {
 		const minus2 = row({
 			id: 'rminus2',
@@ -148,6 +157,37 @@ it('derive() reads the three-row ledger as the uncorrected sale (test 4)', () =>
 	expect(allowedOrderStatuses(base, 'completed', { total: '10.00', rows: corrected })).toEqual(
 		before
 	);
+});
+
+it('B1: derive() drops the change of a cash leg corrected to card', () => {
+	const cash = row({
+		kind: 'cash',
+		method_id: 'pos_cash',
+		amount: '15.00',
+		tendered: '20.00',
+		change: '5.00',
+	});
+	expect(derive('15.00', [cash], []).change).toBe('5.00');
+	const reversal = row({
+		...cash,
+		id: 'rminus',
+		amount: '-15.00',
+		tendered: '-15.00',
+		change: '0.00',
+		entry: 'tender_correction',
+		reverses: 'orig',
+	});
+	const card = row({
+		id: 'rplus',
+		amount: '15.00',
+		tendered: '15.00',
+		entry: 'tender_correction',
+		corrects: 'orig',
+	});
+	expect(derive('15.00', [cash, reversal, card], [])).toMatchObject({
+		paid: '15.00',
+		change: '0.00',
+	});
 });
 
 it('partitionVoidableRows retains R+, R- and the reversed row (test 5)', () => {

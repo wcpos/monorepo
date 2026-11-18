@@ -16,14 +16,13 @@ export function countsTowardPaid(row: Pick<PaymentRow, 'status'>): boolean {
 }
 
 /**
- * The counting rows that still hold their money: minus every R- and every row an R- reverses
- * (#3647). Mirrors the plugin's receipt and Projection reading; paid itself nets the pair.
+ * The rows minus every R- and every row an R- reverses (#3647), and nothing else: each reader
+ * applies its own status predicate to the result. Mirrors the plugin's receipt and Projection
+ * reading. Paid alone nets the pair over every counting row; change, tenders and legs read these.
  */
 export function effectiveRows<T extends PaymentRow>(rows: readonly T[]): T[] {
 	const reversed = reversedPaymentIds(rows);
-	return rows.filter(
-		(row) => countsTowardPaid(row) && !row.reverses && !reversed.has(row.id.toLowerCase())
-	);
+	return rows.filter((row) => !row.reverses && !reversed.has(row.id.toLowerCase()));
 }
 
 /** Server ledger amounts have six decimal places, independent of currency display precision. */
@@ -130,12 +129,13 @@ export function derive(
 	// Server `Ledger::signed_balance`: a succeeded refund on a reopened sale is due again. A pending
 	// refund allocation is a reservation, never added.
 	const dueMinor = totalMinor - paidMinor + refunded(payments, dp);
-	const changeMinor = counting.reduce((sum, { row, amount }) => {
-		return row.tendered === null ? sum : sum + Math.max(0, toMinor(row.tendered, dp) - amount);
-	}, 0);
-
+	// Change and the primary method read the effective counting rows: a corrected leg's change and
+	// method went with it (#3647).
 	const effective = new Set(effectiveRows(payments));
 	const named = counting.filter(({ row }) => effective.has(row));
+	const changeMinor = named.reduce((sum, { row, amount }) => {
+		return row.tendered === null ? sum : sum + Math.max(0, toMinor(row.tendered, dp) - amount);
+	}, 0);
 	const nonStoredValue = named.filter(({ row }) => row.kind !== 'stored_value');
 	const candidates = nonStoredValue.length > 0 ? nonStoredValue : named;
 	const primary = candidates.reduce<(typeof candidates)[number] | undefined>((selected, item) => {

@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import { act, renderHook } from '@testing-library/react';
 
+import { derive, type PaymentRow, upsertPaymentRow } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { createTestT } from '../../../../../../jest/translate';
@@ -26,6 +27,16 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => mockT }))
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockPost }),
 }));
+jest.mock('../../../hooks/use-payment-methods', () => {
+	const state = {
+		methods: [
+			{ id: 'pos_cash', title: 'Cash' },
+			{ id: 'pos_card', title: 'Card' },
+			{ id: 'pos_cheque', title: 'Cheque' },
+		],
+	};
+	return { usePaymentMethods: () => state };
+});
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockStatus }),
 }));
@@ -75,9 +86,41 @@ describe('useCorrectTender (test 8)', () => {
 		expect(mockPost).toHaveBeenCalledWith('orders/42/payments/leg-1/correct', {
 			method_id: 'pos_cash',
 		});
-		expect(mockMirror).toHaveBeenCalledWith(answer);
+		expect(mockMirror).toHaveBeenCalledWith({ order: answer.order });
 		expect(mockSettle).toHaveBeenCalled();
 		expect(mockLog.success).toHaveBeenCalledWith('Payment changed to Cash', expect.anything());
+	});
+
+	it('B3: after the answer and before any pull, the local ledger holds no R+ and paid is unchanged', async () => {
+		const leg = { id: 'leg-1', status: 'captured', amount: '10.00', method_id: 'pos_cash' };
+		const rplus = { ...leg, id: 'r-plus', method_id: 'pos_card', corrects: 'leg-1' };
+		// The resident's ledger, written as the mirror writes an answered row.
+		let local = [leg] as PaymentRow[];
+		mockMirror.mockImplementation(async ({ payment }: { payment?: PaymentRow }) => {
+			if (payment) local = upsertPaymentRow(local, payment);
+		});
+		let atPull: PaymentRow[] = [];
+		mockSettle.mockImplementation(async () => {
+			atPull = local;
+		});
+		mockPost.mockResolvedValue({ data: { payment: rplus, order: { status: 'completed' } } });
+		const { result } = renderHook(() => useCorrectTender());
+		await act(async () => {
+			await result.current(order(42), 'leg-1', { id: 'pos_card', title: 'Card' });
+		});
+		expect(atPull.map(({ id }) => id)).toEqual(['leg-1']);
+		expect(derive('10.00', atPull, []).paid).toBe('10.00');
+	});
+
+	it('B6: a re-press with another method toasts the method the answer names', async () => {
+		// The first press picked Card and timed out; its journaled command re-sends Card.
+		const answer = { payment: { id: 'r-plus', method_id: 'pos_card' }, order: {} };
+		mockPost.mockResolvedValue({ data: answer });
+		const { result } = renderHook(() => useCorrectTender());
+		await act(async () => {
+			await result.current(order(42), 'leg-1', { id: 'pos_cheque', title: 'Cheque' });
+		});
+		expect(mockLog.success).toHaveBeenCalledWith('Payment changed to Card', expect.anything());
 	});
 
 	it('sends nothing offline, and nothing for an order the store does not have', async () => {

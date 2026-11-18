@@ -10,6 +10,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout', 'payments', 'correct']);
@@ -52,8 +53,9 @@ export function correctionFailureMessage(
 
 /**
  * Change a captured manual leg's tender: one `correct` money command through the poster (which
- * adds `command_id` and `revision`). The answer (R+) is mirrored and settled, and the settle's
- * pull brings R-. Online only, and only for an order the store has; never journaled for later.
+ * adds `command_id` and `revision`). Only the answer's order summary is mirrored, never R+: the
+ * settle's pull brings R- and R+ together, so the ledger never holds R+ alone. Online only, and
+ * only for an order the store has; never journaled for later.
  */
 export function useCorrectTender(): (
 	order: EngineRecord<'orders'>,
@@ -65,6 +67,7 @@ export function useCorrectTender(): (
 	const onlineStatus = useOnlineStatus();
 	const manager = useQueryRuntime();
 	const { storeDB } = useStoreSession();
+	const { methods } = usePaymentMethods();
 
 	return React.useCallback(
 		async (order, paymentId, method) => {
@@ -86,12 +89,15 @@ export function useCorrectTender(): (
 				});
 				const answer = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
 				// The store has changed the money: a failed mirror stays journaled and the pull fixes it.
-				await post.mirror(answer).catch((error: unknown) =>
+				await post.mirror({ order: answer.order }).catch((error: unknown) =>
 					logger.warn('Tender correction answered but not mirrored', {
 						context: { ...context, error: getErrorMessage(error) },
 					})
 				);
-				logger.success(t('orders.change_tender_done', { method: method.title }), {
+				// A re-press re-sends the journaled first pick: the answer names the method that took it.
+				const answered = answer.payment?.method_id ?? method.id;
+				const title = methods.find(({ id }) => id === answered)?.title ?? answered;
+				logger.success(t('orders.change_tender_done', { method: title }), {
 					showToast: true,
 					context,
 				});
@@ -109,6 +115,6 @@ export function useCorrectTender(): (
 				await post.settle().catch(() => undefined);
 			}
 		},
-		[http, onlineStatus.status, manager, storeDB, t]
+		[http, onlineStatus.status, manager, storeDB, t, methods]
 	);
 }

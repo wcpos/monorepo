@@ -1,4 +1,11 @@
-import { derive, fromMinor, type PaymentRow, type PaymentStatus, toMinor } from '@wcpos/order-math';
+import {
+	derive,
+	effectiveRows,
+	fromMinor,
+	type PaymentRow,
+	type PaymentStatus,
+	toMinor,
+} from '@wcpos/order-math';
 import { formatMoney } from '@wcpos/printer/encoder/format-money';
 
 export interface LedgerPayment {
@@ -42,13 +49,17 @@ export function buildLedger(
 	const approved = rows.filter(({ status }) => status === 'captured');
 	const view = derive(total, rows, [], { dp });
 	const paidMinor = toMinor(view.paid, dp);
-	const changeMinor = approved.reduce((sum, payment) => sum + toMinor(payment.change, dp), 0);
+	// A corrected leg and its reversal are neither drawn nor owed change (#3647).
+	const effective = effectiveRows(rows);
+	const changeMinor = effective
+		.filter(({ status }) => status === 'captured')
+		.reduce((sum, payment) => sum + toMinor(payment.change, dp), 0);
 	const dueMinor = toMinor(view.balance, dp);
 	const paid = Number(fromMinor(paidMinor, dp));
 	const change = Number(fromMinor(changeMinor, dp));
 	const due = Number(fromMinor(dueMinor, dp));
 	const money = (amount: number) => formatMoney(amount, currency, locale, dp);
-	const payments = rows.map((payment): LedgerPayment => {
+	const payments = effective.map((payment): LedgerPayment => {
 		const amount = Number(payment.amount);
 		const tendered = payment.tendered === null ? undefined : Number(payment.tendered);
 		const paymentChange = payment.change === null ? undefined : Number(payment.change);
