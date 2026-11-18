@@ -94,7 +94,7 @@ export function AddFee() {
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
-				<FormErrors />
+				<FormErrors labels={{ amount: t('pos_cart.amount') }} />
 				<PropertyList prefix="fee">
 					<PropertyRow label={t('pos_cart.fee_name')} id="name">
 						<FormField

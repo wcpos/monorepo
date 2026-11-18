@@ -262,7 +262,10 @@ function LedgerLeg({
 						{t('pos_checkout.cancelled')}
 					</Text>
 				) : (
-					<StatusBadge label={statusLabel(row.status, t)} variant={statusVariant(row.status)} />
+					<StatusBadge
+						label={statusLabel(row.status, t, row.kind)}
+						variant={statusVariant(row.status)}
+					/>
 				)}
 			</HStack>
 			{time ? (

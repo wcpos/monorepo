@@ -137,11 +137,11 @@ it('closes through onBeforeVoid before the real void hook starts its flow', asyn
 	await waitFor(() => expect(mockDelete).toHaveBeenCalledTimes(1));
 	expect(mockSequence).toEqual(['close', 'guard', 'void']);
 });
-it('renders Sync order on the existing save-to-server-button', async () => {
+it('renders Save to store on the existing save-to-server-button', async () => {
 	renderSheet();
 	expect(screen.getByTestId('order-print-button')).toBeTruthy();
 	const save = screen.getByTestId('save-to-server-button');
-	expect(save.textContent).toBe('Sync order');
+	expect(save.textContent).toBe('Save to store');
 	fireEvent.click(save);
 	await waitFor(() => expect(mockPush).toHaveBeenCalledWith(mockOrder));
 });
