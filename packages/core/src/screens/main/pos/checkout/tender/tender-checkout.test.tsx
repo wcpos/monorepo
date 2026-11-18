@@ -375,6 +375,16 @@ describe('TenderCheckout', () => {
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 	});
 
+	// Codex r4616007943 on #3618: the pane is bounded to the dialog, so a tall ledger scrolls itself.
+	it('scrolls the ledger column on its own on a wide screen', () => {
+		render(<TenderCheckout order={order} />);
+
+		const ledger = screen.getByTestId('checkout-ledger-scroll');
+		expect(ledger.contains(screen.getByTestId('checkout-order-total'))).toBe(true);
+		// Pinned at its width: a ScrollView's base flexGrow would take half the tender pane's room.
+		expect([ledger.style.flexGrow, ledger.style.flexShrink]).toEqual(['0', '0']);
+	});
+
 	it('keeps an offline line paid mark after the server assigns a numeric ID', () => {
 		mockLineItems = [
 			{

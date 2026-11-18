@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
@@ -100,9 +100,15 @@ export function TenderCheckout({ order }: Props) {
 					</View>
 				) : (
 					<View className="flex-1 flex-row">
-						<View className="border-border bg-muted/40 w-80 border-r p-4">
+						<ScrollView
+							testID="checkout-ledger-scroll"
+							className="border-border bg-muted/40 w-80 border-r"
+							// Fixed 320px: a ScrollView grows by default, and on web only a style beats it (logs/index.tsx).
+							style={{ flexGrow: 0, flexShrink: 0 }}
+							contentContainerClassName="p-4"
+						>
 							<LedgerPane flow={flow} lines={lines} format={format} />
-						</View>
+						</ScrollView>
 						<View className="flex-1 p-4">
 							<TenderPane flow={flow} format={format} onLeave={leave} />
 						</View>
