@@ -5,10 +5,12 @@
 import {
 	allowedOrderStatuses,
 	availableForRefund,
+	canMarkCompleted,
 	derive,
 	hasRefundableMoney,
 	netRefundable,
 } from './derive';
+import { withLedger } from './ledger';
 
 import type { CaptureMode, PaymentKind, PaymentMethodDescriptor, PaymentRow } from './types';
 
@@ -550,5 +552,35 @@ describe('netRefundable', () => {
 	it('uses absolute total minus Woo refunds when no rows exist', () => {
 		expect(netRefundable('-16.83', [{ total: '-10' }, {}, { total: null }], [])).toBe(6.83);
 		expect(netRefundable('16', [{ total: '-20' }], [])).toBe(0);
+	});
+});
+
+describe('canMarkCompleted (monorepo#3648)', () => {
+	const paid = { status: 'processing', date_paid_gmt: '2026-01-01T10:00:00', total: '20.00' };
+	const ledger = (...rows: PaymentRow[]) => withLedger([], rows);
+	const captured = (amount: string, status: PaymentRow['status'] = 'captured') =>
+		row({ id: `row-${amount}-${status}`, amount, status });
+
+	it('passes an online order paid at the web checkout on date_paid_gmt alone', () => {
+		expect(canMarkCompleted(paid)).toBe(true);
+		expect(canMarkCompleted({ ...paid, meta_data: [] })).toBe(true);
+	});
+	it('passes a POS order whose ledger captured the total', () => {
+		expect(canMarkCompleted({ ...paid, meta_data: ledger(captured('20.00')) })).toBe(true);
+	});
+	it('normalises wc-processing', () => {
+		expect(canMarkCompleted({ ...paid, status: 'wc-processing' })).toBe(true);
+	});
+	it.each([
+		['a pending status', { status: 'pending' }],
+		['on-hold', { status: 'on-hold' }],
+		['completed', { status: 'completed' }],
+		['a missing date_paid_gmt', { date_paid_gmt: null }],
+		['an empty date_paid_gmt', { date_paid_gmt: '' }],
+		['needs_payment true', { needs_payment: true }],
+		['a pending row', { meta_data: ledger(captured('10.00'), captured('10.00', 'pending')) }],
+		['a part capture', { meta_data: ledger(captured('4.00')) }],
+	])('refuses %s', (_, change) => {
+		expect(canMarkCompleted({ ...paid, ...change })).toBe(false);
 	});
 });

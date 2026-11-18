@@ -14,9 +14,9 @@ import type { Observable } from 'rxjs';
  * write, pull, reset or generation bump sees it, and neither does another cashier's session.
  */
 export type MoneyCommandKind =
-	'record' | 'intent' | 'capture' | 'void' | 'refund' | 'submit' | 'cancel' | 'close';
+	'record' | 'intent' | 'capture' | 'void' | 'refund' | 'submit' | 'cancel' | 'close' | 'complete';
 const ROUTE =
-	/^orders\/(\d+)\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/;
+	/^orders\/(\d+)\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close|complete))$/;
 
 /** A money route's kind, order id and target (a payment uuid or method id); null for any other path. */
 export function classifyMoneyRoute(

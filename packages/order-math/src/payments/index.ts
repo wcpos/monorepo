@@ -16,7 +16,13 @@ export {
 	readCompletions,
 } from './provenance';
 export { availableForRefund, hasRefundableMoney, netRefundable } from './derive';
-export { allowedOrderStatuses, countsTowardPaid, derive, isCompletingStatus } from './derive';
+export {
+	allowedOrderStatuses,
+	canMarkCompleted,
+	countsTowardPaid,
+	derive,
+	isCompletingStatus,
+} from './derive';
 export {
 	readLedger,
 	withLedger,

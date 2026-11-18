@@ -10,7 +10,8 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { hasRefundableMoney, netRefundable, readLedger } from '@wcpos/order-math';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { canMarkCompleted, hasRefundableMoney, netRefundable, readLedger } from '@wcpos/order-math';
 import {
 	awaitWriteOutcome,
 	type EngineRecord,
@@ -24,9 +25,12 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
+import { useAppInfo } from '../../../hooks/use-app-info';
 import { requestServerDelete } from '../hooks/mutations/request-server-delete';
 import { useStorageMoneyPathGuard } from '../hooks/use-storage-health';
+import { markCompletedTier, useMarkCompleted } from './use-mark-completed';
 import { useReopenOrder } from './use-reopen-order';
+import { useStoreCapability } from './use-store-capability';
 
 const syncLogger = getLogger(['wcpos', 'orders', 'actions', 'sync']);
 
@@ -78,6 +82,13 @@ export function useOrderActions(
 
 	const { reopen, reopening } = useReopenOrder(order);
 
+	// Mark completed (monorepo#3648): every gate holds, or the action is not drawn at all.
+	const isPro = !!useAppInfo().license?.isPro;
+	const advertised = useStoreCapability('order_complete');
+	const online = useOnlineStatus().status === 'online-website-available';
+	const completable = useRecordField(order, ({ payload }) => canMarkCompleted(payload));
+	const { markCompleted, completing } = useMarkCompleted(order);
+
 	/**
 	 * Refunds are a money path under the #163 follow-up ruling: cash handed back
 	 * with no persistable record is the checkout hazard in reverse. Refuse at the
@@ -124,6 +135,10 @@ export function useOrderActions(
 		storageDegraded,
 		reopen,
 		reopening,
+		canMarkCompleted:
+			markCompletedTier(isPro) && advertised && online && !storageDegraded && completable,
+		markCompleted,
+		completing,
 		sync,
 		refund,
 		requestDelete: React.useCallback(() => setDeleteOpen(true), []),

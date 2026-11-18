@@ -46,7 +46,7 @@ function httpError(status: number, code: string, data?: Record<string, unknown>)
 /** The money routes, as the store serves them (free `API/V2/Payments_Controller.php`). */
 function routeOf(url: string): { kind: MoneyCommandKind; target: string | null } {
 	const match =
-		/^orders\/\d+\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close))$/.exec(
+		/^orders\/\d+\/(?:payments(?:\/([^/]+)\/(intent|capture|void|refund))?|payment-methods\/([^/]+)\/(submit|cancel)|(close|complete))$/.exec(
 			url
 		)!;
 	const kind = (match[2] ?? match[4] ?? match[5] ?? 'record') as MoneyCommandKind;
@@ -856,6 +856,17 @@ describe('the answer chain and the post-answer refresh', () => {
 		expect(store.post).toHaveBeenCalledTimes(1);
 		expect(sentBodies()[0].revision).toBe(polled);
 		expect(store.completions).toBe(1);
+	});
+
+	// monorepo#3648: Mark completed is approved like a close (APPROVED_KINDS), never ends motion.
+	it('a complete is re-adopted like a close, sent once with its command id and revision, and its answer mirrored', async () => {
+		const polled = await pollSettles();
+		const post = poster();
+		const { data } = await post('orders/5/complete', {});
+		expect(requires).toEqual([expect.objectContaining({ readopt: true })]);
+		expect(sentBodies()).toEqual([{ command_id: expect.any(String), revision: polled }]);
+		await post.mirror(data as never);
+		expect(await entries()).toEqual([]);
 	});
 
 	it('a poll leaves the journal’s chain as the command answer wrote it', async () => {

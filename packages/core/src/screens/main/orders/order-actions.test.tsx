@@ -48,6 +48,21 @@ jest.mock('@wcpos/query', () => ({
 	},
 }));
 
+// Mark completed's gates (monorepo#3648): Pro, the store's capability, online, a paid order.
+let mockIsPro = true;
+let mockCapabilities = ['order_complete'];
+let mockOnline = 'online-website-available';
+jest.mock('../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: mockIsPro } }),
+}));
+jest.mock('./use-store-capability', () => ({
+	useStoreCapability: (name: string) => mockCapabilities.includes(name),
+}));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnline }),
+}));
+jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
+
 jest.mock('@wcpos/sync-core', () => ({
 	...jest.requireActual('@wcpos/sync-core'),
 	WOO_REST_CANNOT_DELETE: 'woocommerce_rest_cannot_delete',
@@ -130,6 +145,9 @@ function Footer({ order }: { order: typeof mockOrder }) {
 		recordAction('order-modal-refund', actions.refund, actions.storageDegraded);
 	}
 	recordAction('order-modal-sync', actions.sync);
+	if (actions.canMarkCompleted) {
+		recordAction('order-mark-completed', actions.markCompleted, actions.completing);
+	}
 	recordAction('order-modal-delete', actions.requestDelete, actions.storageDegraded);
 	return (
 		<DeleteOrderDialog
@@ -425,5 +443,48 @@ describe('Order action reports', () => {
 				toast: { title: 'orders.delete_not_permitted', type: 'error' },
 			})
 		);
+	});
+});
+
+describe('Mark completed (monorepo#3648)', () => {
+	const paidOrder = {
+		...mockOrder,
+		payload: {
+			...mockOrder.payload,
+			status: 'processing',
+			total: '20.00',
+			date_paid_gmt: '2026-11-18T10:00:00',
+		},
+	} as typeof mockOrder;
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockHandlers.clear();
+		mockDisabled.clear();
+		mockIsPro = true;
+		mockCapabilities = ['order_complete'];
+		mockOnline = 'online-website-available';
+	});
+
+	it('is offered, enabled, for a Pro store that advertises it, online, on a paid processing order', () => {
+		render(<Footer order={paidOrder} />);
+		expect(mockHandlers.has('order-mark-completed')).toBe(true);
+		expect(mockDisabled.get('order-mark-completed')).toBe(false);
+	});
+
+	it.each<[string, () => void, typeof paidOrder]>([
+		['on a free store', () => (mockIsPro = false), paidOrder],
+		['when the store does not advertise order_complete', () => (mockCapabilities = []), paidOrder],
+		['offline', () => (mockOnline = 'offline'), paidOrder],
+		[
+			'on an order that is not paid',
+			() => undefined,
+			{ ...paidOrder, payload: { ...paidOrder.payload, date_paid_gmt: null } } as never,
+		],
+	])('is absent %s', (_, arrange, order) => {
+		arrange();
+		render(<Footer order={order} />);
+		expect(mockHandlers.has('order-mark-completed')).toBe(false);
+		expect(mockDisabled.has('order-mark-completed')).toBe(false);
 	});
 });

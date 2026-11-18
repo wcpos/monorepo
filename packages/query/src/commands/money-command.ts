@@ -104,7 +104,7 @@ export type MoneyCommandPoster = Post & {
 };
 
 /** The cashier's approval is re-checked for the commands that move money on a total. */
-const APPROVED_KINDS = new Set<MoneyCommandKind>(['intent', 'submit', 'close']);
+const APPROVED_KINDS = new Set<MoneyCommandKind>(['intent', 'submit', 'close', 'complete']);
 /** End a payment in motion: a pending edit is refused until they land, so they never push it. */
 const ENDS_MOTION = new Set<MoneyCommandKind>(['capture', 'void', 'cancel']);
 /**

@@ -18,6 +18,7 @@ import {
 	CLAIM_LEASE_MS,
 	claimHeld,
 	claimRoute,
+	classifyMoneyRoute,
 	type CommandState,
 	commandState,
 	deferEntry,
@@ -458,5 +459,17 @@ describe('the entry state and the reads over it', () => {
 		expect(!!entry && isDeferred(entry)).toBe(mark);
 		// The session owes a re-send for the candidate's scope (`test-scope`), whoever reads it.
 		expect(!!entry && owedResend(entry, 'test-scope')).toBe(owed);
+	});
+});
+
+describe('classifyMoneyRoute', () => {
+	it('classifies Mark completed (monorepo#3648) as its own kind, beside close', () => {
+		expect(classifyMoneyRoute('orders/12/complete')).toEqual({
+			kind: 'complete',
+			orderId: 12,
+			target: null,
+		});
+		expect(classifyMoneyRoute('orders/12/close')).toMatchObject({ kind: 'close' });
+		expect(classifyMoneyRoute('orders/12/completex')).toBeNull();
 	});
 });
