@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ScrollView, useWindowDimensions, View, type ViewProps } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
@@ -16,6 +17,7 @@ import {
 import { Form, FormField, FormTextarea } from '@wcpos/components/form';
 import { MoneyList } from '@wcpos/components/money-list';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import { MAX_FONT_SCALE, SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 import { Notice } from '@wcpos/components/notice';
 import {
@@ -115,9 +117,9 @@ function createRefundFormSchema(dp: number) {
 
 type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
-// One column map for the heads and the cells (F62). The number columns' floors are spacing units
-// sized for Compact (3.5 px, a phone), where the unit and px-3 shrink but the 12 px caption does
-// not: n ≥ longest English head word / spacing + 6. The product column gives way.
+// One column map for the heads and the cells (F62). Each number column also takes a px floor (a
+// style over its class): its head's longest word or its widest value, plus px-3. When the product
+// minimum and the floors do not fit, the table scrolls sideways at their sum (ruling, 18 Nov).
 const REFUND_COLUMNS = {
 	product: 'min-w-0 flex-[3]',
 	price: 'min-w-17 flex-1',
@@ -125,16 +127,25 @@ const REFUND_COLUMNS = {
 	refundQty: 'min-w-21 flex-1',
 	refundAmount: 'min-w-23 flex-1',
 } as const;
-// Main's widths, for a table too narrow for the floors and the product column's own minimum.
-const MAIN_COLUMNS = {
-	product: 'flex-[3]',
-	price: 'flex-1',
-	qty: 'flex-1',
-	refundQty: 'flex-1',
-	refundAmount: 'flex-1',
-} as const;
-// The product column's own minimum, in spacing units, beside the floors' 17 + 14 + 21 + 23.
+// The product column's own minimum, in spacing units.
 const PRODUCT_MIN_UNITS = 20;
+
+/** The table in a frame that reports its layout; given `scrollWidth`, it scrolls sideways. */
+function RefundTable({ scrollWidth, children, ...frame }: ViewProps & { scrollWidth?: number }) {
+	const table = <Table>{children}</Table>;
+	const content = scrollWidth ? { width: scrollWidth } : undefined;
+	return (
+		<View testID="refund-table-frame" {...frame}>
+			{content ? (
+				<ScrollView horizontal testID="refund-table-scroll" contentContainerStyle={content}>
+					{table}
+				</ScrollView>
+			) : (
+				table
+			)}
+		</View>
+	);
+}
 
 /** Renders the form used to calculate and submit an order refund. */
 export function RefundOrderForm({ order }: Props) {
@@ -166,11 +177,8 @@ export function RefundOrderForm({ order }: Props) {
 	const [historyMissing, setHistoryMissing] = React.useState(false);
 	const [historyAttempt, setHistoryAttempt] = React.useState(0);
 	const spacingUnit = useSpacingUnit();
+	const { fontScale } = useWindowDimensions();
 	const [tableWidth, setTableWidth] = React.useState<number>();
-	// Until the table's first layout, the floors.
-	const floored =
-		!tableWidth || (17 + 14 + 21 + 23 + PRODUCT_MIN_UNITS) * spacingUnit <= tableWidth;
-	const columns = floored ? REFUND_COLUMNS : MAIN_COLUMNS;
 	const refundsFallback = JSON.stringify(orderData.refunds || []);
 	const getRefundsFallback = React.useCallback(() => {
 		const refunds = JSON.parse(refundsFallback) as RefundDetail[];
@@ -356,6 +364,40 @@ export function RefundOrderForm({ order }: Props) {
 		control: form.control,
 		name: 'line_items',
 	});
+
+	// Floors computed, not measured (no hidden copy, no second layout), at this step's sizes and text
+	// scale: em per char, rounded up, 0.85 a tracked caption letter, 0.6 a figure. An amount is widest
+	// at the whole quantity; the keypad box is px-3, a 1px border and min-w-10.
+	const [, body, , , , , , caption] =
+		Object.values(SCALE_STEPS).find(([step]) => step === spacingUnit) ?? SCALE_STEPS.regular;
+	const em = Math.min(fontScale || 1, MAX_FONT_SCALE);
+	const span = (texts: string[], px: number) => Math.max(...texts.map((s) => s.length)) * px * em;
+	const floor = (head: string, values: string[], box = 0, min = 0) =>
+		6 * spacingUnit +
+		Math.max(span(head.split(' '), 0.85 * caption), span(values, 0.6 * body) + box, min);
+	const qtys = fields.map((field) => (linesLocked ? '–' : String(field.remaining_quantity)));
+	const prices = fields.map((field) =>
+		formatRefundUnitPrice({ ...field, totalTax: field.total_tax, displayTax, dp })
+	);
+	const amounts = fields.map((field) =>
+		formatLineItemRefundWithTax(
+			calculateLineItemRefund({ ...field, refundQty: field.quantity, dp }),
+			dp
+		)
+	);
+	const floors = {
+		price: floor(t('common.price'), prices),
+		qty: floor(t('pos_cart.qty_abbrev'), qtys),
+		refundQty: floor(t('orders.refund_qty_short'), qtys, 6 * spacingUnit + 2, 10 * spacingUnit),
+		refundAmount: floor(t('orders.refund_amount_short'), [...amounts, (0).toFixed(dp)]),
+	};
+	const column = (name: keyof typeof REFUND_COLUMNS, grows?: string) => ({
+		className: grows ? `${REFUND_COLUMNS[name]} ${grows}` : REFUND_COLUMNS[name],
+		style: name === 'product' ? undefined : { minWidth: floors[name] },
+	});
+	// The header row grows with its heads (h-9 let wrapped heads spill over the rows).
+	const head = (name: keyof typeof REFUND_COLUMNS) => column(name, 'h-auto min-h-9 py-1');
+	const tableMin = Object.values(floors).reduce((a, b) => a + b, PRODUCT_MIN_UNITS * spacingUnit);
 
 	const watchedLineItems = useWatch({
 		control: form.control,
@@ -563,50 +605,46 @@ export function RefundOrderForm({ order }: Props) {
 					/>
 				) : null}
 
-				<Table onLayout={(event) => setTableWidth(event.nativeEvent.layout.width)}>
+				<RefundTable
+					onLayout={(event) => setTableWidth(event.nativeEvent.layout.width)}
+					scrollWidth={tableWidth && tableMin > tableWidth ? tableMin : undefined}
+				>
 					<TableHeader>
 						<TableRow>
-							<TableHead className={columns.product}>
+							<TableHead {...head('product')}>
 								<Text>{t('common.product')}</Text>
 							</TableHead>
-							<TableHead className={columns.price}>
+							<TableHead {...head('price')}>
 								<Text>{t('common.price')}</Text>
 							</TableHead>
-							<TableHead className={columns.qty}>
+							<TableHead {...head('qty')}>
 								<Text>{t('pos_cart.qty_abbrev')}</Text>
 							</TableHead>
-							<TableHead className={columns.refundQty}>
-								<Text>{t('orders.refund_qty')}</Text>
+							<TableHead {...head('refundQty')} accessibilityLabel={t('orders.refund_qty')}>
+								<Text>{t('orders.refund_qty_short')}</Text>
 							</TableHead>
-							<TableHead className={columns.refundAmount}>
-								<Text>{t('orders.refund_amount')}</Text>
+							<TableHead {...head('refundAmount')} accessibilityLabel={t('orders.refund_amount')}>
+								<Text>{t('orders.refund_amount_short')}</Text>
 							</TableHead>
 						</TableRow>
 					</TableHeader>
 					<TableBody>
 						{fields.map((field, index) => {
-							const unitPrice = formatRefundUnitPrice({
-								quantity: field.quantity,
-								total: field.total,
-								totalTax: field.total_tax,
-								displayTax,
-								dp,
-							});
 							const itemRefund = lineItemRefunds[index];
 							const itemRefundWithTax = formatLineItemRefundWithTax(itemRefund, dp);
 
 							return (
 								<TableRow key={field.id}>
-									<TableCell className={columns.product}>
-										<Text numberOfLines={floored ? 2 : 1}>{field.name}</Text>
+									<TableCell {...column('product')}>
+										<Text numberOfLines={2}>{field.name}</Text>
 									</TableCell>
-									<TableCell className={columns.price}>
-										<Text>{unitPrice}</Text>
+									<TableCell {...column('price')}>
+										<Text>{prices[index]}</Text>
 									</TableCell>
-									<TableCell className={columns.qty}>
+									<TableCell {...column('qty')}>
 										<Text>{linesLocked ? '–' : field.remaining_quantity}</Text>
 									</TableCell>
-									<TableCell className={columns.refundQty}>
+									<TableCell {...column('refundQty')}>
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
@@ -615,14 +653,14 @@ export function RefundOrderForm({ order }: Props) {
 											)}
 										/>
 									</TableCell>
-									<TableCell className={columns.refundAmount}>
+									<TableCell {...column('refundAmount')}>
 										<Text>{itemRefundWithTax}</Text>
 									</TableCell>
 								</TableRow>
 							);
 						})}
 					</TableBody>
-				</Table>
+				</RefundTable>
 
 				<FormField
 					control={form.control}

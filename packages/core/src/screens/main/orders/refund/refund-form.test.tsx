@@ -22,6 +22,8 @@ let mockEnableRefundActions = false;
 let mockOnlineStatus = 'online-website-available';
 let mockSpacingUnit = 4;
 let mockTableLayout: ((event: unknown) => void) | undefined;
+// The refund form's heads grow with their text (TableHead's own h-9 does not).
+const HEAD_GROWS = 'h-auto min-h-9 py-1';
 jest.mock('@wcpos/components/lib/use-spacing-unit', () => ({
 	useSpacingUnit: () => mockSpacingUnit,
 }));
@@ -155,14 +157,40 @@ jest.mock('@wcpos/components/dialog', () => ({
 		);
 	},
 }));
+// The table's frame reports the width (jsdom lays nothing out); the sideways scroll shows its content width.
+jest.mock('react-native', () => {
+	const native = jest.requireActual('react-native');
+	return {
+		...native,
+		View: (props: any) => {
+			if (props.testID !== 'refund-table-frame') return <native.View {...props} />;
+			mockTableLayout = props.onLayout;
+			return <div data-testid={props.testID}>{props.children}</div>;
+		},
+		ScrollView: ({ children, testID, horizontal, contentContainerStyle }: any) => (
+			<div
+				data-testid={testID}
+				data-horizontal={String(horizontal)}
+				data-content-width={contentContainerStyle?.width}
+			>
+				{children}
+			</div>
+		),
+	};
+});
 jest.mock('@wcpos/components/table', () => ({
-	Table: ({ children, onLayout }: any) => {
-		mockTableLayout = onLayout;
-		return <table>{children}</table>;
-	},
+	Table: ({ children }: any) => <table>{children}</table>,
 	TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-	TableCell: ({ children, className }: any) => <td data-classes={className}>{children}</td>,
-	TableHead: ({ children, className }: any) => <th data-classes={className}>{children}</th>,
+	TableCell: ({ children, className, style }: any) => (
+		<td data-classes={className} data-floor={style?.minWidth}>
+			{children}
+		</td>
+	),
+	TableHead: ({ children, className, style, accessibilityLabel }: any) => (
+		<th data-classes={className} data-floor={style?.minWidth} aria-label={accessibilityLabel}>
+			{children}
+		</th>
+	),
 	TableHeader: ({ children }: any) => <thead>{children}</thead>,
 	TableRow: ({ children }: any) => <tr>{children}</tr>,
 }));
@@ -516,7 +544,7 @@ describe('RefundOrderForm', () => {
 		];
 		expect(
 			screen.getAllByRole('columnheader').map((head) => head.getAttribute('data-classes'))
-		).toEqual(columns);
+		).toEqual(columns.map((column) => `${column} ${HEAD_GROWS}`));
 		const row = screen.getAllByRole('row')[1];
 		expect(
 			within(row)
@@ -529,7 +557,7 @@ describe('RefundOrderForm', () => {
 	describe('on a 390px phone', () => {
 		// The width the dialog body leaves the table at 390px.
 		const PHONE_TABLE_WIDTH = 350;
-		async function renderColumns(spacingUnit: number) {
+		async function renderColumns(spacingUnit: number, width = PHONE_TABLE_WIDTH) {
 			mockSpacingUnit = spacingUnit;
 			mockGet.mockImplementation((url: string) => {
 				if (url === 'payment-gateways') return Promise.resolve({ data: [] });
@@ -539,9 +567,7 @@ describe('RefundOrderForm', () => {
 			await act(async () => {
 				render(<RefundOrderForm order={{ ...order, line_items: [lineItem] }} />);
 			});
-			await act(async () =>
-				mockTableLayout?.({ nativeEvent: { layout: { width: PHONE_TABLE_WIDTH } } })
-			);
+			await act(async () => mockTableLayout?.({ nativeEvent: { layout: { width } } }));
 			const classes = (nodes: HTMLElement[]) => nodes.map((n) => n.getAttribute('data-classes'));
 			return {
 				heads: classes(screen.getAllByRole('columnheader')),
@@ -550,9 +576,61 @@ describe('RefundOrderForm', () => {
 			};
 		}
 
-		it('Spacious: the floors do not fit, so the row takes main’s widths', async () => {
-			const main = ['flex-[3]', 'flex-1', 'flex-1', 'flex-1', 'flex-1'];
-			expect(await renderColumns(5)).toEqual({ heads: main, cells: main, lines: '1' });
+		const floorsOf = (nodes: HTMLElement[]) =>
+			nodes.map((node) => Number(node.getAttribute('data-floor')));
+
+		it('the floors do not fit: the table scrolls sideways and keeps every column’s floor', async () => {
+			const { lines } = await renderColumns(5);
+			const [product, ...floors] = floorsOf(screen.getAllByRole('columnheader'));
+			expect(product).toBe(0);
+			expect(floors).toHaveLength(4);
+			floors.forEach((floor) => expect(floor).toBeGreaterThan(0));
+			const [, ...cellFloors] = floorsOf(
+				within(screen.getAllByRole('row')[1]).getAllByRole('cell')
+			);
+			expect(cellFloors).toEqual(floors);
+
+			const scroll = screen.getByTestId('refund-table-scroll');
+			const sum = floors.reduce((total, floor) => total + floor, 20 * 5);
+			expect(sum).toBeGreaterThan(PHONE_TABLE_WIDTH);
+			expect(scroll).toHaveAttribute('data-horizontal', 'true');
+			expect(Number(scroll.getAttribute('data-content-width'))).toBe(sum);
+			// The name column scrolls with the rest, kept at two lines.
+			expect(within(scroll).getByText('Aim Analog Watch')).toBeInTheDocument();
+			expect(lines).toBe('2');
+		});
+
+		it('the floors fit: no sideways scroll', async () => {
+			await renderColumns(3.5);
+			const sum = floorsOf(screen.getAllByRole('columnheader')).reduce(
+				(total, floor) => total + floor,
+				20 * 3.5
+			);
+			expect(screen.getByTestId('refund-table-scroll')).toBeInTheDocument();
+
+			await act(async () => mockTableLayout?.({ nativeEvent: { layout: { width: sum } } }));
+			expect(screen.queryByTestId('refund-table-scroll')).not.toBeInTheDocument();
+			expect(
+				within(screen.getByTestId('refund-table-frame')).getByText('Aim Analog Watch')
+			).toBeInTheDocument();
+		});
+
+		it('the refund heads use short forms with the full name as their label', async () => {
+			await renderColumns(4);
+			const [, , , refundQty, refundAmount] = screen.getAllByRole('columnheader');
+			expect(refundQty.textContent).toBe('orders.refund_qty_short');
+			expect(refundQty).toHaveAttribute('aria-label', 'orders.refund_qty');
+			expect(refundAmount.textContent).toBe('orders.refund_amount_short');
+			expect(refundAmount).toHaveAttribute('aria-label', 'orders.refund_amount');
+		});
+
+		it('the header row grows to fit its heads', async () => {
+			await renderColumns(5);
+			screen.getAllByRole('columnheader').forEach((head) => {
+				const classes = head.getAttribute('data-classes')?.split(' ');
+				expect(classes).toEqual(expect.arrayContaining(['h-auto', 'min-h-9', 'py-1']));
+				expect(classes).not.toContain('h-9');
+			});
 		});
 
 		it('Compact: the floors fit and stay', async () => {
@@ -563,7 +641,11 @@ describe('RefundOrderForm', () => {
 				'min-w-21 flex-1',
 				'min-w-23 flex-1',
 			];
-			expect(await renderColumns(3.5)).toEqual({ heads: floored, cells: floored, lines: '2' });
+			expect(await renderColumns(3.5)).toEqual({
+				heads: floored.map((column) => `${column} ${HEAD_GROWS}`),
+				cells: floored,
+				lines: '2',
+			});
 		});
 	});
 
