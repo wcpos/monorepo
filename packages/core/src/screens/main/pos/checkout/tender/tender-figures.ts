@@ -104,10 +104,11 @@ export function tenderFigures(facts: TenderFacts) {
 		lines.every(({ id }) => (picked[id] ?? 0) >= unpaidUnits[String(id)]) &&
 		strayMinor >= 0 &&
 		strayMinor < lines.reduce((sum, { quantity }) => sum + quantity, 0);
+	const pickedHeroMinor = heroForPicked(pickedMinor, balanceMinor, allUnpaidPicked);
+	// THIS payment while picks build it, typed over or not: what Exact offers (F44).
+	const pickedShareMinor = picking ? pickedHeroMinor + (state.extraMinor ?? 0) : null;
 	const pickedEntryMinor =
-		picking && (state.extraMinor !== null || !state.entryDirty)
-			? heroForPicked(pickedMinor, balanceMinor, allUnpaidPicked) + (state.extraMinor ?? 0)
-			: null;
+		picking && (state.extraMinor !== null || !state.entryDirty) ? pickedShareMinor : null;
 	// Percent entry: the reducer's entry is the typed share; the money is a share of the balance.
 	const percent = state.entryMode === 'percent';
 	const percentMinor = percent ? percentOfMinor(balanceMinor, state.entryMinor) : null;
@@ -133,6 +134,17 @@ export function tenderFigures(facts: TenderFacts) {
 	// A cash entry the cash.rounding hook will settle is due the rounded amount (#66, #84).
 	const dueMinor = roundingMinor !== 0 ? roundedDueMinor : thisPaymentMinor;
 	const typed = state.entryDirty && entryAppliedMinor > 0 && entryAppliedMinor < balanceMinor;
+	// Picks never carry a plan, so `thisPaymentMinor` is the balance: for a method that gives
+	// change their share is this leg's due instead; a no-change method's chip stays Full balance.
+	// A share that reaches the balance settles, so it keeps the rounded due.
+	const exactMinor =
+		pickedShareMinor !== null &&
+		method?.capabilities.change === true &&
+		pickedShareMinor < balanceMinor
+			? pickedShareMinor
+			: thisPaymentMinor === balanceMinor
+				? roundedDueMinor
+				: dueMinor;
 	return {
 		fixedAmount,
 		/** The plan as the keypad sees it: null once its legs are taken, or for a fixed gateway. */
@@ -173,8 +185,13 @@ export function tenderFigures(facts: TenderFacts) {
 				)
 			: [],
 		dueMinor,
-		/** The Exact chip: the rounded due whenever this leg is the whole balance, since tapping it settles. */
-		exactMinor: thisPaymentMinor === balanceMinor ? roundedDueMinor : dueMinor,
+		/** The Exact chip: the picks' share; else the rounded due whenever this leg is the whole balance, since tapping it settles. */
+		exactMinor,
+		/** What Exact's `set-entry` carries: with `+ amount` armed it writes the amount, so the picks' price comes off. */
+		exactEntryMinor:
+			pickedShareMinor !== null && state.extraMinor !== null
+				? Math.max(0, exactMinor - pickedHeroMinor)
+				: exactMinor,
 		/** The big figure. */
 		shownMinor:
 			state.view === 'select' ? dueMinor : fixedAmount || percent ? entryAppliedMinor : entryMinor,
