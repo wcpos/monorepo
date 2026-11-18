@@ -544,3 +544,65 @@ it('a row with no label has no key column and indents its value', () => {
 	);
 	expect(row.contains(screen.getByTestId('key'))).toBe(true);
 });
+
+// A narrow dialog (nl, 2026-11): "Bewerken" kept its width and squeezed the address to one
+// character. On one line the value and its words share a wrapping line; the value keeps 160.
+describe('a line row with words never squeezes its value (ledger line 22)', () => {
+	const verb = <PropertyVerb testID="verb">Bewerken</PropertyVerb>;
+
+	it.each([
+		['centred', undefined, 'items-center'],
+		['align top', 'top' as const, 'items-start'],
+	])('the value and the verb share one wrapping line: %s', (_case, align, alignClass) => {
+		render(
+			<PropertyRow testID="row" label="Shipping" verb={verb} align={align}>
+				Hoofdstraat 1, Amsterdam
+			</PropertyRow>
+		);
+		const row = screen.getByTestId('row');
+		const value = screen.getByText('Hoofdstraat 1, Amsterdam').parentElement as HTMLElement;
+		const wrapper = value.parentElement as HTMLElement;
+		expect(row.children).toHaveLength(2);
+		expect(wrapper.parentElement).toBe(row);
+		expect(classes(wrapper)).toEqual(
+			expect.arrayContaining(['min-w-0', 'flex-1', 'flex-row', 'flex-wrap', 'gap-x-3', alignClass])
+		);
+		expect(classes(value)).toEqual(expect.arrayContaining(['min-w-40', 'flex-1']));
+		expect(classes(value)).not.toContain('min-w-0');
+		expect(wrapper.contains(screen.getByTestId('verb'))).toBe(true);
+		const trailing = screen.getByTestId('verb').parentElement as HTMLElement;
+		expect(trailing.parentElement).toBe(wrapper);
+		expect(classes(trailing)).toEqual(
+			expect.arrayContaining(['shrink-0', 'flex-row', 'flex-wrap', 'items-center', 'gap-2'])
+		);
+	});
+
+	it('a switch row with a value and no verb keeps its columns as before, with no wrapper', () => {
+		render(
+			<PropertyRow testID="row" label="Featured" control={<Probe testID="switch" />}>
+				Shown first
+			</PropertyRow>
+		);
+		const row = screen.getByTestId('row');
+		const value = screen.getByText('Shown first').parentElement as HTMLElement;
+		expect(row.children).toHaveLength(3);
+		expect(value.parentElement).toBe(row);
+		expect(value.dataset.classes).toBe('min-w-0 flex-1');
+		expect((screen.getByTestId('switch').parentElement as HTMLElement).parentElement).toBe(row);
+	});
+
+	it('on a phone a row with a verb has no wrapper', () => {
+		render(
+			<DeviceScope phone>
+				<PropertyRow testID="row" label="Shipping" verb={verb}>
+					Hoofdstraat 1, Amsterdam
+				</PropertyRow>
+			</DeviceScope>
+		);
+		const row = screen.getByTestId('row');
+		const value = screen.getByText('Hoofdstraat 1, Amsterdam').parentElement as HTMLElement;
+		expect(row.children).toHaveLength(3);
+		expect(value.parentElement).toBe(row);
+		expect(value.dataset.classes).toBe('min-w-0');
+	});
+});

@@ -3,6 +3,7 @@ import {
 	buildCaptureOptions,
 	createPendingCaptures,
 	prepareEvent,
+	scrubBreadcrumb,
 	SENTRY_DSN,
 } from './sentry-core';
 
@@ -140,6 +141,7 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 						integrations.filter(({ name }) => name !== 'BrowserSession'),
 					sampleRate: 1,
 					beforeSend: prepareEvent,
+					beforeBreadcrumb: scrubBreadcrumb,
 					ignoreErrors: [/ResizeObserver loop/],
 				});
 				const installId = getInstallId();
