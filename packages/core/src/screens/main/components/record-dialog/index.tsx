@@ -23,14 +23,12 @@ export interface RecordDialogProps<R> {
 	/** The record; null when it is not on the device, and the body is then `notFound`. */
 	record: R | null | undefined;
 	notFound?: string;
-	/** The record's one tab (Form), or its tabs when it has more than one (an order's View and Edit). JSON follows unless `json` is false. */
+	/** The record's one tab (Form), or its tabs when it has more than one (an order's View and Edit). JSON always follows. */
 	form: ((record: R) => React.ReactNode) | RecordTab<R>[];
 	/** The tab to open on; one the dialog does not show falls back to the first. */
 	initialTab?: string;
 	/** What the JSON tab shows. */
-	payload?: object;
-	/** false drops the JSON tab (the cart's Order details); with one tab left the form fills the sheet with no tab bar. */
-	json?: boolean;
+	payload: object | undefined;
 	/** A `DialogFooter` (its slots decide the buttons), under the tabs. */
 	footer?: React.ReactNode;
 	/** `right` on a page; on the POS, `usePanelSide`. */
@@ -38,7 +36,7 @@ export interface RecordDialogProps<R> {
 	testID?: string;
 }
 
-/** The one shell of a record edit: side panel, title, the record's tabs then JSON unless `json` is false, or not-found. */
+/** The one shell of a record edit: side panel, title, the record's tabs then JSON, or not-found. */
 export function RecordDialog<R>({
 	title,
 	record,
@@ -46,7 +44,6 @@ export function RecordDialog<R>({
 	form,
 	initialTab,
 	payload,
-	json = true,
 	footer,
 	side = 'right',
 	testID,
@@ -56,7 +53,7 @@ export function RecordDialog<R>({
 		? form
 		: [{ value: 'form', label: t('common.form'), render: form }];
 	const [value, setValue] = React.useState(() =>
-		(json && initialTab === 'json') || tabs.some((tab) => tab.value === initialTab)
+		initialTab === 'json' || tabs.some((tab) => tab.value === initialTab)
 			? (initialTab as string)
 			: tabs[0].value
 	);
@@ -74,36 +71,28 @@ export function RecordDialog<R>({
 			) : (
 				<DismissIsClose>
 					<View className="min-h-0 flex-1">
-						{!json && tabs.length === 1 ? (
-							tabs[0].render(record)
-						) : (
-							<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
-								<TabsList className="mx-4 flex-row">
-									{tabs.map((tab) => (
-										<TabsTrigger key={tab.value} value={tab.value} className="flex-1">
-											<Text>{tab.label}</Text>
-										</TabsTrigger>
-									))}
-									{json && (
-										<TabsTrigger value="json" className="flex-1">
-											<Text>{t('common.json')}</Text>
-										</TabsTrigger>
-									)}
-								</TabsList>
+						<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
+							<TabsList className="mx-4 flex-row">
 								{tabs.map((tab) => (
-									<TabsContent key={tab.value} value={tab.value} className="min-h-0 flex-1">
-										{tab.render(record)}
-									</TabsContent>
+									<TabsTrigger key={tab.value} value={tab.value} className="flex-1">
+										<Text>{tab.label}</Text>
+									</TabsTrigger>
 								))}
-								{json && (
-									<TabsContent value="json" className="min-h-0 flex-1">
-										<DialogBody>
-											<Tree value={payload} />
-										</DialogBody>
-									</TabsContent>
-								)}
-							</Tabs>
-						)}
+								<TabsTrigger value="json" className="flex-1">
+									<Text>{t('common.json')}</Text>
+								</TabsTrigger>
+							</TabsList>
+							{tabs.map((tab) => (
+								<TabsContent key={tab.value} value={tab.value} className="min-h-0 flex-1">
+									{tab.render(record)}
+								</TabsContent>
+							))}
+							<TabsContent value="json" className="min-h-0 flex-1">
+								<DialogBody>
+									<Tree value={payload} />
+								</DialogBody>
+							</TabsContent>
+						</Tabs>
 					</View>
 					{footer}
 				</DismissIsClose>

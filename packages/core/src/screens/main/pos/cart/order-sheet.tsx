@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { Dialog, DialogFooter, type FooterButton } from '@wcpos/components/dialog';
+import { useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { RecordDialog } from '../../components/record-dialog';
@@ -28,6 +29,7 @@ export function OrderSheet({
 	// The form's pending autosave, awaited before Sync order pushes (a debounced note write
 	// still in flight would otherwise be pushed as the value before it).
 	const flushRef = React.useRef<(() => Promise<boolean>) | null>(null);
+	const payload = useRecordField(order, (record) => record.payload);
 	const [unsent, setUnsent] = React.useState(false);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -38,7 +40,7 @@ export function OrderSheet({
 				form={(record) => (
 					<EditOrderMeta order={record} flushRef={flushRef} onUnsentChange={setUnsent} />
 				)}
-				json={false}
+				payload={payload}
 				footer={
 					<OrderSheetFooter
 						order={order}

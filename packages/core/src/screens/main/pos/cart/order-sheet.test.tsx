@@ -263,8 +263,8 @@ it('a pending hand-over takes the primary: Save to store drops behind Print', ()
 	expect(document.querySelector('[data-slot="intent"]')).toBeNull();
 });
 
-it("the cart's Order details has no JSON tab", () => {
+it("the cart's Order details keeps its JSON tab", () => {
 	renderSheet();
-	expect(mockRecordDialogProps.json).toBe(false);
-	expect(mockRecordDialogProps).not.toHaveProperty('payload');
+	expect(mockRecordDialogProps.payload).toEqual({ id: 1 });
+	expect(mockRecordDialogProps).not.toHaveProperty('json');
 });
