@@ -12,6 +12,7 @@ import { useT } from '../../../../contexts/translations';
 import { useAppInfo } from '../../../../hooks/use-app-info';
 import { useRecordAutosave } from '../../components/use-record-autosave';
 import { CouponForm, couponFormSchema } from '../../components/coupon/coupon-form';
+import { couponFormErrors } from '../../components/coupon/coupon-schema';
 import { useCouponRecord } from '../commands/use-coupon-record';
 import { DeleteCouponDialog, useCouponActions } from '../coupon-actions';
 
@@ -35,7 +36,10 @@ function EditCouponFormFields({ coupon }: Props) {
 	const readOnly = !(useAppInfo().license?.isPro ?? false);
 
 	const form = useForm<z.infer<typeof couponFormSchema>>({
-		resolver: zodResolver(couponFormSchema as never) as never,
+		resolver: zodResolver(
+			couponFormSchema as never,
+			{ error: couponFormErrors(t) } as never
+		) as never,
 		defaultValues: {
 			...coupon.toMutableJSON().payload,
 		} as z.infer<typeof couponFormSchema>,
