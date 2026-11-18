@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { decimalRow, DIGIT_ROWS, Key, Keypad, type KeypadKey } from './index';
+import { decimalRow, DIGIT_ROWS, Key, Keypad, type KeypadKey, keypadKeyName } from './index';
 
 // Keep RNW press/focus behavior; expose classes because Jest does not compile Uniwind.
 jest.mock('react-native', () => {
@@ -134,4 +134,13 @@ it.each([
 	);
 	expect(nodes).toHaveLength(2);
 	for (const node of nodes) expect(node.getAttribute('data-classes')).toContain(ink);
+});
+
+it('keypadKeyName: a digit from either row is its own name, else the caller’s, else nothing', () => {
+	const names = { Backspace: 'backspace', Clear: 'clear' };
+	expect(['0', '5', '9'].map((key) => keypadKeyName(key, names))).toEqual(['0', '5', '9']);
+	expect(keypadKeyName('Backspace', names)).toBe('backspace');
+	expect(keypadKeyName('Clear', names)).toBe('clear');
+	for (const key of ['Enter', 'Escape', 'a', '10', '.'])
+		expect(keypadKeyName(key, names)).toBeUndefined();
 });
