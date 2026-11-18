@@ -274,9 +274,14 @@ export function CartTable({
 				return {
 					id: col.key,
 					header: ({ column }: { column: Column<CartTableLine, unknown, CartTableFeatures> }) => (
-						<Text numberOfLines={1}>
+						<Text
+							numberOfLines={1}
+							accessibilityLabel={
+								column.id === 'quantity' && !picking ? t('pos_cart.quantity') : undefined
+							}
+						>
 							{{
-								quantity: picking ? t('pos_checkout.this_payment') : t('pos_cart.col_qty'),
+								quantity: picking ? t('pos_checkout.this_payment') : t('pos_cart.qty_abbrev'),
 								name: t('pos_cart.col_item'),
 								price: t('pos_cart.col_price'),
 								total: t('pos_cart.col_total'),

@@ -30,8 +30,14 @@ jest.mock('@wcpos/components/table', () => ({ TABLE_HEAD_TEXT: 'head' }));
 jest.mock('@wcpos/components/text', () => {
 	const { decode } = jest.requireActual('html-entities');
 	return {
-		Text: ({ children, decodeHtml }: React.PropsWithChildren<{ decodeHtml?: boolean }>) => (
-			<span>{decodeHtml && typeof children === 'string' ? decode(children) : children}</span>
+		Text: ({
+			children,
+			decodeHtml,
+			accessibilityLabel,
+		}: React.PropsWithChildren<{ decodeHtml?: boolean; accessibilityLabel?: string }>) => (
+			<span aria-label={accessibilityLabel}>
+				{decodeHtml && typeof children === 'string' ? decode(children) : children}
+			</span>
 		),
 	};
 });
@@ -105,5 +111,11 @@ describe('LineItemsSection', () => {
 		} finally {
 			mockPhone = false;
 		}
+	});
+
+	it('heads the qty column with the abbreviation, the full word as its label (#3652)', () => {
+		render(<LineItemsSection order={order} />);
+		expect(screen.getByLabelText('Quantity').textContent).toBe('Qty');
+		expect(screen.getByText('Item').getAttribute('aria-label')).toBeNull();
 	});
 });

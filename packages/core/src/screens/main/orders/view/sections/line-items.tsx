@@ -166,7 +166,9 @@ function HeadRow({ t, phone }: { t: ReturnType<typeof useT>; phone: boolean }) {
 	return (
 		<View className="border-border flex-row gap-3 border-b pb-2">
 			<View className="w-8">
-				<Text className={TABLE_HEAD_TEXT}>{t('pos_cart.col_qty')}</Text>
+				<Text className={TABLE_HEAD_TEXT} accessibilityLabel={t('pos_cart.quantity')}>
+					{t('pos_cart.qty_abbrev')}
+				</Text>
 			</View>
 			<View className="min-w-0 flex-1">
 				<Text className={TABLE_HEAD_TEXT}>{t('pos_cart.col_item')}</Text>
