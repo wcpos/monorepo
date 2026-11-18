@@ -143,6 +143,8 @@ export function PropertyRow(props: {
 	const controlIsValue = line && !!wide && value == null && !!props.control;
 	if (controlIsValue) value = props.control;
 	const control = controlIsValue ? null : props.control;
+	// A keyed line row whose trailing slot carries words: the value keeps 160, the words wrap under it.
+	const squeeze = line && words && keyed && !bare && !controlIsValue;
 	return (
 		<FormItem
 			nativeID={item}
@@ -184,43 +186,60 @@ export function PropertyRow(props: {
 				</View>
 			)}
 			{/* On a settings page every value is one 320 column, so the trailing slot is one column too. */}
-			{!bare && (
-				<View
-					className={cn(
-						'min-w-0',
-						!phone && 'flex-1',
-						!phone && wide && 'max-w-80',
-						controlIsValue && 'items-start',
-						!keyed && props.indent && 'pl-4'
-					)}
-				>
-					<TextClassContext.Provider
-						value={props.derived ? 'text-muted-foreground text-base' : 'text-foreground text-base'}
-					>
-						{props.compound ? (
-							<FormItemContext.Provider value={NO_ITEM}>{value}</FormItemContext.Provider>
-						) : (
-							value
+			<ValueLine squeeze={squeeze} top={props.align === 'top'}>
+				{!bare && (
+					<View
+						className={cn(
+							squeeze ? 'min-w-40' : 'min-w-0',
+							!phone && 'flex-1',
+							!phone && wide && 'max-w-80',
+							controlIsValue && 'items-start',
+							!keyed && props.indent && 'pl-4'
 						)}
-					</TextClassContext.Provider>
-				</View>
-			)}
-			{end || control || (!keyed && mark) ? (
-				<View
-					className={cn(
-						'shrink-0 flex-row items-center gap-2',
-						// A switch is narrow and sits on the key's line; words would lie over a long key on
-						// a phone, so there they wrap in flow under the value. A row with no key has no key
-						// line: its slot stays in flow too, never over the value (Codex P2, #3229).
-						words || !keyed ? 'flex-wrap' : !line && 'absolute top-1 right-0'
-					)}
-				>
-					{!keyed ? mark : null}
-					{end}
-					{control}
-				</View>
-			) : null}
+					>
+						<TextClassContext.Provider
+							value={
+								props.derived ? 'text-muted-foreground text-base' : 'text-foreground text-base'
+							}
+						>
+							{props.compound ? (
+								<FormItemContext.Provider value={NO_ITEM}>{value}</FormItemContext.Provider>
+							) : (
+								value
+							)}
+						</TextClassContext.Provider>
+					</View>
+				)}
+				{end || control || (!keyed && mark) ? (
+					<View
+						className={cn(
+							'shrink-0 flex-row items-center gap-2',
+							// A switch is narrow and sits on the key's line; words would lie over a long key on
+							// a phone, so there they wrap in flow under the value. A row with no key has no key
+							// line: its slot stays in flow too, never over the value (Codex P2, #3229).
+							words || !keyed ? 'flex-wrap' : !line && 'absolute top-1 right-0'
+						)}
+					>
+						{!keyed ? mark : null}
+						{end}
+						{control}
+					</View>
+				) : null}
+			</ValueLine>
 		</FormItem>
+	);
+}
+
+/**
+ * A squeezed line row's value and words share one wrapping line (ledger line 22): the value keeps
+ * 160 (`min-w-40`), the words keep the 12 gap after it and wrap under its left edge when both do not
+ * fit. Every other row renders its value and trailing slot as before, with no wrapper.
+ */
+function ValueLine(props: React.PropsWithChildren<{ squeeze: boolean; top: boolean }>) {
+	if (!props.squeeze) return <>{props.children}</>;
+	const align = props.top ? 'items-start' : 'items-center';
+	return (
+		<View className={cn('min-w-0 flex-1 flex-row flex-wrap gap-x-3', align)}>{props.children}</View>
 	);
 }
 
