@@ -117,9 +117,10 @@ function createRefundFormSchema(dp: number) {
 
 type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
-// One column map for the heads and the cells (F62). Each number column also takes a px floor (a
-// style over its class): its head's longest word or its widest value, plus px-3. When the product
-// minimum and the floors do not fit, the table scrolls sideways at their sum (ruling, 18 Nov).
+// One column map for the heads and the cells (F62). All five columns take a px floor (a style over
+// the class), plus px-3: a number column at its head's longest word or its widest value, the product
+// column at its head's longest word, its longest name word, or 20 units. When the floors do not
+// fit, the table scrolls sideways at their sum (ruling, 18 Nov).
 const REFUND_COLUMNS = {
 	product: 'min-w-0 flex-[3]',
 	price: 'min-w-17 flex-1',
@@ -366,15 +367,17 @@ export function RefundOrderForm({ order }: Props) {
 	});
 
 	// Floors computed, not measured (no hidden copy, no second layout), at this step's sizes and text
-	// scale: em per char, rounded up, 0.85 a tracked caption letter, 0.6 a figure. An amount is widest
-	// at the whole quantity; the keypad box is px-3, a 1px border and min-w-10.
+	// scale: em per char, rounded up, 0.85 a tracked caption letter, 0.65 a mixed-case name letter
+	// (capitals and m/w run wider than figures), 0.6 a figure. An amount is widest at the whole
+	// quantity; the keypad box is px-3, a 1px border and min-w-10.
 	const [, body, , , , , , caption] =
 		Object.values(SCALE_STEPS).find(([step]) => step === spacingUnit) ?? SCALE_STEPS.regular;
 	const em = Math.min(fontScale || 1, MAX_FONT_SCALE);
 	const span = (texts: string[], px: number) => Math.max(...texts.map((s) => s.length)) * px * em;
-	const floor = (head: string, values: string[], box = 0, min = 0) =>
+	const floor = (head: string, values: string[], box = 0, min = 0, perChar = 0.6) =>
 		6 * spacingUnit +
-		Math.max(span(head.split(' '), 0.85 * caption), span(values, 0.6 * body) + box, min);
+		Math.max(span(head.split(' '), 0.85 * caption), span(values, perChar * body) + box, min);
+	const nameWords = fields.flatMap((field) => field.name.split(/\s+/));
 	const qtys = fields.map((field) => (linesLocked ? '–' : String(field.remaining_quantity)));
 	const prices = fields.map((field) =>
 		formatRefundUnitPrice({ ...field, totalTax: field.total_tax, displayTax, dp })
@@ -386,6 +389,7 @@ export function RefundOrderForm({ order }: Props) {
 		)
 	);
 	const floors = {
+		product: floor(t('common.product'), nameWords, 0, PRODUCT_MIN_UNITS * spacingUnit, 0.65),
 		price: floor(t('common.price'), prices),
 		qty: floor(t('pos_cart.qty_abbrev'), qtys),
 		refundQty: floor(t('orders.refund_qty_short'), qtys, 6 * spacingUnit + 2, 10 * spacingUnit),
@@ -393,11 +397,11 @@ export function RefundOrderForm({ order }: Props) {
 	};
 	const column = (name: keyof typeof REFUND_COLUMNS, grows?: string) => ({
 		className: grows ? `${REFUND_COLUMNS[name]} ${grows}` : REFUND_COLUMNS[name],
-		style: name === 'product' ? undefined : { minWidth: floors[name] },
+		style: { minWidth: floors[name] },
 	});
 	// The header row grows with its heads (h-9 let wrapped heads spill over the rows).
 	const head = (name: keyof typeof REFUND_COLUMNS) => column(name, 'h-auto min-h-9 py-1');
-	const tableMin = Object.values(floors).reduce((a, b) => a + b, PRODUCT_MIN_UNITS * spacingUnit);
+	const tableMin = Object.values(floors).reduce((a, b) => a + b, 0);
 
 	const watchedLineItems = useWatch({
 		control: form.control,

@@ -4,7 +4,7 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useController } from 'react-hook-form';
 
 import {
@@ -557,13 +557,17 @@ describe('RefundOrderForm', () => {
 	describe('on a 390px phone', () => {
 		// The width the dialog body leaves the table at 390px.
 		const PHONE_TABLE_WIDTH = 350;
-		async function renderColumns(spacingUnit: number, width = PHONE_TABLE_WIDTH) {
+		async function renderColumns(
+			spacingUnit: number,
+			width = PHONE_TABLE_WIDTH,
+			name = 'Aim Analog Watch'
+		) {
 			mockSpacingUnit = spacingUnit;
 			mockGet.mockImplementation((url: string) => {
 				if (url === 'payment-gateways') return Promise.resolve({ data: [] });
 				return Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '1' } });
 			});
-			const lineItem = { id: 77, name: 'Aim Analog Watch', quantity: 2, total: '20.00', taxes: [] };
+			const lineItem = { id: 77, name, quantity: 2, total: '20.00', taxes: [] };
 			await act(async () => {
 				render(<RefundOrderForm order={{ ...order, line_items: [lineItem] }} />);
 			});
@@ -572,7 +576,7 @@ describe('RefundOrderForm', () => {
 			return {
 				heads: classes(screen.getAllByRole('columnheader')),
 				cells: classes(within(screen.getAllByRole('row')[1]).getAllByRole('cell')),
-				lines: screen.getByText('Aim Analog Watch').getAttribute('data-lines'),
+				lines: screen.getByText(name).getAttribute('data-lines'),
 			};
 		}
 
@@ -581,17 +585,14 @@ describe('RefundOrderForm', () => {
 
 		it('the floors do not fit: the table scrolls sideways and keeps every column’s floor', async () => {
 			const { lines } = await renderColumns(5);
-			const [product, ...floors] = floorsOf(screen.getAllByRole('columnheader'));
-			expect(product).toBe(0);
-			expect(floors).toHaveLength(4);
+			const floors = floorsOf(screen.getAllByRole('columnheader'));
+			expect(floors).toHaveLength(5);
 			floors.forEach((floor) => expect(floor).toBeGreaterThan(0));
-			const [, ...cellFloors] = floorsOf(
-				within(screen.getAllByRole('row')[1]).getAllByRole('cell')
-			);
+			const cellFloors = floorsOf(within(screen.getAllByRole('row')[1]).getAllByRole('cell'));
 			expect(cellFloors).toEqual(floors);
 
 			const scroll = screen.getByTestId('refund-table-scroll');
-			const sum = floors.reduce((total, floor) => total + floor, 20 * 5);
+			const sum = floors.reduce((total, floor) => total + floor, 0);
 			expect(sum).toBeGreaterThan(PHONE_TABLE_WIDTH);
 			expect(scroll).toHaveAttribute('data-horizontal', 'true');
 			expect(Number(scroll.getAttribute('data-content-width'))).toBe(sum);
@@ -602,10 +603,9 @@ describe('RefundOrderForm', () => {
 
 		it('the floors fit: no sideways scroll', async () => {
 			await renderColumns(3.5);
-			const sum = floorsOf(screen.getAllByRole('columnheader')).reduce(
-				(total, floor) => total + floor,
-				20 * 3.5
-			);
+			const floors = floorsOf(screen.getAllByRole('columnheader'));
+			floors.forEach((floor) => expect(floor).toBeGreaterThan(0));
+			const sum = floors.reduce((total, floor) => total + floor, 0);
 			expect(screen.getByTestId('refund-table-scroll')).toBeInTheDocument();
 
 			await act(async () => mockTableLayout?.({ nativeEvent: { layout: { width: sum } } }));
@@ -633,7 +633,22 @@ describe('RefundOrderForm', () => {
 			});
 		});
 
-		it('Compact: the floors fit and stay', async () => {
+		it('the product column is floored at its longest name word', async () => {
+			const productFloor = async (name: string) => {
+				await renderColumns(3.5, PHONE_TABLE_WIDTH, name);
+				const [head] = floorsOf(screen.getAllByRole('columnheader'));
+				const [cell] = floorsOf(within(screen.getAllByRole('row')[1]).getAllByRole('cell'));
+				expect(cell).toBe(head);
+				cleanup();
+				return head;
+			};
+			const long = await productFloor('Handgefertigte Keramik-Servierschale');
+			const short = await productFloor('Mug');
+			expect(long).toBeGreaterThan(20 * 3.5);
+			expect(long).toBeGreaterThan(short);
+		});
+
+		it('Compact: the columns keep their classes and the name keeps two lines', async () => {
 			const floored = [
 				'min-w-0 flex-[3]',
 				'min-w-17 flex-1',
