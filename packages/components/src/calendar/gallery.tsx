@@ -1,6 +1,8 @@
 import type * as React from 'react';
 
-import { Calendar } from './index';
+// The gallery renders the eager implementation: `index.tsx` lazy-loads it behind a null Suspense fallback, and a
+// shot that landed before the chunk resolved captured an empty 608×32 cell (#3635).
+import { Calendar } from './calendar-impl';
 
 const examples: ({ id: string } & React.ComponentProps<typeof Calendar>)[] = [
 	// A month that never holds today: the calendar marks today in the primary colour, and a
