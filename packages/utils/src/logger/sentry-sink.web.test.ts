@@ -64,7 +64,11 @@ describe('sentry-sink.web', () => {
 			integrations: expect.any(Function),
 			sampleRate: 1,
 			beforeSend: expect.any(Function),
+			beforeBreadcrumb: expect.any(Function),
 			ignoreErrors: [/ResizeObserver loop/],
+		});
+		expect(initOptions.beforeBreadcrumb?.({ message: 'jane@example.com' })).toEqual({
+			message: '[EMAIL]',
 		});
 		const configureIntegrations = initOptions.integrations;
 		expect(configureIntegrations).toEqual(expect.any(Function));

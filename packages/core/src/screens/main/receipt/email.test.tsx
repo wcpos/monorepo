@@ -193,6 +193,11 @@ describe('EmailForm', () => {
 		});
 		expect(queueRows).toHaveLength(0);
 		expect(mockLoggerSuccess).toHaveBeenCalled();
+		expect(mockLoggerSuccess).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ context: expect.objectContaining({ hasRecipient: true }) })
+		);
+		expect(JSON.stringify(mockLoggerSuccess.mock.calls)).not.toContain('customer@example.com');
 		// The merchant on 1.11.6 found the dialog still open after every Send.
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
@@ -231,8 +236,12 @@ describe('EmailForm', () => {
 		expect(queueRows).toHaveLength(0);
 		expect(mockLoggerError).toHaveBeenCalledWith(
 			'Failed to send receipt email',
-			expect.objectContaining({ showToast: true })
+			expect.objectContaining({
+				showToast: true,
+				context: expect.objectContaining({ hasRecipient: true }),
+			})
 		);
+		expect(JSON.stringify(mockLoggerError.mock.calls)).not.toContain('customer@example.com');
 		// A failure keeps the dialog open so the address can be corrected.
 		expect(mockCloseDialog).not.toHaveBeenCalled();
 	});

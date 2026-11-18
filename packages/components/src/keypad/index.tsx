@@ -30,6 +30,11 @@ export const DIGIT_ROWS: KeypadKey[][] = ['123', '456', '789'].map((row) =>
 	[...row].map((digit) => ({ name: digit, label: digit }))
 );
 
+/** A physical key's keypad name: a digit (top row or numeric keypad) is its own, else `names[key]`. */
+export function keypadKeyName(key: string, names: Record<string, string>): string | undefined {
+	return /^[0-9]$/.test(key) ? key : names[key];
+}
+
 /** The store's separator, 0, ⌫; with no separator (a currency without places) 0 spans its cell. */
 export function decimalRow(separator: string | undefined, backspace: string): KeypadKey[] {
 	return [
