@@ -558,6 +558,15 @@ describe('Receipt of an unpaid order', () => {
 		}
 	});
 
+	// Paul's decision 3A: a wrapped footer keeps Save to store at the trailing edge; only the receipt asks.
+	it("the receipt's footer asks for wrapToEnd", () => {
+		withPayload({ id: undefined, status: 'pos-open', total: '149.00', refunds: [] });
+		render(<Receipt resource={{} as never} />);
+		const footer = document.querySelector('[data-wrap-to-end="true"]');
+		expect(footer).not.toBeNull();
+		expect(footer?.querySelector('[data-testid="receipt-sync-order-button"]')).not.toBeNull();
+	});
+
 	it("a part-paid order's mark shows the balance still owed, not the total", () => {
 		const translations = jest.requireMock('../../../contexts/translations');
 		const { createTestT } = jest.requireActual('../../../../jest/translate');

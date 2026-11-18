@@ -160,6 +160,14 @@ it('a given primary takes the intent and Print leads the secondaries', () => {
 	]);
 });
 
+// Only the receipt opts in: a caller that names nothing (the Reports panel) aligns as on main.
+it('does not ask the footer for wrapToEnd unless told to', () => {
+	const view = render(<PrintSheetContent {...props()} />);
+	expect(document.querySelector('[data-wrap-to-end]')).toBeNull();
+	view.rerender(<PrintSheetContent {...props()} footerWrapToEnd />);
+	expect(document.querySelector('[data-wrap-to-end="true"]')).not.toBeNull();
+});
+
 // A single template and no printer still have visible values, never empty selectors.
 it('shows read-only property values when there are no choices', () => {
 	render(<PrintSheetContent {...props()} />);

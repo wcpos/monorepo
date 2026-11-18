@@ -100,6 +100,7 @@ function ReceiptDocument({
 				testID="receipt-dialog"
 				close={{ testID: 'receipt-close-button' }}
 				printTestID="receipt-print-button"
+				footerWrapToEnd
 			>
 				{dialog}
 			</PrintSheetContent>

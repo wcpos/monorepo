@@ -39,6 +39,8 @@ export type PrintSheetProps = {
 	aside?: DialogFooterProps['aside'];
 	fullWidth?: boolean;
 	footerTestID?: string;
+	/** The footer's `wrapToEnd`: a wrapped trailing row stays at the trailing edge (the receipt). */
+	footerWrapToEnd?: boolean;
 	/** Nested dialogs (the receipt's email sheet) render inside the content, never beside it. */
 	children?: React.ReactNode;
 	printTestID?: string;
@@ -71,6 +73,7 @@ export function PrintSheetInner({
 	aside,
 	fullWidth,
 	footerTestID,
+	footerWrapToEnd,
 	header,
 	close = true,
 	printTestID = 'print-sheet-print',
@@ -119,6 +122,7 @@ export function PrintSheetInner({
 					record={record}
 					secondary={primary ? [print, secondary].flat() : secondary}
 					intent={primary ?? print}
+					wrapToEnd={footerWrapToEnd}
 				/>
 			</DismissIsClose>
 			{children}
