@@ -66,8 +66,8 @@ const cartTableFeatures = tableFeatures({ columnVisibilityFeature });
 const INPUT_COLUMN = { head: 'w-18 flex-none px-2', cell: 'w-18 flex-none px-2' };
 const TEXT_COLUMN = { head: 'w-20 flex-none pr-3 pl-2', cell: 'min-w-20 flex-none pr-3 pl-2' };
 const AMOUNT_COLUMNS: Record<string, { head: string; cell: string } | undefined> = {
-	// "MENGE"/"AANTAL" fit: a left gutter only, Total's inner side, and 10.5 px from Item (#3652).
-	quantity: { head: 'w-17 flex-none pl-2 pr-0', cell: 'w-17 flex-none pl-2 pr-0' },
+	// The abbreviated head fits 42 px after a left gutter; Qty + Total equal main's, so Item keeps its width (#3652).
+	quantity: { head: 'w-14 flex-none pl-2 pr-0', cell: 'w-14 flex-none pl-2 pr-0' },
 	price: INPUT_COLUMN,
 	regular_price: INPUT_COLUMN,
 	subtotal: TEXT_COLUMN,
