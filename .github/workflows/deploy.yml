@@ -355,11 +355,16 @@ jobs:
   # 2026-08-12 to 2026-08-18: with 2+ PRs active it starved every merge gate
   # (#1265), because one holder kept the store for a whole run. Since
   # 2026-11-13 (desk ruling, after dev-pro hit pm.max_children=32 whenever two
-  # web runs overlapped) each shard queues per lane and shard index in its own
-  # concurrency group (`queue: max`), so runs pipeline shard by shard instead
-  # of holding the store whole. The Merge Gate poll was raised to ~150 min
-  # (merge-gate.yml, MERGE_GATE_MAX_ATTEMPTS) so a PR four runs deep waits
-  # instead of going red. Cross-run safety in the specs still applies:
+  # web runs overlapped) shards queue per lane in concurrency groups
+  # (`queue: max`), so runs pipeline shard by shard instead of holding the
+  # store whole. Since 2026-11-18 (desk ruling, after the 2026-11-17
+  # saturation: ~20 laps × 6 shards since 15:00Z, VPS load ~38 on 12 cores,
+  # production slowed) shards queue in 3 slots per lane, not 6: the pairs are
+  # 1+5, 2+4 and 3+6, balanced by measured length, so a pair takes turns.
+  # Peak is 3 shards × 2 workers = 6 browser sessions per store; a healthy
+  # lap goes from ~21–27 min to ~30–41 min. The Merge Gate poll was raised
+  # to ~240 min (merge-gate.yml, MERGE_GATE_MAX_ATTEMPTS) so a PR four runs
+  # deep waits instead of going red. Cross-run safety in the specs still applies:
   # run-private probe records (checkout-probe.ts / search-probe.ts random
   # tokens), relative count assertions (store-agnostic E2E policy in
   # CLAUDE.md), and Playwright CI retries absorb residual contention.
@@ -369,8 +374,8 @@ jobs:
   # queue in e2e-setup's `🚦 Queue for dev-next` step, shared with
   # e2e-native.yml (scripts/wait-devnext-free.mjs). Only dispatched and
   # scheduled runs reach dev-next — PRs to next skip this suite — so the
-  # queue cannot starve a merge gate. The main lane queues per shard through
-  # the e2e job's concurrency group instead.
+  # queue cannot starve a merge gate. The main lane queues in 3 store slots
+  # through the e2e job's concurrency group instead.
   # dev-next is the next lane's one store (owner ruling 2026-10-19: three dev
   # stores, no fourth). Six shards logging in at once saturated it on
   # 2026-09-30 (#2321); e2e-setup now does every login and sync serially (#2324).
@@ -403,10 +408,10 @@ jobs:
         # nothing. One shard cannot produce that. A quarantine-only run is one shard too.
         shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
         shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[6]') }}
-    # One web E2E run per dev store at a time: shards queue per lane and shard, never
-    # cancelled (desk ruling 2026-11-13). Why, and the exceptions: see the comment above `e2e:`.
+    # At most 3 web E2E shards per dev store: shards queue per lane in 3 slots (pairs 1+5, 2+4,
+    # 3+6), never cancelled (desk rulings 2026-11-13, 2026-11-18). Why: see the comment above `e2e:`.
     concurrency:
-      group: ${{ (github.event_name == 'schedule' || inputs.quarantine_only || needs.changes.outputs.lane == '') && format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) || format('e2e-store-{0}-shard-{1}', needs.changes.outputs.lane, matrix.shardIndex) }}
+      group: ${{ (github.event_name == 'schedule' || inputs.quarantine_only || needs.changes.outputs.lane == '') && format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) || format('e2e-store-{0}-slot-{1}', needs.changes.outputs.lane, fromJSON('[0,1,2,3,2,1,3]')[matrix.shardIndex]) }}
       cancel-in-progress: false
       queue: max
     steps:
