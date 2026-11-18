@@ -165,6 +165,7 @@ export function RegisterPanel({
 	// Money out of the drawer reads as a minus (U+2212), never as a colour: it is not destructive.
 	const minus = (amount: string | number) =>
 		Number(amount) ? `\u2212${format(Math.abs(Number(amount)))}` : format(0);
+	const signed = (amount: string) => (Number(amount) < 0 ? minus(amount) : format(Number(amount)));
 	const attempt = async (action: () => Promise<unknown>) => {
 		try {
 			await action();
@@ -216,6 +217,7 @@ export function RegisterPanel({
 	const sessionSales =
 		Number(terms?.cashSales.amount ?? 0) -
 		Number(terms?.cashRefunds.amount ?? 0) +
+		Number(terms?.cashCorrections ?? 0) +
 		others.reduce((sum, [, amount]) => sum + Number(amount), 0);
 	// One scope or no money: an older plugin's baseline carries `server_expected` without
 	// `server_terms`, so the cash terms are this device's while the other tenders are the
@@ -479,6 +481,13 @@ export function RegisterPanel({
 									<DerivationStep
 										label={countedLabel(t('register.cash_refunds'), terms.cashRefunds.count)}
 										trailing={trailing(minus(terms.cashRefunds.amount))}
+									/>
+								)}
+								{Number(terms.cashCorrections) !== 0 && (
+									<DerivationStep
+										testID="register-panel-corrections"
+										label={t('register.cash_corrections')}
+										trailing={trailing(signed(terms.cashCorrections))}
 									/>
 								)}
 								{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => {

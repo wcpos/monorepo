@@ -93,6 +93,7 @@ const baseTerms = {
 	paidIn: [] as { amount: string; note?: string }[],
 	paidOut: { amount: '7', count: 1, note: 'Milk' },
 	cashRefunds: { amount: '0', count: 0 },
+	cashCorrections: '0',
 	noSales: 0,
 	voids: 0,
 	expected: '155',
@@ -949,6 +950,19 @@ it('the drawer hero separates drawer money from the net sales line across every 
 		expected = previousExpected;
 		terms = previousTerms;
 	}
+});
+it('draws a Corrections step for a non-zero cash correction and none for zero', () => {
+	const { unmount } = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-panel-corrections')).toBeNull();
+	unmount();
+	terms = { ...baseTerms, cashCorrections: '-10' }; // beforeEach restores baseTerms
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	const step = screen.getByTestId('register-panel-corrections').textContent;
+	expect(step).toContain('register.cash_corrections');
+	expect(step).toContain('−£10.00');
+	expect(screen.getByTestId('register-panel-session-sales').textContent).toBe(
+		'register.session_sales £82.00 · register.sales_count 2'
+	);
 });
 it('a baseline without server terms (older plugin): Session sales is the count, no money', () => {
 	currentSession = {

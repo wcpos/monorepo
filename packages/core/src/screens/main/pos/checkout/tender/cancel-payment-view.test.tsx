@@ -137,3 +137,15 @@ it.each([
 	expect(confirm.hasAttribute('disabled')).toBe(true);
 	expect(screen.getByTestId('checkout-cancel-keep-going').hasAttribute('disabled')).toBe(true);
 });
+it('lists only R+ on a corrected ledger, as a refund', () => {
+	const tc = { status: 'captured', capture_mode: 'manual', entry: 'tender_correction' } as const;
+	const o = row('o', { status: 'captured', kind: 'cash', capture_mode: 'manual', amount: '20' });
+	const minus = row('rminus', { ...tc, kind: 'cash', amount: '-20', reverses: 'o' });
+	const plus = row('rplus', { ...tc, kind: 'card', amount: '20', corrects: 'o' });
+	const meta_data = [{ key: '_wcpos_payments', value: { schema: 1, payments: [o, minus, plus] } }];
+	const { retained } = partitionVoidableRows(meta_data as never);
+	render(<CancelPaymentView flow={flow([o, minus, plus], retained)} format={format} />);
+	expect(screen.getByTestId('checkout-cancel-leg-rplus').textContent).toContain('refund_on_method');
+	expect(screen.queryByTestId('checkout-cancel-leg-rminus')).toBeNull();
+	expect(screen.queryByTestId('checkout-cancel-leg-o')).toBeNull();
+});

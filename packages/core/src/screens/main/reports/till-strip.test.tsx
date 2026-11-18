@@ -89,6 +89,7 @@ const initialTerms = () => ({
 	paidIn: [] as { amount: string; note?: string }[],
 	paidOut: { amount: '150', count: 1, note: 'to bank' },
 	cashRefunds: { amount: '0', count: 0 },
+	cashCorrections: '0',
 	noSales: 0,
 	voids: 0,
 	expected: '293.70',
@@ -207,6 +208,15 @@ it('shows four desktop terms with the expected result kept beside equals', () =>
 	expect(screen.getByTestId('till-equation').parentElement).toBe(
 		screen.getByTestId('till-title').parentElement
 	);
+});
+it('draws a Corrections term only when the drawer has a correction', () => {
+	const { unmount } = render(<TillStrip />);
+	expect(screen.queryByTestId('till-term-corrections')).toBeNull();
+	unmount();
+	data.terms = { ...data.terms, cashCorrections: '-10' };
+	render(<TillStrip />);
+	expect(screen.getByTestId('till-term-corrections').textContent).toContain('£10.00');
+	expect(screen.getByTestId('till-term-corrections').parentElement?.textContent).toContain('−');
 });
 // Losing the busy/tablet branch leaves a wide equation squeezed beside the title.
 it.each(['lg', 'md'])('puts a busy equation on its own row on %s', (width) => {
