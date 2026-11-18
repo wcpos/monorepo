@@ -238,6 +238,27 @@ describe('PaymentSection change tender (#3647 test 10)', () => {
 		expect(screen.getByTestId('change-tender-sheet')).toBeTruthy();
 	});
 
+	it.each<[string, Record<string, unknown>]>([
+		['a partial refund that names no leg', { refunds: [{ id: 9, total: '-2.00' }] }],
+		['status refunded', { status: 'refunded' }],
+	])('E4: no leg offers Change tender on an order with %s', (_name, payload) => {
+		const refunded = {
+			uuid: 'one',
+			payload: { total: '7.73', status: 'completed', meta_data: [], ...payload },
+		};
+		render(<PaymentSection order={refunded as never} canChangeTender />);
+		expect(changeTender()).toBeNull();
+	});
+
+	it('E4: an order with no refunds still offers Change tender', () => {
+		const unrefunded = {
+			uuid: 'one',
+			payload: { total: '7.73', status: 'completed', meta_data: [], refunds: [] },
+		};
+		render(<PaymentSection order={unrefunded as never} canChangeTender />);
+		expect(changeTender()?.textContent).toBe('Change tender');
+	});
+
 	it('a corrected original reads Corrected with no action; R- is not a leg; R+ names its source', () => {
 		const minus = leg({
 			id: 'rminus',

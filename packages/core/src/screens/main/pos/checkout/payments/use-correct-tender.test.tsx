@@ -161,6 +161,19 @@ describe('useCorrectTender (test 8)', () => {
 		);
 	});
 
+	it('E4: a refunded refusal toasts its own reason, with no code summary or hint', async () => {
+		mockPost.mockRejectedValue(
+			refusal(422, 'wcpos_payment_not_correctable', { reason: 'refunded' })
+		);
+		const { result } = renderHook(() => useCorrectTender());
+		await act(async () => {
+			expect(await result.current(order(42), 'leg-1', cash)).toBe('refused');
+		});
+		const toast = toastOf(mockLog.warn.mock.calls[0]);
+		expect(toast.title).toBe("This order has a refund, so its payment method can't be changed.");
+		expect(toast.description).toBeUndefined();
+	});
+
 	it('E5: an unanswered post toasts the unconfirmed change, with no terminal wording', async () => {
 		mockPost.mockRejectedValue(new Error('Network Error'));
 		const { result } = renderHook(() => useCorrectTender());
@@ -205,6 +218,12 @@ describe('correctionFailureMessage (test 9)', () => {
 		const offIncrement = messages.at(-1)?.message ?? '';
 		expect(offIncrement).toContain('0.05');
 		expect(offIncrement).toContain('10.03');
+	});
+
+	it('E4: the refunded refusal says the order has a refund', () => {
+		expect(notCorrectable({ reason: 'refunded' }).message).toBe(
+			"This order has a refund, so its payment method can't be changed."
+		);
 	});
 
 	it('names the fiscal refusal, and falls back to the store message for an unknown reason', () => {

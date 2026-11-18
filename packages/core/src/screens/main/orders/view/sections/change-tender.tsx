@@ -41,7 +41,9 @@ export function useChangeTender(
 ) {
 	const t = useT();
 	const online = useOnlineStatus().status === 'online-website-available';
-	const live = useStoreCapability('tender_correction') && enabled && online;
+	const { refunds, status } = order.getLatest?.().payload ?? order.payload;
+	const anyRefund = status === 'refunded' || !!refunds?.length; // the store refuses `correct` then
+	const live = useStoreCapability('tender_correction') && enabled && online && !anyRefund;
 	const { methods } = usePaymentMethods();
 	const correct = useCorrectTender();
 	const [open, setOpen] = React.useState<PaymentRow | null>(null);

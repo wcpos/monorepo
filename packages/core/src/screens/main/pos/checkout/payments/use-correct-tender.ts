@@ -6,7 +6,6 @@ import { moneyCommandPoster, useQueryRuntime } from '@wcpos/query';
 import type { EngineRecord } from '@wcpos/query';
 import { isDefinitiveMoneyRefusal, moneyRefusalOf } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -104,10 +103,9 @@ export function useCorrectTender(): (
 				return 'done';
 			} catch (error) {
 				const { refused, message } = correctionFailureMessage(error, t);
-				// Unconfirmed carries no code: PAYMENT201's terminal hint would become the description.
+				// No code: its summary and action hint would replace these sentences in the toast.
 				logger.warn(message, {
-					code: refused ? ERROR_CODES.PAYMENT_RECORD_REFUSED : undefined,
-					toast: refused ? undefined : { title: t('orders.change_tender_unconfirmed') },
+					toast: { title: refused ? message : t('orders.change_tender_unconfirmed') },
 					showToast: true,
 					context: { ...context, error: getErrorMessage(error) },
 				});

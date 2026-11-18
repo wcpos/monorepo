@@ -988,7 +988,7 @@
 	"orders.change_tender_voidable": "This sale is still open. Cancel the payment and take it again instead.",
 	"orders.change_tender_is_reversal": "This entry reverses an earlier correction and can't be changed.",
 	"orders.change_tender_already_corrected": "This payment was already corrected. Change the corrected payment instead.",
-	"orders.change_tender_refunded": "Part of this payment was refunded, so its tender can't be changed.",
+	"orders.change_tender_refunded": "This order has a refund, so its payment method can't be changed.",
 	"orders.change_tender_provider_row": "Only payments recorded by hand can change tender.",
 	"orders.change_tender_method_invalid": "That method can't take a payment recorded by hand.",
 	"orders.change_tender_same_method": "This payment already uses that method.",
