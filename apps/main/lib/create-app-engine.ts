@@ -781,6 +781,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			const status = event.fields?.status;
 			if (status !== undefined && status >= 1 && status < 500) {
 				const durationMs = event.fields?.durationMs;
+				// Missing `at` or `durationMs` falls back to the response time, so the
+				// pulse is trusted. The only producer (engine-fetcher's response path)
+				// always sets both.
 				const startedAt =
 					typeof event.at === 'number' &&
 					Number.isFinite(event.at) &&

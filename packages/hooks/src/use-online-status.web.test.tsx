@@ -271,6 +271,50 @@ describe('OnlineStatusProvider web', () => {
 		expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
 	});
 
+	it('recovers through a re-probe when a probe straddles the drop and onLine stays false', async () => {
+		let resolveProbe!: (reachable: boolean) => void;
+		checkWebsiteReachabilityMock
+			.mockImplementationOnce(
+				() =>
+					new Promise<boolean>((resolve) => {
+						resolveProbe = resolve;
+					})
+			)
+			.mockResolvedValueOnce(true);
+		renderProvider('https://probe-straddle-recovery.example.com/wp-json/');
+		await flushAsyncWork();
+
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+		act(() => window.dispatchEvent(new Event('offline')));
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+
+		await act(async () => {
+			resolveProbe(true);
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+
+		expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+		expect(checkWebsiteReachabilityMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('trusts an older pulse once the browser reports online again', async () => {
+		const site = 'https://pulse-after-reconnect.example.com/wp-json/';
+		checkWebsiteReachabilityMock.mockResolvedValue(false);
+		renderProvider(site);
+		await flushAsyncWork();
+
+		const offlineAt = Date.now();
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+		act(() => window.dispatchEvent(new Event('offline')));
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true });
+		act(() => reportNetworkResponse(site, offlineAt + 200, offlineAt - 100));
+
+		expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+	});
+
 	it('probes instead of trusting a pulse timestamp from the future', async () => {
 		checkWebsiteReachabilityMock.mockResolvedValue(true);
 		renderProvider('https://rollback.example.com/wp-json/');
