@@ -19,6 +19,10 @@ jest.mock('react-native-reanimated', () => {
 		__esModule: true,
 		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: jest.fn() },
+		ReduceMotion: { System: 'system' },
+		useSharedValue: (value: unknown) => jest.requireActual('react').useRef({ value }).current,
+		useAnimatedStyle: () => ({}),
+		withTiming: (value: unknown) => value,
 	};
 	return new Proxy(mod, { get: (target, key) => target[key] ?? animation });
 });
