@@ -53,6 +53,8 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	// `visibilitychange` together and the queued checks run back-to-back, so two
 	// failures can land seconds apart. The verdict is elapsed failure instead.
 	const failingSinceRef = React.useRef<number | null>(null);
+	// When the browser last fired 'offline', or null if it never has.
+	const lastOfflineAtRef = React.useRef<number | null>(null);
 
 	/**
 	 * Perform a full connectivity check
@@ -74,9 +76,15 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 					setStatus('offline');
 				}
 
+				const offlineAtBeforeProbe = lastOfflineAtRef.current;
 				const isReachable = await checkWebsiteReachability(wpAPIURL);
 
-				if (isReachable) {
+				if (isReachable && lastOfflineAtRef.current !== offlineAtBeforeProbe) {
+					// The probe was sent before the link dropped, so its success is not
+					// evidence the link is up. Probe again: a newer success still recovers
+					// the Chromium stuck-onLine case.
+					checkRequestedRef.current = true;
+				} else if (isReachable) {
 					failingSinceRef.current = null;
 					setStatus('online-website-available');
 				} else if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -122,7 +130,13 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	 */
 	React.useEffect(
 		() =>
-			subscribeNetworkPulse(wpAPIURL, () => {
+			subscribeNetworkPulse(wpAPIURL, (startedAt) => {
+				// A reply to a request sent before the link dropped is not evidence the
+				// link is up. A request started after it still recovers the Chromium
+				// stuck-onLine case.
+				const offlineAt = lastOfflineAtRef.current;
+				const browserOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+				if (browserOffline && offlineAt !== null && startedAt <= offlineAt) return;
 				failingSinceRef.current = null;
 				setStatus('online-website-available');
 			}),
@@ -144,6 +158,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 		const handleOffline = () => {
 			// A dropped link is not evidence against the website.
 			failingSinceRef.current = null;
+			lastOfflineAtRef.current = Date.now();
 			setStatus('offline');
 		};
 

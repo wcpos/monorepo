@@ -323,7 +323,7 @@ export function useTenderFlow(
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const { confirm, dialog: confirmDialog, open: confirming } = useConfirm({ portalHost });
-	const { methods, byId } = usePaymentMethods();
+	const { methods, byId, defaultMethodId } = usePaymentMethods();
 	const titleOf = React.useCallback((id: string) => byId.get(id)?.title ?? id, [byId]);
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
@@ -365,7 +365,11 @@ export function useTenderFlow(
 		});
 		const first = initialTiles.find((tile) => !tile.disabled)?.method;
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
-		const methodId = stored?.id ?? first?.id ?? null;
+		// Stored wins; a disabled or absent store default falls back to the first available tile.
+		const preferred = initialTiles.find(
+			(tile) => !tile.disabled && tile.method.id === defaultMethodId
+		)?.method;
+		const methodId = stored?.id ?? preferred?.id ?? first?.id ?? null;
 		const initial = initTenderState({ methodId, balanceMinor });
 		// A stored plan is a split: `restoredPlan` turns its chip on (a no-op unless the store lost it).
 		const storedPlan = restoredPlan(order.uuid, balanceMinor);

@@ -639,6 +639,7 @@ it('defers initialization until a Stripe device descriptor exists and bootstraps
 			methods,
 			byId: new Map(methods.map((item) => [item.id, item])),
 			contract: 'test',
+			defaultMethodId: null,
 			loaded: true,
 			unsupportedSchema: false,
 		});

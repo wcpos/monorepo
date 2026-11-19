@@ -107,7 +107,14 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	DialogTitle: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	DialogBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	// Records its content container style, the one layout prop the checkout sets per body.
+	DialogBody: ({
+		children,
+		contentContainerStyle,
+	}: {
+		children?: React.ReactNode;
+		contentContainerStyle?: unknown;
+	}) => <div data-content-style={JSON.stringify(contentContainerStyle)}>{children}</div>,
 }));
 jest.mock('@wcpos/components/tabs', () => ({
 	Tabs: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -340,12 +347,42 @@ describe('TenderCheckout', () => {
 		expect(mockUseFinishSale).toHaveBeenCalledWith(order.uuid, 'modal');
 	});
 
+	it('bounds the dialog body to the dialog only for the tender pane', () => {
+		const bodyStyle = () =>
+			JSON.parse(
+				document.querySelector('[data-content-style]')!.getAttribute('data-content-style')!
+			);
+		const pane = render(<TenderCheckout order={order} />);
+		expect(bodyStyle()).toEqual({ height: '100%' });
+		pane.unmount();
+		for (const overrides of [
+			{ unansweredCommand: true },
+			{ hasLiveLeg: true, state: { ...initialTenderState, view: 'cancel' as const } },
+			{ state: { ...initialTenderState, tab: 'legacy' as const } },
+		]) {
+			mockFlow = makeFlow(overrides);
+			const other = render(<TenderCheckout order={order} />);
+			expect(bodyStyle()).toEqual({ flexGrow: 1 });
+			other.unmount();
+		}
+	});
+
 	it('shows the ledger pane beside the tenders on a wide screen', () => {
 		render(<TenderCheckout order={order} />);
 
 		expect(screen.getByTestId('checkout-server-order-id').textContent).toBe('1187');
 		expect(screen.getByTestId('checkout-order-total').textContent).toBe('$92.95');
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
+	});
+
+	// Codex r4616007943 on #3618: the pane is bounded to the dialog, so a tall ledger scrolls itself.
+	it('scrolls the ledger column on its own on a wide screen', () => {
+		render(<TenderCheckout order={order} />);
+
+		const ledger = screen.getByTestId('checkout-ledger-scroll');
+		expect(ledger.contains(screen.getByTestId('checkout-order-total'))).toBe(true);
+		// Pinned at its width: a ScrollView's base flexGrow would take half the tender pane's room.
+		expect([ledger.style.flexGrow, ledger.style.flexShrink]).toEqual(['0', '0']);
 	});
 
 	it('keeps an offline line paid mark after the server assigns a numeric ID', () => {
