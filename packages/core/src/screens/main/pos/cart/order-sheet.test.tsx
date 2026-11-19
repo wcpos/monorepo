@@ -137,11 +137,11 @@ it('closes through onBeforeVoid before the real void hook starts its flow', asyn
 	await waitFor(() => expect(mockDelete).toHaveBeenCalledTimes(1));
 	expect(mockSequence).toEqual(['close', 'guard', 'void']);
 });
-it('renders Sync order on the existing save-to-server-button', async () => {
+it('renders Save to store on the existing save-to-server-button', async () => {
 	renderSheet();
 	expect(screen.getByTestId('order-print-button')).toBeTruthy();
 	const save = screen.getByTestId('save-to-server-button');
-	expect(save.textContent).toBe('Sync order');
+	expect(save.textContent).toBe('Save to store');
 	fireEvent.click(save);
 	await waitFor(() => expect(mockPush).toHaveBeenCalledWith(mockOrder));
 });
@@ -159,6 +159,12 @@ jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ testID, onPress }: { testID: string; onPress: () => void }) => (
 		<button data-testid={testID} onClick={onPress} />
 	),
+}));
+// The foot's ⋮ tooltip reaches the safe-area native module; pass it through.
+jest.mock('@wcpos/components/tooltip', () => ({
+	Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 // The cart root's wiring, as `pos/cart/index.tsx` does it: the foot asks, the root pins the
 // sheet to the order it opened for.

@@ -1714,13 +1714,13 @@ test('the shared-store queue stays removed', () => {
 	assert.doesNotMatch(gate.steps[0].run, /QUEUE_RESULT/);
 
 	// Queued runs pipeline shard by shard instead of holding the store whole,
-	// so the merge gate must out-wait the runs ahead of it: 300 × 30s ≈ 150 min,
+	// so the merge gate must out-wait the runs ahead of it: 480 × 30s = 240 min,
 	// sized for four queued runs. A gate must wait, not go red and need a rerun.
 	const mergeGate = readWorkflow('merge-gate.yml');
 	const gateStep = mergeGate.jobs['merge-gate'].steps.find(
 		({ name }) => name === 'Evaluate merge policy'
 	);
-	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '300');
+	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '480');
 });
 
 test('main-lane web E2E shards queue across runs per dev store', () => {
@@ -1729,12 +1729,34 @@ test('main-lane web E2E shards queue across runs per dev store', () => {
 	assert.equal(concurrency['cancel-in-progress'], false);
 	assert.ok(
 		concurrency.group.includes(
-			"format('e2e-store-{0}-shard-{1}', needs.changes.outputs.lane, matrix.shardIndex)"
+			"format('e2e-store-{0}-slot-{1}', needs.changes.outputs.lane, fromJSON('[0,1,2,3,2,1,3]')[matrix.shardIndex])"
 		)
 	);
 	assert.match(concurrency.group, /github\.event_name == 'schedule'/);
 	assert.match(concurrency.group, /inputs\.quarantine_only/);
 	assert.match(concurrency.group, /needs\.changes\.outputs\.lane == ''/);
+});
+
+test('main-lane web E2E shards queue in three store slots, paired 1+5, 2+4, 3+6', () => {
+	// Desk ruling 2026-11-18: at most 3 shards per dev store across all runs.
+	// The slot comes from an index into a literal array, never a matrix
+	// `include`, which would add stray jobs to a one-shard narrowed run.
+	const { concurrency, strategy } = readWorkflow('deploy.yml').jobs.e2e;
+	assert.ok(concurrency.group.includes('e2e-store-{0}-slot-{1}'));
+	assert.ok(!concurrency.group.includes('e2e-store-{0}-shard-{1}'));
+	const slotsLiteral = concurrency.group.match(/fromJSON\('(\[[^']*\])'\)\[matrix\.shardIndex\]/);
+	assert.ok(slotsLiteral, 'the slot index into a literal array is gone');
+	const slots = JSON.parse(slotsLiteral[1]);
+	const slotOf = Object.fromEntries([1, 2, 3, 4, 5, 6].map((shard) => [shard, slots[shard]]));
+	assert.deepEqual(slotOf, { 1: 1, 5: 1, 2: 2, 4: 2, 3: 3, 6: 3 });
+	assert.ok(!('include' in strategy.matrix), 'a matrix include adds stray jobs to narrowed runs');
+	assert.equal(concurrency['cancel-in-progress'], false);
+	assert.equal(concurrency.queue, 'max');
+
+	const gateStep = readWorkflow('merge-gate.yml').jobs['merge-gate'].steps.find(
+		({ name }) => name === 'Evaluate merge policy'
+	);
+	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '480');
 });
 
 test('main web E2E tests its own production deploy, never the alias', () => {

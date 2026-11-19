@@ -46,7 +46,13 @@ export function AddFee() {
 	 */
 	const form = useForm<FormValues, unknown, FormValues>({
 		resolver: zodResolver(
-			formSchema.extend({ amount: feeAmountSchema(t('pos_cart.fee_amount_negative')) }) as never
+			formSchema.extend({
+				// A blank or zero fee adds nothing to the order, so Add refuses it (climb F28).
+				amount: feeAmountSchema(t('pos_cart.fee_amount_negative')).refine(
+					(value) => Number(value ?? 0) !== 0,
+					{ message: t('pos_cart.discount_amount_invalid') }
+				),
+			}) as never
 		) as never,
 		defaultValues: {
 			name: '',
@@ -88,7 +94,7 @@ export function AddFee() {
 	return (
 		<Form {...form}>
 			<DialogBody contentContainerClassName="gap-4">
-				<FormErrors />
+				<FormErrors labels={{ amount: t('pos_cart.amount') }} />
 				<PropertyList prefix="fee">
 					<PropertyRow label={t('pos_cart.fee_name')} id="name">
 						<FormField

@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import {
+	type KeyDownEvent,
+	Platform,
+	ScrollView,
+	type ScrollViewInstance,
+	View,
+} from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { decode } from 'html-entities';
@@ -8,7 +14,7 @@ import { useCSSVariable } from 'uniwind';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Chip } from '@wcpos/components/chip';
 import { DocsLink } from '@wcpos/components/docs-link';
-import { DIGIT_ROWS, Keypad, type KeypadKey } from '@wcpos/components/keypad';
+import { DIGIT_ROWS, Keypad, type KeypadKey, keypadKeyName } from '@wcpos/components/keypad';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -179,6 +185,14 @@ const keypadRows = (backspace: string): KeypadKey[][] => [
 	],
 ];
 
+/** Web: the physical keys beyond the digits; `Clear` is the macOS numeric keypad's C. Never Enter. */
+const PHYSICAL_KEYS: Record<string, TenderKey> = { Backspace: 'backspace', Clear: 'clear' };
+const isWeb = Platform.OS === 'web';
+/** A field keeps its own typing and Backspace. */
+const editable = (node: unknown) =>
+	node instanceof Element &&
+	!!node.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+
 /**
  * Digits shift in from the right, till-style: the entry is pre-filled with the
  * balance and the first keypress starts a fresh number. There is no decimal key
@@ -189,14 +203,26 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const KEYPAD_ROWS = keypadRows(t('common.backspace'));
 	const phone = useIsPhone();
 	const busy = flow.busy || saving;
+	const pane = React.useRef<ScrollViewInstance>(null);
+	// Focus is the browser's, outside React: the pane takes the keys as the stage opens, so typing
+	// works at once, unless a field in it already has focus. Mount only.
+	React.useEffect(() => {
+		if (!isWeb) return;
+		const node = pane.current as unknown as HTMLElement | null;
+		const held = document.activeElement;
+		if (node && !(node.contains(held) && editable(held))) node.focus({ preventScroll: true });
+	}, []);
 	const tile = useCSSVariable('--spacing-tile');
 	const ctl = useCSSVariable('--spacing-ctl');
 	const scale = Object.values(SCALE_STEPS).find((step) => step[4] === parseFloat(String(tile)));
 	const [paneHeight, setPaneHeight] = React.useState(0);
-	const [headHeight, setHeadHeight] = React.useState(0);
-	const [footHeight, setFootHeight] = React.useState(0);
+	const [contentSize, setContentSize] = React.useState(0);
+	const [keypadSize, setKeypadSize] = React.useState(0);
+	// The head is two sizes, not the keypad's y: a browser reports layout only on resize, and rows added above move the keypad without resizing it.
+	const headHeight = contentSize > 0 && keypadSize > 0 ? contentSize - keypadSize : 0;
 	const gap = scale ? scale[0] * 2 : 0;
-	const fixedHeight = headHeight + footHeight + gap * KEYPAD_ROWS.length;
+	// The commit bar sits outside the scroll, so the measured scroll height already excludes it.
+	const fixedHeight = headHeight + gap * (KEYPAD_ROWS.length - 1);
 	const shrink =
 		!!scale && paneHeight > 0 && paneHeight < fixedHeight + KEYPAD_ROWS.length * scale[4];
 	const contentHeight = shrink
@@ -334,6 +360,17 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		missing || noChange || figures.entryChangeMinor > 0 ? hint : splitHint || hint || rounding;
 	// While the taken payments are unfolded, their list has the keypad's place and no helpers.
 	const showDone = doneOpen && counted.length >= 1;
+	// Web: the physical keyboard presses the on-screen keys, from anywhere in the pane, only while
+	// they are drawn and live; a shortcut (Cmd, Ctrl, Alt) stays the browser's.
+	const onKeyDown = (event: KeyDownEvent) => {
+		const { key, metaKey, ctrlKey, altKey } = event.nativeEvent;
+		if (showDone || pickList || busy || fixedAmount || metaKey || ctrlKey || altKey) return;
+		if (editable(event.target)) return;
+		const name = keypadKeyName(key, PHYSICAL_KEYS);
+		if (!name) return;
+		event.preventDefault();
+		flow.commands.dispatch({ type: 'key', key: name as TenderKey });
+	};
 	const legs: (PlanLeg & { index: number; run: number })[] = [];
 	(plan
 		? [...flow.rows.slice(0, plan.from).filter(countsTowardPaid).map(doneLeg), ...figures.legs]
@@ -373,13 +410,16 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 						: '')
 		: t('pos_checkout.choose_how_paying');
 
-	return (
+	const scroll = (
 		<ScrollView
+			ref={pane}
 			testID="checkout-keypad-pane"
-			className="bg-card flex-1"
+			className="web:outline-none flex-1"
+			tabIndex={isWeb ? -1 : undefined}
 			// A declared field leaves the keyboard open: the first tap on Send must reach it.
 			keyboardShouldPersistTaps="handled"
 			onLayout={(event) => setPaneHeight(event.nativeEvent.layout.height)}
+			onContentSizeChange={(_width, height) => setContentSize(height)}
 			contentContainerClassName="items-center gap-2"
 			// `minHeight`, never `height`: a native ScrollView scrolls only to its content container's
 			// own height, not to children overflowing it (a browser counts overflow, Yoga does not), so
@@ -388,7 +428,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 			showsVerticalScrollIndicator={false}
 		>
 			<HStack className="flex-wrap items-center justify-center gap-2">
-				<Text testID="checkout-label" decodeHtml variant="caption">
+				<Text testID="checkout-label" decodeHtml variant="key" className="text-foreground">
 					{shared
 						? t('pos_checkout.shared_payment_n_of', { n, ways })
 						: plan
@@ -451,12 +491,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 				</>
 			) : (
 				<>
-					<AmountFigure
-						testID="checkout-entry"
-						className={flow.state.entryDirty ? '' : 'opacity-70'}
-					>
-						{format(shownMinor)}
-					</AmountFigure>
+					<AmountFigure testID="checkout-entry">{format(shownMinor)}</AmountFigure>
 					<Text
 						testID="checkout-entry-hint"
 						variant="key"
@@ -524,44 +559,51 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							</Button>
 						</View>
 					) : counted.length >= 1 ? (
-						<PressableSurface
+						<Button
+							variant="ghost"
+							size="sm"
+							className="flex-row gap-1"
 							testID="checkout-plan-done"
-							role="button"
 							disabled={busy}
 							onPress={() => flow.commands.dispatch({ type: 'toggle-done' })}
-							className="bg-success/20 border-success/30 min-h-ctl flex-row items-center gap-1 rounded-full border px-3"
 						>
 							<Icon name="check" size="xs" className="text-success" />
-							<Text className="text-foreground text-xs" decodeHtml>
+							<ButtonText decodeHtml>
 								{counted.length === 1
 									? `${(done[0] ?? doneLeg(counted[0])).title} ${format(toMinor(counted[0].amount, flow.dp))}`
 									: t('pos_checkout.n_paid_amount', {
 											n: counted.length,
 											amount: format(flow.paidMinor),
 										})}
-							</Text>
+							</ButtonText>
 							<Icon name="chevronDown" size="xs" className="text-muted-foreground" />
-						</PressableSurface>
+						</Button>
 					) : null}
-					{legs.map((leg) => (
-						<View
-							key={leg.index}
-							testID={`checkout-plan-leg-${leg.index}`}
-							className={`min-h-ctl flex-row items-center gap-1 rounded-full border px-3 ${leg.state === 'done' ? 'bg-success/20 border-success/30' : leg.state === 'now' ? 'border-primary' : 'border-border opacity-60'} ${leg.state === 'rest' ? 'border-dashed' : ''}`}
-						>
-							{leg.state === 'done' ? (
-								<Icon name="check" size="xs" className="text-success" />
+					{legs.map((leg, index) => (
+						<React.Fragment key={leg.index}>
+							{index > 0 || (!showDone && counted.length >= 1) ? (
+								<Text variant="key" className="text-foreground" aria-hidden>
+									·
+								</Text>
 							) : null}
-							{/* Words stay in the foreground on every leg: green text on the done leg's
-							    green wash reads under 4.5:1; the wash and the check carry the state. */}
-							<Text className="text-foreground text-xs" decodeHtml>
-								{leg.state === 'rest'
-									? t('pos_checkout.then_amount', { amount: format(leg.minor) })
-									: leg.run > 1
-										? t('pos_checkout.then_n_times', { n: leg.run, amount: format(leg.minor) })
-										: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
-							</Text>
-						</View>
+							<View
+								key={leg.index}
+								testID={`checkout-plan-leg-${leg.index}`}
+								className="flex-row items-center gap-1"
+							>
+								{leg.state === 'done' ? (
+									<Icon name="check" size="xs" className="text-success" />
+								) : null}
+								{/* Status, not a control: plain text; the check marks a done leg. */}
+								<Text variant="key" className="text-foreground" decodeHtml>
+									{leg.state === 'rest'
+										? t('pos_checkout.then_amount', { amount: format(leg.minor) })
+										: leg.run > 1
+											? t('pos_checkout.then_n_times', { n: leg.run, amount: format(leg.minor) })
+											: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
+								</Text>
+							</View>
+						</React.Fragment>
 					))}
 					{plan ? (
 						<Button
@@ -899,7 +941,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							label={format(minor)}
 							testID={`checkout-quick-${fromMinor(minor, flow.dp)}`}
 							disabled={busy}
-							onPress={() => flow.commands.dispatch({ type: 'set-entry', minor })}
+							onPress={() => flow.commands.dispatch({ type: 'quick-tender', minor })}
 						/>
 					))}
 					{method && !fixedAmount && !percent ? (
@@ -913,7 +955,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 							}
 							testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
 							disabled={busy}
-							onPress={() => flow.commands.dispatch({ type: 'set-entry', minor: exactMinor })}
+							onPress={() =>
+								flow.commands.dispatch({ type: 'set-entry', minor: figures.exactEntryMinor })
+							}
 						/>
 					) : null}
 				</View>
@@ -994,12 +1038,18 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					onPress={(name) => flow.commands.dispatch({ type: 'key', key: name as TenderKey })}
 					fit={shrink ? 'shrink' : 'tile'}
 					testID="checkout-keypad"
-					onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
+					onLayout={(event) => setKeypadSize(event.nativeEvent.layout.height)}
 					className="w-full"
 				/>
 			)}
+		</ScrollView>
+	);
+
+	return (
+		<View className="bg-card flex-1 gap-2" onKeyDown={isWeb ? onKeyDown : undefined}>
+			{scroll}
 			{/* On a phone the full-size dialog keeps this 8 above the bottom inset: the shell's `fill` pads the inset and the panel keeps `py-2` (`lib/overlay`, `dialog/index.tsx`). */}
-			<View className="w-full" onLayout={(event) => setFootHeight(event.nativeEvent.layout.height)}>
+			<View className="w-full">
 				<Button
 					variant="default"
 					size="lg"
@@ -1023,7 +1073,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 					</ButtonText>
 				</Button>
 			</View>
-		</ScrollView>
+		</View>
 	);
 }
 
