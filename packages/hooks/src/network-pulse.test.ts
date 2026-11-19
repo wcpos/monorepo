@@ -26,6 +26,20 @@ describe('network pulse', () => {
 		expect(subscriber).toHaveBeenCalledTimes(1);
 	});
 
+	it('passes subscribers the request start, or the response time when none is given', () => {
+		const subscriber = jest.fn();
+		const unsubscribe = subscribeNetworkPulse('https://started.example.test/wp-json/', subscriber);
+
+		reportNetworkResponse('https://started.example.test/wp-json/', 2000, 1500);
+		expect(subscriber).toHaveBeenLastCalledWith(1500);
+		expect(lastNetworkResponseAt('https://started.example.test/wp-json/')).toBe(2000);
+
+		reportNetworkResponse('https://started.example.test/wp-json/', 3000);
+		expect(subscriber).toHaveBeenLastCalledWith(3000);
+
+		unsubscribe();
+	});
+
 	it('canonicalizes adversarial slash runs without excessive backtracking', () => {
 		const site = `https://example.test/${'/'.repeat(50000)}x`;
 		const startedAt = performance.now();

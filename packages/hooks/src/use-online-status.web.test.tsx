@@ -210,6 +210,67 @@ describe('OnlineStatusProvider web', () => {
 		expect(screen.getByTestId('online-status').textContent).toBe('offline');
 	});
 
+	it('drops a probe success when the browser went offline during the probe', async () => {
+		let resolveProbe!: (reachable: boolean) => void;
+		checkWebsiteReachabilityMock
+			.mockImplementationOnce(
+				() =>
+					new Promise<boolean>((resolve) => {
+						resolveProbe = resolve;
+					})
+			)
+			.mockResolvedValueOnce(false);
+		renderProvider('https://probe-straddle.example.com/wp-json/');
+		await flushAsyncWork();
+
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+		act(() => window.dispatchEvent(new Event('offline')));
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+		const statusesAtOffline = renderedStatuses.length;
+
+		await act(async () => {
+			resolveProbe(true);
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+		expect(renderedStatuses.slice(statusesAtOffline)).not.toContain('online-website-available');
+		expect(checkWebsiteReachabilityMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('ignores a pulse whose request started before the browser went offline', async () => {
+		const site = 'https://pulse-before-drop.example.com/wp-json/';
+		checkWebsiteReachabilityMock.mockResolvedValue(false);
+		renderProvider(site);
+		await flushAsyncWork();
+
+		const offlineAt = Date.now();
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+		act(() => window.dispatchEvent(new Event('offline')));
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+
+		act(() => reportNetworkResponse(site, offlineAt + 200, offlineAt - 100));
+
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+	});
+
+	it('trusts a pulse whose request started after the browser went offline (stuck onLine)', async () => {
+		const site = 'https://pulse-after-drop.example.com/wp-json/';
+		checkWebsiteReachabilityMock.mockResolvedValue(false);
+		renderProvider(site);
+		await flushAsyncWork();
+
+		const offlineAt = Date.now();
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+		act(() => window.dispatchEvent(new Event('offline')));
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+
+		act(() => reportNetworkResponse(site, offlineAt + 500, offlineAt + 100));
+
+		expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+	});
+
 	it('probes instead of trusting a pulse timestamp from the future', async () => {
 		checkWebsiteReachabilityMock.mockResolvedValue(true);
 		renderProvider('https://rollback.example.com/wp-json/');
