@@ -9,6 +9,8 @@ const mockAddProduct = jest.fn();
 const mockAddVariation = jest.fn();
 const mockReadCounting = jest.fn(async () => false);
 const mockShowCountingNotice = jest.fn();
+const mockReadPriceCheck = jest.fn(async () => false);
+const mockShowPriceCheckNotice = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockEngineActive = jest.fn();
 const mockEngineStatus = jest.fn();
@@ -116,10 +118,14 @@ jest.mock('../../hooks/barcodes', () => ({
 jest.mock('../hooks/use-add-product', () => ({
 	useAddProduct: () => ({ addProduct: mockAddProduct }),
 	showCountingNotice: (...args: unknown[]) => mockShowCountingNotice(...args),
+	showPriceCheckNotice: (...args: unknown[]) => mockShowPriceCheckNotice(...args),
 }));
 
 jest.mock('../hooks/use-action-context', () => ({
-	useActionContext: () => ({ readCounting: () => mockReadCounting() }),
+	useActionContext: () => ({
+		readCounting: () => mockReadCounting(),
+		readPriceCheck: () => mockReadPriceCheck(),
+	}),
 }));
 
 jest.mock('../hooks/use-add-variation', () => ({
@@ -344,6 +350,8 @@ describe('useBarcode online escalation', () => {
 		mockAddVariation.mockResolvedValue(true);
 		mockReadCounting.mockReset().mockResolvedValue(false);
 		mockShowCountingNotice.mockReset();
+		mockReadPriceCheck.mockReset().mockResolvedValue(false);
+		mockShowPriceCheckNotice.mockReset();
 	});
 
 	it('refuses a scan while the drawer is counted, with the notice and no "not found"', async () => {
@@ -365,6 +373,27 @@ describe('useBarcode online escalation', () => {
 		await act(async () => scan());
 		expect(mockAddProduct).toHaveBeenCalledTimes(1);
 		expect(mockShowCountingNotice).toHaveBeenCalledTimes(2);
+	});
+
+	it('refuses a scan while the register is closed, with the price-check notice and no lookup', async () => {
+		engineProducts.push(productDocument());
+		mockReadPriceCheck.mockResolvedValue(true);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockShowPriceCheckNotice).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).not.toHaveBeenCalled();
+		expect(mockSetSearch).not.toHaveBeenCalled();
+		// An unknown code while closed is refused the same way, not looked up.
+		await act(async () => scan('UNKNOWN'));
+		expect(mockFetcher).not.toHaveBeenCalled();
+		expect(mockToastShow).not.toHaveBeenCalled();
+
+		mockReadPriceCheck.mockResolvedValue(false);
+		await act(async () => scan());
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockShowPriceCheckNotice).toHaveBeenCalledTimes(2);
 	});
 
 	it.each([
