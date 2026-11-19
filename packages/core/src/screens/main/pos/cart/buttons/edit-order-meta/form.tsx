@@ -111,6 +111,7 @@ export function EditOrderMetaForm({
 	formData,
 	handOverData,
 	flushRef,
+	onUnsentChange,
 }: {
 	order: CurrentOrderRecord;
 	formData: FormValues;
@@ -120,6 +121,8 @@ export function EditOrderMetaForm({
 	 * (the sheet's Sync order) carries the edit the cashier just made, not the one before.
 	 */
 	flushRef?: React.RefObject<(() => Promise<boolean>) | null>;
+	/** Whether the hand-over has a change not yet sent; the sheet's footer gives up its primary while it does. */
+	onUnsentChange?: (unsent: boolean) => void;
 }) {
 	const t = useT();
 	const { writeOrderFields } = useOrderFieldsWrite();
@@ -253,6 +256,12 @@ export function EditOrderMetaForm({
 		},
 	];
 	const changes = staged.filter((change) => change.from !== change.to);
+	const unsent = changes.length > 0;
+	React.useEffect(() => {
+		if (!onUnsentChange) return;
+		onUnsentChange(unsent);
+		return () => onUnsentChange(false);
+	}, [unsent, onUnsentChange]);
 	const changed = (field: HandOverField) => changes.some((change) => change.field === field);
 	const tone = (field: HandOverField) => (changed(field) ? ('attention' as const) : undefined);
 	const leaves = leavesCart({
@@ -551,9 +560,9 @@ export function EditOrderMetaForm({
 									</Text>
 									<ChangeRows changes={changes} />
 								</View>
-								{/* An intent keeps its verb button (property rows rule 12). */}
+								{/* An intent keeps its verb button (property rows rule 12); a pending hand-over makes it the sheet's one primary (decision 6A). */}
 								<Button
-									variant="outline"
+									variant={unsent ? 'default' : 'outline'}
 									testID="order-meta-send"
 									disabled={loading || changes.length === 0 || blocked}
 									onPress={() => void onSend()}
