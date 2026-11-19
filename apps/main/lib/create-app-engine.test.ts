@@ -420,11 +420,13 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(reportNetworkResponse).toHaveBeenNthCalledWith(
 			1,
 			'https://store.example.test/wp-json/',
+			1234,
 			1234
 		);
 		expect(reportNetworkResponse).toHaveBeenNthCalledWith(
 			2,
 			'https://store.example.test/wp-json/',
+			1234,
 			1234
 		);
 		now.mockRestore();
@@ -455,7 +457,11 @@ describe('createAppSyncEngine scope cache', () => {
 			'network down'
 		);
 
-		expect(reportNetworkResponse).toHaveBeenCalledWith('https://store.example.test/wp-json/', 200);
+		expect(reportNetworkResponse).toHaveBeenCalledWith(
+			'https://store.example.test/wp-json/',
+			200,
+			100
+		);
 		now.mockRestore();
 		fetch.mockRestore();
 	});

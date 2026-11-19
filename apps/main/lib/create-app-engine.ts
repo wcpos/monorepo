@@ -780,7 +780,18 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		if (event.type === 'transport.request') {
 			const status = event.fields?.status;
 			if (status !== undefined && status >= 1 && status < 500) {
-				reportNetworkResponse(site.wpJsonRoot, event.at);
+				const durationMs = event.fields?.durationMs;
+				// Missing `at` or `durationMs` falls back to the response time, so the
+				// pulse is trusted. The only producer (engine-fetcher's response path)
+				// always sets both.
+				const startedAt =
+					typeof event.at === 'number' &&
+					Number.isFinite(event.at) &&
+					typeof durationMs === 'number' &&
+					Number.isFinite(durationMs)
+						? event.at - durationMs
+						: undefined;
+				reportNetworkResponse(site.wpJsonRoot, event.at, startedAt);
 			}
 		}
 		try {
