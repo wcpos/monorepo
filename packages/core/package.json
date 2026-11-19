@@ -144,7 +144,7 @@
 		"@types/react": "^19.3.0",
 		"expo-router": "~58.0.30",
 		"jest": "^30.5.2",
-		"mingo": "7.2.4",
+		"mingo": "7.2.7",
 		"react-native": "0.88.1",
 		"react-native-device-info": "^15.0.2",
 		"react-native-gesture-handler": "~3.3.0",
