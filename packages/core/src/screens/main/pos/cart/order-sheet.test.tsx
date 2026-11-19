@@ -102,6 +102,7 @@ jest.mock('@wcpos/query/register-session', () => ({
 	getCurrentBoundRegisterId: () => undefined,
 }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({}));
+jest.mock('../checkout/payments/use-gateway-payment', () => ({ useGatewayPayment: () => ({}) }));
 jest.mock('../../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ storageDegraded: false, blockIfDegraded: mockGuard }),
 }));

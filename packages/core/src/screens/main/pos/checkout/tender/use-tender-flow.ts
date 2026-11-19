@@ -443,7 +443,10 @@ export function useTenderFlow(
 	);
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
 	const readersInUse = service?.readersInUse();
-	const tiles = buildTenderTiles(methods, {
+	// The shared rule (order-math): a stamp beside held money is stale. A zero balance has nothing to send.
+	const stamp = React.useMemo(() => activeAwaitingCustomer(payload.meta_data), [payload.meta_data]);
+	const invoiceSent = stamp && balanceMinor > 0 ? stamp : null;
+	const allTiles = buildTenderTiles(methods, {
 		online: reachable,
 		readersInUse,
 		currentOrderUuid: order.uuid,
@@ -452,9 +455,11 @@ export function useTenderFlow(
 		hasLiveLeg: liveRows.length > 0,
 		hasServerId: !!payload.id,
 	});
-	// The shared rule (order-math): a stamp beside held money is stale. A zero balance has nothing to send.
-	const stamp = React.useMemo(() => activeAwaitingCustomer(payload.meta_data), [payload.meta_data]);
-	const invoiceSent = stamp && balanceMinor > 0 ? stamp : null;
+	// A sent invoice offers exactly Send again (its own method, a new attempt) and Cancel invoice:
+	// no other tile, so no fresh send and no payment taken around the invoice the customer holds.
+	const tiles = invoiceSent
+		? allTiles.filter(({ method: tile }) => tile.id === invoiceSent.method_id)
+		: allTiles;
 	// Who may clear: never beside an awaiting invoice (the store refuses that cancel). The title
 	// names a gateway the till no longer offers as a tile.
 	const unansweredAttempt = React.useMemo(() => {

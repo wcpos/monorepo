@@ -243,7 +243,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 let mockT: (key: string, options?: Record<string, unknown>) => string = (key) => key;
 jest.mock('../../../../contexts/translations', () => ({ useT: () => mockT }));
 let mockAwaitingStore = 0;
-const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0, hits: [] } };
 const mockUseOpenOrdersHandle = jest.fn((..._args: unknown[]) => mockOpenOrdersHandle);
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: (...args: unknown[]) => mockUseOpenOrdersHandle(...args),

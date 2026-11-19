@@ -44,6 +44,7 @@ const mockLogger = getLogger(['test']) as unknown as {
 	success: jest.Mock;
 };
 
+jest.mock('../../checkout/payments/use-gateway-payment', () => ({ useGatewayPayment: () => ({}) }));
 jest.mock('../../hooks/use-action-context', () => ({
 	useActionContext: () => ({
 		ctx: {

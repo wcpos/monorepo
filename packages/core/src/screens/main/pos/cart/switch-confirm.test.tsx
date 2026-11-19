@@ -8,6 +8,7 @@ import type { UserDatabase } from '@wcpos/database';
 import { readRegister, type RegisterDocument } from '@wcpos/query/register-session';
 import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+import { type MetaDataEntry, withAwaitingCustomer } from '@wcpos/order-math';
 
 import { recordCarriedFrom } from '../../../../../../query/src/register-session/register-document';
 import { createTestT } from '../../../../../jest/translate';
@@ -174,6 +175,7 @@ jest.mock('../../../../../../query/src/engine-query', () => ({
 	observeEngineQuery: (...args: unknown[]) => mockObserve(...args),
 }));
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: ['pos-open', 'pos-partial', 'pending'],
 	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 	useQueryRuntime: () => ({ engine: 'engine', locale: 'en' }),
 	observeCashierSalesTotal: jest.fn(
@@ -297,7 +299,13 @@ let mockDirectoryY: {
 };
 // The open-orders handle as the confirm reads it: one stable handle, a snapshot swapped whole
 // (useSyncExternalStore needs the same object back until the store changes).
-const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+const cart = (uuid: string, status = 'pos-open', meta_data: MetaDataEntry[] = []) => ({
+	id: uuid,
+	record: { uuid, payload: { status, meta_data } },
+});
+// The snapshot: every open-status row, and the count the query gives with them.
+const carts = (...hits: ReturnType<typeof cart>[]) => ({ count: hits.length, hits });
+const mockOpenOrdersHandle = { subscribe: () => () => {}, value: carts() };
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: jest.fn(() => mockOpenOrdersHandle),
 }));
@@ -338,7 +346,7 @@ const show = (request: SwitchRequest | null) =>
 		</OverlayHostProvider>
 	);
 beforeEach(() => {
-	mockOpenOrdersHandle.value = { count: 0 };
+	mockOpenOrdersHandle.value = carts();
 	mockAwaitingStore = 0;
 	mockDrawer.figuresPending = false;
 	mockDrawer.unsyncedCount = 0;
@@ -354,7 +362,7 @@ it('renders nothing while there is no request', () => {
 	expect(screen.queryByTestId('switch-confirm')).toBeNull();
 });
 it('hand over: the tiles, the waiting notice and the verb', () => {
-	mockOpenOrdersHandle.value = { count: 2 };
+	mockOpenOrdersHandle.value = carts(cart('a'), cart('b'));
 	mockAwaitingStore = 1;
 	show({ kind: 'cashier', credential: amy });
 	expect(screen.getByTestId('switch-confirm').textContent).toContain(
@@ -376,6 +384,24 @@ it('hand over: the tiles, the waiting notice and the verb', () => {
 	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
 	expect(onConfirm).toHaveBeenCalledWith({ kind: 'cashier', credential: amy });
 	expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+it('hand over: a sent invoice has left the till, so the open carts count leaves it out', () => {
+	const sent = withAwaitingCustomer([], {
+		method_id: 'wcpos_email_invoice',
+		destination: 'buyer@example.com',
+		attempt_id: 'attempt-1',
+		sent_at_gmt: '2026-11-19T10:00:00.000Z',
+		cashier_id: 7,
+	});
+	mockOpenOrdersHandle.value = carts(
+		cart('open'),
+		cart('partial', 'pos-partial'),
+		cart('sent', 'pending', sent)
+	);
+	show({ kind: 'cashier', credential: amy });
+	expect(screen.getByTestId('switch-confirm-waits').textContent).toBe(
+		'Waits here for you2 open carts'
+	);
 });
 it('hand over: no notice when nothing waits', () => {
 	show({ kind: 'cashier', credential: amy });

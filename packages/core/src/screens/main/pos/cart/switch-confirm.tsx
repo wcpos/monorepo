@@ -38,6 +38,7 @@ import {
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useAwaitingStoreCount } from '../checkout/use-awaiting-store';
+import { isOpenOrderTab, type OpenOrderHit } from '../contexts/current-order';
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
 
 export type SwitchRequest =
@@ -81,7 +82,11 @@ export function SwitchConfirm({
 	// The cashier's open carts from the same handle the POS layout owns (the rail's sheet renders
 	// outside CurrentOrderProvider, so the context read would say none); never suspends.
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
-	const carts = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value).count;
+	const { hits } = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value);
+	// A sent invoice has left the till: count the tabs only, by the carousel's own predicate.
+	const carts = (hits as OpenOrderHit[]).filter(({ record }) =>
+		isOpenOrderTab(record.payload)
+	).length;
 	// The hand-over count is the cashier's day (the same read as the amount), never the register's.
 	const { count: salesCount } = useSalesToday();
 	// The target store's rows are asked fresh on every opening: another till may have opened or

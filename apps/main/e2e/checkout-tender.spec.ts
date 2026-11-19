@@ -34,7 +34,7 @@ import {
 	readAmountMinor,
 	requireTenderCheckout,
 } from './checkout-shared';
-import { ensureRegisterOpen, getStoreVariant, navigateToPage } from './fixtures';
+import { ensureRegisterOpen, getStoreVariant, navigateToPage, openOrderSheet } from './fixtures';
 import {
 	expectOrderPaid,
 	liveOrderTest as liveTest,
@@ -1377,6 +1377,10 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			);
 			expect(ledgerRows(server), 'a sent order carries no payment leg').toHaveLength(0);
 			const firstAttempt = awaitingCustomer(server)!.attempt_id;
+			// The sent order has left the till: a reload brings no open-order tab back for it.
+			await page.reload();
+			await expect(page.getByTestId('new-order-tab')).toBeVisible({ timeout: 60_000 });
+			await expect(page.getByTestId(`open-order-tab-${uuid}`)).toHaveCount(0);
 
 			// 2. Send again from Orders: the modal lists the invoice line and re-opens the till on
 			//    the gateway, under a new attempt.
@@ -1428,6 +1432,48 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 				'cancelling the invoice must return the order to pos-open without the stamp'
 			);
 			expect(ledgerRows(server), 'a cancelled invoice records no payment').toHaveLength(0);
+
+			// 4. Void a sent invoice from the till: the open order is back as a tab; send it, open
+			//    it again from Orders, Void. The invoice is cancelled first, then the order is
+			//    cancelled on the store: kept, never trashed.
+			await navigateToPage(page, 'pos');
+			const tab = page.getByTestId(`open-order-tab-${uuid}`);
+			await expect(tab).toBeVisible({ timeout: 30_000 });
+			await tab.click();
+			await page.getByTestId('checkout-button').click();
+			await expect(page.getByTestId(`checkout-method-${gateway!.id}`)).toBeVisible({
+				timeout: 30_000,
+			});
+			await page.getByTestId(`checkout-method-${gateway!.id}`).click();
+			await page.getByTestId(`checkout-field-${emailField.id}`).fill(email);
+			await page.getByTestId('checkout-commit').click();
+			await expect(page.getByTestId('checkout-sent')).toBeVisible({ timeout: 120_000 });
+			await page.getByTestId('checkout-sent-new').click();
+			await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => awaitingCustomer(order) !== null && order.status !== 'pos-open',
+				'the server must stamp the order sent again'
+			);
+			await navigateToPage(page, 'orders');
+			await expect(row).toBeVisible({ timeout: 30_000 });
+			await row.click();
+			await expect(page.getByTestId('orders-send-again')).toBeVisible({ timeout: 15_000 });
+			await page.getByTestId('orders-send-again').click();
+			await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 30_000 });
+			await openOrderSheet(page);
+			await page.getByTestId('void-button').click();
+			server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => order.status === 'cancelled' && awaitingCustomer(order) === null,
+				'Void on a sent invoice must cancel the invoice and the order, never trash it'
+			);
+			expect(ledgerRows(server), 'a voided invoice records no payment').toHaveLength(0);
 		}
 	);
 });

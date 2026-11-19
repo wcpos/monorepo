@@ -5209,6 +5209,13 @@ describe('gateway capture mode (contract 1.2)', () => {
 		expect(result.current.busy).toBe(false);
 	});
 
+	it('a sent order offers only its own method: no cash tile and no fresh send around the invoice', async () => {
+		mockPayload.meta_data = withAwaitingCustomer([], stamp);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.tiles.map((tile) => tile.method.id)).toEqual(['wcpos_email_invoice']);
+		await act(async () => {});
+	});
+
 	it('a stamp beside a counting row is stale and not shown', async () => {
 		mockPayload.meta_data = withLedger(withAwaitingCustomer([], stamp), [
 			payment({ amount: '10.00' }),

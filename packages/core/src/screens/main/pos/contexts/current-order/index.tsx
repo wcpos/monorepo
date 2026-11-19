@@ -2,7 +2,13 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { type QueryHandle, type QueryResult, useRecordField } from '@wcpos/query';
+import { activeAwaitingCustomer, type MetaDataEntry } from '@wcpos/order-math';
+import {
+	OPEN_ORDER_STATUSES,
+	type QueryHandle,
+	type QueryResult,
+	useRecordField,
+} from '@wcpos/query';
 import { useQuerySnapshot } from '@wcpos/query/query-state';
 
 import {
@@ -45,6 +51,21 @@ interface CurrentOrderContextProviderProps {
 	currentOrderUUID?: string;
 }
 
+/**
+ * Whether an order is an open tab: an open status and no active awaiting-customer stamp. A sent
+ * invoice waits for its customer, not for this till; a part-paid order keeps its tab, since its
+ * counting row clears the stamp. Tabs, counts and hotkeys all read `openOrders`, built from this.
+ */
+export function isOpenOrderTab(payload: {
+	status?: string;
+	meta_data?: readonly MetaDataEntry[] | null;
+}): boolean {
+	return (
+		OPEN_ORDER_STATUSES.some((status) => status === payload.status) &&
+		activeAwaitingCustomer(payload.meta_data) === null
+	);
+}
+
 function inFlightFor(id: string | undefined) {
 	const mode = getCheckoutModeSnapshot();
 	if (!id) return 'none';
@@ -68,7 +89,11 @@ export function CurrentOrderProvider({
 }: CurrentOrderContextProviderProps) {
 	const { newOrder } = useNewOrder(defaultCustomerResource);
 	const { hits } = useQuerySnapshot(handle, ['hits']);
-	const openOrders = hits as OpenOrderHit[];
+	const openHits = hits as OpenOrderHit[];
+	const openOrders = React.useMemo(
+		() => openHits.filter(({ record }) => isOpenOrderTab(record.payload)),
+		[openHits]
+	);
 	const router = useRouter();
 
 	// Internal state is the source of truth, initialized from route param
@@ -115,7 +140,9 @@ export function CurrentOrderProvider({
 
 	// Determine the current record from internal state. The temporary order has the same
 	// engine-shaped record face as resident orders since ADR 0028 stage I.
-	const selectedOrder = openOrders.find((order) => order.id === internalOrderId);
+	// Every hit, tab or not: a sent order the cashier is on (just sent, or opened again from
+	// Orders) stays the current order; its tab is the checkout membership's (`cart/tabs.tsx`).
+	const selectedOrder = openHits.find((order) => order.id === internalOrderId);
 	// The hit and the scope it came from: another cashier's or register's query must not keep
 	// showing this one's sale.
 	const [held, setHeld] = React.useState<(OpenOrderHit & { scope: string }) | undefined>(undefined);

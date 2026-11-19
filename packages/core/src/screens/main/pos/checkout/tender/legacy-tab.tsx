@@ -39,14 +39,26 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 		useCheckoutSession(order);
 	const frameGate = usePayFrameGate();
 
-	if (flow.hasLiveLeg) {
+	// A sent invoice greys the tab too: the store's pay page would charge (or mail) the whole order
+	// again around the invoice the customer holds. Send again and Cancel invoice are the tender pane's.
+	const sentTo = flow.invoiceSent?.destination;
+	const greyed = flow.invoiceSent
+		? {
+				testID: 'checkout-legacy-invoice-sent',
+				title: sentTo
+					? t('pos_checkout.invoice_sent_awaiting', { destination: sentTo })
+					: t('pos_checkout.invoice_sent_awaiting_customer'),
+			}
+		: flow.hasLiveLeg
+			? {
+					title: t('pos_checkout.legacy_not_with_split_title'),
+					description: t('pos_checkout.legacy_not_with_split_description'),
+				}
+			: null;
+	if (greyed) {
 		return (
 			<VStack space="sm" className="p-4">
-				<Notice
-					tone="warning"
-					title={t('pos_checkout.legacy_not_with_split_title')}
-					description={t('pos_checkout.legacy_not_with_split_description')}
-				/>
+				<Notice tone="warning" {...greyed} />
 				{flow.legacyMethods.map((method) => (
 					<Text
 						key={method.id}

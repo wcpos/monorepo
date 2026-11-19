@@ -1288,7 +1288,7 @@ it('closed without a closure or refused movement renders nothing', () => {
 });
 
 const mockBackToSelling = jest.fn(async () => undefined);
-const mockOpenCarts = { count: 0 };
+const mockOpenCarts = { count: 0, hits: [] };
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: () => ({ subscribe: () => () => {}, value: mockOpenCarts }),
 }));

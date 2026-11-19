@@ -87,6 +87,7 @@ const mockCurrentOrder = {
 	toMutableJSON: () => ({ payload: { ...mockOrderJson } }),
 };
 
+jest.mock('../checkout/payments/use-gateway-payment', () => ({ useGatewayPayment: () => ({}) }));
 jest.mock('expo-router', () => ({
 	useRouter: () => mockRouter,
 }));

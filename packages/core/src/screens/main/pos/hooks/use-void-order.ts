@@ -1,8 +1,14 @@
 import * as React from 'react';
 
-import { isInMotionPaymentStatus, readLedger } from '@wcpos/order-math';
-import { useQueryRuntime } from '@wcpos/query';
+import {
+	activeAwaitingCustomer,
+	isInMotionPaymentStatus,
+	type MetaDataEntry,
+	readLedger,
+} from '@wcpos/order-math';
+import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { restoreVoidedOrder, voidOrder, type VoidOrderResult } from '@wcpos/query/mutations';
+import { refreshOrderRecord } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
@@ -24,9 +30,13 @@ import { getTerminalPaymentsService } from '../../../../services/terminal-paymen
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import '../cart/void-audit-hook';
 import '../cart/void-guards';
+import { useGatewayPayment } from '../checkout/payments/use-gateway-payment';
 import { useCurrentOrderActions, useCurrentOrderRecord } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
+
+/** Cancel invoice did not reopen the order: the invoice stands, so the void stops here. */
+class InvoiceStandsError extends Error {}
 
 /**
  * The void path for the current order: the Undo snapshot, `cart.order.void` through its gate,
@@ -44,6 +54,7 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 	const t = useT();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const { ctx, actor, cashier } = useActionContext();
+	const gateway = useGatewayPayment();
 
 	/**
 	 *
@@ -86,18 +97,24 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 		let orderPayload: Record<string, unknown> = currentOrder.getLatest().toMutableJSON().payload;
 		const recordId = currentOrder.uuid;
 		let undone = false;
+		// A sent invoice's void cancels the invoice on the store first; no Undo can send it again.
+		let invoiceCancelled = false;
 		const showSuccess = (message: string) => {
 			cartLogger.success(message, {
 				showToast: true,
 				toast: {
 					dismissable: true,
-					action: {
-						label: t('common.undo'),
-						onClick: () => {
-							undone = true;
-							void undoRemove(recordId, orderPayload);
-						},
-					},
+					...(invoiceCancelled
+						? {}
+						: {
+								action: {
+									label: t('common.undo'),
+									onClick: () => {
+										undone = true;
+										void undoRemove(recordId, orderPayload);
+									},
+								},
+							}),
 				},
 				context: {
 					orderId: recordId,
@@ -158,6 +175,7 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 					}
 				);
 				voidedIn = sessionId;
+				const stamp = activeAwaitingCustomer(latest.meta_data as MetaDataEntry[] | undefined);
 				return dispatchAction({
 					event: ORDER_VOID_EVENT,
 					requiredGuards: ORDER_VOID_GUARD_IDS,
@@ -177,7 +195,19 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 							paymentLegs,
 						},
 					},
-					bottom: () => voidOrder(manager, { recordId, registerId, undone: () => undone }),
+					bottom: async () => {
+						if (!stamp) return voidOrder(manager, { recordId, registerId, undone: () => undone });
+						// A sent invoice: Cancel invoice first, and only an order the store reopened is
+						// cancelled. Never deleted: the store keeps the order and its history. The store
+						// stamped it, so it is a stored order, never the temporary one.
+						const order = (queue.order ?? currentOrder) as EngineRecord<'orders'>;
+						const answer = await gateway.cancel(order, stamp);
+						if (answer.kind === 'refused') throw new InvoiceStandsError(answer.message);
+						if (!answer.reopened)
+							throw new InvoiceStandsError(t('pos_checkout.invoice_not_cancelled'));
+						invoiceCancelled = true;
+						return voidOrder(manager, { recordId, registerId, undone: () => undone, keep: true });
+					},
 				});
 			});
 			if (isActionRefusal(dispatched)) {
@@ -190,7 +220,21 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 			// A non-refusal is the writer's return (a hook answering without `next` is refused).
 			outcome = dispatched as VoidOrderResult;
 		} catch (err) {
-			reportFailure(err);
+			if (err instanceof InvoiceStandsError) {
+				// Nothing was written: the order stays as the store has it, read again from the store.
+				cartLogger.warn(err.message, { showToast: true, context: { orderId: recordId } });
+			} else {
+				reportFailure(err);
+				// The store reopened the order but the cancel did not land: show it as the store has it.
+				if (!invoiceCancelled) return;
+			}
+			try {
+				await refreshOrderRecord(manager.engine, orderPayload.id as number);
+			} catch (refreshError) {
+				cartLogger.warn('Could not refresh the order', {
+					context: { orderId: recordId, error: getErrorMessage(refreshError) },
+				});
+			}
 			return;
 		}
 		if (outcome.kind === 'kept-cancelled') {
@@ -235,6 +279,7 @@ export function useVoidOrder({ onBeforeVoid }: { onBeforeVoid?: () => void } = {
 		undoRemove,
 		onBeforeVoid,
 		ctx,
+		gateway,
 		actor,
 		cashier,
 		getCurrentOrderRecord,

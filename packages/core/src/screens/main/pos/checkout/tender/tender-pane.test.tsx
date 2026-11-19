@@ -1990,6 +1990,21 @@ describe('declared UI (contract 1.2)', () => {
 		fireEvent.click(screen.getByTestId('checkout-cancel-invoice'));
 		expect(flow.commands.cancelInvoice).toHaveBeenCalled();
 	});
+	it('a sent order commits as Send again beside Cancel invoice, never a fresh send', () => {
+		const flow = invoiceFlow({
+			invoiceSent: {
+				method_id: 'wcpos_email_invoice',
+				destination: 'buyer@example.com',
+				attempt_id: 'attempt-0',
+				sent_at_gmt: '2026-10-08T10:35:00.000Z',
+				cashier_id: 7,
+			},
+		});
+		render(<TenderPane flow={flow} format={String} />);
+		expect(screen.getByTestId('checkout-commit').textContent).toBe('Send again');
+		expect(screen.getByTestId('checkout-cancel-invoice')).toBeTruthy();
+		expect(screen.queryByText(/Send invoice/)).toBeNull();
+	});
 	// R11: while a command holds the gate, every control that could fire another is inert; Try
 	// again is not disabled by busy, because the flow refuses it itself.
 	it('busy disables Commit, the method tile and Cancel invoice; Try again still presses', () => {

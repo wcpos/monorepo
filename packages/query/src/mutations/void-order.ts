@@ -30,6 +30,11 @@ export interface VoidOrderInput {
 	registerId: string | undefined;
 	/** Read by the late watch: an Undo in the meantime cancels a late conversion. */
 	undone: () => boolean;
+	/**
+	 * A sent invoice's order: cancelled on the store, never deleted. The caller has cancelled the
+	 * invoice first; the order's record stays on the store with the customer's history.
+	 */
+	keep?: true;
 }
 
 export type VoidOrderResult =
@@ -81,16 +86,23 @@ export async function voidOrder(
 	// The refused delete leaves the order resident (removal only happens at delete-ACK), so the
 	// fallback is an atomic patch-and-enqueue to status 'cancelled' — the shared rollback path
 	// unwinds the resident if the enqueue fails, and the failure surfaces instead of a success.
-	const cancelOnStore = async (deleteMutationId: string) => {
-		await patchAndEnqueueEngineResident({
+	const cancelOrder = () =>
+		patchAndEnqueueEngineResident({
 			manager,
 			collection: 'orders',
 			recordId,
 			changes: { status: 'cancelled' },
 			registerId,
 		});
+	const cancelOnStore = async (deleteMutationId: string) => {
+		await cancelOrder();
 		settleRefusedDelete(deleteMutationId);
 	};
+
+	if (input.keep) {
+		await cancelOrder();
+		return { kind: 'kept-cancelled' };
+	}
 
 	const receipt = await requestServerDelete(manager.engine, { collection: 'orders', recordId });
 

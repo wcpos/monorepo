@@ -212,3 +212,23 @@ it('a failed later navigation shows the check-the-order copy and offers no Retry
 // Notice links out through the native URL boundary; keep that boundary inert in jsdom.
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
+it('a sent invoice greys the tab: no pay frame, no Charge, the stamp and the methods shown', () => {
+	const sentFlow = {
+		hasLiveLeg: false,
+		legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
+		saveState: null,
+		invoiceSent: {
+			method_id: 'wcpos_email_invoice',
+			destination: 'buyer@example.com',
+			attempt_id: 'attempt-0',
+			sent_at_gmt: '2026-10-08T10:35:00.000Z',
+			cashier_id: 7,
+		},
+	} as never;
+	const view = render(<LegacyTab order={makeOrder()} flow={sentFlow} />);
+	expect(PaymentWebview).not.toHaveBeenCalled();
+	expect(view.queryByTestId('checkout-legacy-process-payment')).toBeNull();
+	expect(view.getByText('Invoice sent to buyer@example.com · awaiting the customer')).toBeTruthy();
+	expect(view.getByText('Legacy')).toBeTruthy();
+});

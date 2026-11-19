@@ -31,6 +31,7 @@ import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 import { type CloseResult, countRecorded } from '@wcpos/query/register-session';
 
+import { isOpenOrderTab, type OpenOrderHit } from '../contexts/current-order';
 import { useOpenOrdersHandle } from '../contexts/current-order/use-open-orders-handle';
 import { recordRegisterFact, useRegisterActor } from '../../../../services/register-session/audit';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -84,7 +85,11 @@ export function RegisterCount({
 	} = useRegisterSession();
 	const { store, wpCredentials } = useStoreSession();
 	const openOrders = useOpenOrdersHandle(wpCredentials.id, store.id, binding.registerId);
-	const carts = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value).count;
+	const { hits } = React.useSyncExternalStore(openOrders.subscribe, () => openOrders.value);
+	// A sent invoice has left the till: count the tabs only, by the carousel's own predicate.
+	const carts = (hits as OpenOrderHit[]).filter(({ record }) =>
+		isOpenOrderTab(record.payload)
+	).length;
 	const actor = useRegisterActor();
 	const phone = useIsPhone();
 	const currency = useDocField(store, (value) => value.currency);

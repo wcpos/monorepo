@@ -392,23 +392,27 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	);
 	const changeLeads = !missing && !noChange && figures.entryChangeMinor > 0;
 	const entry = { amount: format(figures.entryAppliedMinor), method: method?.title };
-	const commit = method
-		? (fields
-				? t('pos_checkout.send_verb_amount', {
-						label: fields.verb.label,
-						amount: format(figures.entryAppliedMinor),
-					})
-				: remote
-					? t('pos_checkout.send_amount_to', entry)
-					: t('pos_checkout.take_amount_in', entry)) +
-			(plan && !groupDone
-				? ` · ${t('pos_checkout.n_of_ways', { n, ways })}`
-				: left > 0
-					? ` · ${t('pos_checkout.amount_left', { amount: format(left) })}`
-					: flow.rows.length > 0 || flow.balanceMinor < flow.totalMinor
-						? ` · ${t('pos_checkout.pays_it_off')}`
-						: '')
-		: t('pos_checkout.choose_how_paying');
+	// A sent invoice's only tile is its own method: the commit sends it again, never a fresh send.
+	const commit =
+		flow.invoiceSent && method
+			? t('pos_checkout.send_again')
+			: method
+				? (fields
+						? t('pos_checkout.send_verb_amount', {
+								label: fields.verb.label,
+								amount: format(figures.entryAppliedMinor),
+							})
+						: remote
+							? t('pos_checkout.send_amount_to', entry)
+							: t('pos_checkout.take_amount_in', entry)) +
+					(plan && !groupDone
+						? ` · ${t('pos_checkout.n_of_ways', { n, ways })}`
+						: left > 0
+							? ` · ${t('pos_checkout.amount_left', { amount: format(left) })}`
+							: flow.rows.length > 0 || flow.balanceMinor < flow.totalMinor
+								? ` · ${t('pos_checkout.pays_it_off')}`
+								: '')
+				: t('pos_checkout.choose_how_paying');
 
 	const scroll = (
 		<ScrollView
@@ -1082,9 +1086,8 @@ function methodIcon(method: TenderTile['method']) {
 }
 
 /**
- * §4.3: an order sent to the customer and opened again. The keypad above takes money on the
- * full balance (a counting row clears the stamp), the gateway pill sends again under a new
- * attempt, and Cancel invoice names the attempt the store is holding.
+ * §4.3: an order sent to the customer and opened again. Its gateway pill is the only tile and
+ * sends again under a new attempt; Cancel invoice names the attempt the store is holding.
  */
 function InvoiceSentLine({ flow, busy }: { flow: TenderFlow; busy: boolean }) {
 	const t = useT();

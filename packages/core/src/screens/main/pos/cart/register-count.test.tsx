@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
+import { type MetaDataEntry, withAwaitingCustomer } from '@wcpos/order-math';
 
 import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
@@ -133,7 +134,9 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
 	}),
 }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: jest.fn() }) }));
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: ['pos-open', 'pos-partial', 'pending'],
 	useDocField: (doc: unknown, select: (doc: unknown) => unknown) => select(doc),
 }));
 jest.mock('../../components/register-count/register-amount', () => ({
@@ -620,7 +623,14 @@ it('requests approval again when the count changes after approval', () => {
 	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
 });
 
-let mockCarts = { count: 0 };
+// An open-orders hit as the handle emits it: the record and its payload.
+const cart = (uuid: string, status = 'pos-open', meta_data: MetaDataEntry[] = []) => ({
+	id: uuid,
+	record: { uuid, payload: { status, meta_data } },
+});
+// The handle's snapshot: every open-status row, and the count the query gives with them.
+const carts = (...hits: ReturnType<typeof cart>[]) => ({ count: hits.length, hits });
+let mockCarts = carts();
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: () => ({ subscribe: () => () => {}, value: mockCarts }),
 }));
@@ -639,7 +649,7 @@ it.each([0, 2])(
 	'shows the open-carts warning only for %s carts, without blocking close',
 	(count) => {
 		const previous = mockCarts;
-		mockCarts = { count };
+		mockCarts = carts(...Array.from({ length: count }, (_, i) => cart(`cart-${i}`)));
 		try {
 			render(<RegisterCount description="Shop · Pat" onBack={jest.fn()} onClosed={jest.fn()} />);
 			enter('480.80');
@@ -658,6 +668,25 @@ it.each([0, 2])(
 		}
 	}
 );
+it('a sent invoice has left the till: the open carts count leaves it out', () => {
+	const previous = mockCarts;
+	const sent = withAwaitingCustomer([], {
+		method_id: 'wcpos_email_invoice',
+		destination: 'buyer@example.com',
+		attempt_id: 'attempt-1',
+		sent_at_gmt: '2026-11-19T10:00:00.000Z',
+		cashier_id: 7,
+	});
+	mockCarts = carts(cart('open'), cart('partial', 'pos-partial'), cart('sent', 'pending', sent));
+	try {
+		render(<RegisterCount description="Shop · Pat" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.getByTestId('count-open-carts').textContent).toBe(
+			'2 carts still open · they wait for their cashier'
+		);
+	} finally {
+		mockCarts = previous;
+	}
+});
 it('backs out only after returning the session to selling', async () => {
 	const onBack = jest.fn();
 	render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);

@@ -16,6 +16,7 @@ import {
 } from './index';
 
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: ['pos-open', 'pos-partial', 'pending'],
 	useRecordField: <T,>(record: T, select: (value: T) => unknown) =>
 		record ? select(record) : undefined,
 }));

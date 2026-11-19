@@ -25,6 +25,7 @@ jest.mock('./use-new-order', () => ({
 	useNewOrder: () => ({ newOrder: { uuid: 'new-order', payload: {} } }),
 }));
 jest.mock('@wcpos/query', () => ({
+	OPEN_ORDER_STATUSES: ['pos-open', 'pos-partial', 'pending'],
 	useRecordField: <T,>(record: T, select: (value: T) => unknown) =>
 		record ? select(record) : undefined,
 }));

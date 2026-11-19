@@ -275,7 +275,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 jest.mock('../contexts/current-order/context', () => ({
 	useCurrentOrderOptional: () => undefined,
 }));
-const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0 } };
+const mockOpenOrdersHandle = { subscribe: () => () => {}, value: { count: 0, hits: [] } };
 jest.mock('../contexts/current-order/use-open-orders-handle', () => ({
 	useOpenOrdersHandle: () => mockOpenOrdersHandle,
 }));
