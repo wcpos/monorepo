@@ -22,6 +22,10 @@ const REGISTRY_POLL_MS = 5000;
 // Two seconds matches the display page's own poll; used only while the server reports a display
 // online but its session is not yet configured, so a switched-off display adds no load.
 const HANDSHAKE_POLL_MS = 2000;
+// Slow poll while every display is configured, so a rebooted display's `ready` is read. The front
+// desk ruled the reconnect cadence at 5 s on Pro #824 step 5 (step limit 15 s): a 5 s poll sees a
+// display's `ready` within 5 s, leaving room for the 2-6 s handshake.
+const CONNECTED_POLL_MS = 5_000;
 export interface CustomerDisplayServiceOptions {
 	http: HttpFunction;
 	deviceId: string;
@@ -65,6 +69,10 @@ export class CustomerDisplayService {
 				context: { error: getErrorMessage(error) },
 			});
 		});
+	}
+	// Foreground: read the registry and signals at once instead of waiting for the next poll.
+	wake(): void {
+		if (!this.stopped) this.start();
 	}
 	configure(config: DisplayConfigInput): void {
 		if (JSON.stringify(config) === JSON.stringify(this.config)) return;
@@ -119,16 +127,14 @@ export class CustomerDisplayService {
 				} else {
 					session.updateDisplay(display);
 				}
-				if (!session.isOpen) {
-					try {
-						await session.poll();
-					} catch (error) {
-						logger.warn('Customer display session poll failed', {
-							context: { displayId: display.id, error: getErrorMessage(error) },
-						});
-					}
-					if (this.stopped) return;
+				try {
+					await session.poll();
+				} catch (error) {
+					logger.warn('Customer display session poll failed', {
+						context: { displayId: display.id, error: getErrorMessage(error) },
+					});
 				}
+				if (this.stopped) return;
 			}
 			this.emit();
 		} finally {
@@ -253,11 +259,16 @@ export class CustomerDisplayService {
 			!this.registryReadSucceeded ||
 			this.activePairingCode() ||
 			this.displays.some(({ id }) => !this.sessions.get(id)?.isConfigured);
-		if (needsPoll) {
+		// With no display at all there is no `ready` to read, so nothing is scheduled.
+		if (needsPoll || this.displays.length > 0) {
 			const handshaking = this.displays.some(
 				({ id, connected }) => connected && !this.sessions.get(id)?.isConfigured
 			);
-			const delay = handshaking ? HANDSHAKE_POLL_MS : REGISTRY_POLL_MS;
+			const delay = handshaking
+				? HANDSHAKE_POLL_MS
+				: needsPoll
+					? REGISTRY_POLL_MS
+					: CONNECTED_POLL_MS;
 			this.timer = setTimeout(() => {
 				void this.refreshDisplays().catch((error) => {
 					logger.warn('Customer display registry poll failed', {

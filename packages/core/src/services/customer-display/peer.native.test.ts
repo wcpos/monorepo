@@ -52,3 +52,39 @@ test('passes a caller-supplied ICE server list through unchanged', async () => {
 		iceServers: [{ urls: 'stun:example.test:3478' }],
 	});
 });
+
+test('after close(), late channel open and message events reach no handler', async () => {
+	jest.resetModules();
+	const channel = {
+		readyState: 'open',
+		send: jest.fn(),
+		close: jest.fn(),
+		onopen: null as (() => void) | null,
+		onmessage: null as ((event: { data: unknown }) => void) | null,
+		onclose: null,
+		onerror: null,
+	};
+	const connection = {
+		createDataChannel: jest.fn(() => channel),
+		addEventListener: jest.fn(),
+		close: jest.fn(),
+	};
+	const constructor = jest.fn(() => connection);
+	jest.doMock('react-native-webrtc', () => ({ RTCPeerConnection: constructor }), { virtual: true });
+	const { createOfferer } = await import('./peer.native');
+	const peer = createOfferer();
+	const onOpen = jest.fn();
+	const onMessage = jest.fn();
+	peer.onOpen(onOpen);
+	peer.onMessage(onMessage);
+	channel.onmessage?.({ data: 'before' });
+	expect(onMessage).toHaveBeenCalledWith('before');
+
+	peer.close();
+	// react-native-webrtc keeps its listeners until the native `closed` state event arrives.
+	channel.onopen?.();
+	channel.onmessage?.({ data: 'late' });
+
+	expect(onOpen).not.toHaveBeenCalled();
+	expect(onMessage).toHaveBeenCalledTimes(1);
+});
