@@ -220,6 +220,19 @@ it('the Edit slot is the solid primary beside it, not the muted surface grey (Pa
 	expect(classes).toMatch(/\bbg-primary\b/);
 	expect(classes).not.toMatch(/\bbg-muted\b/);
 });
+it('closed, the peeking Edit slot takes no pointer; open, it does', () => {
+	renderStrip();
+	// The rule text on the slot's own class: jsdom's cascade drops `!important`, so the strip's `>*` wins.
+	const pointer = () => {
+		const slot = screen.getByTestId('cart-line-edit-slot');
+		const cls = Array.from(slot.classList).find((c) => c.startsWith('r-pointerEvents-'));
+		const all = Array.from(document.styleSheets).flatMap((s) => Array.from(s.cssRules));
+		return all.find((r) => (r as CSSStyleRule).selectorText === `.${cls}`)?.cssText;
+	};
+	expect(pointer()).toContain('pointer-events: none');
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	expect(pointer()).toContain('pointer-events: auto');
+});
 it('fine keeps the hover nudge and takes the held mouse as the pan', () => {
 	mockPointer = 'fine';
 	renderStrip();
@@ -361,4 +374,20 @@ it('a removal cancelled before it commits brings the row back and leaves it remo
 	expect(mockOffsetSet).toHaveBeenLastCalledWith(0);
 	fireEvent.click(screen.getByTestId('cart-line-remove'));
 	expect(pulseRemove).toHaveBeenCalledTimes(2);
+});
+it("the actions paint over the row: the strip's window comes after the body and clips", () => {
+	renderStrip();
+	const row = screen.getByTestId('cart-line-row');
+	const windowEl = screen.getByTestId('cart-line-strip-window');
+	const strip = screen.getByTestId('cart-line-strip');
+	expect(row.lastElementChild).toBe(windowEl);
+	expect(windowEl.contains(strip)).toBe(true);
+	expect(windowEl.getAttribute('data-classes')).toMatch(/\boverflow-hidden\b/);
+	// The window is the row wide and moves by transform, never pinned right and resized.
+	expect(windowEl.getAttribute('data-classes')).toMatch(/\binset-0\b/);
+	expect(windowEl.getAttribute('data-classes')).not.toMatch(/\bright-0\b/);
+	// Nothing of the strip sits before the body, under it.
+	const body = row.firstElementChild;
+	expect(body).not.toBe(windowEl);
+	expect(body?.contains(strip)).toBe(false);
 });
