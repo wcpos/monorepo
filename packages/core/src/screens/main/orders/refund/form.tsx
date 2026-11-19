@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useWindowDimensions, View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
@@ -16,6 +17,10 @@ import {
 import { Form, FormField, FormTextarea } from '@wcpos/components/form';
 import { MoneyList } from '@wcpos/components/money-list';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { MAX_FONT_SCALE, SCALE_STEPS } from '@wcpos/components/lib/scale';
+import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
+import { Notice } from '@wcpos/components/notice';
 import {
 	Table,
 	TableBody,
@@ -113,6 +118,23 @@ function createRefundFormSchema(dp: number) {
 
 type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
+// One column map for the heads and the cells (F62). All five columns take a px floor (a style over
+// the class), plus px-3: a number column at its head's longest word or its widest value, the product
+// column at its head's longest word, its longest name word, or 20 units. Wider screens only: the
+// table never scrolls; a phone shows two-line rows, no header (name; price × qty · input · amount).
+const REFUND_COLUMNS = {
+	product: 'min-w-0 flex-[3]',
+	price: 'min-w-17 flex-1',
+	qty: 'min-w-14 flex-1',
+	refundQty: 'min-w-21 flex-1',
+	refundAmount: 'min-w-23 flex-1',
+} as const;
+// The product column's own minimum, in spacing units.
+const PRODUCT_MIN_UNITS = 20;
+
+// Screen-reader-only text: a phone row's labels, which have no column head to name them.
+const SR_ONLY = { position: 'absolute', width: 1, height: 1, overflow: 'hidden' } as const;
+
 /** Renders the form used to calculate and submit an order refund. */
 export function RefundOrderForm({ order }: Props) {
 	const t = useT();
@@ -137,7 +159,14 @@ export function RefundOrderForm({ order }: Props) {
 	const [refundDetails, setRefundDetails] = React.useState<RefundDetail[]>(() =>
 		normalizeRefundDetails(orderData.refunds || [])
 	);
+	const storeHistoryOrderId = React.useRef<number | null>(null);
+	const storeHistoryRefundIds = React.useRef<number[]>([]);
 	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(orderData.id));
+	const [historyMissing, setHistoryMissing] = React.useState(false);
+	const [historyAttempt, setHistoryAttempt] = React.useState(0);
+	const spacingUnit = useSpacingUnit();
+	const { fontScale } = useWindowDimensions();
+	const isPhone = useIsPhone();
 	const refundsFallback = JSON.stringify(orderData.refunds || []);
 	const getRefundsFallback = React.useCallback(() => {
 		const refunds = JSON.parse(refundsFallback) as RefundDetail[];
@@ -190,7 +219,13 @@ export function RefundOrderForm({ order }: Props) {
 					)
 				);
 				if (!mounted) return;
-				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
+				const details = normalizeRefundDetails([...firstPage, ...remainingPages.flat()]);
+				setRefundDetails(details);
+				storeHistoryOrderId.current = orderData.id ?? null;
+				storeHistoryRefundIds.current = details
+					.map((refund) => refund.id)
+					.filter((id): id is number => typeof id === 'number');
+				setHistoryMissing(false);
 				setRefundDetailsLoading(false);
 			})
 			.catch((error: unknown) => {
@@ -200,14 +235,35 @@ export function RefundOrderForm({ order }: Props) {
 					context: { orderId: orderData.id, error: getErrorMessage(error) },
 				});
 				if (!mounted) return;
-				setRefundDetails(getRefundsFallback());
+				// A reconnect reloads with a new client; the saved refunds carry no line detail.
+				// A failed reload keeps the history already read from the store for this order
+				// rather than show already-refunded units as refundable.
+				// Only while that history holds exactly the refunds the order lists.
+				const heldIds = storeHistoryRefundIds.current;
+				const fallback = getRefundsFallback();
+				if (
+					storeHistoryOrderId.current === orderData.id &&
+					heldIds.length === fallback.length &&
+					fallback.every((refund) => typeof refund.id === 'number' && heldIds.includes(refund.id))
+				) {
+					setRefundDetailsLoading(false);
+					return;
+				}
+				storeHistoryOrderId.current = null;
+				storeHistoryRefundIds.current = [];
+				setRefundDetails(fallback);
+				setHistoryMissing(true);
 				setRefundDetailsLoading(false);
 			});
 
 		return () => {
 			mounted = false;
 		};
-	}, [getRefundsFallback, http, orderData.id]);
+	}, [getRefundsFallback, http, orderData.id, historyAttempt]);
+
+	// Without the store's refund rows the lines' refunded quantities are unknown, so only an amount, which the refund totals still cap, may be refunded.
+	const linesLocked = historyMissing && online;
+	const retry = () => setHistoryAttempt((n) => n + 1);
 
 	const previousRefundTotal = React.useMemo(() => {
 		if (!refundDetails.length) return 0;
@@ -222,11 +278,12 @@ export function RefundOrderForm({ order }: Props) {
 	);
 
 	const initialLineItems = React.useMemo(() => {
+		const quantitiesUnknown = refundDetailsLoading || linesLocked;
 		return (orderData.line_items || []).map((item) => ({
 			id: item.id ?? 0,
 			name: item.name || '',
 			quantity: item.quantity ?? 0,
-			remaining_quantity: refundDetailsLoading
+			remaining_quantity: quantitiesUnknown
 				? 0
 				: computeRemainingRefundQuantity({
 						lineItemId: item.id ?? 0,
@@ -241,7 +298,7 @@ export function RefundOrderForm({ order }: Props) {
 			})),
 			refund_qty: 0,
 		}));
-	}, [orderData.line_items, refundDetails, refundDetailsLoading]);
+	}, [orderData.line_items, refundDetails, refundDetailsLoading, linesLocked]);
 
 	const form = useForm<RefundFormValues>({
 		resolver: zodResolver(refundFormSchema as never) as never,
@@ -295,6 +352,61 @@ export function RefundOrderForm({ order }: Props) {
 		control: form.control,
 		name: 'line_items',
 	});
+
+	// Floors computed, not measured (no hidden copy, no second layout), at this step's sizes and text
+	// scale: em per char, rounded up, 0.85 a tracked caption letter, 0.65 a mixed-case name letter
+	// (capitals and m/w run wider than figures), 0.6 a figure. An amount is widest at the whole
+	// quantity; the keypad box is px-3, a 1px border and min-w-10.
+	const [, body, , , , , , caption] =
+		Object.values(SCALE_STEPS).find(([step]) => step === spacingUnit) ?? SCALE_STEPS.regular;
+	const em = Math.min(fontScale || 1, MAX_FONT_SCALE);
+	const span = (texts: string[], px: number) => Math.max(...texts.map((s) => s.length)) * px * em;
+	const floor = (head: string, values: string[], box = 0, min = 0, perChar = 0.6) =>
+		6 * spacingUnit +
+		Math.max(span(head.split(' '), 0.85 * caption), span(values, perChar * body) + box, min);
+	const nameWords = fields.flatMap((field) => field.name.split(/\s+/));
+	const qtys = fields.map((field) => (linesLocked ? '–' : String(field.remaining_quantity)));
+	const prices = fields.map((field) =>
+		formatRefundUnitPrice({ ...field, totalTax: field.total_tax, displayTax, dp })
+	);
+	const amounts = fields.map((field) =>
+		formatLineItemRefundWithTax(
+			calculateLineItemRefund({ ...field, refundQty: field.quantity, dp }),
+			dp
+		)
+	);
+	const floors = {
+		product: floor(t('common.product'), nameWords, 0, PRODUCT_MIN_UNITS * spacingUnit, 0.65),
+		price: floor(t('common.price'), prices),
+		qty: floor(t('pos_cart.qty_abbrev'), qtys),
+		refundQty: floor(t('orders.refund_qty_short'), qtys, 6 * spacingUnit + 2, 10 * spacingUnit),
+		refundAmount: floor(t('orders.refund_amount_short'), [...amounts, (0).toFixed(dp)]),
+	};
+	const column = (name: keyof typeof REFUND_COLUMNS, grows?: string) => ({
+		className: grows ? `${REFUND_COLUMNS[name]} ${grows}` : REFUND_COLUMNS[name],
+		style: { minWidth: floors[name] },
+	});
+	// The header row grows with its heads (h-9 let wrapped heads spill over the rows).
+	const head = (name: keyof typeof REFUND_COLUMNS) => column(name, 'h-auto min-h-9 py-1');
+	// A phone row's input and amount keep one width down the list: the keypad box, the widest amount.
+	const qtyBox = Math.max(span(qtys, 0.6 * body) + 6 * spacingUnit + 2, 10 * spacingUnit);
+	const amountBox = span([...amounts, (0).toFixed(dp)], 0.6 * body);
+	// The refund quantity, as the table's cell and a phone row both hold it.
+	const qtyInput = (index: number, labelledBy?: string) => (
+		<FormField
+			control={form.control}
+			name={`line_items.${index}.refund_qty`}
+			render={({ field: qtyField }) => (
+				<FormAmountField
+					kind="count"
+					live
+					{...qtyField}
+					disabled={linesLocked}
+					aria-labelledby={labelledBy}
+				/>
+			)}
+		/>
+	);
 
 	const watchedLineItems = useWatch({
 		control: form.control,
@@ -486,66 +598,102 @@ export function RefundOrderForm({ order }: Props) {
 					)}
 				</MoneyList>
 
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead className="flex-[3]">
-								<Text>{t('common.product')}</Text>
-							</TableHead>
-							<TableHead className="flex-1">
-								<Text>{t('common.price')}</Text>
-							</TableHead>
-							<TableHead className="flex-1">
-								<Text>{t('pos_cart.qty_abbrev')}</Text>
-							</TableHead>
-							<TableHead className="flex-1">
-								<Text>{t('orders.refund_qty')}</Text>
-							</TableHead>
-							<TableHead className="flex-1">
-								<Text>{t('orders.refund_amount')}</Text>
-							</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{fields.map((field, index) => {
-							const unitPrice = formatRefundUnitPrice({
-								quantity: field.quantity,
-								total: field.total,
-								totalTax: field.total_tax,
-								displayTax,
-								dp,
-							});
-							const itemRefund = lineItemRefunds[index];
-							const itemRefundWithTax = formatLineItemRefundWithTax(itemRefund, dp);
+				{linesLocked ? (
+					<Notice
+						tone="warning"
+						testID="refund-history-missing"
+						title={t('orders.refund_history_not_loaded')}
+						actions={[
+							{
+								label: t('common.retry'),
+								onPress: retry,
+								testID: 'refund-history-retry',
+								loading: refundDetailsLoading,
+							},
+						]}
+					/>
+				) : null}
 
-							return (
-								<TableRow key={field.id}>
-									<TableCell className="flex-[3]">
-										<Text numberOfLines={1}>{field.name}</Text>
-									</TableCell>
-									<TableCell className="flex-1">
-										<Text>{unitPrice}</Text>
-									</TableCell>
-									<TableCell className="flex-1">
-										<Text>{field.remaining_quantity}</Text>
-									</TableCell>
-									<TableCell className="flex-1">
-										<FormField
-											control={form.control}
-											name={`line_items.${index}.refund_qty`}
-											render={({ field: qtyField }) => (
-												<FormAmountField kind="count" live {...qtyField} />
-											)}
-										/>
-									</TableCell>
-									<TableCell className="flex-1">
-										<Text>{itemRefundWithTax}</Text>
-									</TableCell>
-								</TableRow>
-							);
-						})}
-					</TableBody>
-				</Table>
+				{isPhone ? (
+					<View>
+						{fields.map((field, index) => (
+							<View
+								key={field.id}
+								testID="refund-line-row"
+								className="border-border gap-1 border-b py-1.5"
+							>
+								<Text>{field.name}</Text>
+								<View className="flex-row items-center gap-2">
+									<Text
+										testID="refund-line-price-qty"
+										tabular
+										className="text-muted-foreground min-w-0 flex-1"
+									>
+										{t('orders.refund_line_price_qty', { price: prices[index], qty: qtys[index] })}
+									</Text>
+									<View style={{ width: qtyBox }}>
+										<Text nativeID={`refund-qty-label-${index}`} style={SR_ONLY}>
+											{t('orders.refund_qty')}
+										</Text>
+										{qtyInput(index, `refund-qty-label-${index}`)}
+									</View>
+									<View className="items-end" style={{ minWidth: amountBox }}>
+										<Text style={SR_ONLY}>{t('orders.refund_amount')}</Text>
+										<Text testID="refund-line-amount" tabular numberOfLines={1}>
+											{formatLineItemRefundWithTax(lineItemRefunds[index], dp)}
+										</Text>
+									</View>
+								</View>
+							</View>
+						))}
+					</View>
+				) : (
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead {...head('product')}>
+									<Text>{t('common.product')}</Text>
+								</TableHead>
+								<TableHead {...head('price')}>
+									<Text>{t('common.price')}</Text>
+								</TableHead>
+								<TableHead {...head('qty')}>
+									<Text>{t('pos_cart.qty_abbrev')}</Text>
+								</TableHead>
+								<TableHead {...head('refundQty')} accessibilityLabel={t('orders.refund_qty')}>
+									<Text>{t('orders.refund_qty_short')}</Text>
+								</TableHead>
+								<TableHead {...head('refundAmount')} accessibilityLabel={t('orders.refund_amount')}>
+									<Text>{t('orders.refund_amount_short')}</Text>
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{fields.map((field, index) => {
+								const itemRefund = lineItemRefunds[index];
+								const itemRefundWithTax = formatLineItemRefundWithTax(itemRefund, dp);
+
+								return (
+									<TableRow key={field.id}>
+										<TableCell {...column('product')}>
+											<Text numberOfLines={2}>{field.name}</Text>
+										</TableCell>
+										<TableCell {...column('price')}>
+											<Text>{prices[index]}</Text>
+										</TableCell>
+										<TableCell {...column('qty')}>
+											<Text>{linesLocked ? '–' : field.remaining_quantity}</Text>
+										</TableCell>
+										<TableCell {...column('refundQty')}>{qtyInput(index)}</TableCell>
+										<TableCell {...column('refundAmount')}>
+											<Text>{itemRefundWithTax}</Text>
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				)}
 
 				<FormField
 					control={form.control}
