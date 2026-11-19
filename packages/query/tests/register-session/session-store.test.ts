@@ -13,6 +13,7 @@ import {
 	IllegalSessionTransitionError,
 	isRegisterCounting,
 	openSession,
+	readCurrentSession,
 	recordApproval,
 	recordMovement,
 	requireOpenSession,
@@ -185,6 +186,23 @@ it('reads counting only for this register, and never from a failed row', async (
 	expect(await isRegisterCounting(db, 'register')).toBe(true);
 	await row.getLatest().incrementalPatch({ sync_status: 'failed' });
 	expect(await isRegisterCounting(db, 'register')).toBe(false);
+});
+
+it('reads the current session by the drawer rule: open, counting and an unwritten close are current; synced history and a failed row are not', async () => {
+	expect(await readCurrentSession(db, 'register')).toBeNull();
+	const row = await openSession(db, input);
+	expect((await readCurrentSession(db, 'register'))?.id).toBe(row.id);
+	expect(await readCurrentSession(db, 'other')).toBeNull();
+	await startCounting(db, row.id);
+	expect((await readCurrentSession(db, 'register'))?.id).toBe(row.id);
+	// The close's closure write never landed: still current, as the cart column shows it.
+	await closeSession(db, row.id, { counted: { cash: '100' } });
+	expect((await readCurrentSession(db, 'register'))?.id).toBe(row.id);
+	await row.getLatest().incrementalPatch({ sync_status: 'synced' });
+	expect(await readCurrentSession(db, 'register')).toBeNull();
+	const failed = await openSession(db, input);
+	await failed.incrementalPatch({ sync_status: 'failed' });
+	expect(await readCurrentSession(db, 'register')).toBeNull();
 });
 
 it('re-queues a refused movement so the outbox will send it again', async () => {

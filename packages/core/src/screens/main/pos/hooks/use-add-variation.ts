@@ -8,7 +8,7 @@ import { useDocField } from '@wcpos/query';
 
 import { showAddedToCartToast } from './added-to-cart-toast';
 import { reportCartFailure } from './cart-failure';
-import { showCountingNotice } from './use-add-product';
+import { showCountingNotice, showPriceCheckNotice } from './use-add-product';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
 import { useUpdateCartLine } from './use-update-cart-line';
@@ -35,7 +35,7 @@ interface MetaData {
 }
 
 export const useAddVariation = () => {
-	const { addItemToOrder, readCounting } = useAddItemToOrder();
+	const { addItemToOrder, readCounting, readPriceCheck } = useAddItemToOrder();
 	// Event-time resolution — every variable product tile mounts this hook.
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { incrementLineItem } = useUpdateCartLine();
@@ -58,6 +58,11 @@ export const useAddVariation = () => {
 			// The drawer is being counted: nothing joins the cart until the count ends (#2001).
 			if (await readCounting()) {
 				showCountingNotice(t);
+				return false;
+			}
+			// The register is closed: browsing is a price check, nothing joins the cart.
+			if (await readPriceCheck()) {
+				showPriceCheckNotice(t);
 				return false;
 			}
 			let success;
@@ -134,6 +139,7 @@ export const useAddVariation = () => {
 		},
 		[
 			readCounting,
+			readPriceCheck,
 			getCurrentOrderRecord,
 			incrementLineItem,
 			metaDataKeys,

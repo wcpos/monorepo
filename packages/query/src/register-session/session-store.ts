@@ -40,6 +40,7 @@ import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
 import { baselineContains } from './baseline';
 import {
 	countRecorded,
+	currentSession,
 	isSessionOrder,
 	isUnsyncedMovement,
 	unaccepted,
@@ -109,6 +110,37 @@ export async function isRegisterCounting(storeDB: RegisterStoreDatabase, registe
 		})
 		.exec();
 	return !!counting;
+}
+/**
+ * The register's current session by `currentSession`'s rule (the products notice and the cart
+ * column read the same one), read once on the tap or scan. `undefined` when it cannot be read.
+ */
+export async function readCurrentSession(storeDB: RegisterStoreDatabase, registerId: string) {
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
+	if (!sessions || !closures) return undefined;
+	// The open or counting register is the common case: one findOne, as `isRegisterCounting`.
+	const live = await sessions
+		.findOne({
+			selector: {
+				register_id: registerId,
+				status: { $in: ['open', 'counting'] },
+				sync_status: { $ne: 'failed' },
+			},
+		})
+		.exec();
+	if (live) return live;
+	const [active, closed, closureRows] = await Promise.all([
+		sessions
+			.find({ selector: { register_id: registerId, status: { $in: ['open', 'counting'] } } })
+			.exec(),
+		sessions
+			.find({
+				selector: { register_id: registerId, status: 'closed', sync_status: { $ne: 'synced' } },
+			})
+			.exec(),
+		closures.find({ selector: { register_id: registerId } }).exec(),
+	]);
+	return currentSession({ active, closed }, closureRows);
 }
 export function openSession(
 	storeDB: RegisterStoreDatabase,

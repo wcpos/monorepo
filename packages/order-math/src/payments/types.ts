@@ -148,6 +148,8 @@ export interface PaymentMethodsEnvelope {
 	contract: string;
 	methods: PaymentMethodDescriptor[];
 	deprecated?: string[];
+	/** Additive, absent on older stores: the admin's default gateway id. */
+	default_method?: string | null;
 }
 
 export type PaymentStatus = 'pending' | 'authorized' | 'captured' | 'failed' | 'voided';

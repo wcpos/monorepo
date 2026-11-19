@@ -189,6 +189,21 @@ it('gives only the trailing group the remaining width beside an aside', () => {
 	expect(screen.getByTestId('Intent').parentElement).toHaveClass('flex-1');
 	expect(screen.getByTestId('Intent')).toHaveClass('flex-1');
 });
+const wrapping = {
+	intent: action('Intent'),
+	secondary: [action('A'), action('B')],
+	aside: slots.aside,
+	close: true,
+};
+it("a wrapped trailing row keeps main's start alignment by default", () => {
+	footer(wrapping);
+	expect(screen.getByTestId('Intent').parentElement).not.toHaveClass('justify-end');
+});
+it('wrapToEnd keeps a wrapped trailing row at the trailing edge; the leading group keeps the start', () => {
+	footer({ ...wrapping, wrapToEnd: true });
+	expect(screen.getByTestId('Intent').parentElement).toHaveClass('justify-end');
+	expect(screen.getByTestId('Aside').parentElement).not.toHaveClass('justify-end');
+});
 it.each([false, null, undefined])('omits the leading group for an absent aside (%s)', (aside) => {
 	footer({ aside, close: true });
 	expect(screen.getByTestId('footer')).toHaveClass('justify-end');
