@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, useWindowDimensions, View, type ViewProps } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
@@ -17,6 +17,7 @@ import {
 import { Form, FormField, FormTextarea } from '@wcpos/components/form';
 import { MoneyList } from '@wcpos/components/money-list';
 import { DialogBody, DialogFooter } from '@wcpos/components/dialog';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { MAX_FONT_SCALE, SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 import { Notice } from '@wcpos/components/notice';
@@ -119,8 +120,8 @@ type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
 // One column map for the heads and the cells (F62). All five columns take a px floor (a style over
 // the class), plus px-3: a number column at its head's longest word or its widest value, the product
-// column at its head's longest word, its longest name word, or 20 units. When the floors do not
-// fit, the table scrolls sideways at their sum (ruling, 18 Nov).
+// column at its head's longest word, its longest name word, or 20 units. Wider screens only: the
+// table never scrolls; a phone shows two-line rows, no header (name; price × qty · input · amount).
 const REFUND_COLUMNS = {
 	product: 'min-w-0 flex-[3]',
 	price: 'min-w-17 flex-1',
@@ -131,22 +132,8 @@ const REFUND_COLUMNS = {
 // The product column's own minimum, in spacing units.
 const PRODUCT_MIN_UNITS = 20;
 
-/** The table in a frame that reports its layout; given `scrollWidth`, it scrolls sideways. */
-function RefundTable({ scrollWidth, children, ...frame }: ViewProps & { scrollWidth?: number }) {
-	const table = <Table>{children}</Table>;
-	const content = scrollWidth ? { width: scrollWidth } : undefined;
-	return (
-		<View testID="refund-table-frame" {...frame}>
-			{content ? (
-				<ScrollView horizontal testID="refund-table-scroll" contentContainerStyle={content}>
-					{table}
-				</ScrollView>
-			) : (
-				table
-			)}
-		</View>
-	);
-}
+// Screen-reader-only text: a phone row's labels, which have no column head to name them.
+const SR_ONLY = { position: 'absolute', width: 1, height: 1, overflow: 'hidden' } as const;
 
 /** Renders the form used to calculate and submit an order refund. */
 export function RefundOrderForm({ order }: Props) {
@@ -179,7 +166,7 @@ export function RefundOrderForm({ order }: Props) {
 	const [historyAttempt, setHistoryAttempt] = React.useState(0);
 	const spacingUnit = useSpacingUnit();
 	const { fontScale } = useWindowDimensions();
-	const [tableWidth, setTableWidth] = React.useState<number>();
+	const isPhone = useIsPhone();
 	const refundsFallback = JSON.stringify(orderData.refunds || []);
 	const getRefundsFallback = React.useCallback(() => {
 		const refunds = JSON.parse(refundsFallback) as RefundDetail[];
@@ -401,7 +388,25 @@ export function RefundOrderForm({ order }: Props) {
 	});
 	// The header row grows with its heads (h-9 let wrapped heads spill over the rows).
 	const head = (name: keyof typeof REFUND_COLUMNS) => column(name, 'h-auto min-h-9 py-1');
-	const tableMin = Object.values(floors).reduce((a, b) => a + b, 0);
+	// A phone row's input and amount keep one width down the list: the keypad box, the widest amount.
+	const qtyBox = Math.max(span(qtys, 0.6 * body) + 6 * spacingUnit + 2, 10 * spacingUnit);
+	const amountBox = span([...amounts, (0).toFixed(dp)], 0.6 * body);
+	// The refund quantity, as the table's cell and a phone row both hold it.
+	const qtyInput = (index: number, labelledBy?: string) => (
+		<FormField
+			control={form.control}
+			name={`line_items.${index}.refund_qty`}
+			render={({ field: qtyField }) => (
+				<FormAmountField
+					kind="count"
+					live
+					{...qtyField}
+					disabled={linesLocked}
+					aria-labelledby={labelledBy}
+				/>
+			)}
+		/>
+	);
 
 	const watchedLineItems = useWatch({
 		control: form.control,
@@ -609,62 +614,86 @@ export function RefundOrderForm({ order }: Props) {
 					/>
 				) : null}
 
-				<RefundTable
-					onLayout={(event) => setTableWidth(event.nativeEvent.layout.width)}
-					scrollWidth={tableWidth && tableMin > tableWidth ? tableMin : undefined}
-				>
-					<TableHeader>
-						<TableRow>
-							<TableHead {...head('product')}>
-								<Text>{t('common.product')}</Text>
-							</TableHead>
-							<TableHead {...head('price')}>
-								<Text>{t('common.price')}</Text>
-							</TableHead>
-							<TableHead {...head('qty')}>
-								<Text>{t('pos_cart.qty_abbrev')}</Text>
-							</TableHead>
-							<TableHead {...head('refundQty')} accessibilityLabel={t('orders.refund_qty')}>
-								<Text>{t('orders.refund_qty_short')}</Text>
-							</TableHead>
-							<TableHead {...head('refundAmount')} accessibilityLabel={t('orders.refund_amount')}>
-								<Text>{t('orders.refund_amount_short')}</Text>
-							</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{fields.map((field, index) => {
-							const itemRefund = lineItemRefunds[index];
-							const itemRefundWithTax = formatLineItemRefundWithTax(itemRefund, dp);
+				{isPhone ? (
+					<View>
+						{fields.map((field, index) => (
+							<View
+								key={field.id}
+								testID="refund-line-row"
+								className="border-border gap-1 border-b py-1.5"
+							>
+								<Text>{field.name}</Text>
+								<View className="flex-row items-center gap-2">
+									<Text
+										testID="refund-line-price-qty"
+										tabular
+										className="text-muted-foreground min-w-0 flex-1"
+									>
+										{t('orders.refund_line_price_qty', { price: prices[index], qty: qtys[index] })}
+									</Text>
+									<View style={{ width: qtyBox }}>
+										<Text nativeID={`refund-qty-label-${index}`} style={SR_ONLY}>
+											{t('orders.refund_qty')}
+										</Text>
+										{qtyInput(index, `refund-qty-label-${index}`)}
+									</View>
+									<View className="items-end" style={{ minWidth: amountBox }}>
+										<Text style={SR_ONLY}>{t('orders.refund_amount')}</Text>
+										<Text testID="refund-line-amount" tabular numberOfLines={1}>
+											{formatLineItemRefundWithTax(lineItemRefunds[index], dp)}
+										</Text>
+									</View>
+								</View>
+							</View>
+						))}
+					</View>
+				) : (
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead {...head('product')}>
+									<Text>{t('common.product')}</Text>
+								</TableHead>
+								<TableHead {...head('price')}>
+									<Text>{t('common.price')}</Text>
+								</TableHead>
+								<TableHead {...head('qty')}>
+									<Text>{t('pos_cart.qty_abbrev')}</Text>
+								</TableHead>
+								<TableHead {...head('refundQty')} accessibilityLabel={t('orders.refund_qty')}>
+									<Text>{t('orders.refund_qty_short')}</Text>
+								</TableHead>
+								<TableHead {...head('refundAmount')} accessibilityLabel={t('orders.refund_amount')}>
+									<Text>{t('orders.refund_amount_short')}</Text>
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{fields.map((field, index) => {
+								const itemRefund = lineItemRefunds[index];
+								const itemRefundWithTax = formatLineItemRefundWithTax(itemRefund, dp);
 
-							return (
-								<TableRow key={field.id}>
-									<TableCell {...column('product')}>
-										<Text numberOfLines={2}>{field.name}</Text>
-									</TableCell>
-									<TableCell {...column('price')}>
-										<Text>{prices[index]}</Text>
-									</TableCell>
-									<TableCell {...column('qty')}>
-										<Text>{linesLocked ? '–' : field.remaining_quantity}</Text>
-									</TableCell>
-									<TableCell {...column('refundQty')}>
-										<FormField
-											control={form.control}
-											name={`line_items.${index}.refund_qty`}
-											render={({ field: qtyField }) => (
-												<FormAmountField kind="count" live {...qtyField} disabled={linesLocked} />
-											)}
-										/>
-									</TableCell>
-									<TableCell {...column('refundAmount')}>
-										<Text>{itemRefundWithTax}</Text>
-									</TableCell>
-								</TableRow>
-							);
-						})}
-					</TableBody>
-				</RefundTable>
+								return (
+									<TableRow key={field.id}>
+										<TableCell {...column('product')}>
+											<Text numberOfLines={2}>{field.name}</Text>
+										</TableCell>
+										<TableCell {...column('price')}>
+											<Text>{prices[index]}</Text>
+										</TableCell>
+										<TableCell {...column('qty')}>
+											<Text>{linesLocked ? '–' : field.remaining_quantity}</Text>
+										</TableCell>
+										<TableCell {...column('refundQty')}>{qtyInput(index)}</TableCell>
+										<TableCell {...column('refundAmount')}>
+											<Text>{itemRefundWithTax}</Text>
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				)}
 
 				<FormField
 					control={form.control}

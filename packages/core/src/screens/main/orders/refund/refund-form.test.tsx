@@ -11,6 +11,7 @@ import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { DeviceScope } from '@wcpos/components/lib/device';
 
 import { RefundOrderForm } from './form';
 
@@ -21,7 +22,6 @@ function mockWebProps({ testID, ...props }: any) {
 let mockEnableRefundActions = false;
 let mockOnlineStatus = 'online-website-available';
 let mockSpacingUnit = 4;
-let mockTableLayout: ((event: unknown) => void) | undefined;
 // The refund form's heads grow with their text (TableHead's own h-9 does not).
 const HEAD_GROWS = 'h-auto min-h-9 py-1';
 jest.mock('@wcpos/components/lib/use-spacing-unit', () => ({
@@ -93,12 +93,13 @@ jest.mock('@wcpos/components/form', () => ({
 // the count fields render too, addressed by their field name.
 jest.mock('../../components/amount-field', () => ({
 	AmountField: () => null,
-	FormAmountField: ({ testID, name, kind, onChange, disabled }: any) => {
+	FormAmountField: ({ testID, name, kind, onChange, disabled, ...props }: any) => {
 		const id = testID ?? (kind === 'count' ? name : undefined);
 		return id ? (
 			<input
 				data-testid={id}
 				disabled={disabled}
+				aria-labelledby={props['aria-labelledby']}
 				onChange={(e) => onChange(kind === 'count' ? Number(e.target.value) : e.target.value)}
 			/>
 		) : null;
@@ -157,16 +158,14 @@ jest.mock('@wcpos/components/dialog', () => ({
 		);
 	},
 }));
-// The table's frame reports the width (jsdom lays nothing out); the sideways scroll shows its content width.
+// A ScrollView shows whether it is horizontal, so a test can prove the lines never scroll sideways.
+// jsdom lays nothing out (RN-web reads a 0-wide window), so the form renders at a tablet's width
+// and a phone test wraps it in `DeviceScope phone`.
 jest.mock('react-native', () => {
 	const native = jest.requireActual('react-native');
 	return {
 		...native,
-		View: (props: any) => {
-			if (props.testID !== 'refund-table-frame') return <native.View {...props} />;
-			mockTableLayout = props.onLayout;
-			return <div data-testid={props.testID}>{props.children}</div>;
-		},
+		useWindowDimensions: () => ({ ...native.useWindowDimensions(), width: 1024, height: 768 }),
 		ScrollView: ({ children, testID, horizontal, contentContainerStyle }: any) => (
 			<div
 				data-testid={testID}
@@ -195,7 +194,16 @@ jest.mock('@wcpos/components/table', () => ({
 	TableRow: ({ children }: any) => <tr>{children}</tr>,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, numberOfLines }: any) => <span data-lines={numberOfLines}>{children}</span>,
+	Text: ({ children, numberOfLines, testID, nativeID, style }: any) => (
+		<span
+			data-lines={numberOfLines}
+			data-testid={testID}
+			id={nativeID}
+			data-sr-only={style?.position === 'absolute' && style?.width === 1 ? 'true' : undefined}
+		>
+			{children}
+		</span>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: any) => <div>{children}</div>,
@@ -258,7 +266,13 @@ jest.mock('expo-router', () => ({ useRouter: () => mockUseRouter() }));
 jest.mock('uuid', () => ({ v4: () => 'mock-uuid' }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: any) =>
-		vars?.gateway ? `${key}:${vars.gateway}` : vars?.amount ? `${key}:${vars.amount}` : key,
+		vars?.gateway
+			? `${key}:${vars.gateway}`
+			: vars?.amount
+				? `${key}:${vars.amount}`
+				: vars?.price !== undefined
+					? `${key}:${vars.price}:${vars.qty}`
+					: key,
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
@@ -554,14 +568,9 @@ describe('RefundOrderForm', () => {
 		expect(screen.getByText('Aim Analog Watch')).toHaveAttribute('data-lines', '2');
 	});
 
-	describe('on a 390px phone', () => {
-		// The width the dialog body leaves the table at 390px.
-		const PHONE_TABLE_WIDTH = 350;
-		async function renderColumns(
-			spacingUnit: number,
-			width = PHONE_TABLE_WIDTH,
-			name = 'Aim Analog Watch'
-		) {
+	// The table is the wide layout only; a phone shows rows (below).
+	describe('the table, wider than a phone', () => {
+		async function renderColumns(spacingUnit: number, name = 'Aim Analog Watch') {
 			mockSpacingUnit = spacingUnit;
 			mockGet.mockImplementation((url: string) => {
 				if (url === 'payment-gateways') return Promise.resolve({ data: [] });
@@ -569,9 +578,12 @@ describe('RefundOrderForm', () => {
 			});
 			const lineItem = { id: 77, name, quantity: 2, total: '20.00', taxes: [] };
 			await act(async () => {
-				render(<RefundOrderForm order={{ ...order, line_items: [lineItem] }} />);
+				render(
+					<DeviceScope phone={false}>
+						<RefundOrderForm order={{ ...order, line_items: [lineItem] }} />
+					</DeviceScope>
+				);
 			});
-			await act(async () => mockTableLayout?.({ nativeEvent: { layout: { width } } }));
 			const classes = (nodes: HTMLElement[]) => nodes.map((n) => n.getAttribute('data-classes'));
 			return {
 				heads: classes(screen.getAllByRole('columnheader')),
@@ -583,36 +595,19 @@ describe('RefundOrderForm', () => {
 		const floorsOf = (nodes: HTMLElement[]) =>
 			nodes.map((node) => Number(node.getAttribute('data-floor')));
 
-		it('the floors do not fit: the table scrolls sideways and keeps every column’s floor', async () => {
-			const { lines } = await renderColumns(5);
-			const floors = floorsOf(screen.getAllByRole('columnheader'));
-			expect(floors).toHaveLength(5);
-			floors.forEach((floor) => expect(floor).toBeGreaterThan(0));
-			const cellFloors = floorsOf(within(screen.getAllByRole('row')[1]).getAllByRole('cell'));
-			expect(cellFloors).toEqual(floors);
-
-			const scroll = screen.getByTestId('refund-table-scroll');
-			const sum = floors.reduce((total, floor) => total + floor, 0);
-			expect(sum).toBeGreaterThan(PHONE_TABLE_WIDTH);
-			expect(scroll).toHaveAttribute('data-horizontal', 'true');
-			expect(Number(scroll.getAttribute('data-content-width'))).toBe(sum);
-			// The name column scrolls with the rest, kept at two lines.
-			expect(within(scroll).getByText('Aim Analog Watch')).toBeInTheDocument();
-			expect(lines).toBe('2');
-		});
-
-		it('the floors fit: no sideways scroll', async () => {
-			await renderColumns(3.5);
-			const floors = floorsOf(screen.getAllByRole('columnheader'));
-			floors.forEach((floor) => expect(floor).toBeGreaterThan(0));
-			const sum = floors.reduce((total, floor) => total + floor, 0);
-			expect(screen.getByTestId('refund-table-scroll')).toBeInTheDocument();
-
-			await act(async () => mockTableLayout?.({ nativeEvent: { layout: { width: sum } } }));
-			expect(screen.queryByTestId('refund-table-scroll')).not.toBeInTheDocument();
-			expect(
-				within(screen.getByTestId('refund-table-frame')).getByText('Aim Analog Watch')
-			).toBeInTheDocument();
+		it('the floors are set and the table never scrolls sideways', async () => {
+			for (const spacingUnit of [3.5, 4, 5]) {
+				const { lines } = await renderColumns(spacingUnit);
+				const floors = floorsOf(screen.getAllByRole('columnheader'));
+				expect(floors).toHaveLength(5);
+				floors.forEach((floor) => expect(floor).toBeGreaterThan(0));
+				const cellFloors = floorsOf(within(screen.getAllByRole('row')[1]).getAllByRole('cell'));
+				expect(cellFloors).toEqual(floors);
+				expect(screen.queryByTestId('refund-table-scroll')).not.toBeInTheDocument();
+				expect(screen.getByText('Aim Analog Watch')).toBeInTheDocument();
+				expect(lines).toBe('2');
+				cleanup();
+			}
 		});
 
 		it('the refund heads use short forms with the full name as their label', async () => {
@@ -635,7 +630,7 @@ describe('RefundOrderForm', () => {
 
 		it('the product column is floored at its longest name word', async () => {
 			const productFloor = async (name: string) => {
-				await renderColumns(3.5, PHONE_TABLE_WIDTH, name);
+				await renderColumns(3.5, name);
 				const [head] = floorsOf(screen.getAllByRole('columnheader'));
 				const [cell] = floorsOf(within(screen.getAllByRole('row')[1]).getAllByRole('cell'));
 				expect(cell).toBe(head);
@@ -661,6 +656,100 @@ describe('RefundOrderForm', () => {
 				cells: floored,
 				lines: '2',
 			});
+		});
+	});
+
+	describe('on a phone', () => {
+		const lines = [
+			{ id: 71, name: 'Aim Analog Watch', quantity: 2, total: '20.00', taxes: [] },
+			{ id: 72, name: 'Belt', quantity: 1, total: '9.00', taxes: [] },
+			{
+				id: 73,
+				name: 'Handgefertigte Keramik-Servierschale mit Goldrand',
+				quantity: 3,
+				total: '36.00',
+				taxes: [],
+			},
+		];
+		async function renderPhone(spacingUnit = 4) {
+			mockSpacingUnit = spacingUnit;
+			mockGet.mockImplementation((url: string) => {
+				if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+				return Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '1' } });
+			});
+			await act(async () => {
+				render(
+					<DeviceScope phone>
+						<RefundOrderForm order={{ ...order, line_items: lines }} />
+					</DeviceScope>
+				);
+			});
+		}
+
+		it('two-line rows with no column heads', async () => {
+			await renderPhone();
+			const rows = screen.getAllByTestId('refund-line-row');
+			expect(rows).toHaveLength(3);
+			expect(screen.queryAllByRole('columnheader')).toHaveLength(0);
+			for (const head of [
+				'common.product',
+				'common.price',
+				'pos_cart.qty_abbrev',
+				'orders.refund_qty_short',
+				'orders.refund_amount_short',
+			]) {
+				expect(screen.queryByText(head)).not.toBeInTheDocument();
+			}
+			const expected = [
+				['Aim Analog Watch', '10.00', '2'],
+				['Belt', '9.00', '1'],
+				['Handgefertigte Keramik-Servierschale mit Goldrand', '12.00', '3'],
+			];
+			rows.forEach((row, index) => {
+				const [name, price, qty] = expected[index];
+				expect(within(row).getByText(name)).toBeInTheDocument();
+				expect(within(row).getByTestId('refund-line-price-qty')).toHaveTextContent(
+					`orders.refund_line_price_qty:${price}:${qty}`
+				);
+				// Each value carries a hidden label for screen readers; the input is named by its own.
+				const [qtyLabel, amountLabel] = within(row)
+					.getAllByText(/^orders\.refund_(qty|amount)$/)
+					.map((label) => {
+						expect(label).toHaveAttribute('data-sr-only', 'true');
+						return label;
+					});
+				expect(qtyLabel).toHaveTextContent('orders.refund_qty');
+				expect(qtyLabel.id).toBe(`refund-qty-label-${index}`);
+				expect(within(row).getByTestId(`line_items.${index}.refund_qty`)).toHaveAttribute(
+					'aria-labelledby',
+					qtyLabel.id
+				);
+				expect(amountLabel).toHaveTextContent('orders.refund_amount');
+				const amountText = within(row).getByTestId('refund-line-amount');
+				expect(amountText).toHaveTextContent(/^0\.00$/);
+				expect(amountText).toHaveAttribute('data-lines', '1');
+			});
+			// Entering a quantity updates that row's amount.
+			fireEvent.change(screen.getByTestId('line_items.1.refund_qty'), { target: { value: '1' } });
+			await waitFor(() =>
+				expect(within(rows[1]).getByTestId('refund-line-amount')).toHaveTextContent('9.00')
+			);
+		});
+
+		it('no sideways scroll at any scale', async () => {
+			for (const spacingUnit of [3.5, 4, 5]) {
+				await renderPhone(spacingUnit);
+				expect(screen.getAllByTestId('refund-line-row')).toHaveLength(3);
+				expect(screen.queryByTestId('refund-table-scroll')).not.toBeInTheDocument();
+				expect(document.querySelector('[data-horizontal="true"]')).toBeNull();
+				cleanup();
+			}
+		});
+
+		it('the name is not clamped', async () => {
+			await renderPhone();
+			const name = screen.getByText('Handgefertigte Keramik-Servierschale mit Goldrand');
+			expect(name).not.toHaveAttribute('data-lines');
 		});
 	});
 
@@ -1124,6 +1213,19 @@ describe('RefundOrderForm', () => {
 			const payload = buildRefundPayload(args);
 			expect(payload).toEqual(expect.objectContaining({ amount: '45.00' }));
 			expect(payload).not.toHaveProperty('line_items');
+		});
+
+		it('phone: a locked line shows – as its quantity and disables the input', async () => {
+			mockRefundsGets(storeError);
+			render(
+				<DeviceScope phone>
+					<RefundOrderForm order={lockedOrder} />
+				</DeviceScope>
+			);
+			await screen.findByTestId('refund-history-missing');
+			const row = screen.getByTestId('refund-line-row');
+			expect(within(row).getByTestId('refund-line-price-qty')).toHaveTextContent(/:–$/);
+			expect(within(row).getByTestId('line_items.0.refund_qty')).toBeDisabled();
 		});
 
 		it('the cap still holds while the lines are locked', async () => {
