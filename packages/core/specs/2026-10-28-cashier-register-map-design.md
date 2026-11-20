@@ -174,7 +174,7 @@ nothing: the panel and the bar's drawer icon do not render (as today).
 drawer`, the bar's pill reads Counting. The pane: header 4.2 with ‹; the typed count with its
    keypad and the denomination tiles (the existing `register-count` body, moved under the panel);
    `Expected N` and the result badge (hidden for a blind cashier); other tenders counted; `Notice`
-   **n sales not yet on the server — the closure will record them**; `Notice` **n carts still open
+   **n records not yet on the server — the closure will carry them** (the count is sales, cash movements and the session row itself, so it says records); `Notice` **n carts still open
    · they wait for their cashier** (warning, never a block); `DialogFooter size="lg" intent`
    **Close & print**. ‹ and × both run `backToSelling` (the session returns to `open`). Manager
    approval is the existing centred approve sheet over it.
