@@ -279,7 +279,10 @@ export const useUpdateCartLine = () => {
 							ctx.store.preventOverselling
 						) {
 							const max = await allowedLineQuantity(ctx, { lineItems, lineUuid: uuid, line });
-							const units = max === null ? 0 : Math.floor(max - quantity + 1e-9);
+							const units = Math.min(
+								fold.delta,
+								max === null ? 0 : Math.floor(max - quantity + 1e-9)
+							);
 							if (units >= 1) {
 								result = await dispatch(
 									{ ...payload, changes: { quantity: quantity + units } },

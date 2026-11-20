@@ -603,6 +603,27 @@ describe('useUpdateCartLine — line_items', () => {
 		});
 	});
 
+	it('a fold clamp never writes more than the presses asked for when stock rises before the retry', async () => {
+		mockLineItemQuantity = 0;
+		// With variation_id 0, the first dispatch's stock guard reads only the product.
+		mockReadCatalog
+			.mockResolvedValueOnce({ manage_stock: true, stock_quantity: 3, backorders: 'no' })
+			.mockResolvedValue({ manage_stock: true, stock_quantity: 100, backorders: 'no' });
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', () => gate);
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = Array.from({ length: 20 }, () => result.current.incrementLineItem(uuid, 1));
+			release();
+			expect((await Promise.all(presses)).every(Boolean)).toBe(true);
+		});
+		const quantities = mockLocalPatch.mock.calls.map(([args]) => args.data.line_items[1].quantity);
+		expect(quantities[quantities.length - 1]).toBe(20);
+		expect(quantities.every((quantity) => quantity <= 20)).toBe(true);
+	});
+
 	it('a fold whose line was removed resolves every press undefined', async () => {
 		const removed = jest
 			.requireMock('../contexts/current-order')
