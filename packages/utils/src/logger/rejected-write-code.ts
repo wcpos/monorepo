@@ -8,20 +8,29 @@ const WOO_RXDB_SYNC_RECORD_NOT_FOUND = 'woo_rxdb_sync_record_not_found';
 /** Store refusals that name a field the cashier can correct where it was entered. */
 const INVALID_FIELD_REASONS = new Set(['pos_data_invalid', 'rest_invalid_param']);
 
+// The plugin's 422 for a line change to a locked order (`Order_Writer::money_gate()`).
+const REOPEN_REQUIRED = 'reopen_required';
+
 /**
  * The code for a write the store refused, from its status and machine reason. ONE
  * mapping for every reporter of the same refusal — the sync observer's push.rejected
  * row and the screen's toast must agree: a 403 is the cashier's role (AUTH201), an
  * invalid field is SYNC211 ("correct the value"), a gone record is SYNC203, and
  * anything else is SYNC201 ("settle it
- * in Store health").
+ * in Store health"). Sentry POS-338: `orderClosed` codes a closed order's reopen_required SYNC204.
  */
-export function rejectedWriteCode(status: unknown, reason: unknown): ErrorCode {
+export function rejectedWriteCode(
+	status: unknown,
+	reason: unknown,
+	orderClosed?: boolean
+): ErrorCode {
 	if (status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
 	if (typeof reason === 'string' && INVALID_FIELD_REASONS.has(reason)) {
 		return ERROR_CODES.RECORD_INVALID_FIELD;
 	}
 	if (status === 404 && reason === WOO_RXDB_SYNC_RECORD_NOT_FOUND)
 		return ERROR_CODES.RECORD_GONE_ON_STORE;
+	if (status === 422 && reason === REOPEN_REQUIRED && orderClosed === true)
+		return ERROR_CODES.ORDER_CLOSED_ON_STORE;
 	return ERROR_CODES.RECORD_REJECTED;
 }

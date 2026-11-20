@@ -239,6 +239,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 						// only ActiveScopeChangedTwiceError — already reported, so skipped. Any
 						// other rejection getting this far is unexpected. Log it — without a
 						// second toast, which would double up on the cashier.
+						// An order queued for deletion now comes back as a refusal (toasted, `false`).
 						if (isErrorReported(error)) return;
 						cartLogger.error('Cart line removal failed', {
 							code: ERROR_CODES.CART_UPDATE_FAILED,

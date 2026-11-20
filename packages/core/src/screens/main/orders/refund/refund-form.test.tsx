@@ -12,8 +12,10 @@ import {
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { DeviceScope } from '@wcpos/components/lib/device';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { RefundOrderForm } from './form';
+import { RefundUnconfirmedError } from './refund-failure';
 
 function mockWebProps({ testID, ...props }: any) {
 	return testID ? { ...props, 'data-testid': testID } : props;
@@ -1148,6 +1150,75 @@ describe('RefundOrderForm', () => {
 				expect(screen.getByTestId('confirm-process-refund-button')).toBeDisabled()
 			);
 			expect(screen.getByText('orders.confirm_refund_description:€0.00')).toBeInTheDocument();
+		});
+	});
+
+	// #3380: a 2xx with no refund in it must not tell the cashier the refund went through.
+	describe('the answer to a sent refund', () => {
+		const cashOrder = { ...order, payment_method: 'pos_cash' } as never;
+		const back = jest.fn();
+		// jest.config maps the logger to a mock whose getLogger hands every caller one shared logger.
+		const { success, warn, error } = getLogger(['wcpos', 'mutations', 'refund']) as unknown as {
+			success: jest.Mock;
+			warn: jest.Mock;
+			error: jest.Mock;
+		};
+
+		beforeEach(() => {
+			mockUseRouter.mockImplementation(() => ({ back }));
+			mockGet.mockImplementation((url: string) =>
+				url === 'payment-gateways'
+					? Promise.resolve({ data: [] })
+					: Promise.resolve({ data: order.refunds, headers: { 'x-wp-totalpages': '1' } })
+			);
+		});
+
+		afterEach(() => {
+			mockUseRouter.mockImplementation(() => ({ back: jest.fn() }));
+		});
+
+		async function sendRefund(refundCall: jest.Mock) {
+			mockUseRefundMutation.mockReturnValue(refundCall);
+			render(<RefundOrderForm order={cashOrder} />);
+			fireEvent.change(screen.getByTestId('refund-custom-amount'), { target: { value: '5' } });
+			await waitFor(() => expect(screen.getByTestId('process-refund-button')).toBeEnabled());
+			fireEvent.click(screen.getByTestId('process-refund-button'));
+			fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+			await waitFor(() => expect(refundCall).toHaveBeenCalledTimes(1));
+		}
+
+		it('an unconfirmed refund warns, logs no success and stays on the form', async () => {
+			await sendRefund(jest.fn().mockRejectedValue(new RefundUnconfirmedError(23858, 200)));
+
+			await waitFor(() => expect(warn).toHaveBeenCalledWith('Refund failed', expect.anything()));
+			expect(warn).toHaveBeenCalledWith('Refund failed', {
+				showToast: true,
+				toast: {
+					title: 'orders.refund_unconfirmed',
+					text2: 'orders.refund_unconfirmed_check',
+				},
+				context: {
+					orderId: 23858,
+					status: 200,
+					error: 'Refund not confirmed: order 23858, status 200',
+				},
+				code: 'PAYMENT311',
+			});
+			expect(success).not.toHaveBeenCalled();
+			// The logger mock is shared by every module, so only this form's failure row is checked.
+			expect(error).not.toHaveBeenCalledWith('Refund failed', expect.anything());
+			expect(back).not.toHaveBeenCalled();
+		});
+
+		it('a genuine refund logs its success and goes back, as before', async () => {
+			await sendRefund(jest.fn().mockResolvedValue({ id: 230987, amount: '5.00' }));
+
+			await waitFor(() => expect(back).toHaveBeenCalledTimes(1));
+			expect(success).toHaveBeenCalledWith(
+				'orders.refund_processed:5.00',
+				expect.objectContaining({ showToast: true })
+			);
+			expect(warn).not.toHaveBeenCalledWith('Refund failed', expect.anything());
 		});
 	});
 

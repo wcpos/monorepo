@@ -9,6 +9,7 @@ export type ErrorCode =
 	| 'SYNC201'
 	| 'SYNC202'
 	| 'SYNC203'
+	| 'SYNC204'
 	| 'SYNC211'
 	| 'SYNC301'
 	| 'SYNC311'
@@ -221,6 +222,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 			'Nothing to fix on this device. If the order was deleted by mistake, restore it from the trash in WP Admin.',
 		dataSafety: 'order-safe',
 		summary: 'Your store no longer has this order, so this device settled its own copy.',
+	},
+	SYNC204: {
+		code: 'SYNC204',
+		symbol: 'ORDER_CLOSED_ON_STORE',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			'The store has already closed this order. Reopen it on the store first if the change is still needed, then tap Send again in Store health → Database, or Discard it.',
+		dataSafety: 'local-only',
+		summary: 'The store had already closed this order, so it refused a change to its lines.',
 	},
 	SYNC211: {
 		code: 'SYNC211',
@@ -1246,6 +1257,7 @@ export const ERROR_CODES = {
 	RECORD_REJECTED: 'SYNC201',
 	RECORD_REVERTED: 'SYNC202',
 	RECORD_GONE_ON_STORE: 'SYNC203',
+	ORDER_CLOSED_ON_STORE: 'SYNC204',
 	RECORD_INVALID_FIELD: 'SYNC211',
 	SYNC_BEHIND_HEAD: 'SYNC301',
 	SCHEMA_MISMATCH: 'SYNC311',
