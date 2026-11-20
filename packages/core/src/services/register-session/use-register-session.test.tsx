@@ -160,6 +160,11 @@ const mockStoreSession = {
 	},
 };
 
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeSiteCredentials: (site: { populate$: (key: string) => never }) =>
+		jest.requireActual('rxjs').defer(() => site.populate$('wp_credentials')),
+}));
 jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => mockBinding,
 }));

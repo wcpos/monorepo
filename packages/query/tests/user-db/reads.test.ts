@@ -67,6 +67,31 @@ it('resolves credentials without wrapping them and follows removal', async () =>
 	expect(values.filter((value) => value === PENDING_USER_DB_READ)).toHaveLength(1);
 });
 
+it('follows a linked cashier rename in link order, and never lists an unlinked one', async () => {
+	await db.wp_credentials.insert({ uuid: 'a', display_name: 'Ann' });
+	const b = await db.wp_credentials.insert({ uuid: 'b', display_name: 'Bob' });
+	const stranger = await db.wp_credentials.insert({ uuid: 'stranger', display_name: 'Eve' });
+	const site = await db.sites.insert({ uuid: 'site', wp_credentials: ['b', 'a'] });
+	const values: unknown[] = [];
+	subscription = observeSiteCredentials(site).subscribe((value) => values.push(value));
+	const names = () => (values.at(-1) as { display_name?: string }[]).map((row) => row.display_name);
+	await waitFor(() => expect(names()).toEqual(['Bob', 'Ann']));
+	await b.incrementalPatch({ display_name: 'Robert' });
+	await waitFor(() => expect(names()).toEqual(['Robert', 'Ann']));
+	await stranger.incrementalPatch({ display_name: 'Mallory' });
+	await db.wp_credentials.insert({ uuid: 'late', display_name: 'Late' });
+	await site.incrementalPatch({ wp_credentials: ['a', 'b'] });
+	await waitFor(() => expect(names()).toEqual(['Ann', 'Robert']));
+	expect(
+		values.every(
+			(value) =>
+				value === PENDING_USER_DB_READ ||
+				(value as { uuid: string }[]).every((row) => ['a', 'b'].includes(row.uuid))
+		)
+	).toBe(true);
+	expect(values.filter((value) => value === PENDING_USER_DB_READ)).toHaveLength(1);
+});
+
 it('re-emits pending on every source binding, then resolves genuinely empty lists', async () => {
 	const user = await db.users.insert({ uuid: 'user' });
 	const site = await db.sites.insert({ uuid: 'site' });
