@@ -23,6 +23,17 @@ function eventURL(event: { nativeEvent?: { url?: unknown } }): string | null {
 	return typeof url === 'string' && url !== '' ? url : null;
 }
 
+/** The origin of the URL an event names, when it names a parseable one. */
+function senderOrigin(event: { nativeEvent?: { url?: unknown } }): string | null {
+	const url = eventURL(event);
+	if (url === null) return null;
+	try {
+		return new URL(url).origin || null;
+	} catch {
+		return null;
+	}
+}
+
 /**
  * WebView component that automatically resizes to fill its parent container
  */
@@ -30,7 +41,7 @@ function WebView({
 	ref,
 	src,
 	srcDoc,
-	targetOrigin: _targetOrigin,
+	targetOrigin,
 	onMessage,
 	onContentSizeChange,
 	onLoad,
@@ -98,6 +109,9 @@ function WebView({
 			ref={localRef}
 			source={source}
 			onMessage={(event: WebViewMessageEvent) => {
+				// As on web, a view pinned to an origin hands on only that origin's messages;
+				// react-native-webview names the sending frame's URL.
+				if (targetOrigin && senderOrigin(event) !== targetOrigin) return;
 				/**
 				 * https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#onmessage
 				 * data from the webview must be a string, we want to convert this to an object

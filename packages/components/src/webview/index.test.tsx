@@ -166,3 +166,72 @@ describe('WebView native pay page session signal', () => {
 		});
 	});
 });
+
+describe('WebView native message origin', () => {
+	const STORE = 'https://shop.example.com';
+	const MESSAGE = JSON.stringify({
+		action: 'host-ping',
+		payload: { data: { id: 1 } },
+	});
+
+	const renderPinned = () => {
+		const onMessage = jest.fn();
+		render(
+			<WebView src={`${STORE}/checkout/order-pay/42/`} targetOrigin={STORE} onMessage={onMessage} />
+		);
+		return onMessage;
+	};
+
+	it("forwards the pinned origin's own page, with its data parsed", () => {
+		const onMessage = renderPinned();
+		rnProps().onMessage({
+			nativeEvent: { url: `${STORE}/checkout/order-received/42/?key=k`, data: MESSAGE },
+		});
+		expect(onMessage).toHaveBeenCalledTimes(1);
+		expect(onMessage.mock.calls[0][0].nativeEvent.data).toEqual(JSON.parse(MESSAGE));
+	});
+
+	it('drops a message from another origin', () => {
+		const onMessage = renderPinned();
+		rnProps().onMessage({
+			nativeEvent: { url: 'https://gateway.example.net/return', data: MESSAGE },
+		});
+		expect(onMessage).not.toHaveBeenCalled();
+	});
+
+	it('drops hosts that only begin with the pinned origin', () => {
+		const onMessage = renderPinned();
+		rnProps().onMessage({
+			nativeEvent: { url: 'https://shop.example.com.evil.test/x', data: MESSAGE },
+		});
+		rnProps().onMessage({
+			nativeEvent: { url: 'https://shop.example.com@evil.test/x', data: MESSAGE },
+		});
+		expect(onMessage).not.toHaveBeenCalled();
+	});
+
+	it('drops a message that names no parseable sender', () => {
+		const onMessage = renderPinned();
+		rnProps().onMessage({ nativeEvent: { data: MESSAGE } });
+		rnProps().onMessage({ nativeEvent: { url: '', data: MESSAGE } });
+		rnProps().onMessage({ nativeEvent: { url: 'not a url', data: MESSAGE } });
+		expect(onMessage).not.toHaveBeenCalled();
+	});
+
+	it('drops a message from another origin before parsing it', () => {
+		const onMessage = renderPinned();
+		rnProps().onMessage({ nativeEvent: { url: 'https://gateway.example.net/', data: 'not json' } });
+		rnProps().onMessage({
+			nativeEvent: { url: 'https://gateway.example.net/', data: { action: 'x' } },
+		});
+		expect(onMessage).not.toHaveBeenCalled();
+	});
+
+	it('forwards any sender when no origin is pinned', () => {
+		const onMessage = jest.fn();
+		render(<WebView src={`${STORE}/checkout/order-pay/42/`} onMessage={onMessage} />);
+		rnProps().onMessage({ nativeEvent: { url: 'https://anything.example.org/', data: MESSAGE } });
+		expect(onMessage).toHaveBeenCalledTimes(1);
+		expect(onMessage.mock.calls[0][0].nativeEvent.data).toEqual(JSON.parse(MESSAGE));
+	});
+});
