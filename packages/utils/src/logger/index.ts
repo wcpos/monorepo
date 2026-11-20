@@ -854,7 +854,7 @@ const mainTransport = (props: any) => {
 		};
 
 		// Add secondary message (description in new format)
-		if (options.toast?.text2) {
+		if (options.toast?.text2 !== undefined) {
 			toastConfig.description = options.toast.text2;
 		}
 

@@ -100,6 +100,25 @@ describe('createMerchantToast', () => {
 		});
 	});
 
+	it('keeps an explicit empty second line over a known code’s action hint', () => {
+		// "Nothing was taken" under PAYMENT999's "confirm whether it went through" contradicted itself.
+		const show = jest.fn();
+		const title = catalogue['pos_checkout.payment_not_recorded'];
+
+		createMerchantToast(
+			t,
+			show
+		)({
+			type: 'error',
+			title,
+			description: '',
+			merchantCopy: { explicitTitle: title, errorCode: 'PAYMENT999', logMessage: title },
+		});
+
+		expect(catalogue['health.logs.error_action.PAYMENT999']).toBeTruthy();
+		expect(show).toHaveBeenCalledWith({ type: 'error', title, description: '' });
+	});
+
 	it('passes a config with no seam field straight through', () => {
 		const show = jest.fn();
 		const config = { type: 'success', title: 'Order saved' };
