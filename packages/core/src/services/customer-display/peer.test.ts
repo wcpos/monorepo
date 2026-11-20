@@ -132,3 +132,33 @@ test.each(['channel error', 'failed connection'])(
 		expect(events).toEqual(['channel closed', 'connection closed', 'notified']);
 	}
 );
+
+test('after close(), late channel open and message events reach no handler', () => {
+	const channel = {
+		readyState: 'open',
+		send: jest.fn(),
+		close: jest.fn(),
+		onopen: null as (() => void) | null,
+		onmessage: null as ((event: { data: unknown }) => void) | null,
+	};
+	const connection = {
+		createDataChannel: jest.fn(() => channel),
+		addEventListener: jest.fn(),
+		close: jest.fn(),
+	};
+	Object.assign(globalThis, { RTCPeerConnection: jest.fn(() => connection) });
+	const peer = createOfferer();
+	const onOpen = jest.fn();
+	const onMessage = jest.fn();
+	peer.onOpen(onOpen);
+	peer.onMessage(onMessage);
+	channel.onmessage?.({ data: 'before' });
+	expect(onMessage).toHaveBeenCalledWith('before');
+
+	peer.close();
+	channel.onopen?.();
+	channel.onmessage?.({ data: 'late' });
+
+	expect(onOpen).not.toHaveBeenCalled();
+	expect(onMessage).toHaveBeenCalledTimes(1);
+});

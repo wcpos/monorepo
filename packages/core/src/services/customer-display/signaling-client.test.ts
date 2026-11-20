@@ -49,3 +49,19 @@ test('uses the display mailbox routes with the expected request shapes', async (
 		{ method: 'DELETE', url: '/wcpos/v2/display/displays/display-1' },
 	]);
 });
+
+test('postSignal returns the server signal id, or null when the body has none', async () => {
+	const bodies: unknown[] = [{ id: 42 }, {}, { id: '42' }, null];
+	const http = jest.fn(async () => ({ data: bodies.shift() })) as unknown as HttpFunction;
+	const client = createSignalingClient('/wcpos/v2/display', http);
+	const post = () =>
+		client.postSignal('display-1', {
+			from: 'pos:device-1',
+			to: 'display',
+			type: 'offer',
+			session: 'session-1',
+			body: {},
+		});
+
+	expect([await post(), await post(), await post(), await post()]).toEqual([42, null, null, null]);
+});
