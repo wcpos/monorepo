@@ -132,6 +132,10 @@ export type OpenOrdersScope = { cashierId: number; storeId?: number; registerId?
  * This till's open orders as a handle: one `collection.find(...).$` over the STORAGE-scoped
  * selector (#2242), rebound on every database the engine publishes (a scope move, a same-site
  * replacement), and one standing demand per open status while owned.
+ * A revision changing only `local`, `_rev`, `_meta` or `_attachments` keeps the previous hit
+ * and record instance (and result when nothing else changed), so a dirty mark does not
+ * re-render the POS (#3379); read `local` through `useRecordField` / `record.$` or
+ * `getLatest()`, never off `hit.record`.
  */
 export function acquireOpenOrdersQueryHandle(
 	engine: RxdbSyncEngine,
