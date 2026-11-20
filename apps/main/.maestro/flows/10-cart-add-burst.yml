@@ -129,6 +129,7 @@ env:
           id: "pos-tab-products"
 # The burst: nineteen taps at 200 ms, no assertions or waits between them.
 - evalScript: ${output.burstStartedAt = Date.now()}
+- evalScript: ${output.burstSettledAt = 0; output.settleSignal = 'field'}
 - tapOn:
     id: "product-tile"
     index: 0
@@ -144,6 +145,25 @@ env:
     when:
       true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
     commands:
+      # The badge carries the summed quantity. Its label regex matches iOS
+      # accessibilityText (run 44693059717) and Android contentDescription
+      # (run 44680615197). The tab switch and Maestro's settle wait are driver
+      # time, so phones time the badge. The optional wait falls back to the
+      # field timing below if the badge does not match.
+      - extendedWaitUntil:
+          visible:
+            id: "pos-tab-cart"
+            text: "20, .*"
+          timeout: 20000
+          optional: true
+      - evalScript: ${output.badgeSeenAt = Date.now()}
+      - runFlow:
+          when:
+            visible:
+              id: "pos-tab-cart"
+              text: "20, .*"
+          commands:
+            - evalScript: ${output.burstSettledAt = output.badgeSeenAt; output.settleSignal = 'badge'}
       - retry:
           maxRetries: 2
           commands:
@@ -170,13 +190,14 @@ env:
       text: "20"
     timeout: 20000
     optional: true
-- evalScript: ${output.burstSettledAt = Date.now()}
-- evalScript: "${console.log('WCPOS_E2E_CART_BURST ' + JSON.stringify({ adds: 20, burstTaps: 19, paceMs: 200, tapSpanMs: output.burstTappedAt - output.burstStartedAt, settleAfterLastTapMs: output.burstSettledAt - output.burstTappedAt, totalMs: output.burstSettledAt - output.burstStartedAt }))}"
+- evalScript: ${output.burstSettledAt = output.burstSettledAt || Date.now()}
+- evalScript: "${console.log('WCPOS_E2E_CART_BURST ' + JSON.stringify({ adds: 20, burstTaps: 19, paceMs: 200, tapSpanMs: output.burstTappedAt - output.burstStartedAt, settleAfterLastTapMs: output.burstSettledAt - output.burstTappedAt, totalMs: output.burstSettledAt - output.burstStartedAt, settleSignal: output.settleSignal }))}"
 - assertVisible:
     id: "cart-quantity-input"
     text: "20"
-# settleAfterLastTapMs is the app-attributable number (on phones it includes
-# one cart-tab tap of driver time); tapSpanMs is the driver's pacing and is
+# settleAfterLastTapMs on phones is last tap → badge 20 (no tab tap); when
+# settleSignal is field it still includes one tab tap.
+# tapSpanMs is the driver's pacing and is
 # logged, not gated. Local iPhone 16 Pro simulator, Metro --no-dev --minify,
 # 2026-09-09: tapSpanMs 7454, settleAfterLastTapMs 5261. Provisional ceiling
 # below; after two green four-device runs, tighten to the observed CI maximum
