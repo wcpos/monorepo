@@ -103,6 +103,9 @@ export type MoneyCommandPoster = Post & {
 	retire(kind: MoneyCommandKind, target: string | null): Promise<void>;
 };
 
+/** The entry whose re-send a refusal answered, so a recovery reads that entry's own row. */
+const refusedEntries = new WeakMap<object, MoneyCommandEntry>();
+
 /** The cashier's approval is re-checked for the commands that move money on a total. */
 const APPROVED_KINDS = new Set<MoneyCommandKind>(['intent', 'submit', 'close']);
 /** End a payment in motion: a pending edit is refused until they land, so they never push it. */
@@ -439,6 +442,7 @@ export async function resendOpenCommands(
 		if (phaseOf(entry) === 'unsent') continue;
 		const sent = await poster(entry.path, entry.body).catch(async (error: Error) => {
 			if (error.message === 'money_command_unclaimed') return null;
+			if (error instanceof Error) refusedEntries.set(error, entry);
 			// A definitive refusal settled its entry and says the resident's money is stale: the
 			// poster's settle runs the corrective refresh before the refusal propagates (Codex
 			// 4342609024 on #2831). The refusal is what the caller acts on, so a refresh that fails
@@ -520,7 +524,8 @@ export async function recoverMoneyCommands(
 			const failure = moneyRefusalOf(error);
 			const settled = sent.filter(({ id }) => !journaled.some((entry) => entry.id === id));
 			// A refusal that stored nothing carries no row: the till's own record is the money taken.
-			const recorded = settled.find((entry) => entry.kind === 'record')?.body.payment;
+			const refusedEntry = error instanceof Error ? refusedEntries.get(error) : undefined;
+			const recorded = refusedEntry?.kind === 'record' ? refusedEntry.body.payment : undefined;
 			const refused =
 				failure?.code && isDefinitiveMoneyRefusal(failure) && settled.length > 0
 					? {

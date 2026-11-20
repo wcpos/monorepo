@@ -316,6 +316,8 @@ it('logs a record refused because the store had closed the order as PAYMENT521 n
 	});
 	// The store stored nothing: no row is mirrored onto the resident.
 	expect(mockPatchEngineResident).not.toHaveBeenCalled();
+	// The refusal's settle runs the forced refresh that adopts the store's closed order.
+	expect(mockSettle).toHaveBeenCalledTimes(1);
 });
 
 it('localizes an amount-exceeds-balance refusal with the server balance', async () => {

@@ -1185,6 +1185,27 @@ describe('defer: a record journaled offline (ADR 0040 Decided 1)', () => {
 		expect(await entries()).toEqual([]);
 		expect(await recover()).toEqual([]);
 	});
+
+	// POS-338 review: the row comes from the refused re-send only, never from a record the same
+	// recovery answered before it.
+	it('a close refused after its deferred record was answered is returned as refused with no row', async () => {
+		await poster().defer('orders/5/payments', { payment: cash() });
+		store.modes = ['drop'];
+		await expect(poster()('orders/5/close', {})).rejects.toThrow('Network Error');
+		const answer = store.post.getMockImplementation()!;
+		store.post
+			.mockImplementationOnce(answer)
+			.mockRejectedValueOnce(httpError(409, 'wcpos_invalid_transition', { status: 409 }));
+		expect(await recover()).toEqual([
+			{
+				orderUuid: 'order',
+				answers: [],
+				refused: { code: 'wcpos_invalid_transition', row: null, summary: null },
+			},
+		]);
+		expect(store.rows.get('row-1')).toEqual(expect.objectContaining({ status: 'captured' }));
+		expect(await entries()).toEqual([]);
+	});
 });
 
 describe('Try again: resendOpenCommands', () => {
