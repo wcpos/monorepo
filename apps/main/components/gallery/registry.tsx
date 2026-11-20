@@ -38,7 +38,12 @@ import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
 import { stories as paneStack } from '@wcpos/components/pane-stack/gallery';
 import { IconSetProvider } from '@wcpos/components/icon';
 import { ThemeTraitsContext } from '@wcpos/components/lib/theme-traits';
-import { iconSetForTheme, traitsForTheme, typeSetForTheme } from '@wcpos/components/lib/themes';
+import {
+	iconSetForTheme,
+	isThemeName,
+	traitsForTheme,
+	typeSetForTheme,
+} from '@wcpos/components/lib/themes';
 import { useThemeType } from '@wcpos/core/contexts/theme-traits';
 import { PortalHost } from '@wcpos/components/portal';
 import { stories as slideOver } from '@wcpos/components/slide-over/gallery';
@@ -127,26 +132,12 @@ const registry: Record<string, Story[]> = {
 	'v2-dialog': dialogV2,
 };
 
-// Every theme is baselined: the five original ones since decision 12 (2026-10-16), the four personality
-// themes since 2026-11-06 (Paul: "proceed as you recommend", after a Bold field regression no cell could catch).
-const THEMES = [
-	'light',
-	'dark',
-	'ocean',
-	'sunset',
-	'monochrome',
-	'paper',
-	'warm',
-	'bold',
-	'market',
-] as const;
-type Theme = (typeof THEMES)[number];
-const isTheme = (theme: string | undefined): theme is Theme =>
-	(THEMES as readonly string[]).includes(theme ?? '');
+// Every theme is baselined (decision 12, 2026-10-16; the personality themes since 2026-11-06):
+// the list is the components package's THEME_RULES, so a new theme is shot without a second list to edit.
 
 function GalleryPage({ children }: React.PropsWithChildren) {
 	const { theme } = useLocalSearchParams<{ theme?: string }>();
-	const selected = isTheme(theme) ? theme : 'light';
+	const selected = isThemeName(theme) ? theme : 'light';
 	const { type, status } = useThemeType(typeSetForTheme(selected));
 	// Sync the URL's external theme selection before painting the cells.
 	React.useLayoutEffect(() => {
