@@ -28,6 +28,12 @@ import {
 } from '../../src/testing';
 
 addRxPlugin(RxDBLocalDocumentsPlugin);
+// The fake site answers populate$; the live read's get$/find path needs a real site document.
+jest.mock('../../src/user-db/reads', () => ({
+	...jest.requireActual('../../src/user-db/reads'),
+	observeSiteCredentials: (site: { populate$: (key: string) => never }) =>
+		jest.requireActual('rxjs').defer(() => site.populate$('wp_credentials')),
+}));
 
 let storeDB: StoreDatabase;
 let userDB: UserDatabase;

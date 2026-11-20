@@ -22,6 +22,8 @@ jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
 		credentials.populate$('stores'),
+	observeSiteCredentials: (site: { populate$: (key: string) => never }) =>
+		jest.requireActual('rxjs').defer(() => site.populate$('wp_credentials')),
 }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
 jest.mock('@wcpos/components/icon', () => ({
