@@ -1029,6 +1029,8 @@
 	"orders.refund_background": "WCPOS was in the background, so no refund was made.",
 	"orders.refund_outcome_unknown": "WCPOS couldn't confirm whether this refund went through.",
 	"orders.refund_check_before_retry": "Open the order and check its refunds before trying again — a retry could refund twice.",
+	"orders.refund_unconfirmed": "The store did not confirm the refund.",
+	"orders.refund_unconfirmed_check": "Check this order's refunds before refunding again.",
 	"orders.refund_order": "Refund Order #{number}",
 	"orders.refund_processed": "Refund of {amount} processed",
 	"orders.refund_qty": "Refund Qty",

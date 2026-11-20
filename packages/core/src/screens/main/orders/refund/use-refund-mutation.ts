@@ -6,6 +6,7 @@ import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { refreshOrderRefunds, refreshRecordByWooId } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
+import { RefundUnconfirmedError } from './refund-failure';
 import { useRegisterStatus } from '../../../../services/register-session/use-register-status';
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -77,6 +78,15 @@ export function buildRefundPayload({
  */
 export function createRefundIdempotencyKey(orderId: number) {
 	return `refund-${orderId}-${uuidv4()}`;
+}
+
+/**
+ * A created refund is a plain object with a positive integer `id`.
+ */
+function isCreatedRefund(data: unknown): data is { id: number } {
+	if (typeof data !== 'object' || data === null || Array.isArray(data)) return false;
+	const id = (data as { id?: unknown }).id;
+	return typeof id === 'number' && Number.isInteger(id) && id > 0;
 }
 
 /**
@@ -163,7 +173,13 @@ export function useRefundMutation() {
 				}
 			}
 
-			return response?.data;
+			// #3380: a 2xx with no created refund in it (null, a non-JSON string, `{}`) is
+			// not a success. Checked after the refreshes, so a refund the store did make shows.
+			const created: unknown = response?.data;
+			if (!isCreatedRefund(created)) {
+				throw new RefundUnconfirmedError(orderId, response?.status);
+			}
+			return created;
 		},
 		[registerId, blockIfDegraded, http, runtime, sessionId]
 	);
