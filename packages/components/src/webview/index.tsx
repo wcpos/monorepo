@@ -29,7 +29,10 @@ function eventURL(event: { nativeEvent?: { url?: unknown } }): string | null {
 
 /** The origin of the URL an event names, when it names a parseable one. */
 function senderOrigin(event: { nativeEvent?: { url?: unknown } }): string | null {
-	const url = eventURL(event);
+	return originOf(eventURL(event));
+}
+
+function originOf(url: string | null): string | null {
 	if (url === null) return null;
 	try {
 		return new URL(url).origin || null;
@@ -138,7 +141,7 @@ function WebView({
 					if (!loggedDropRef.current) {
 						loggedDropRef.current = true;
 						log.warn('Ignored a message from a page outside the pinned origin', {
-							context: { senderOrigin: senderOrigin(event), pinnedOrigin: targetOrigin },
+							context: { senderOrigin: senderOrigin(event), pinnedOrigin: originOf(targetOrigin) },
 						});
 					}
 					return;

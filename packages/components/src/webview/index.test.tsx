@@ -313,6 +313,22 @@ describe('WebView native message origin', () => {
 		expect(parentOnMessage).not.toHaveBeenCalled();
 	});
 
+	it('refuses a sender with a doubled www. prefix', () => {
+		const onMessage = renderPinned();
+		rnProps().onMessage({
+			nativeEvent: { url: 'https://www.www.shop.example.com/x', data: MESSAGE },
+		});
+		expect(onMessage).not.toHaveBeenCalled();
+	});
+
+	it('refuses a blob: document even from the store', () => {
+		const onMessage = renderPinned();
+		rnProps().onMessage({
+			nativeEvent: { url: 'blob:https://shop.example.com/0b7c-uuid', data: MESSAGE },
+		});
+		expect(onMessage).not.toHaveBeenCalled();
+	});
+
 	it('refuses another port', () => {
 		for (const [pin, url] of [
 			[STORE, `${STORE}:8443/x`],
@@ -368,6 +384,16 @@ describe('WebView native message origin', () => {
 		);
 		expect(JSON.stringify(mockWarn.mock.calls[0])).not.toContain(MESSAGE);
 		expect(JSON.stringify(mockWarn.mock.calls[0])).not.toContain('/return');
+	});
+
+	it('logs the pin as an origin, never its path or query', () => {
+		renderPinned('https://shop.example.com/checkout/?key=secret');
+		rnProps().onMessage({
+			nativeEvent: { url: 'https://checkout.gateway.example.net/return', data: MESSAGE },
+		});
+		expect(mockWarn).toHaveBeenCalledTimes(1);
+		expect(mockWarn.mock.calls[0][1].context.pinnedOrigin).toBe('https://shop.example.com');
+		expect(JSON.stringify(mockWarn.mock.calls[0])).not.toContain('secret');
 	});
 
 	it('an admitted message logs nothing', () => {
