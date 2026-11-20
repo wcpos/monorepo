@@ -785,7 +785,20 @@ describe('EditOrderForm Cashier and Store', () => {
 		store: mockFormSelect.mock.calls.some(([props]) => props.name === 'store_id'),
 	});
 
+	// What each write set: the record holds it, and a resolver runs on the payload it lands on.
+	let writes: Record<string, unknown>[];
+	let beforeWrite: () => void;
+
 	beforeEach(() => {
+		writes = [];
+		beforeWrite = () => undefined;
+		mockLocalPatch.mockImplementation(async ({ data, changes }) => {
+			beforeWrite();
+			const patch = changes ? changes(orderPayload) : data;
+			writes.push(patch);
+			Object.assign(orderPayload, patch);
+			return { document: order, changes: patch };
+		});
 		orderPayload.meta_data = sale();
 		mockCanReassign = true;
 		mockFeatures = ['order_cashier_reassignment'];
@@ -810,12 +823,10 @@ describe('EditOrderForm Cashier and Store', () => {
 		const [user, ...rest] = sale();
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledWith(
-			{
-				document: order,
-				data: { meta_data: [{ ...user, value: '9' }, ...rest] },
-			},
+			{ document: order, changes: expect.any(Function) },
 			{ stampTill: false }
 		);
+		expect(writes).toEqual([{ meta_data: [{ ...user, value: '9' }, ...rest] }]);
 		expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
 			mockLocalPatch.mock.invocationCallOrder[0]
 		);
@@ -832,7 +843,7 @@ describe('EditOrderForm Cashier and Store', () => {
 		mockPicks = { cashier_id: '9', store_id: '' };
 		render(<EditOrderForm order={order} />);
 		await press('order-edit-update-cashier');
-		const written = mockLocalPatch.mock.calls[0][0].data.meta_data;
+		const written = writes[0].meta_data as { key: string }[];
 		expect(written.some((row: { key: string }) => row.key === '_pos_store')).toBe(false);
 		expect(written).toHaveLength(4);
 	});
@@ -843,13 +854,7 @@ describe('EditOrderForm Cashier and Store', () => {
 		await press('order-edit-update-store');
 		const [user, store, ...rest] = sale();
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(mockLocalPatch).toHaveBeenCalledWith(
-			{
-				document: order,
-				data: { meta_data: [user, { ...store, value: '4' }, ...rest] },
-			},
-			{ stampTill: false }
-		);
+		expect(writes).toEqual([{ meta_data: [user, { ...store, value: '4' }, ...rest] }]);
 		expect(mockPushDocument).toHaveBeenCalledTimes(1);
 		expect(testLogger.success).toHaveBeenCalledWith('orders.store_updated', expect.anything());
 	});
@@ -874,23 +879,46 @@ describe('EditOrderForm Cashier and Store', () => {
 	it('restores the previous cashier and pushes the revert when the push is refused', async () => {
 		mockPicks.cashier_id = '9';
 		mockPushDocument.mockRejectedValueOnce(new Error('HTTP 500'));
-		// The record holds each write, so the revert is built from the order carrying cashier 9.
-		mockLocalPatch.mockImplementation(async ({ data }) => {
-			Object.assign(orderPayload, data);
-			return { document: order };
-		});
 		render(<EditOrderForm order={order} />);
 		await press('order-edit-update-cashier');
 		expect(mockLocalPatch).toHaveBeenCalledTimes(2);
 		const [user, ...rest] = sale();
-		const [written, reverted] = mockLocalPatch.mock.calls.map(([call]) => call.data.meta_data);
-		expect(written).toEqual([{ ...user, value: '9' }, ...rest]);
-		// The revert turns cashier 9 back into 7 and leaves every other row as it was.
-		expect(reverted).not.toBe(written);
-		expect(reverted).toEqual(sale());
+		// The revert is resolved on the order carrying cashier 9: it turns 9 back into 7 and leaves
+		// every other row as it was.
+		expect(writes).toEqual([
+			{ meta_data: [{ ...user, value: '9' }, ...rest] },
+			{ meta_data: sale() },
+		]);
 		expect(orderPayload.meta_data).toEqual(sale());
 		expect(mockPushDocument).toHaveBeenCalledTimes(2);
 		expect(testLogger.success).not.toHaveBeenCalled();
+	});
+
+	it('leaves a newer cashier alone when the refused write has been overtaken: no revert, no revert push', async () => {
+		mockPicks.cashier_id = '9';
+		mockPushDocument.mockImplementationOnce(async () => {
+			// Cashier 11 is assigned from elsewhere while the refused write is out.
+			orderPayload.meta_data = orderPayload.meta_data.map((row) =>
+				row.key === '_pos_user' ? { ...row, value: '11' } : row
+			);
+			throw new Error('HTTP 500');
+		});
+		render(<EditOrderForm order={order} />);
+		await press('order-edit-update-cashier');
+		expect(writes[1]).toEqual({});
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(orderPayload.meta_data.find((row) => row.key === '_pos_user')?.value).toBe('11');
+	});
+
+	it('keeps a custom field written between the read and the identity write', async () => {
+		mockPicks.cashier_id = '9';
+		beforeWrite = () => {
+			orderPayload.meta_data = [...orderPayload.meta_data, { key: 'late', value: 'landed' }];
+		};
+		render(<EditOrderForm order={order} />);
+		await press('order-edit-update-cashier');
+		expect(writes[0].meta_data).toContainEqual({ key: 'late', value: 'landed' });
+		expect(writes[0].meta_data).toContainEqual({ id: 1, key: '_pos_user', value: '9' });
 	});
 
 	it('keeps the cashier queued when the push is still pending: no revert, "still on its way"', async () => {

@@ -17,7 +17,8 @@ type Picker = { name: string; value: unknown; onChange: (value: string) => void 
 type Autosave = { persist: (data: Record<string, unknown>) => Promise<unknown> };
 
 const mockHarness: { autosave?: Autosave } = {};
-const mockSaveOrderFields = jest.fn(async (_record: unknown, _data: object) => true);
+type Fields = object | ((payload: Record<string, unknown>) => object);
+const mockSaveOrderFields = jest.fn(async (_record: unknown, _data: Fields) => true);
 const mockStore = { currency: 'USD', store_country: 'US' };
 let mockCanReassign = false;
 let mockStoresPending = false;
@@ -302,7 +303,9 @@ it('a store update keeps the cashier picked but not yet sent', async () => {
 	// The write lands on the record, as the engine's would.
 	mockSaveOrderFields.mockImplementationOnce(async (record, data) => {
 		const target = record as EngineRecord<'orders'>;
-		const payload = { ...target.payload, ...data };
+		// A resolver write is applied to the payload it lands on.
+		const changes = typeof data === 'function' ? data(target.payload) : data;
+		const payload = { ...target.payload, ...changes };
 		Object.assign(target, { payload });
 		(target.$ as BehaviorSubject<unknown>).next({ toJSON: () => ({ payload }) });
 		return true;

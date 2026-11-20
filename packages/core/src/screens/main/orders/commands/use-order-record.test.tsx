@@ -103,6 +103,39 @@ describe('the Orders command never stamps this device on an order (Edit tab writ
 		expect(enqueued().meta_data).toEqual(meta);
 	});
 
+	it('a resolver write lands on the payload as it stands: a custom row written after the read stays', async () => {
+		seed([...identity]);
+		const { result } = renderHook(() => useOrderRecord());
+		const read = mockStored.payload.meta_data as typeof identity; // the form read the order here
+		await act(async () => {
+			await result.current.saveOrderFields(order, {
+				meta_data: [...read, { key: 'custom', value: 'landed' }],
+			} as never);
+			const cashier = (payload: { meta_data?: unknown }) => ({
+				meta_data: (payload.meta_data as typeof identity).map((row) =>
+					row.key === '_pos_user' ? { ...row, value: '9' } : row
+				),
+			});
+			expect(await result.current.saveOrderFields(order, cashier as never)).toBe(true);
+		});
+		expect(mockStored.payload.meta_data).toEqual([
+			{ ...identity[0], value: '9' },
+			identity[1],
+			{ key: 'custom', value: 'landed' },
+		]);
+		expect(keys(enqueued().meta_data)).not.toContain('_wcpos_till');
+	});
+
+	it('a resolver that finds nothing to change writes nothing and resolves false', async () => {
+		seed([...identity]);
+		const { result } = renderHook(() => useOrderRecord());
+		await act(async () => {
+			expect(await result.current.saveOrderFields(order, () => ({}))).toBe(false);
+		});
+		expect(mockWrite).not.toHaveBeenCalled();
+		expect(mockStored.payload.meta_data).toEqual(identity);
+	});
+
 	it('a reopen still stamps this device’s register and till (ledger line 10)', async () => {
 		seed([...identity]);
 		const { result } = renderHook(() => useOrderRecord());

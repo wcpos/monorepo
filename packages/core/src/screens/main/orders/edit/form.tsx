@@ -106,9 +106,10 @@ const formSchema = z.object({
 const statusSchema = z.object({ status: z.string() });
 type FormValues = z.infer<typeof formSchema>;
 /** An intent the Edit tab sends: its write, the write that undoes it, and how it is reported. */
+type OrderFields = Partial<OrderPayload> | ((payload: OrderPayload) => Partial<OrderPayload>);
 type Intent = {
-	patch: Partial<OrderPayload>;
-	revert: () => Partial<OrderPayload>;
+	patch: OrderFields;
+	revert: OrderFields;
 	success: string;
 	failure: string;
 	context: Record<string, unknown>;
@@ -244,7 +245,7 @@ function EditOrderFormFields({ order }: Props) {
 			if (data.status === previous) return null;
 			return {
 				patch: { status: data.status },
-				revert: () => ({ status: previous }),
+				revert: { status: previous },
 				success: t('orders.status_updated'),
 				failure: 'Failed to update order status',
 				context: { status: data.status },
@@ -258,15 +259,22 @@ function EditOrderFormFields({ order }: Props) {
 	 */
 	function updateIdentity(field: 'cashier' | 'store', next: string) {
 		const key = field === 'cashier' ? POS_META_KEYS.user : POS_META_KEYS.store;
+		const valueOf = (meta: OrderPayload['meta_data']) => {
+			const identity = wooMetaCarrier.readIdentity(meta);
+			return (field === 'cashier' ? identity.cashierId : identity.storeId) ?? '';
+		};
 		return sendIntent((latest) => {
-			const identity = wooMetaCarrier.readIdentity(latest.meta_data);
-			const previous = (field === 'cashier' ? identity.cashierId : identity.storeId) ?? '';
+			const previous = valueOf(latest.meta_data);
 			if (!next || next === previous) return null;
 			return {
-				patch: { meta_data: withIdentityRow(latest.meta_data, key, next) },
-				revert: () => ({
-					meta_data: withIdentityRow(order.getLatest().payload.meta_data, key, previous),
-				}),
+				// Applied to the payload the write lands on: a custom field written meanwhile stays.
+				patch: (payload) => ({ meta_data: withIdentityRow(payload.meta_data, key, next) }),
+				// Only while the order still holds the refused value: a newer assignment is left alone,
+				// and the empty change writes and pushes nothing.
+				revert: (payload) =>
+					valueOf(payload.meta_data) === next
+						? { meta_data: withIdentityRow(payload.meta_data, key, previous) }
+						: {},
 				success: field === 'cashier' ? t('orders.cashier_updated') : t('orders.store_updated'),
 				failure:
 					field === 'cashier' ? 'Failed to update order cashier' : 'Failed to update order store',
@@ -311,7 +319,7 @@ function EditOrderFormFields({ order }: Props) {
 				!pending &&
 				!blockIfDegraded('save-order', { orderId: order.uuid })
 			) {
-				const reverted = await saveOrderFields(order, intent.revert());
+				const reverted = await saveOrderFields(order, intent.revert);
 				if (reverted) {
 					void pushDocument(order).catch((revertError) =>
 						mutationLogger.warn('Failed to send the reverted order', {
