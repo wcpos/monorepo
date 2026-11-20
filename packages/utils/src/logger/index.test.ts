@@ -408,6 +408,21 @@ describe('logger/index', () => {
 				})
 			);
 		});
+		it('passes an explicit empty second line through, so the adapter adds no action hint', () => {
+			const mockToast = jest.fn();
+			setToast(mockToast);
+
+			getLogger(['wcpos', 'test']).error('x', {
+				code: 'PAYMENT999',
+				showToast: true,
+				toast: { title: 'x', text2: '' },
+			});
+			getLogger(['wcpos', 'test']).warn('y', { showToast: true, toast: { title: 'y' } });
+
+			expect(mockToast).toHaveBeenNthCalledWith(1, expect.objectContaining({ description: '' }));
+			expect(mockToast.mock.calls[1][0]).not.toHaveProperty('description');
+		});
+
 		it('maps the level to the toast variant by default', () => {
 			const mockToast = jest.fn();
 			setToast(mockToast);
