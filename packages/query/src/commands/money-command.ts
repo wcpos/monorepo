@@ -518,13 +518,14 @@ export async function recoverMoneyCommands(
 			// no refusal of the command. One left journaled is retried by the session's schedule.
 			const journaled = (await readOrderCommands(storeDB, orderUuid)).entries;
 			const failure = moneyRefusalOf(error);
+			const settled = sent.filter(({ id }) => !journaled.some((entry) => entry.id === id));
+			// A refusal that stored nothing carries no row: the till's own record is the money taken.
+			const recorded = settled.find((entry) => entry.kind === 'record')?.body.payment;
 			const refused =
-				failure?.code &&
-				isDefinitiveMoneyRefusal(failure) &&
-				sent.some(({ id }) => !journaled.some((entry) => entry.id === id))
+				failure?.code && isDefinitiveMoneyRefusal(failure) && settled.length > 0
 					? {
 							code: failure.code,
-							row: (failure.data?.payment as PaymentRow | undefined) ?? null,
+							row: ((failure.data?.payment ?? recorded) as PaymentRow | undefined) ?? null,
 							summary: (failure.data?.order as OrderPaymentSummary | undefined) ?? null,
 						}
 					: undefined;

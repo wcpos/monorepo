@@ -1494,6 +1494,58 @@ it('a refused record whose method the store no longer lists is named by its id',
 	expect(entry.message).toContain('10.00 pos_cheque was also taken');
 });
 
+/** POS-338: the store had already closed the order; it stored nothing, so the row is the till's own. */
+const closedOnRecovery = (methodId: string) =>
+	mockRecover.mockResolvedValueOnce([
+		{
+			orderUuid: 'order',
+			answers: [],
+			refused: {
+				code: 'wcpos_invalid_transition',
+				row: {
+					id: 'order-row',
+					amount: '10.00',
+					currency: 'USD',
+					method_id: methodId,
+					order_id: 42,
+				},
+				summary: null,
+			},
+		},
+	]);
+it('a record refused on recovery because the order was closed raises attention, logs PAYMENT521 and resolves the attempt', async () => {
+	await record();
+	closedOnRecovery('pos_cash');
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).not.toHaveBeenCalled();
+	expect(mockError).toHaveBeenCalledWith(
+		expect.stringContaining('so this 10.00 Cash payment was not recorded'),
+		expect.objectContaining({
+			code: ERROR_CODES.PAYMENT_ORDER_CLOSED,
+			showToast: true,
+			terminal: { operationType: 'sync.record', outcome: 'failed', operationId: 'order-row' },
+			context: expect.objectContaining({
+				type: 'payment.refused',
+				refusal: 'order_closed',
+				recordId: 'order',
+				orderId: 42,
+				amount: '10.00',
+				methodId: 'pos_cash',
+			}),
+		})
+	);
+	const [entry] = await firstValueFrom(journal.observePaymentAttention(mockContext.storeDB));
+	expect(entry).toEqual({
+		rowId: 'order-row',
+		orderUuid: 'order',
+		orderId: 42,
+		message: mockError.mock.calls.at(-1)?.[0],
+		refusedAt: expect.any(String),
+	});
+	expect(entry.message).toContain('so this 10.00 Cash payment was not recorded');
+});
+
 // Codex 4355660786 on #2865: a crash between claimRoute and markSent leaves a never-sent entry
 // whose claim lapsed. It put nothing on the server and awaits nothing: it blocks nothing (the
 // online recovery drops it; pinned in the query suites).
