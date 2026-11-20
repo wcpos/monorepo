@@ -48,7 +48,7 @@ export async function withoutLocallyProtected<T extends { uuid: string }>(
  * synthesizes a date/id stand-in instead (adopt-stamped-revision.ts), which must never be
  * mistaken for a content hash — so only a `sha256:` value counts here.
  */
-function stampedRevision(document: unknown): string | null {
+export function stampedRevision(document: unknown): string | null {
 	const revision = (document as { sync?: { revision?: unknown } } | null)?.sync?.revision;
 	return typeof revision === 'string' && revision.startsWith('sha256:') ? revision : null;
 }

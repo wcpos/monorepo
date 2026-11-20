@@ -25,7 +25,7 @@ import {
 import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
-import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
+import { hasPendingLocalWork, stampedRevision, withoutUnchanged } from './local-work-guard';
 import { adoptedSync, carriedFacts, readoptRequested, residentRevision } from './order-revision';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
@@ -287,7 +287,11 @@ export class EngineOrderRepository {
 			.exec();
 		const ack = context?.source === 'ack' ? context : undefined;
 		// An ack echo carries the server's stamp of the authenticated user (#936); a read carries a reassignment.
-		const identitySource = ack ? 'server' : 'read';
+		// An equal stamp means nothing new on the server; adopting would undo the ack's kept identity (#936).
+		const identitySourceFor = (resident: unknown, incoming: unknown) => {
+			const stamp = stampedRevision(resident);
+			return ack || (stamp !== null && stamp === stampedRevision(incoming)) ? 'server' : 'read';
+		};
 		// A pull requested BEFORE the resident was adopted whole answers with an older document.
 		// Measured: dev-next 2026-10-23, orders 115547/115569 — a boot pull answered mid-create
 		// landed after the ack and zeroed the till's total. WooCommerce saves an order several
@@ -341,7 +345,7 @@ export class EngineOrderRepository {
 				Array.isArray(entry.storedDocument.payload.meta_data)
 					? entry.storedDocument.payload.meta_data
 					: [],
-				identitySource
+				identitySourceFor(resident, entry.storedDocument)
 			);
 
 			if (serverMeta.length > 0) {
@@ -440,7 +444,7 @@ export class EngineOrderRepository {
 							meta_data: mergeProtectedOrderMeta(
 								Array.isArray(localMeta) ? localMeta : [],
 								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : [],
-								identitySource
+								identitySourceFor(current, document)
 							),
 						},
 					});
