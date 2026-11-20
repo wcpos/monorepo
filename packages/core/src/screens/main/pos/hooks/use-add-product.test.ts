@@ -287,6 +287,23 @@ describe('useAddProduct', () => {
 		expect(mockShowAddedToCartToast).not.toHaveBeenCalled();
 	});
 
+	it('a scan-driven add of an in-cart product takes the folding increment path', async () => {
+		const uuid = 'in-cart-line';
+		const line = { product_id: 101, quantity: 1 };
+		mockCurrentOrder = makeOrder(1, [line]);
+		mockFindByProductVariationID.mockReturnValue([line]);
+		mockGetUuidFromLineItem.mockReturnValue(uuid);
+		mockIncrementLineItem.mockResolvedValue(true);
+		const { result } = renderHook(() => useAddProduct());
+		const product = engineDocument({ id: 101, name: 'Plain product', type: 'simple' }, '101');
+		await act(async () => {
+			expect(await result.current.addProduct(product as never, { silent: true })).toBe(true);
+		});
+		expect(mockIncrementLineItem.mock.calls).toEqual([[uuid, 1]]);
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(mockShowAddedToCartToast).not.toHaveBeenCalled();
+	});
+
 	it('refuses a misfiled variation-typed products document instead of writing a malformed line', async () => {
 		// A products-collection document with type 'variation' is misfiled (the
 		// pre-fix search lane persisted Woo's variation-typed sku-leg rows; a
