@@ -25,7 +25,10 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
-import { resolveStoreTimezone } from '../screens/main/receipt/utils/resolve-store-timezone';
+import {
+	offsetToTimezone,
+	resolveStoreTimezone,
+} from '../screens/main/receipt/utils/resolve-store-timezone';
 import { DEVICE_ZONE, inZone, zoneOptions } from './store-zone';
 import { convertLocalDateToUTCString } from './use-local-date';
 
@@ -65,21 +68,34 @@ function usableZone(zone: string): boolean {
 	// No real store sits at a negative sub-hour offset, so the candidate is skipped.
 	if (/^-00:/.test(zone)) return false;
 	try {
+		// Sentry POS-340/343: tz() accepts strings Intl rejects ('UTC+04:00'), which later throw
+		// in Intl.DateTimeFormat callers; require both to agree.
+		new Intl.DateTimeFormat('en-US', { timeZone: zone });
 		return !Number.isNaN(tz(zone)(probe).getTime());
 	} catch {
 		return false;
 	}
 }
 
+/** Offset strings ('+04:00', 'UTC+4', 'GMT-5') become a zone Intl accepts; names pass through. */
+function normalizeZone(zone: string): string {
+	const match = /^(?:UTC|GMT)?([+-])(\d{1,2})(?::?(\d{2}))?$/i.exec(zone);
+	if (!match) return zone;
+	const sign = match[1] === '-' ? -1 : 1;
+	return offsetToTimezone(sign * (Number(match[2]) + Number(match[3] ?? 0) / 60));
+}
+
 const trimmed = (value: unknown): string | null =>
 	typeof value === 'string' && value.trim() ? value.trim() : null;
+
+const normalizeNullable = (zone: string | null): string | null => zone && normalizeZone(zone);
 
 export function resolveDayTimezone(
 	...[store, site]: Parameters<typeof resolveStoreTimezone>
 ): DayTimezone {
 	const candidates: [DayTimezone['source'], string | null][] = [
-		['store', trimmed(store?.timezone)],
-		['site', trimmed(site?.timezone_string)],
+		['store', normalizeNullable(trimmed(store?.timezone))],
+		['site', normalizeNullable(trimmed(site?.timezone_string))],
 		[
 			'offset',
 			site?.gmt_offset != null ? resolveStoreTimezone(null, { gmt_offset: site.gmt_offset }) : null,

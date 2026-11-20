@@ -97,6 +97,7 @@ jest.mock('@wcpos/query', () => ({
 	MoneyCommandError: class MoneyCommandError extends Error {},
 }));
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockLoggerError(...args),
@@ -729,3 +730,29 @@ jest.mock('@wcpos/query/mutations', () => ({
 	fakeMirror: (manager: unknown, recordId: string, changes: unknown) =>
 		mockPatchEngineResident({ manager, collection: 'orders', recordId, changes }),
 }));
+
+it('logs why an unanswered record is unknown, so Sentry can group it by cause', async () => {
+	jest.useFakeTimers();
+	try {
+		lane = 'online';
+		mockPost.mockRejectedValue(new Error('timeout of 30000ms exceeded'));
+		const { result } = renderHook(() => useRecordManualPayment());
+
+		let pending!: Promise<unknown>;
+		await act(async () => {
+			pending = result.current(order, method, { session: gateSession(), lane, amount: 100 });
+			await jest.advanceTimersByTimeAsync(20000);
+			await pending;
+		});
+
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				code: 'PAYMENT201',
+				context: expect.objectContaining({ reason: 'timeout of 30000ms exceeded' }),
+			})
+		);
+	} finally {
+		jest.useRealTimers();
+	}
+});

@@ -97,6 +97,46 @@ describe('store calendar days', () => {
 		});
 	});
 
+	it('normalises offset-string zones to a zone Intl accepts (POS-340/343)', () => {
+		expect(resolveDayTimezone({ timezone: '+04:00' }, {})).toEqual({
+			timezone: 'Etc/GMT-4',
+			source: 'store',
+		});
+		expect(resolveDayTimezone({ timezone: 'UTC+4' }, {})).toEqual({
+			timezone: 'Etc/GMT-4',
+			source: 'store',
+		});
+		expect(
+			resolveDayTimezone({ timezone: 'UTC+04:00' }, { timezone_string: 'Asia/Dubai' })
+		).toEqual({ timezone: 'Etc/GMT-4', source: 'store' });
+		expect(resolveDayTimezone({}, { timezone_string: 'GMT-5' })).toEqual({
+			timezone: 'Etc/GMT+5',
+			source: 'site',
+		});
+		expect(resolveDayTimezone({ timezone: 'Asia/Dubai' }, {})).toEqual({
+			timezone: 'Asia/Dubai',
+			source: 'store',
+		});
+	});
+
+	it('skips an offset zone when the engine has no offset support', () => {
+		const Original = Intl.DateTimeFormat;
+		const spy = jest.spyOn(Intl, 'DateTimeFormat').mockImplementation(((
+			locales?: any,
+			options?: Intl.DateTimeFormatOptions
+		) => {
+			if (/^[+-]/.test(options?.timeZone ?? '')) throw new RangeError('Invalid time zone');
+			return new Original(locales, options);
+		}) as any);
+		try {
+			expect(resolveDayTimezone({ timezone: '-03:30' }, { timezone_string: 'Asia/Dubai' })).toEqual(
+				{ timezone: 'Asia/Dubai', source: 'site' }
+			);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
 	it('uses device bounds only when site timezone fields are absent', () => {
 		const resolved = resolveDayTimezone({}, {});
 		expect(resolved).toEqual({

@@ -501,6 +501,7 @@ describe('recordManualPayment', () => {
 			expect(result).toEqual({
 				kind: 'unknown',
 				row: expect.objectContaining({ id: UUID.toLowerCase() }),
+				reason: error instanceof Error ? error.message : expect.any(String),
 			});
 		}
 	);
@@ -653,7 +654,11 @@ describe('recordManualPayment', () => {
 	it('a retry whose record another sender settled, but whose settled row is missing, reads as unknown (POS-31A)', async () => {
 		const deps = createDeps();
 		const result = await settledElsewhere(deps, null);
-		expect(result).toMatchObject({ kind: 'unknown', row: { id: mintedCard.id } });
+		expect(result).toMatchObject({
+			kind: 'unknown',
+			row: { id: mintedCard.id },
+			reason: 'settled_elsewhere',
+		});
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 

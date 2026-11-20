@@ -36,7 +36,7 @@
 	"pos_cart.quick_discounts_none": "No quick keys. The price keypad shows the digits only.",
 	"pos_cart.auto_print_without_receipt_hint": "Without a receipt printer, the print dialog opens after each sale.",
 	"pos_cart.sync_order": "Save to store",
-	"pos_cart.hand_over_hint": "These decide where the order waits. Changing one sends it to the store.",
+	"pos_cart.hand_over_hint": "These decide where the order waits. Press Send to move it.",
 	"pos_cart.hand_over": "Hand over",
 	"pos_products.option": "Option",
 	"pos_products.type_simple": "Simple",
