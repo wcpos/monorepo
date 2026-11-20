@@ -3560,7 +3560,14 @@ test('flow 10 switches to the cart tab with a retried tap on phones', () => {
 	assert.equal(runFlow.commands[1].evalScript, '${output.badgeSeenAt = Date.now()}');
 	const badge = runFlow.commands[2].runFlow;
 	assert.deepEqual(badge.when.visible, { id: 'pos-tab-cart', text: '20, .*' });
-	assert.equal(retryIndex, 3, 'badge wait, timestamp and conditional must precede the retry');
+	assert.equal(retryIndex, 4, 'badge wait, timestamp and conditional must precede the retry');
+	assert.deepEqual(runFlow.commands[3].runFlow.when.notVisible, {
+		id: 'pos-tab-cart',
+		text: '[0-9]+, .*',
+	});
+	assert.deepEqual(runFlow.commands[3].runFlow.commands, [
+		{ evalScript: "${output.settleSignal = 'badge-unreadable'}" },
+	]);
 	const badgeScripts = badge.commands.map((step) => step.evalScript).join(';');
 	assert.match(badgeScripts, /output\.burstSettledAt = output\.badgeSeenAt/);
 	assert.match(badgeScripts, /output\.settleSignal = 'badge'/);
@@ -3593,6 +3600,15 @@ test('flow 10 times the phone settle at the cart badge and keeps the 15 s gate',
 		)
 	);
 	assert.ok(afterLog.some((step) => step.assertVisible?.id === 'cart-subtotal'));
+	const unreadable = flow.findIndex(
+		(step) => step.assertTrue?.condition?.includes('badge-unreadable')
+	);
+	const quantity = flow.findIndex(
+		(step) => step.assertVisible?.id === 'cart-quantity-input' && step.assertVisible.text === '20'
+	);
+	const gate = flow.findIndex((step) => step.assertTrue?.condition?.includes('<= 15000'));
+	assert.ok(unreadable >= 0, 'missing the unreadable badge assertion');
+	assert.ok(quantity < unreadable && unreadable < gate, 'check the badge after quantity and before latency');
 });
 
 test('the Android emulator resolves DNS through public resolvers and proves connectivity before the suite', () => {

@@ -164,6 +164,14 @@ env:
               text: "20, .*"
           commands:
             - evalScript: ${output.burstSettledAt = output.badgeSeenAt; output.settleSignal = 'badge'}
+      # A label with no readable count is a selector failure, not cart latency.
+      - runFlow:
+          when:
+            notVisible:
+              id: "pos-tab-cart"
+              text: "[0-9]+, .*"
+          commands:
+            - evalScript: ${output.settleSignal = 'badge-unreadable'}
       - retry:
           maxRetries: 2
           commands:
@@ -195,6 +203,9 @@ env:
 - assertVisible:
     id: "cart-quantity-input"
     text: "20"
+- assertTrue:
+    condition: ${output.settleSignal !== 'badge-unreadable'}
+    label: 'Cart tab badge read no "<count>, ..." label on a phone: the selector is wrong, not cart latency'
 # settleAfterLastTapMs on phones is last tap → badge 20 (no tab tap); when
 # settleSignal is field it still includes one tab tap.
 # tapSpanMs is the driver's pacing and is
