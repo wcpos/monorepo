@@ -1187,11 +1187,11 @@ describe('RefundOrderForm', () => {
 			await waitFor(() => expect(refundCall).toHaveBeenCalledTimes(1));
 		}
 
-		it('an unconfirmed refund warns, logs no success and stays on the form', async () => {
+		it('an unconfirmed refund logs an error, logs no success and stays on the form', async () => {
 			await sendRefund(jest.fn().mockRejectedValue(new RefundUnconfirmedError(23858, 200)));
 
-			await waitFor(() => expect(warn).toHaveBeenCalledWith('Refund failed', expect.anything()));
-			expect(warn).toHaveBeenCalledWith('Refund failed', {
+			await waitFor(() => expect(error).toHaveBeenCalledWith('Refund failed', expect.anything()));
+			expect(error).toHaveBeenCalledWith('Refund failed', {
 				showToast: true,
 				toast: {
 					title: 'orders.refund_unconfirmed',
@@ -1206,7 +1206,7 @@ describe('RefundOrderForm', () => {
 			});
 			expect(success).not.toHaveBeenCalled();
 			// The logger mock is shared by every module, so only this form's failure row is checked.
-			expect(error).not.toHaveBeenCalledWith('Refund failed', expect.anything());
+			expect(warn).not.toHaveBeenCalledWith('Refund failed', expect.anything());
 			expect(back).not.toHaveBeenCalled();
 		});
 

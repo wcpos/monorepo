@@ -69,7 +69,7 @@ export function classifyRefundFailure(error: unknown, t: Translate): RefundFailu
 	// A 2xx with no refund in it: never a success, and never a blind retry.
 	if (isRefundUnconfirmedError(error)) {
 		return {
-			level: 'warn',
+			level: 'error',
 			code: ERROR_CODES.REFUND_OUTCOME_UNKNOWN,
 			title: t('orders.refund_unconfirmed'),
 			text2: t('orders.refund_unconfirmed_check'),
