@@ -486,7 +486,7 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 		/>
 	);
 	expect((screen.getByTestId('count-close') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('count-unsynced').textContent).toContain('3 sales');
+	expect(screen.getByTestId('count-unsynced').textContent).toContain('3 records');
 	enter('480.80');
 	fireEvent.click(screen.getByTestId('count-other-tenders'));
 	fireEvent.change(screen.getByTestId('count-tender-card'), { target: { value: '22' } });
@@ -539,9 +539,9 @@ it('returns to selling without closing', async () => {
 });
 
 it.each([
-	[1, '1 sale not yet'],
-	[3, '3 sales not yet'],
-] as const)('pluralizes %s unsynced sales', (count, text) => {
+	[1, '1 record not yet'],
+	[3, '3 records not yet'],
+] as const)('pluralizes %s unsynced records', (count, text) => {
 	unsyncedCount = count;
 	render(
 		<RegisterCount
@@ -646,7 +646,7 @@ it.each([0, 2])(
 			expect(screen.getByRole('heading').textContent).toBe('Close Front');
 			expect(screen.getByText('Shop · Pat')).toBeTruthy();
 			expect(screen.getByTestId('count-unsynced').textContent).toContain(
-				'the closure will record them'
+				'the closure will carry them'
 			);
 			expect(screen.queryByTestId('count-open-carts')?.textContent ?? null).toBe(
 				count ? '2 carts still open · they wait for their cashier' : null
