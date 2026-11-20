@@ -1363,6 +1363,34 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		expect(events.filter((e) => e.type === 'queue.write.conflict-transition')).toHaveLength(1); // ONE event, at transition
 	});
 
+	it('the conflict-transition event names the paths the server says moved, and omits the field when it sent none', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'm-named' }),
+			mut({ mutationId: 'm-bare', recordId: 'other' })
+		);
+		const events: SyncEvent[] = [];
+		await drainMutationQueue({
+			queue: q,
+			push: async (m) =>
+				m.mutationId === 'm-named'
+					? {
+							...conflict(m),
+							conflict: {
+								current: { id: 1 },
+								currentRevision: 'r1',
+								differs: ['customer_note', 'meta_data.x'],
+							},
+						}
+					: conflict(m),
+			observe: (e) => events.push(e),
+		});
+		const transitions = events.filter((e) => e.type === 'queue.write.conflict-transition');
+		expect(transitions.map((e) => e.fields)).toEqual([
+			{ recordId: expect.any(String), mutationId: 'm-named', differs: 'customer_note,meta_data.x' },
+			{ recordId: 'other', mutationId: 'm-bare' },
+		]);
+	});
+
 	it('holds later pending mutations for a record while one of its mutations is conflicted', async () => {
 		const q = await queueWith(mut({ mutationId: 'm-first', queuedAt: '..1' }));
 		const push = vi.fn(async (m: RecordMutation) =>
