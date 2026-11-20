@@ -368,6 +368,26 @@ describe('useUpdateCartLine — line_items', () => {
 		expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
 	});
 
+	it("a write enqueued on another order leaves this order's fold open", async () => {
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', () => gate);
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const first = result.current.incrementLineItem(uuid, 1);
+			const other = enqueueOrderMutation('other-order', async () => {});
+			const second = result.current.incrementLineItem(uuid, 1);
+			release();
+			const outcomes = await Promise.all([first, other, second]);
+			expect(outcomes[0]).toBeTruthy();
+			expect(outcomes[2]).toBeTruthy();
+		});
+		expect(mockLocalPatch.mock.calls.map(([args]) => args.data.line_items[1].quantity)).toEqual([
+			3,
+		]);
+	});
+
 	it('a press after a typed quantity queued behind an open fold lands after it', async () => {
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		mockLocalPatch.mockImplementation(async ({ data }) => {
