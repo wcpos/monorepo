@@ -371,6 +371,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		{
 			name: "clean pull adopts the server's cashier and store",
 			local: { dirty: false, pendingMutationIds: [] },
+			expectedColumns: { posUserId: '999', posStoreId: '12' },
 			expectedMeta: [
 				{ key: '_pos_user', value: '999' },
 				{ key: '_pos_store', value: '12' },
@@ -390,6 +391,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			name: 'a pull that omits the identity keys keeps the resident values',
 			local: { dirty: false, pendingMutationIds: [] },
 			omitIdentity: true,
+			expectedColumns: { posUserId: '7', posStoreId: '11' },
 			expectedMeta: [
 				{ key: 'echo_meta', value: 'adopted' },
 				{ key: '_pos_user', value: '7' },
@@ -407,6 +409,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			name: 'an ack keeps the resident identity (#936)',
 			local: { dirty: false, pendingMutationIds: ['ack-1'] },
 			ack: true,
+			expectedColumns: { posUserId: '7', posStoreId: '11' },
 			expectedMeta: [
 				{ key: '_pos_user', value: '7' },
 				{ key: '_pos_store', value: '11' },
@@ -422,6 +425,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			omitIdentity,
 			ack,
 			expectedMeta,
+			expectedColumns,
 		} = testCase;
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
@@ -498,6 +502,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			.findOne(id)
 			.exec();
 		expect(stored?.toJSON().payload.meta_data).toEqual(expectedMeta ?? resident.payload.meta_data);
+		if (expectedColumns) expect(stored?.toJSON()).toMatchObject(expectedColumns);
 		if (!expectedMeta) expect(stored?.toJSON()).toMatchObject(resident);
 		await engine.dispose();
 	});
