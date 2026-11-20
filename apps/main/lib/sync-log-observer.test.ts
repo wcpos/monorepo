@@ -1127,6 +1127,47 @@ describe('createSyncLogObserver', () => {
 		}
 	);
 
+	// Sentry POS-338: a closed order's reopen_required refusal is its own code, at warn.
+	it('records a closed order’s reopen_required refusal as SYNC204 at warn', () => {
+		observer.observe(
+			event({
+				type: 'push.rejected',
+				fields: { recordId: 'o-1', status: 422, reason: 'reopen_required', orderClosed: true },
+			})
+		);
+		expect(rows[0]).toMatchObject({ level: 'warn', code: 'SYNC204' });
+	});
+
+	it('carries the rounding fee flag and amount on a closed order’s refusal', () => {
+		observer.observe(
+			event({
+				type: 'push.rejected',
+				fields: {
+					recordId: 'o-1',
+					status: 422,
+					reason: 'reopen_required',
+					orderClosed: true,
+					roundingFeeAmount: '0.02',
+				},
+			})
+		);
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			code: 'SYNC204',
+			context: { orderClosed: true, roundingFeeAmount: '0.02' },
+		});
+	});
+
+	it('keeps an open order’s reopen_required refusal at error as SYNC201', () => {
+		observer.observe(
+			event({
+				type: 'push.rejected',
+				fields: { recordId: 'o-1', status: 422, reason: 'reopen_required', orderClosed: false },
+			})
+		);
+		expect(rows[0]).toMatchObject({ level: 'error', code: 'SYNC201' });
+	});
+
 	// Drift guard: the screen's toast codes the same refusal through the shared
 	// rejectedWriteCode helper; this row and that toast must never disagree.
 	it.each([

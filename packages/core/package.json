@@ -125,6 +125,7 @@
 		"mustache": "^4.2.0",
 		"observable-hooks": "4.2.4",
 		"react-error-boundary": "^6.1.6",
+		"react-hook-form": "7.91.0",
 		"react-i18next": "^17.1.12",
 		"react-number-format": "^5.4.5",
 		"react-to-print": "^3.3.0",

@@ -1,14 +1,24 @@
 import { readFileSync } from 'node:fs';
 
 import * as React from 'react';
-import type { TextProps, ViewProps } from 'react-native';
+import type { LayoutChangeEvent, TextProps, ViewProps } from 'react-native';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { EdgeSurface } from '../edge-surface';
 import { TitleBarStripProvider } from '../edge-surface/title-bar-strip';
 import { DeviceScope } from '../lib/device';
 import { PageBar } from './index';
+
+// Each View's `onLayout` by testID, so a test can lay a bar out at a width (a div has no layout).
+const mockOnLayout = new Map<string, ViewProps['onLayout']>();
+function layOut(testID: string, width: number) {
+	const fire = mockOnLayout.get(testID);
+	if (!fire) throw new Error(`no onLayout on ${testID}`);
+	act(() =>
+		fire({ nativeEvent: { layout: { width, height: 40, x: 0, y: 0 } } } as LayoutChangeEvent)
+	);
+}
 
 jest.mock('react-native', () => {
 	const native = jest.requireActual<typeof import('react-native')>('react-native');
@@ -17,9 +27,10 @@ jest.mock('react-native', () => {
 		useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
 		// RN-web drops className without the Uniwind transform; preserve it at this boundary.
 		View: React.forwardRef<HTMLDivElement, ViewProps>(function MockView(
-			{ testID, style, className, children },
+			{ testID, style, className, children, onLayout },
 			ref
 		) {
+			if (testID && onLayout) mockOnLayout.set(testID, onLayout);
 			return (
 				<div
 					ref={ref}
@@ -181,6 +192,44 @@ it('keeps the phone search in the row when the row holds only controls', () => {
 		Array.from(row.querySelectorAll('*')).indexOf(node)
 	);
 	expect(order).toEqual([...order].sort((a, b) => a - b));
+});
+
+// A narrowed POS products column on a tablet squeezed the search to a sliver beside its icons:
+// below NARROW_BAR_PX the search takes its own row, as a phone's does (monorepo#3626).
+it('moves the tablet search to its own row once the bar lays out narrower than it needs', () => {
+	render(
+		<DeviceScope phone={false}>
+			<PageBar testID="bar" search={<input data-testid="search" />}>
+				<button data-testid="scan" />
+				<button data-testid="settings" />
+			</PageBar>
+		</DeviceScope>
+	);
+	const bar = screen.getByTestId('bar');
+	const inRow = () => {
+		expect(bar.children).toHaveLength(1);
+		expect(bar.firstElementChild?.contains(screen.getByTestId('bar-search'))).toBe(true);
+	};
+	inRow(); // not yet measured
+	layOut('bar', 800);
+	inRow();
+	layOut('bar', 200);
+	expect(bar.children).toHaveLength(2);
+	const [row, searchRow] = Array.from(bar.children);
+	expect(row.contains(screen.getByTestId('search'))).toBe(false);
+	expect(screen.getAllByTestId('bar-search')).toHaveLength(1);
+	expect(searchRow).toBe(screen.getByTestId('bar-search'));
+	expect(searchRow).toContainElement(screen.getByTestId('search'));
+	expect(searchRow).toHaveClass('h-ctl', 'px-gutter');
+	expect(searchRow).not.toHaveClass('px-2');
+});
+
+it("still calls the caller's onLayout", () => {
+	const onLayout = jest.fn();
+	render(<PageBar testID="bar" title="Products" onLayout={onLayout} />);
+	layOut('bar', 500);
+	expect(onLayout).toHaveBeenCalledTimes(1);
+	expect(onLayout.mock.calls[0][0].nativeEvent.layout.width).toBe(500);
 });
 
 // Under the desktop title bar the menu sits beside the search (Paul, 2026-10-30: "the menu icon

@@ -29,12 +29,16 @@ export type PageBarProps = ViewProps & {
 	/**
 	 * The page's search field: beside the title on wide widths, taking the width up to a cap; on
 	 * a phone, its own row under the bar, with no rule under it (owner, 2026-10-23), unless the
-	 * control row holds nothing but icons (owner, 2026-10-28).
+	 * control row holds nothing but icons (owner, 2026-10-28); or on any bar narrower than
+	 * `NARROW_BAR_PX`, its own row.
 	 */
 	search?: React.ReactNode;
 };
 
 const TOP = ['top'] as const;
+// A phone-width bar (390) still holds the search plus three icons; below 360 the middle slot is
+// left too little width for a usable field (iPad products column at 25 %, monorepo#3626).
+const NARROW_BAR_PX = 360;
 
 export function PageBar({
 	title,
@@ -48,6 +52,7 @@ export function PageBar({
 	testID,
 	className,
 	style,
+	onLayout,
 	...props
 }: PageBarProps) {
 	const phone = useIsPhone();
@@ -58,7 +63,16 @@ export function PageBar({
 	// column; the menu too, under the desktop title bar, Paul 2026-10-30) keeps it in its middle,
 	// so the search does not spend a second row (Paul, 2026-10-28).
 	const menuRow = !useTitleBarStrip().height && onMenu != null;
-	const searchRow = phone && (title !== undefined || titleSlot != null || back != null || menuRow);
+	const [barWidth, setBarWidth] = React.useState(0);
+	const handleLayout: ViewProps['onLayout'] = (e) => {
+		const { width } = e.nativeEvent.layout;
+		setBarWidth((prev) => (prev === width ? prev : width));
+		onLayout?.(e);
+	};
+	// Not yet measured (0) keeps today's layout, so the first frame renders as before.
+	const narrow = !phone && barWidth > 0 && barWidth < NARROW_BAR_PX;
+	const searchRow =
+		(phone && (title !== undefined || titleSlot != null || back != null || menuRow)) || narrow;
 	return (
 		// The bar touches the top edge; inside a column that pads it already (the POS products
 		// column), there is nothing left to pad.
@@ -68,6 +82,7 @@ export function PageBar({
 			className={cn('bg-background', className)}
 			style={style}
 			{...props}
+			onLayout={handleLayout}
 		>
 			{/* No rule under the bar: the content below sits on its own surface (a card), so the
 			    bar and the ground are one colour and a line would only draw a box around nothing.
@@ -144,7 +159,10 @@ export function PageBar({
 				<HStack className="items-center gap-1">{children}</HStack>
 			</HStack>
 			{searchRow && search != null && (
-				<View testID={id('search')} className="h-ctl justify-center px-2">
+				<View
+					testID={id('search')}
+					className={cn('h-ctl justify-center', phone ? 'px-2' : ground.px)}
+				>
 					{search}
 				</View>
 			)}

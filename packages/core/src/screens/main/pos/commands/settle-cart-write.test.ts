@@ -416,3 +416,73 @@ describe('a coupon write settles the total it priced', () => {
 		}
 	);
 });
+
+describe('an order queued for deletion', () => {
+	const superseded = () =>
+		Object.assign(new Error('queued for deletion'), { code: 'write-superseded-by-delete' });
+	const queue = { dispatchToken: {} } as OrderMutationContext;
+	const refused = { deny: { reasonKey: 'pos_cart.order_being_removed' } };
+
+	it('refuses the edit when the local write is superseded by the delete', async () => {
+		const commitAtBoundary = jest.fn();
+		await expect(
+			settleCartWrite(
+				{ document: record(), data: { billing: { country: 'NZ' } }, queue },
+				{
+					localPatch: () => Promise.reject(superseded()),
+					commitAtBoundary,
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+				}
+			)
+		).resolves.toEqual(refused);
+		expect(commitAtBoundary).not.toHaveBeenCalled();
+	});
+
+	it('refuses the edit when the boundary commit is superseded by the delete', async () => {
+		const order = record();
+		order.payload.line_items = [
+			{ ...line, total: '3' },
+			{ ...line, total: '9', quantity: 3 },
+		];
+		order.payload.status = 'pos-partial';
+		order.payload.meta_data = [
+			{
+				key: '_wcpos_payments',
+				value: {
+					schema: 1,
+					payments: [{ id: 'leg', status: 'captured', amount: '4', refunded_amount: '0' }],
+				},
+			},
+		];
+		const localPatch = jest.fn(async () => order);
+		const commitAtBoundary = jest.fn(() => Promise.reject(superseded()));
+		await expect(
+			settleCartWrite(
+				{ document: order, data: { line_items: order.payload.line_items.slice(0, 1) }, queue },
+				{
+					localPatch: resolveCartWrite(localPatch),
+					commitAtBoundary,
+					configForOrder: () => config,
+					serverOwnsMoney: () => false,
+				}
+			)
+		).resolves.toEqual(refused);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(commitAtBoundary).toHaveBeenCalledTimes(1);
+	});
+
+	it('rethrows any other failure unchanged', async () => {
+		const other = Object.assign(new Error('other'), { code: 'something-else' });
+		const result = settleCartWrite(
+			{ document: record(), data: { billing: { country: 'NZ' } }, queue },
+			{
+				localPatch: () => Promise.reject(other),
+				commitAtBoundary: jest.fn(),
+				configForOrder: () => config,
+				serverOwnsMoney: () => false,
+			}
+		);
+		await expect(result).rejects.toBe(other);
+	});
+});
