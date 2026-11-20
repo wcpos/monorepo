@@ -1,3 +1,5 @@
+import { execSync } from 'node:child_process';
+
 import { ConfigContext, ExpoConfig } from 'expo/config';
 
 import packageJson from './package.json';
@@ -37,6 +39,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
 	// Set env var for web builds (used by @wcpos/utils/app-info)
 	process.env.EXPO_PUBLIC_APP_VERSION = packageJson.version;
+	// The bundle's commit for the Sentry `build_commit` tag. Env only, never the returned config:
+	// the native fingerprint hashes that config, and a per-commit value would cost an EAS build.
+	if (!process.env.EXPO_PUBLIC_BUILD_COMMIT) {
+		try {
+			process.env.EXPO_PUBLIC_BUILD_COMMIT = execSync('git rev-parse HEAD', {
+				stdio: ['ignore', 'pipe', 'ignore'],
+			})
+				.toString()
+				.trim()
+				.slice(0, 12);
+		} catch {
+			process.env.EXPO_PUBLIC_BUILD_COMMIT = 'unknown';
+		}
+	}
 
 	return {
 		...config,
