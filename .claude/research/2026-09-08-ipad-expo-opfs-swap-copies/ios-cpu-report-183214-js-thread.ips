@@ -1,0 +1,555 @@
+{"app_name":"WCPOS","timestamp":"2026-09-08 18:32:14.00 +0200","app_version":"1.10.3","slice_uuid":"B119B617-02E0-3545-AB6E-E6453CDD0ACC","build_version":"1","bundleID":"com.wcpos.main.dev","duration_ms":"159206","share_with_app_devs":1,"is_first_party":0,"bug_type":"202","os_version":"iPhone OS 26.6.1 (23G83)","roots_installed":0,"name":"WCPOS","incident_id":"F57E66FD-6231-4D2F-B7F8-8E932704641D"}
+Date/Time:        2026-09-08 18:29:32.260 +0200
+End time:         2026-09-08 18:32:11.466 +0200
+OS Version:       iPhone OS 26.6.1 (Build 23G83)
+Architecture:     arm64e
+Report Version:   72
+Incident Identifier: F57E66FD-6231-4D2F-B7F8-8E932704641D
+Share With Devs:  Yes
+
+Data Source:      Microstackshots
+Shared Cache:     D4AE8DE6-326B-3EA2-8F8B-73E6D184066F slid base address 0x190ed4000, slide 0x10ed4000
+
+Command:          WCPOS
+Path:             /private/var/containers/Bundle/Application/D878268D-6E9A-4EE5-8144-FAD94B6EFE72/WCPOS.app/WCPOS
+Identifier:       com.wcpos.main.dev
+Version:          1.10.3 (1)
+Is First Party:   No
+Beta Identifier:  3491C85F-3C31-4D84-BEA1-020F6876D08F
+Resource Coalition: "com.wcpos.main.dev"(3708)
+Architecture:     arm64
+Parent:           UNKNOWN [1]
+PID:              67176
+
+Event:            cpu usage
+Action taken:     none
+CPU:              90 seconds cpu time over 159 seconds (57% cpu average), exceeding limit of 50% cpu over 180 seconds
+CPU limit:        90s
+Limit duration:   180s
+CPU used:         90s
+CPU duration:     159s
+Duration:         159.21s
+Duration Sampled: 144.69s (event starts 9.63s before samples, event ends 4.89s after samples)
+Steps:            26 (10 gigacycles/step, 58 samples lost)
+
+Hardware model:   iPad8,5
+Active cpus:      8
+Memory size:      3.66 GB
+HW page size:     16384
+VM page size:     16384
+Shared cache residency: 2.95% (175.81 MB / 5950.58 MB)
+
+Time Since Boot:  667621s
+Time Awake Since Boot: 612947s
+Time Since Wake:  6097s
+
+Total CPU Time:   94.663s
+Advisory levels:  Battery -> 3, User -> 3, ThermalPressure -> 20, Combined -> 2
+Free disk space:  106.18 GB/238.38 GB, low space threshold 150 MB
+Vnodes Available: 65.88% (13176/20000, 10000 allocated, 10000 soft limit)
+Models:           none
+
+Preferred User Language: en-AU, it-AU
+Country Code:     AU
+Keyboards:        es_ES QWERTY-Spanish;ml=1, en_AU QWERTY
+HW Keyboard:      Yes
+OS Cryptex File Extents: 1144
+
+Heaviest stack for the target process:
+  22  ??? (libsystem_pthread.dylib + 2252) [0x1f3cae8cc]
+  22  ??? (libsystem_pthread.dylib + 17464) [0x1f3cb2438]
+  18  ??? (Foundation + 583956) [0x1916da914]
+  18  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 13025132) [0x10c4b3f6c]
+  18  ??? (CoreFoundation + 189772) [0x1943e954c]
+  17  ??? (CoreFoundation + 194464) [0x1943ea7a0]
+  17  ??? (CoreFoundation + 186264) [0x1943e8798]
+  17  ??? (CoreFoundation + 187084) [0x1943e8acc]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2587740) [0x10babfc5c]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2587784) [0x10babfc88]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2591016) [0x10bac0928]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2604760) [0x10bac3ed8]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2609692) [0x10bac521c]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2609728) [0x10bac5240]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2609800) [0x10bac5288]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2609892) [0x10bac52e4]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2588528) [0x10babff70]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2652164) [0x10bacf804]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2587784) [0x10babfc88]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2591016) [0x10bac0928]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12453124) [0x10c428504]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12457924) [0x10c4297c4]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12457960) [0x10c4297e8]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12458032) [0x10c429830]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12458208) [0x10c4298e0]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12459152) [0x10c429c90]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12465704) [0x10c42b628]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11947340) [0x10c3acd4c]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11951796) [0x10c3adeb4]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11951840) [0x10c3adee0]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11951920) [0x10c3adf30]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11951968) [0x10c3adf60]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11912044) [0x10c3a436c]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11912844) [0x10c3a468c]
+  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11913384) [0x10c3a48a8]
+  17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 155544) [0x1105c1f98]
+  17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1973204) [0x11077dbd4]
+  17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1661272) [0x110731958]
+  17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1666900) [0x110732f54]
+  17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2639980) [0x11082086c]
+  17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1769048) [0x11074be58]
+  17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1760416) [0x110749ca0]
+  16  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2726300) [0x11083599c]
+  16  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1661812) [0x110731b74]
+  16  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1666900) [0x110732f54]
+  16  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2639980) [0x11082086c]
+  15  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1769048) [0x11074be58]
+  15  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1760416) [0x110749ca0]
+  7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2726300) [0x11083599c]
+  7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1661812) [0x110731b74]
+  7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1666900) [0x110732f54]
+  7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2639980) [0x11082086c]
+  7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1769048) [0x11074be58]
+  7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1760416) [0x110749ca0]
+  7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 217960) [0x1105d1368]
+  7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 151968) [0x10b7011a0]
+  7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 132992) [0x10b6fc780]
+  7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 148300) [0x10b70034c]
+  7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 148336) [0x10b700370]
+  7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 133588) [0x10b6fc9d4]
+  7   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1196124) [0x10b1ec05c]
+  7   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1195820) [0x10b1ebf2c]
+  6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1193428) [0x10b1eb5d4]
+  6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1189472) [0x10b1ea660]
+  6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 510428) [0x10b1449dc]
+  6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 492068) [0x10b140224]
+  3   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 255480) [0x10ae0e5f8]
+  3   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 197764) [0x10ae00484]
+  2   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 300892) [0x10ae1975c]
+  2   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 199764) [0x10ae00c54]
+  1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 199032) [0x10ae00978]
+  1   ??? (Foundation + 1916436) [0x19181fe14]
+  1   ??? (Foundation + 1918096) [0x191820490]
+  1   ??? (Foundation + 1908744) [0x19181e008]
+  1   ??? (Foundation + 678520) [0x1916f1a78]
+  1   ??? (Foundation + 688880) [0x1916f42f0]
+  1   ??? (Foundation + 736080) [0x1916ffb50]
+  1   ??? (Foundation + 728676) [0x1916fde64]
+  1   ??? (Foundation + 699704) [0x1916f6d38]
+  1   ??? (Foundation + 18180) [0x191650704]
+  1   ??? (CoreFoundation + 104776) [0x1943d4948]
+  1   ??? (CoreFoundation + 104668) [0x1943d48dc]
+  1   ??? (CoreFoundation + 29412) [0x1943c22e4]
+  1   ??? (CoreFoundation + 70636) [0x1943cc3ec]
+
+
+Powerstats for:   WCPOS [67176]
+UUID:             B119B617-02E0-3545-AB6E-E6453CDD0ACC
+Path:             /private/var/containers/Bundle/Application/D878268D-6E9A-4EE5-8144-FAD94B6EFE72/WCPOS.app/WCPOS
+Identifier:       com.wcpos.main.dev
+Version:          1.10.3 (1)
+Is First Party:   No
+Beta Identifier:  3491C85F-3C31-4D84-BEA1-020F6876D08F
+Resource Coalition: 26 samples "com.wcpos.main.dev"(3708)
+Architecture:     arm64
+Parent:           UNKNOWN [1]
+UID:              501
+Footprint:        721.30 MB -> 1872.67 MB (+1151.38 MB)
+Pageins:          3661 pages
+Start time:       2026-09-08 18:29:41.888 +0200
+End time:         2026-09-08 18:32:06.574 +0200
+Num samples:      26 (100%)
+Energy:           6760.35 uWh
+Num threads:      5
+Primary state:    12 samples Frontmost App, Non-Suppressed, Kernel mode, Effective Thread QoS User Interactive, Requested Thread QoS User Interactive, Override Thread QoS Unspecified, p-core
+User Activity:    0 samples Idle, 26 samples Active
+Power Source:     0 samples on Battery, 26 samples on AC
+  22  ??? (libsystem_pthread.dylib + 2252) [0x1f3cae8cc]
+    22  ??? (libsystem_pthread.dylib + 17464) [0x1f3cb2438]
+      18  ??? (Foundation + 583956) [0x1916da914]
+        18  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 13025132) [0x10c4b3f6c]
+          18  ??? (CoreFoundation + 189772) [0x1943e954c]
+            17  ??? (CoreFoundation + 194464) [0x1943ea7a0]
+              17  ??? (CoreFoundation + 186264) [0x1943e8798]
+                17  ??? (CoreFoundation + 187084) [0x1943e8acc]
+                  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2587740) [0x10babfc5c]
+                    17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2587784) [0x10babfc88]
+                      17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2591016) [0x10bac0928]
+                        17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2604760) [0x10bac3ed8]
+                          17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2609692) [0x10bac521c]
+                            17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2609728) [0x10bac5240]
+                              17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2609800) [0x10bac5288]
+                                17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2609892) [0x10bac52e4]
+                                  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2588528) [0x10babff70]
+                                    17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2652164) [0x10bacf804]
+                                      17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2587784) [0x10babfc88]
+                                        17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2591016) [0x10bac0928]
+                                          17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12453124) [0x10c428504]
+                                            17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12457924) [0x10c4297c4]
+                                              17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12457960) [0x10c4297e8]
+                                                17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12458032) [0x10c429830]
+                                                  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12458208) [0x10c4298e0]
+                                                    17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12459152) [0x10c429c90]
+                                                      17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 12465704) [0x10c42b628]
+                                                        17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11947340) [0x10c3acd4c]
+                                                          17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11951796) [0x10c3adeb4]
+                                                            17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11951840) [0x10c3adee0]
+                                                              17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11951920) [0x10c3adf30]
+                                                                17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11951968) [0x10c3adf60]
+                                                                  17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11912044) [0x10c3a436c]
+                                                                    17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11912844) [0x10c3a468c]
+                                                                      17  ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 11913384) [0x10c3a48a8]
+                                                                        17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 155544) [0x1105c1f98]
+                                                                          17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1973204) [0x11077dbd4]
+                                                                            17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1661272) [0x110731958]
+                                                                              17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1666900) [0x110732f54]
+                                                                                17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2639980) [0x11082086c]
+                                                                                  17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1769048) [0x11074be58]
+                                                                                    17  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1760416) [0x110749ca0]
+                                                                                      16  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2726300) [0x11083599c]
+                                                                                        16  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1661812) [0x110731b74]
+                                                                                          16  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1666900) [0x110732f54]
+                                                                                            16  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2639980) [0x11082086c]
+                                                                                              15  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1769048) [0x11074be58]
+                                                                                                15  ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1760416) [0x110749ca0]
+                                                                                                  7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2726300) [0x11083599c]
+                                                                                                    7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1661812) [0x110731b74]
+                                                                                                      7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1666900) [0x110732f54]
+                                                                                                        7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2639980) [0x11082086c]
+                                                                                                          7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1769048) [0x11074be58]
+                                                                                                            7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1760416) [0x110749ca0]
+                                                                                                              7   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 217960) [0x1105d1368]
+                                                                                                                7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 151968) [0x10b7011a0]
+                                                                                                                  7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 132992) [0x10b6fc780]
+                                                                                                                    7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 148300) [0x10b70034c]
+                                                                                                                      7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 148336) [0x10b700370]
+                                                                                                                        7   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 133588) [0x10b6fc9d4]
+                                                                                                                          7   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1196124) [0x10b1ec05c]
+                                                                                                                            7   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1195820) [0x10b1ebf2c]
+                                                                                                                              6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1193428) [0x10b1eb5d4]
+                                                                                                                                6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1189472) [0x10b1ea660]
+                                                                                                                                  6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 510428) [0x10b1449dc]
+                                                                                                                                    6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 492068) [0x10b140224]
+                                                                                                                                      3   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 255480) [0x10ae0e5f8]
+                                                                                                                                        3   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 197764) [0x10ae00484]
+                                                                                                                                          2   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 300892) [0x10ae1975c]
+                                                                                                                                            2   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 199764) [0x10ae00c54]
+                                                                                                                                              1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 199032) [0x10ae00978]
+                                                                                                                                                1   ??? (Foundation + 1916436) [0x19181fe14]
+                                                                                                                                                  1   ??? (Foundation + 1918096) [0x191820490]
+                                                                                                                                                    1   ??? (Foundation + 1908744) [0x19181e008]
+                                                                                                                                                      1   ??? (Foundation + 678520) [0x1916f1a78]
+                                                                                                                                                        1   ??? (Foundation + 688880) [0x1916f42f0]
+                                                                                                                                                          1   ??? (Foundation + 736080) [0x1916ffb50]
+                                                                                                                                                            1   ??? (Foundation + 728676) [0x1916fde64]
+                                                                                                                                                              1   ??? (Foundation + 699704) [0x1916f6d38]
+                                                                                                                                                                1   ??? (Foundation + 18180) [0x191650704]
+                                                                                                                                                                  1   ??? (CoreFoundation + 104776) [0x1943d4948]
+                                                                                                                                                                    1   ??? (CoreFoundation + 104668) [0x1943d48dc]
+                                                                                                                                                                      1   ??? (CoreFoundation + 29412) [0x1943c22e4]
+                                                                                                                                                                        1   ??? (CoreFoundation + 70636) [0x1943cc3ec]
+                                                                                                                                                                          1   <User mode>
+                                                                                                                                              1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 198180) [0x10ae00624]
+                                                                                                                                                1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 285956) [0x10ae15d04]
+                                                                                                                                                  1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 200012) [0x10ae00d4c]
+                                                                                                                                                    1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 285304) [0x10ae15a78]
+                                                                                                                                                      1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1886180) [0x10b2947e4]
+                                                                                                                                                        1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1886396) [0x10b2948bc]
+                                                                                                                                                          1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1888596) [0x10b295154]
+                                                                                                                                                            1   ??? (Foundation + 742332) [0x1917013bc]
+                                                                                                                                                              1   ??? (libsystem_platform.dylib + 16768) [0x2b4aad180]
+                                                                                                                                          1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 300852) [0x10ae19734]
+                                                                                                                                            1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 284704) [0x10ae15820]
+                                                                                                                                              1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 285304) [0x10ae15a78]
+                                                                                                                                                1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1886180) [0x10b2947e4]
+                                                                                                                                                  1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1886396) [0x10b2948bc]
+                                                                                                                                                    1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1888596) [0x10b295154]
+                                                                                                                                                      1   ??? (Foundation + 742332) [0x1917013bc]
+                                                                                                                                                        1   ??? (libsystem_kernel.dylib + 26132) [0x2435ef614]
+                                                                                                                                      1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 258700) [0x10ae0f28c]
+                                                                                                                                        1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 226252) [0x10ae073cc]
+                                                                                                                                          1   ??? (Foundation + 1601456) [0x1917d2fb0]
+                                                                                                                                            1   ??? (libsystem_kernel.dylib + 4832) [0x2435ea2e0]
+                                                                                                                                      1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 258608) [0x10ae0f230]
+                                                                                                                                        1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 225928) [0x10ae07288]
+                                                                                                                                          1   ??? (Foundation + 2806612) [0x1918f9354]
+                                                                                                                                            1   ??? (Foundation + 2789284) [0x1918f4fa4]
+                                                                                                                                              1   ??? (libsystem_platform.dylib + 16768) [0x2b4aad180]
+                                                                                                                                      1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 251700) [0x10ae0d734]
+                                                                                                                                        1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 221760) [0x10ae06240]
+                                                                                                                                          1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 222720) [0x10ae06600]
+                                                                                                                                            1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 224116) [0x10ae06b74]
+                                                                                                                                              1   ??? (Foundation + 3441412) [0x191994304]
+                                                                                                                                                1   ??? (Foundation + 1601044) [0x1917d2e14]
+                                                                                                                                                  1   ??? (Foundation + 1601300) [0x1917d2f14]
+                                                                                                                                                    1   ??? (libsystem_kernel.dylib + 26500) [0x2435ef784]
+                                                                                                                              1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1193520) [0x10b1eb630]
+                                                                                                                                1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1312028) [0x10b20851c]
+                                                                                                                                  1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1012964) [0x10b1bf4e4]
+                                                                                                                                    1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 913628) [0x10b1a70dc]
+                                                                                                                                      1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1012780) [0x10b1bf42c]
+                                                                                                                                        1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 912792) [0x10b1a6d98]
+                                                                                                                                          1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1012680) [0x10b1bf3c8]
+                                                                                                                                            1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1009136) [0x10b1be5f0]
+                                                                                                                                              1   <User mode>
+                                                                                                  6   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 217960) [0x1105d1368]
+                                                                                                    6   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 151968) [0x10b7011a0]
+                                                                                                      6   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 132992) [0x10b6fc780]
+                                                                                                        6   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 148300) [0x10b70034c]
+                                                                                                          6   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 148336) [0x10b700370]
+                                                                                                            6   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 133588) [0x10b6fc9d4]
+                                                                                                              6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1196124) [0x10b1ec05c]
+                                                                                                                6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1195820) [0x10b1ebf2c]
+                                                                                                                  6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1193428) [0x10b1eb5d4]
+                                                                                                                    6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1189472) [0x10b1ea660]
+                                                                                                                      6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 510428) [0x10b1449dc]
+                                                                                                                        6   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 492068) [0x10b140224]
+                                                                                                                          3   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 255120) [0x10ae0e490]
+                                                                                                                            2   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 287444) [0x10ae162d4]
+                                                                                                                              2   ??? (Foundation + 972780) [0x1917397ec]
+                                                                                                                                2   ??? (Foundation + 973776) [0x191739bd0]
+                                                                                                                                  2   ??? (Foundation + 926588) [0x19172e37c]
+                                                                                                                                    2   ??? (Foundation + 926992) [0x19172e510]
+                                                                                                                                      1   ??? (libsystem_kernel.dylib + 26264) [0x2435ef698]
+                                                                                                                                      1   ??? (libremovefile.dylib + 2084) [0x2b4a2b824]
+                                                                                                                                        1   ??? (libremovefile.dylib + 3808) [0x2b4a2bee0]
+                                                                                                                                          1   ??? (libsystem_c.dylib + 108860) [0x19ff5293c]
+                                                                                                                                            1   ??? (libsystem_kernel.dylib + 25956) [0x2435ef564]
+                                                                                                                            1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 287072) [0x10ae16160]
+                                                                                                                              1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 284704) [0x10ae15820]
+                                                                                                                                1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 285304) [0x10ae15a78]
+                                                                                                                                  1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1886180) [0x10b2947e4]
+                                                                                                                                    1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1886396) [0x10b2948bc]
+                                                                                                                                      1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1888596) [0x10b295154]
+                                                                                                                                        1   ??? (Foundation + 742332) [0x1917013bc]
+                                                                                                                                          1   ??? (libsystem_platform.dylib + 16768) [0x2b4aad180]
+                                                                                                                          1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 258608) [0x10ae0f230]
+                                                                                                                            1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 225928) [0x10ae07288]
+                                                                                                                              1   ??? (Foundation + 2806612) [0x1918f9354]
+                                                                                                                                1   ??? (Foundation + 2789284) [0x1918f4fa4]
+                                                                                                                                  1   ??? (libsystem_platform.dylib + 16768) [0x2b4aad180]
+                                                                                                                          1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 255480) [0x10ae0e5f8]
+                                                                                                                            1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 197764) [0x10ae00484]
+                                                                                                                              1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 300892) [0x10ae1975c]
+                                                                                                                                1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 199764) [0x10ae00c54]
+                                                                                                                                  1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 199032) [0x10ae00978]
+                                                                                                                                    1   ??? (Foundation + 1916436) [0x19181fe14]
+                                                                                                                                      1   ??? (Foundation + 1918096) [0x191820490]
+                                                                                                                                        1   ??? (Foundation + 1908744) [0x19181e008]
+                                                                                                                                          1   ??? (Foundation + 678520) [0x1916f1a78]
+                                                                                                                                            1   ??? (Foundation + 688880) [0x1916f42f0]
+                                                                                                                                              1   ??? (Foundation + 736080) [0x1916ffb50]
+                                                                                                                                                1   ??? (Foundation + 728676) [0x1916fde64]
+                                                                                                                                                  1   ??? (Foundation + 698744) [0x1916f6978]
+                                                                                                                                                    1   ??? (libsystem_coreservices.dylib + 5724) [0x1ac1c565c]
+                                                                                                                                                      1   ??? (libsystem_kernel.dylib + 26264) [0x2435ef698]
+                                                                                                                          1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 251700) [0x10ae0d734]
+                                                                                                                            1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 221760) [0x10ae06240]
+                                                                                                                              1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 222720) [0x10ae06600]
+                                                                                                                                1   ??? (CoreFoundation + 29128) [0x1943c21c8]
+                                                                                                                                  1   <User mode>
+                                                                                                  1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2765664) [0x11083f360]
+                                                                                                    1   <User mode>
+                                                                                                  1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2765684) [0x11083f374]
+                                                                                                    1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1836960) [0x11075c7a0]
+                                                                                                      1   <User mode>
+                                                                                              1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1776356) [0x11074dae4]
+                                                                                                1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2645356) [0x110821d6c]
+                                                                                                  1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1846364) [0x11075ec5c]
+                                                                                                    1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1661272) [0x110731958]
+                                                                                                      1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1665752) [0x110732ad8]
+                                                                                                        1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 217960) [0x1105d1368]
+                                                                                                          1   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 151968) [0x10b7011a0]
+                                                                                                            1   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 132992) [0x10b6fc780]
+                                                                                                              1   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 148300) [0x10b70034c]
+                                                                                                                1   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 148336) [0x10b700370]
+                                                                                                                  1   ??? (<689C7A6D-25D0-3A44-A5EC-C466CD149B31> + 133588) [0x10b6fc9d4]
+                                                                                                                    1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1410412) [0x10b22056c]
+                                                                                                                      1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1410024) [0x10b2203e8]
+                                                                                                                        1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1196360) [0x10b1ec148]
+                                                                                                                          1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1193428) [0x10b1eb5d4]
+                                                                                                                            1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1189472) [0x10b1ea660]
+                                                                                                                              1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 255216) [0x10ae0e4f0]
+                                                                                                                                1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 200012) [0x10ae00d4c]
+                                                                                                                                  1   ??? (<F42FA778-EA10-3E10-8AEE-833D8E0D36D7> + 285304) [0x10ae15a78]
+                                                                                                                                    1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1886180) [0x10b2947e4]
+                                                                                                                                      1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1886396) [0x10b2948bc]
+                                                                                                                                        1   ??? (<A6317114-1CD9-330B-AC75-B5B5EF0675D5> + 1888596) [0x10b295154]
+                                                                                                                                          1   ??? (Foundation + 742332) [0x1917013bc]
+                                                                                                                                            1   ??? (libsystem_platform.dylib + 16768) [0x2b4aad180]
+                                                                                      1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2702760) [0x11082fda8]
+                                                                                        1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1662104) [0x110731c98]
+                                                                                          1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1666900) [0x110732f54]
+                                                                                            1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2639980) [0x11082086c]
+                                                                                              1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1769048) [0x11074be58]
+                                                                                                1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1760416) [0x110749ca0]
+                                                                                                  1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2702760) [0x11082fda8]
+                                                                                                    1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1662104) [0x110731c98]
+                                                                                                      1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1666900) [0x110732f54]
+                                                                                                        1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2639980) [0x11082086c]
+                                                                                                          1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1767436) [0x11074b80c]
+                                                                                                            1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1798336) [0x1107530c0]
+                                                                                                              1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2380168) [0x1107e1188]
+                                                                                                                1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2364236) [0x1107dd34c]
+                                                                                                                  1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2377180) [0x1107e05dc]
+                                                                                                                    1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2391836) [0x1107e3f1c]
+                                                                                                                      1   <User mode>
+            1   ??? (CoreFoundation + 193296) [0x1943ea310]
+              1   ??? (CoreFoundation + 414580) [0x194420374]
+                1   ??? (libsystem_kernel.dylib + 16504) [0x2435ed078]
+                  1   ??? (libsystem_kernel.dylib + 16940) [0x2435ed22c]
+                    1   ??? (libsystem_platform.dylib + 16768) [0x2b4aad180]
+      4   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2035416) [0x11078ced8]
+        3   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2031196) [0x11078be5c]
+          3   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2030444) [0x11078bb6c]
+            2   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2028904) [0x11078b568]
+              2   ??? (libsystem_kernel.dylib + 45520) [0x2435f41d0]
+                2   <Effective Thread QoS Default, Requested Thread QoS Default>
+            1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2028912) [0x11078b570]
+              1   ??? (libsystem_kernel.dylib + 85996) [0x2435fdfec]
+                1   <Effective Thread QoS Default, Requested Thread QoS Default>
+        1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2031664) [0x11078c030]
+          1   ??? (libc++.1.dylib + 70620) [0x1a3b3a3dc]
+            1   ??? (libsystem_kernel.dylib + 29320) [0x2435f0288]
+              1   <Effective Thread QoS Default, Requested Thread QoS Default>
+  2   ??? (dyld + 19484) [0x190ff5c1c]
+    2   ??? (<B3849C84-E740-388C-881C-5D46CE61E626> + 1751640) [0x1053b3a58]
+      2   ??? (<B3849C84-E740-388C-881C-5D46CE61E626> + 1748904) [0x1053b2fa8]
+        2   ??? (<B3849C84-E740-388C-881C-5D46CE61E626> + 1749048) [0x1053b3038]
+          2   ??? (UIKitCore + 2722468) [0x19a294aa4]
+            2   ??? (UIKitCore + 573784) [0x19a088158]
+              2   ??? (UIKitCore + 1185392) [0x19a11d670]
+                2   ??? (GraphicsServices + 5272) [0x239f79498]
+                  2   ??? (CoreFoundation + 189772) [0x1943e954c]
+                    2   ??? (CoreFoundation + 194052) [0x1943ea604]
+                      2   ??? (CoreFoundation + 663656) [0x19445d068]
+                        2   ??? (libdispatch.dylib + 67748) [0x1ceef18a4]
+                          2   ??? (libdispatch.dylib + 67940) [0x1ceef1964]
+                            2   ??? (libdispatch.dylib + 232976) [0x1cef19e10]
+                              2   ??? (libdispatch.dylib + 111076) [0x1ceefc1e4]
+                                2   ??? (libdispatch.dylib + 6568) [0x1ceee29a8]
+                                  2   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 329028) [0x10fa68544]
+                                    2   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 371016) [0x10fa72948]
+                                      2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 3530792) [0x10bba6028]
+                                        2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1392212) [0x10b99be54]
+                                          2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1379616) [0x10b998d20]
+                                            2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1382000) [0x10b999670]
+                                              2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1450260) [0x10b9aa114]
+                                                2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1275220) [0x10b97f554]
+                                                  2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1275380) [0x10b97f5f4]
+                                                    2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1236780) [0x10b975f2c]
+                                                      2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1241728) [0x10b977280]
+                                                        2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1241772) [0x10b9772ac]
+                                                          2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1241852) [0x10b9772fc]
+                                                            2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1241900) [0x10b97732c]
+                                                              2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1242648) [0x10b977618]
+                                                                2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1044492) [0x10b94700c]
+                                                                  2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 1044732) [0x10b9470fc]
+                                                                    2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2010692) [0x10ba32e44]
+                                                                      2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2011708) [0x10ba3323c]
+                                                                        2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2014716) [0x10ba33dfc]
+                                                                          2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2029612) [0x10ba3782c]
+                                                                            2   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2190540) [0x10ba5eccc]
+                                                                              1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2191900) [0x10ba5f21c]
+                                                                                1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2195008) [0x10ba5fe40]
+                                                                                  1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2231992) [0x10ba68eb8]
+                                                                                    1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2234116) [0x10ba69704]
+                                                                                      1   <User mode>
+                                                                              1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2191716) [0x10ba5f164]
+                                                                                1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2194688) [0x10ba5fd00]
+                                                                                  1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2032416) [0x10ba38320]
+                                                                                    1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2046732) [0x10ba3bb0c]
+                                                                                      1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2017084) [0x10ba3473c]
+                                                                                        1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2021540) [0x10ba358a4]
+                                                                                          1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2021584) [0x10ba358d0]
+                                                                                            1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2021664) [0x10ba35920]
+                                                                                              1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2021900) [0x10ba35a0c]
+                                                                                                1   ??? (<F833B928-E972-3B7D-B1A4-B5FAA11472E1> + 2026376) [0x10ba36b88]
+                                                                                                  1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1123996) [0x10fb2a69c]
+                                                                                                    1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1113608) [0x10fb27e08]
+                                                                                                      1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1114684) [0x10fb2823c]
+                                                                                                        1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1125948) [0x10fb2ae3c]
+                                                                                                          1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1132420) [0x10fb2c784]
+                                                                                                            1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171368) [0x10fb35fa8]
+                                                                                                              1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171960) [0x10fb361f8]
+                                                                                                                1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1114684) [0x10fb2823c]
+                                                                                                                  1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1125948) [0x10fb2ae3c]
+                                                                                                                    1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1132420) [0x10fb2c784]
+                                                                                                                      1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171368) [0x10fb35fa8]
+                                                                                                                        1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171960) [0x10fb361f8]
+                                                                                                                          1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1114704) [0x10fb28250]
+                                                                                                                            1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1126512) [0x10fb2b070]
+                                                                                                                              1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171960) [0x10fb361f8]
+                                                                                                                                1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1114684) [0x10fb2823c]
+                                                                                                                                  1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1125948) [0x10fb2ae3c]
+                                                                                                                                    1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1132420) [0x10fb2c784]
+                                                                                                                                      1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171368) [0x10fb35fa8]
+                                                                                                                                        1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171960) [0x10fb361f8]
+                                                                                                                                          1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1114684) [0x10fb2823c]
+                                                                                                                                            1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1125948) [0x10fb2ae3c]
+                                                                                                                                              1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1132420) [0x10fb2c784]
+                                                                                                                                                1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171368) [0x10fb35fa8]
+                                                                                                                                                  1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171960) [0x10fb361f8]
+                                                                                                                                                    1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1114684) [0x10fb2823c]
+                                                                                                                                                      1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1125948) [0x10fb2ae3c]
+                                                                                                                                                        1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1132512) [0x10fb2c7e0]
+                                                                                                                                                          1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171368) [0x10fb35fa8]
+                                                                                                                                                            1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171960) [0x10fb361f8]
+                                                                                                                                                              1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1114684) [0x10fb2823c]
+                                                                                                                                                                1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1125948) [0x10fb2ae3c]
+                                                                                                                                                                  1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1132420) [0x10fb2c784]
+                                                                                                                                                                    1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171368) [0x10fb35fa8]
+                                                                                                                                                                      1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171960) [0x10fb361f8]
+                                                                                                                                                                        1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1114704) [0x10fb28250]
+                                                                                                                                                                          1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1126512) [0x10fb2b070]
+                                                                                                                                                                            1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 1171960) [0x10fb361f8]
+                                                                                                                                                                              1   ??? (<3B28F8BC-70DE-3AF4-ACE6-C848848D8B91> + 999036) [0x10fb0be7c]
+                                                                                                                                                                                1   <User mode>
+  1   ??? (libsystem_pthread.dylib + 2240) [0x1f3cae8c0]
+    1   ??? (libsystem_pthread.dylib + 5040) [0x1f3caf3b0]
+      1   ??? (libdispatch.dylib + 83628) [0x1ceef56ac]
+        1   ??? (libdispatch.dylib + 85420) [0x1ceef5dac]
+          1   ??? (libdispatch.dylib + 43748) [0x1ceeebae4]
+            1   ??? (libdispatch.dylib + 40880) [0x1ceeeafb0]
+              1   ??? (libdispatch.dylib + 111076) [0x1ceefc1e4]
+                1   ??? (libdispatch.dylib + 6568) [0x1ceee29a8]
+                  1   ??? (AXCoreUtilities + 160428) [0x1a2d2b2ac]
+                    1   ??? (Foundation + 10080668) [0x191fe919c]
+                      1   ??? (libdispatch.dylib + 17840) [0x1ceee55b0]
+                        1   ??? (libdispatch.dylib + 111076) [0x1ceefc1e4]
+                          1   ??? (Foundation + 10080900) [0x191fe9284]
+                            1   ??? (Foundation + 836700) [0x19171845c]
+                              1   ??? (Foundation + 95900) [0x19166369c]
+                                1   ??? (libsystem_kernel.dylib + 26132) [0x2435ef614]
+                                  1   <Effective Thread QoS Background, Requested Thread QoS Background, e-core>
+  1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 2597368) [0x1108161f8]
+    1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1607832) [0x110724898]
+      1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1673436) [0x1107348dc]
+        1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1001040) [0x110690650]
+          1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 999916) [0x1106901ec]
+            1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 1118428) [0x1106ad0dc]
+              1   ??? (<25EB07E0-BA73-337A-9718-D40EF74BE424> + 872952) [0x1106711f8]
+                1   <User mode>
+
+  Binary Images:
+           0x104d00000 -                ???  com.wcpos.main.dev 1.10.3 (1) <B119B617-02E0-3545-AB6E-E6453CDD0ACC>  /private/var/containers/Bundle/Application/D878268D-6E9A-4EE5-8144-FAD94B6EFE72/WCPOS.app/WCPOS
+           0x105208000 -                ???  ???                           <B3849C84-E740-388C-881C-5D46CE61E626>
+           0x10add0000 -                ???  ???                           <F42FA778-EA10-3E10-8AEE-833D8E0D36D7>
+           0x10b0c8000 -                ???  ???                           <A6317114-1CD9-330B-AC75-B5B5EF0675D5>
+           0x10b6dc000 -                ???  ???                           <689C7A6D-25D0-3A44-A5EC-C466CD149B31>
+           0x10b848000 -                ???  ???                           <F833B928-E972-3B7D-B1A4-B5FAA11472E1>
+           0x10fa18000 -                ???  ???                           <3B28F8BC-70DE-3AF4-ACE6-C848848D8B91>
+           0x11059c000 -                ???  ???                           <25EB07E0-BA73-337A-9718-D40EF74BE424>
+           0x190ff1000 -        0x19109647f  dyld                          <0F8D35B6-556F-3E34-8EAA-80AB54047DC5>  /usr/lib/dyld
+           0x19164c000 -        0x1924d5cbf  Foundation                    <73841AA3-BFDD-322D-8DC2-E5185A14DEE1>  /System/Library/Frameworks/Foundation.framework/Foundation
+           0x1943bb000 -        0x194957a3f  CoreFoundation                <101EB2F1-1915-34A0-8BC9-631D03753B84>  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
+           0x199ffc000 -        0x19c53f63f  UIKitCore                     <0D94422F-FE7C-302E-B896-3BC5873C0CFC>  /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore
+           0x19ff38000 -        0x19ffb75ff  libsystem_c.dylib             <FF429821-80DE-3A68-99CB-0B2E707E8D48>  /usr/lib/system/libsystem_c.dylib
+           0x1a2d04000 -        0x1a2e10a7f  AXCoreUtilities               <84A96B3F-F8ED-361B-8BCD-127C853BAE0B>  /System/Library/PrivateFrameworks/AXCoreUtilities.framework/AXCoreUtilities
+           0x1a3b29000 -        0x1a3bb9a7b  libc++.1.dylib                <BE42C221-2EB0-3636-AEF5-9CEDC8B1F656>  /usr/lib/libc++.1.dylib
+           0x1ac1c4000 -        0x1ac1c6e6f  libsystem_coreservices.dylib  <3E268A32-8610-399F-878E-B14C5064979A>  /usr/lib/system/libsystem_coreservices.dylib
+           0x1ceee1000 -        0x1cef275ff  libdispatch.dylib             <49C0CD3E-A696-3B11-BA92-5755F0C3C6E3>  /usr/lib/system/libdispatch.dylib
+           0x1f3cae000 -        0x1f3cba4ef  libsystem_pthread.dylib       <34B44744-BC64-386E-AB90-EEE86B23AC46>  /usr/lib/system/libsystem_pthread.dylib
+           0x239f78000 -        0x239f807bf  GraphicsServices              <411165E2-EE8E-380E-B254-9977273971E3>  /System/Library/PrivateFrameworks/GraphicsServices.framework/GraphicsServices
+           0x2435e9000 -        0x243624b1f  libsystem_kernel.dylib        <18665B3F-6D51-33AB-B9E9-63062200EC42>  /usr/lib/system/libsystem_kernel.dylib
+           0x2b4a2b000 -        0x2b4a2db9f  libremovefile.dylib           <462D09E0-5824-32E5-A061-3F16636742DC>  /usr/lib/system/libremovefile.dylib
+           0x2b4aa9000 -        0x2b4ab1433  libsystem_platform.dylib      <3EDB2C1D-BF74-39F3-A9F6-B8C78BD66DD5>  /usr/lib/system/libsystem_platform.dylib
