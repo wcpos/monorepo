@@ -459,6 +459,23 @@ function coverageNowMs(input: OrdersSchedulerFetcherInput): number {
 	return input.nowMs?.() ?? Date.now();
 }
 
+export async function ingestPulledOrderPayloads(
+	input: Pick<
+		OrdersSchedulerFetcherInput,
+		'repository' | 'pendingMutationOrderIds' | 'discardHeldOpenCartRows'
+	>,
+	payloads: readonly WooOrderPayload[],
+	requestedAt: number
+): Promise<number> {
+	const materialized = payloads.map((payload) => materializedOrderFromWooPayload(payload));
+	const documents = materialized.map(({ storedDocument }) => storedDocument);
+	const applicable = await retireSettledHoldsThenFilter(input, documents);
+	const applied =
+		(await input.repository.upsertMany(applicable, { source: 'pull', requestedAt })) ?? applicable;
+	await recordOrderManifestRows(input, materialized, applied);
+	return applied.length;
+}
+
 function orderCoverageInput(
 	input: OrdersSchedulerFetcherInput,
 	task: FetchTask,

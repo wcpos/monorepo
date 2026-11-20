@@ -33,13 +33,20 @@
  */
 
 import { REFERENCE_COLLECTIONS } from '@wcpos/sync-core';
-import type { OrderDocument, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
+import type {
+	OrderDocument,
+	StoredOrderDocument,
+	StoreScopeManager,
+	SyncObserver,
+} from '@wcpos/sync-core';
 
 import {
 	censusCollectionFromQueryKey,
 	censusQueryKey,
 	type CensusTotal,
 	type CensusTotals,
+	orderIngestInput,
+	parseOrderBrowserSchedulerDescriptor,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
 	type ProductBrowseWindowDescriptor,
 	QUERY_TOTAL_FRESH_FOR_MS,
@@ -78,6 +85,7 @@ import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
 import { findAllUncached } from '../collections/find-all-uncached';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import { OPEN_CART_ORDER_STATUS } from '../write-path/open-cart-hold';
+import { tickOrderViewDelta } from './order-view-delta';
 
 import type {
 	BarcodeSelectors,
@@ -196,6 +204,7 @@ type MaintenanceLaneDeps = {
 	 * 2026-08-19); see maintenance/product-trickle.ts.
 	 */
 	currentProductBrowseWindowKey?: () => string | null;
+	liveOrderBrowseQueryKeys?: () => readonly string[];
 	/**
 	 * The customers browse window the grid last declared — the cashier's current customer
 	 * sort. The idle customer backfill trickles in THAT order (same ruling); see
@@ -666,10 +675,65 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.requeued += seeded.requeued;
 			result.claimLost += seeded.claimLost;
 		}
+		const visibleIds = new Set<NonNullable<OrderDocument['remoteId']>>();
+		for (const key of deps.liveOrderBrowseQueryKeys?.() ?? []) {
+			const decision = parseOrderBrowserSchedulerDescriptor(key);
+			if (!decision?.descriptor || decision.skipReason || decision.descriptor.complete) continue;
+			const { cashierId, store, limit } = decision.descriptor;
+			if (cashierId === undefined) continue;
+			const rows = await findAllUncached(db.collections.orders, {
+				selector: {
+					posUserId: String(cashierId),
+					...(store !== undefined && /^\d+$/.test(store) ? { posStoreId: store } : {}),
+				},
+			});
+			const orders = rows
+				.map((doc): StoredOrderDocument => doc.toJSON())
+				.filter((doc) => doc.remoteId !== null && !hasPendingLocalWork(doc))
+				.sort((a, b) => b.dateCreatedGmt.localeCompare(a.dateCreatedGmt));
+			for (const order of orders.slice(0, Math.min(limit ?? 100, 100))) {
+				if (visibleIds.size < 100) visibleIds.add(order.remoteId!);
+			}
+		}
+		// The store's include= read applies no cashier visibility rule: reassigned orders return with their new _pos_user.
+		if (visibleIds.size > 0) {
+			const seeded = await seedTargetedOrderSchedulerTask({
+				remoteIds: [...visibleIds],
+				priority: ORDER_OPEN_RECENT_PRIORITY,
+				completedDedupeForMs: 0,
+				database: db,
+				nowMs: now(),
+			});
+			result.inserted += seeded.inserted;
+			result.requeued += seeded.requeued;
+			result.claimLost += seeded.claimLost;
+		}
 		return seedSummary(
-			`Orders open-recent window seed (windowed, not a bulk pull); queued a check of ${remoteIds.length} held open carts`,
+			`Orders open-recent window seed (windowed, not a bulk pull); queued a check of ${remoteIds.length} held open carts and ${visibleIds.size} cashier view orders`,
 			result
 		);
+	});
+
+	const orderViewCursors = new Map<string, Map<string, number>>();
+	const unsupportedOrderDeltaScopes = new Set<string>();
+	const orderViewDelta = lane('order-view-delta', async (db, scopeId, signal, fetcher) => {
+		if (unsupportedOrderDeltaScopes.has(scopeId)) return { summary: null };
+		const cursors = orderViewCursors.get(scopeId) ?? new Map<string, number>();
+		orderViewCursors.set(scopeId, cursors);
+		const result = await tickOrderViewDelta({
+			baseUrl: deps.syncBaseUrl,
+			fetcher,
+			ingest: () => orderIngestInput(db as unknown as SchedulerDrainDatabase),
+			viewKeys: deps.liveOrderBrowseQueryKeys?.() ?? [],
+			cursors,
+			now,
+			signal,
+			diagnostics: deps.diagnostics,
+		});
+		if (result.unsupported) unsupportedOrderDeltaScopes.add(scopeId);
+		return {
+			summary: `Order view delta: ${result.scopes} scopes, ${result.requests} requests, ${result.documents} documents`,
+		};
 	});
 
 	const productBrowseWindowSeed = lane('product-browse-window-seed', async (db) => {
@@ -1024,6 +1088,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	return {
 		schedulerDrain,
 		orderWindowSeed,
+		orderViewDelta,
 		productBrowseWindowSeed,
 		referenceSeed,
 		queryTotalRetry,

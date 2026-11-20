@@ -1722,6 +1722,7 @@ export function createRxdbSyncEngine(
 		variationCensusTotal: async () => (await censusPublisher.totals()).variations,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
 		currentProductBrowseWindowKey: requirePlane.lastProductBrowseQueryKey,
+		liveOrderBrowseQueryKeys: requirePlane.liveOrderBrowseQueryKeys,
 		...(ports.defaultProductBrowseSort !== undefined
 			? { defaultProductBrowseSort: ports.defaultProductBrowseSort }
 			: {}),

@@ -446,6 +446,12 @@ export type RequirePlane = {
 	 */
 	lastProductBrowseQueryKey(): string | null;
 	/**
+	 * Distinct declared, unreleased orders browse keys in the active scope, reference-counted
+	 * per key. Like lastProductBrowseQueryKey, pre-ready declarations belong to the first
+	 * active scope that reads them; later scope switches never carry them across.
+	 */
+	liveOrderBrowseQueryKeys(): readonly string[];
+	/**
 	 * The customers sibling of {@link lastProductBrowseQueryKey} — the lane identity of the
 	 * LAST customers browse window a grid declared, and therefore the sort the idle customer
 	 * backfill walks (maintenance/customer-trickle.ts). Same ruling, same mechanism, same
@@ -529,6 +535,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const activeScope = () => deps.manager.activeScope;
 	const productBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
 	const customerBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
+	const liveOrderKeys = new Map<string | null, Map<string, number>>();
+	let beforeReadyOrders = { scopeId: null as string | null };
 	// Demand-path reference refreshes dedupe ONLY against their own last pull
 	// (#1302 round 2): the persisted task timestamp is shared with the idle
 	// maintenance lane, and a maintenance completion landing shortly before a
@@ -1763,6 +1771,19 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		hasPendingWork: () => running.search || running.durable || queue.length > 0,
 		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
 		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
+		liveOrderBrowseQueryKeys: () => {
+			const scopeId = activeScope();
+			const pending = liveOrderKeys.get(null);
+			if (scopeId !== null && pending) {
+				const keys = liveOrderKeys.get(scopeId) ?? new Map<string, number>();
+				for (const [key, count] of pending) keys.set(key, (keys.get(key) ?? 0) + count);
+				liveOrderKeys.set(scopeId, keys);
+				liveOrderKeys.delete(null);
+				beforeReadyOrders.scopeId = scopeId;
+				beforeReadyOrders = { scopeId: null };
+			}
+			return [...(liveOrderKeys.get(scopeId)?.keys() ?? [])];
+		},
 		require: (requirement) => {
 			// The runaway backstop is the ONE ceiling left on a browse window (#948/#957),
 			// and it must never behave like the caps it replaced: it is announced, not
@@ -1783,11 +1804,20 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					fields: { requirementId: requirement.id, requested: requirement.limit },
 				});
 			}
+			let orderScope: typeof beforeReadyOrders | undefined;
 			const queryKey = (() => {
 				if (requirement.kind === 'refunds-by-parent')
 					return refundParentQueryKey(requirement.parentRemoteId);
 				if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
-				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
+				if (requirement.kind === 'orders-browse') {
+					const key = orderBrowserQueryKey(requirement);
+					const scopeId = activeScope();
+					orderScope = scopeId === null ? beforeReadyOrders : { scopeId };
+					const keys = liveOrderKeys.get(scopeId) ?? new Map<string, number>();
+					keys.set(key, (keys.get(key) ?? 0) + 1);
+					liveOrderKeys.set(scopeId, keys);
+					return key;
+				}
 				if (requirement.kind === 'refunds-browse') return refundBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
 					// Recorded on DECLARATION, not on completion: the idle backfill must follow the
@@ -1892,6 +1922,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				release: () => {
 					if (subscriber.released) return;
 					subscriber.released = true;
+					if (orderScope) {
+						const keys = liveOrderKeys.get(orderScope.scopeId)!;
+						const remaining = keys.get(queryKey!)! - 1;
+						if (remaining === 0) keys.delete(queryKey!);
+						else keys.set(queryKey!, remaining);
+					}
 					entry.subscribers.delete(subscriber);
 					// Resolve NOW — a released (unmounting) caller must not wait for
 					// whatever is in flight ahead of it. The pump drops the entry later.
