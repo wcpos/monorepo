@@ -1,9 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 
+import { getErrorMessage } from '@wcpos/utils/logger';
 import { MoneyCommandError, type MoneyCommandErrorReason } from '@wcpos/query';
 import {
 	isDefinitiveMoneyRefusal,
 	moneyRefusalOf,
+	ORDER_CLOSED_REFUSALS,
+	type OrderClosedRefusal,
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
 } from '@wcpos/sync-core';
@@ -94,7 +97,7 @@ export interface RecordManualPaymentDeps {
 }
 type InvalidReason =
 	'not_manual' | 'amount_not_positive' | 'tendered_not_allowed' | 'tendered_below_amount';
-type RefusalReason = PaymentRowRefusal;
+type RefusalReason = PaymentRowRefusal | OrderClosedRefusal;
 type Answered = { row: PaymentRow; order: OrderPaymentSummary | null };
 export type RecordManualPaymentOutcome =
 	| ({ kind: 'recorded'; via: 'online' | 'offline'; notMirrored: NotMirrored } & Answered)
@@ -103,7 +106,7 @@ export type RecordManualPaymentOutcome =
 	/** Never dispatched (pre-flight failed, no revision, order changed): nothing reached the store. */
 	| { kind: 'failed'; reason: MoneyCommandErrorReason; cause?: unknown }
 	/** No answer after every re-send: the journal keeps the command, and Try again re-sends it. */
-	| { kind: 'unknown'; row: PaymentRow }
+	| { kind: 'unknown'; row: PaymentRow; reason: string }
 	| { kind: 'invalid'; reason: InvalidReason };
 
 /**
@@ -203,7 +206,8 @@ export async function recordManualPayment(
 			// anything else is unknown, never "nothing was taken".
 			if (error instanceof MoneyCommandError && error.reason === 'settled_elsewhere') {
 				const settled = await deps.settledRecord?.(row.id);
-				if (settled?.row.status !== 'captured') return { kind: 'unknown', row };
+				if (settled?.row.status !== 'captured')
+					return { kind: 'unknown', row, reason: 'settled_elsewhere' };
 				const status = settled.status ? { status: settled.status } : {};
 				const notMirrored = await deps.mirror(
 					{ payment: settled.row, ...status },
@@ -251,6 +255,12 @@ export async function recordManualPayment(
 				await deps.mirror({ payment: failedRow, ...status }, { accepted: false });
 				return { kind: 'refused', reason, row: failedRow, order: serverOrder };
 			}
+			if (refusal?.code && Object.hasOwn(ORDER_CLOSED_REFUSALS, refusal.code)) {
+				// The store had already closed the order and stored nothing: no mirror, no status
+				// read. The cash in the cashier's hand still needs a story (POS-338).
+				deps.raiseAttention({ row, order: null, reason: 'order_closed' });
+				return { kind: 'refused', reason: 'order_closed', row, order: null };
+			}
 			if (refusal?.code && isDefinitiveMoneyRefusal(refusal)) {
 				// A definitive refusal the server will repeat (conflict, unknown method, bad
 				// param): nothing is written — the caller decides.
@@ -262,7 +272,8 @@ export async function recordManualPayment(
 			}
 			// No answer, a 5xx, a held lock, a session or proxy answer proves nothing: re-send the
 			// same journaled record.
-			if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length) return { kind: 'unknown', row };
+			if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length)
+				return { kind: 'unknown', row, reason: getErrorMessage(error) };
 			await (deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
 				RECORD_UNKNOWN_RETRY_DELAYS_MS[attempt]
 			);

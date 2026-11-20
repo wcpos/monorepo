@@ -476,6 +476,47 @@ describe('recordManualPayment', () => {
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
 
+	// POS-338: the store had already closed the order (`Ledger::accepts_tender`) and stored
+	// nothing, but the cash is in the cashier's hand. It is a needs-attention row, never a throw.
+	it('raises attention for the minted row when the store had already closed the order', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValue(responseError(409, 'wcpos_invalid_transition', { status: 409 }));
+
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
+
+		expect(deps.raiseAttention).toHaveBeenCalledTimes(1);
+		expect(deps.raiseAttention).toHaveBeenCalledWith({
+			row: mintedCard,
+			order: null,
+			reason: 'order_closed',
+		});
+		expect(deps.mirror).not.toHaveBeenCalled();
+		expect(deps.fetchOrderStatus).not.toHaveBeenCalled();
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({
+			kind: 'refused',
+			reason: 'order_closed',
+			row: mintedCard,
+			order: null,
+		});
+	});
+
+	it('still throws for a 409 that is not an order-closed refusal, with no attention or mirror', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValue(responseError(409, 'wcpos_command_conflict'));
+
+		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
+		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentError);
+		await expect(promise).rejects.toMatchObject({ code: 'wcpos_command_conflict', status: 409 });
+		expect(deps.mirror).not.toHaveBeenCalled();
+		expect(deps.raiseAttention).not.toHaveBeenCalled();
+	});
+
 	it.each([new Error('network'), responseError(503), responseError(409, 'wcpos_payment_locked')])(
 		'a 5xx re-sends the same row and body and ends unknown with the command (%p)',
 		async (error) => {
@@ -501,6 +542,7 @@ describe('recordManualPayment', () => {
 			expect(result).toEqual({
 				kind: 'unknown',
 				row: expect.objectContaining({ id: UUID.toLowerCase() }),
+				reason: error instanceof Error ? error.message : expect.any(String),
 			});
 		}
 	);
@@ -653,7 +695,11 @@ describe('recordManualPayment', () => {
 	it('a retry whose record another sender settled, but whose settled row is missing, reads as unknown (POS-31A)', async () => {
 		const deps = createDeps();
 		const result = await settledElsewhere(deps, null);
-		expect(result).toMatchObject({ kind: 'unknown', row: { id: mintedCard.id } });
+		expect(result).toMatchObject({
+			kind: 'unknown',
+			row: { id: mintedCard.id },
+			reason: 'settled_elsewhere',
+		});
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 

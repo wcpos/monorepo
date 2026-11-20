@@ -82,6 +82,7 @@
 /error-codes/PAYMENT401
 /error-codes/PAYMENT501
 /error-codes/PAYMENT511
+/error-codes/PAYMENT521
 /error-codes/PAYMENT999
 /error-codes/PRINT101
 /error-codes/PRINT201

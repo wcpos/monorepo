@@ -186,8 +186,12 @@ export function useRecordManualPayment(): (
 						orderId: paymentOrder.id,
 						paymentId: outcome.row.id,
 						amount: outcome.row.amount,
+						reason: outcome.reason,
 					},
 				});
+			// A definitive refusal: settle runs the forced refresh, so the till adopts the closed order.
+			if (outcome.kind === 'refused' && outcome.reason === 'order_closed')
+				await post.settle().catch(() => undefined);
 			return outcome;
 		},
 		[
