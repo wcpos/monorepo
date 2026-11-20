@@ -186,6 +186,7 @@ export function useRecordManualPayment(): (
 						orderId: paymentOrder.id,
 						paymentId: outcome.row.id,
 						amount: outcome.row.amount,
+						reason: outcome.reason,
 					},
 				});
 			return outcome;
