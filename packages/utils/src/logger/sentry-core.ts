@@ -38,6 +38,9 @@ export function createPendingCaptures() {
 export const SENTRY_DSN =
 	'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733';
 
+// The bundle's commit, stamped by app.config.ts at build time; `release` stays the package version.
+export const BUILD_COMMIT = process.env.EXPO_PUBLIC_BUILD_COMMIT || 'unknown';
+
 export type SentryBreadcrumbLike = { message?: string; data?: Record<string, unknown> };
 
 type SentryEventLike = {

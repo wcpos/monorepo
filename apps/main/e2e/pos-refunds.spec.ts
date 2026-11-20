@@ -260,6 +260,7 @@ test.describe('POS refunds (Pro)', () => {
 				status: 201,
 				contentType: 'application/json',
 				body: JSON.stringify({
+					id: 999,
 					refund_id: 999,
 					refund_result: { destination: 'cash', mode: 'manual' },
 				}),
@@ -305,6 +306,7 @@ test.describe('POS refunds (Pro)', () => {
 				status: 201,
 				contentType: 'application/json',
 				body: JSON.stringify({
+					id: 1000,
 					refund_id: 1000,
 					refund_result: { destination: 'original_method', mode: 'provider' },
 				}),

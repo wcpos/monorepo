@@ -406,3 +406,26 @@ describe('PAYMENT201 fingerprint groups by cause', () => {
 		expect(fp('PAYMENT202', { reason: 'Network Error' })).toEqual(['PAYMENT202']);
 	});
 });
+
+describe('BUILD_COMMIT', () => {
+	const loadBuildCommit = () => {
+		let value: string | undefined;
+		jest.isolateModules(() => {
+			value = jest.requireActual<typeof import('./sentry-core')>('./sentry-core').BUILD_COMMIT;
+		});
+		return value;
+	};
+	afterEach(() => {
+		delete process.env.EXPO_PUBLIC_BUILD_COMMIT;
+	});
+
+	it('falls back to unknown when the build did not stamp a commit', () => {
+		delete process.env.EXPO_PUBLIC_BUILD_COMMIT;
+		expect(loadBuildCommit()).toBe('unknown');
+	});
+
+	it('reads the commit app.config.ts stamped', () => {
+		process.env.EXPO_PUBLIC_BUILD_COMMIT = 'abc123def456';
+		expect(loadBuildCommit()).toBe('abc123def456');
+	});
+});

@@ -96,6 +96,7 @@ export {
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
 } from './woo/moneyCommandAnswer';
+export { isClosedOrderStatus, roundingFeeAmount } from './woo/closed-order-refusal';
 export {
 	identifyRecord,
 	isRecordUuid,

@@ -191,6 +191,27 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "SYNC204",
+		"symbol": "ORDER_CLOSED_ON_STORE",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "The store has already closed this order. Reopen it on the store first if the change is still needed, then tap Send again in Store health → Database, or Discard it.",
+		"retryPolicy": "after-change",
+		"dataSafety": "local-only",
+		"escalation": "store-admin",
+		"summary": "The store had already closed this order, so it refused a change to its lines.",
+		"docsBody": "This device sent a change to an order's lines (items, fees, shipping or coupons) after the store had already closed that order: it was paid or completed, cancelled or refunded. The store does not change the lines of a closed order, so it refused the change and kept its own copy as it was. The refused change stays listed in Store health → Database until you settle it. To make the change land, the order has to be reopened on the store first; otherwise discard the change.",
+		"troubleshooting": [
+			"Expand the log entry: it names the order the store refused and the store's reason. If it also shows a rounding fee amount, the refused change carried a cash rounding line.",
+			"Open the same order in WooCommerce → Orders in WP Admin and check its status and lines. If the store's copy is already right, nothing was lost: press Discard on the change's row in Store health → Database.",
+			"If the change is still needed, a store admin has to reopen the order in WP Admin first; then press Send again on the row.",
+			"If the same order keeps being refused while it is still open on this device, another device or an admin is closing it — agree who finishes the sale before changing it here."
+		],
+		"logSources": ["wp-admin-pos-logs"],
+		"evidence": "Sentry POS-338: 422 reopen_required from Order_Writer::money_gate() for an order whose status was already closed, logged as SYNC201 at error",
+		"introducedIn": "2.0.1"
+	},
+	{
 		"code": "SYNC211",
 		"symbol": "RECORD_INVALID_FIELD",
 		"domain": "SYNC",

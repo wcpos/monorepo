@@ -10,6 +10,7 @@ import {
 } from './recordPushAdapter';
 import { drainMutationQueue } from './drainMutationQueue';
 import { createFakeWriteServer } from './fakeWriteServer';
+import { POS_META_KEYS } from './pos-carrier/carrier';
 
 import type { RecordMutation } from './recordMutation';
 
@@ -1587,6 +1588,83 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 				data,
 			}),
 		]);
+	});
+
+	describe('a closed order’s reopen_required refusal (Sentry POS-338)', () => {
+		const roundingFee = {
+			name: 'Cash rounding',
+			total: '0.02',
+			meta_data: [{ key: POS_META_KEYS.posData, value: JSON.stringify({ rounding: true }) }],
+		};
+		const refuseReopen = (orderStatus: string) => (mutation: RecordMutation) =>
+			pushRecordMutation({
+				mutation,
+				resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+				fetcher: async () =>
+					jsonResponse(422, {
+						code: 'reopen_required',
+						message: 'Reopen the order before changing its lines.',
+						data: { status: 422, order_status: orderStatus },
+					}),
+			});
+		const storedKeys = [
+			'baseRevision',
+			'collectionName',
+			'mutationId',
+			'operation',
+			'origin',
+			'payload',
+			'queuedAt',
+			'recordId',
+			'rejectedAt',
+			'rejectedMessage',
+			'rejectedReason',
+			'rejectedStatus',
+			'seq',
+			'status',
+		];
+
+		it('flags the push.rejected emit as closed with the rounding fee amount; the stored row is unchanged', async () => {
+			const q = await queueWith(
+				mut({
+					mutationId: 'm-closed',
+					collectionName: 'orders',
+					payload: { id: 'rec-A', fee_lines: [roundingFee] },
+				})
+			);
+			const events: SyncEvent[] = [];
+			await drainMutationQueue({
+				queue: q,
+				push: refuseReopen('completed'),
+				observe: (e) => events.push(e),
+			});
+			expect(events.find((e) => e.type === 'push.rejected')?.fields).toMatchObject({
+				status: 422,
+				reason: 'reopen_required',
+				orderClosed: true,
+				roundingFeeAmount: '0.02',
+			});
+			const [row] = await q.all();
+			expect(row).toMatchObject({ status: 'rejected', rejectedReason: 'reopen_required' });
+			expect(Object.keys(row).sort()).toEqual(storedKeys);
+		});
+
+		it('leaves an open order’s refusal unflagged, with no rounding fee amount', async () => {
+			const q = await queueWith(mut({ mutationId: 'm-open', collectionName: 'orders' }));
+			const events: SyncEvent[] = [];
+			await drainMutationQueue({
+				queue: q,
+				push: refuseReopen('pending'),
+				observe: (e) => events.push(e),
+			});
+			const fields = events.find((e) => e.type === 'push.rejected')?.fields;
+			expect(fields).toMatchObject({ status: 422, reason: 'reopen_required' });
+			expect(fields).not.toHaveProperty('orderClosed');
+			expect(fields).not.toHaveProperty('roundingFeeAmount');
+			const [row] = await q.all();
+			expect(row).toMatchObject({ status: 'rejected' });
+			expect(Object.keys(row).sort()).toEqual(storedKeys);
+		});
 	});
 
 	it('writes the server verdict ONTO the dead-lettered row so the recovery surface can say why (#832)', async () => {

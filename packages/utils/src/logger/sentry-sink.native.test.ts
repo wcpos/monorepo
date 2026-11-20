@@ -39,6 +39,8 @@ jest.mock('expo-file-system', () => ({
 }));
 const testGlobal = globalThis as typeof globalThis & { __DEV__: boolean };
 testGlobal.__DEV__ = false;
+// app.config.ts stamps the commit at build time; read when sentry-core loads.
+process.env.EXPO_PUBLIC_BUILD_COMMIT = 'abc123def456';
 Object.defineProperty(globalThis, 'crypto', {
 	configurable: true,
 	value: { randomUUID: () => 'e49735e4-34af-4abd-a8f6-78f17b350a82' },
@@ -190,6 +192,7 @@ describe('sentry-sink.native', () => {
 				enableNetworkBreadcrumbs: false,
 				beforeSend: expect.any(Function),
 				beforeBreadcrumb: expect.any(Function),
+				initialScope: { tags: { build_commit: 'abc123def456' } },
 			})
 		);
 		const initOptions = jest.mocked(Sentry.init).mock.calls[0]?.[0];

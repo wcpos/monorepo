@@ -115,13 +115,20 @@ export function settleCartWrite<T>(
 		},
 	});
 	if (!deps.commitAtBoundary) return written;
-	return Promise.resolve(written).then(async (value) => {
-		if (refusal) return refusal;
-		if (closed) return { deny: { reasonKey: 'pos_checkout.order_changed_retry' } };
-		if (boundary && value) {
-			const outcome = await deps.commitAtBoundary!(document, input.queue!, input.coupons);
-			if (outcome.kind === 'refused') return outcome.refusal;
-		}
-		return value;
-	});
+	return Promise.resolve(written)
+		.then(async (value) => {
+			if (refusal) return refusal;
+			if (closed) return { deny: { reasonKey: 'pos_checkout.order_changed_retry' } };
+			if (boundary && value) {
+				const outcome = await deps.commitAtBoundary!(document, input.queue!, input.coupons);
+				if (outcome.kind === 'refused') return outcome.refusal;
+			}
+			return value;
+		})
+		.catch((error: unknown) => {
+			// Sentry POS-32T: an order queued for deletion refuses the edit instead of throwing.
+			if ((error as { code?: unknown })?.code === 'write-superseded-by-delete')
+				return { deny: { reasonKey: 'pos_cart.order_being_removed' } };
+			throw error;
+		});
 }
