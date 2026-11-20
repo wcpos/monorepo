@@ -55,6 +55,7 @@ import { useCashierLabel } from '../../../../hooks/use-cashier-label';
 import { useOrderStatusLabel } from '../../../../hooks/use-order-status-label';
 import { storeListResource } from '../../../../hooks/store-list-resource';
 import { useStorageMoneyPathGuard } from '../../../../hooks/use-storage-health';
+import { useUserCapabilities } from '../../../../hooks/use-user-capabilities';
 import { useCurrentOrderActions } from '../../../contexts/current-order';
 import { FormErrors } from '../../../../components/form-errors';
 import {
@@ -207,6 +208,9 @@ export function EditOrderMetaForm({
 	);
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 	const { label: cashierBefore } = useCashierLabel(base.cashier_id);
+	// The store takes a hand-over to another cashier only from a user who may reassign sales
+	// (Paul, 2026-11-20): anyone else gets no picker, so the order keeps its own cashier.
+	const { canReassignSales } = useUserCapabilities().caps;
 	const { getLabel: statusLabel } = useOrderStatusLabel();
 	const stores = useObservableSuspense(storeListResource(wpCredentials));
 	const storeOptions = React.useMemo(
@@ -480,27 +484,29 @@ export function EditOrderMetaForm({
 									)}
 								/>
 							</PropertyRow>
-							<PropertyRow id="cashier" label={t('common.cashier')}>
-								<FormField
-									control={handOverForm.control}
-									name="cashier_id"
-									render={({ field }) => (
-										<View testID="order-meta-cashier">
-											<FormCombobox
-												customComponent={CashierSelect}
-												portalHost="pos"
-												tone={tone('cashier')}
-												{...field}
-												// An order with no cashier names the choice, not an empty box.
-												value={{
-													value: field.value,
-													label: cashierLabel || t('common.select_cashier'),
-												}}
-											/>
-										</View>
-									)}
-								/>
-							</PropertyRow>
+							{canReassignSales && (
+								<PropertyRow id="cashier" label={t('common.cashier')}>
+									<FormField
+										control={handOverForm.control}
+										name="cashier_id"
+										render={({ field }) => (
+											<View testID="order-meta-cashier">
+												<FormCombobox
+													customComponent={CashierSelect}
+													portalHost="pos"
+													tone={tone('cashier')}
+													{...field}
+													// An order with no cashier names the choice, not an empty box.
+													value={{
+														value: field.value,
+														label: cashierLabel || t('common.select_cashier'),
+													}}
+												/>
+											</View>
+										)}
+									/>
+								</PropertyRow>
+							)}
 							{stores.length > 1 && (
 								<PropertyRow id="store" label={t('common.store')}>
 									<FormField
