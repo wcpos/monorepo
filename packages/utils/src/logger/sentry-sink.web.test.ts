@@ -13,6 +13,8 @@ const localStorage = {
 // the production path. Cleared before the module under test is loaded.
 const testGlobal = globalThis as typeof globalThis & { __DEV__: boolean };
 testGlobal.__DEV__ = false;
+// app.config.ts stamps the commit at build time; read when sentry-core loads.
+process.env.EXPO_PUBLIC_BUILD_COMMIT = 'abc123def456';
 Object.defineProperty(globalThis, 'window', {
 	configurable: true,
 	value: {
@@ -66,6 +68,7 @@ describe('sentry-sink.web', () => {
 			beforeSend: expect.any(Function),
 			beforeBreadcrumb: expect.any(Function),
 			ignoreErrors: [/ResizeObserver loop/],
+			initialScope: { tags: { build_commit: 'abc123def456' } },
 		});
 		expect(initOptions.beforeBreadcrumb?.({ message: 'jane@example.com' })).toEqual({
 			message: '[EMAIL]',
