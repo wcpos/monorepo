@@ -1139,6 +1139,7 @@
 	"pos_cart.send_order_description": "It leaves this cart.",
 	"pos_cart.order_sent": "Order sent",
 	"pos_cart.order_removed": "Order removed",
+	"pos_cart.order_being_removed": "This order is being removed, so it can't be changed.",
 	"pos_cart.order_voided_cancelled": "Order voided and marked cancelled",
 	"pos_cart.percentage_discount": "Percentage discount",
 	"pos_cart.qty_abbrev": "Qty",
