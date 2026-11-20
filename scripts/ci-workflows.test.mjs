@@ -3561,6 +3561,10 @@ test('flow 10 switches to the cart tab with a retried tap on phones', () => {
 	const badge = runFlow.commands[2].runFlow;
 	assert.deepEqual(badge.when.visible, { id: 'pos-tab-cart', text: '20, .*' });
 	assert.equal(retryIndex, 4, 'badge wait, timestamp and conditional must precede the retry');
+	assert.equal(
+		runFlow.commands[3].runFlow.when.true,
+		'${output.badgeSeenAt - output.burstTappedAt >= 20000}'
+	);
 	assert.deepEqual(runFlow.commands[3].runFlow.when.notVisible, {
 		id: 'pos-tab-cart',
 		text: '[0-9]+, .*',

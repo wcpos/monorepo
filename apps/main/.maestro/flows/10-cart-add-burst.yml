@@ -164,9 +164,11 @@ env:
               text: "20, .*"
           commands:
             - evalScript: ${output.burstSettledAt = output.badgeSeenAt; output.settleSignal = 'badge'}
-      # A label with no readable count is a selector failure, not cart latency.
+      # Only run when the 20 s badge wait timed out, so the gate already fails.
+      # Name a label with no readable count as a selector failure, not cart latency.
       - runFlow:
           when:
+            true: ${output.badgeSeenAt - output.burstTappedAt >= 20000}
             notVisible:
               id: "pos-tab-cart"
               text: "[0-9]+, .*"
