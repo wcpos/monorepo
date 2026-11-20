@@ -150,3 +150,19 @@ describe('WebView native load events', () => {
 		expect(host.onLoadStart).toHaveBeenCalledTimes(1);
 	});
 });
+
+// Revert: hand the host the raw string, so readPayPageMessage never sees the plugin's object.
+describe('WebView native pay page session signal', () => {
+	it('parses the JSON string ReactNativeWebView.postMessage delivers into the object', () => {
+		const onMessage = jest.fn();
+		render(<WebView src="https://shop.example.com/order-pay/42" onMessage={onMessage} />);
+		rnProps().onMessage({
+			nativeEvent: { data: '{"action":"wcpos-session-expired","orderId":"42"}' },
+		});
+		expect(onMessage).toHaveBeenCalledTimes(1);
+		expect(onMessage.mock.calls[0][0].nativeEvent.data).toEqual({
+			action: 'wcpos-session-expired',
+			orderId: '42',
+		});
+	});
+});
