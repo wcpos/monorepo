@@ -121,7 +121,7 @@ describe.each(storages)('%s open-orders scope', (name, storage) => {
 						selector: openOrdersSelector(scope.cashierId, scope.storeId),
 						sort: OPEN_ORDERS_SORT,
 					})
-					.$.pipe(filter((records) => records.some((item) => item._rev === latest._rev)))
+					.$.pipe(filter((records) => records.some((item) => item.revision === latest.revision)))
 			);
 			await new Promise((resolve) => setTimeout(resolve, 0));
 			return handle.value.result;
