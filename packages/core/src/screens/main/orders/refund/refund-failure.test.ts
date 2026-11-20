@@ -1,8 +1,19 @@
-import { classifyRefundFailure } from './refund-failure';
+import { classifyRefundFailure, RefundUnconfirmedError } from './refund-failure';
 
 const t = (key: string) => key;
 
 describe('classifyRefundFailure', () => {
+	// #3380: a 2xx with no refund in it. Never a success; the copy sends the cashier to
+	// the order's refunds, never to a blind retry (each retry is a new refund).
+	it('warns that the store did not confirm the refund and sends the cashier to its refunds', () => {
+		expect(classifyRefundFailure(new RefundUnconfirmedError(77, 200), t)).toEqual({
+			level: 'warn',
+			code: 'PAYMENT311',
+			title: 'orders.refund_unconfirmed',
+			text2: 'orders.refund_unconfirmed_check',
+		});
+	});
+
 	it('says no refund was made — and not "offline" — when the app was only backgrounded', () => {
 		const asleep = Object.assign(new Error('asleep'), { isSleeping: true });
 

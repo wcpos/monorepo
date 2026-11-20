@@ -119,6 +119,7 @@
 /error-codes/SYNC201
 /error-codes/SYNC202
 /error-codes/SYNC203
+/error-codes/SYNC204
 /error-codes/SYNC211
 /error-codes/SYNC221
 /error-codes/SYNC222
