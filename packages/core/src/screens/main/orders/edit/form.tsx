@@ -719,7 +719,12 @@ function StoreRow(props: {
 						name="store_id"
 						render={({ field }) => (
 							<View testID="order-edit-store">
-								<FormSelect options={options} placeholder={t('common.store')} {...field} />
+								<FormSelect
+									options={options}
+									placeholder={t('common.store')}
+									triggerTestID="order-edit-store-select"
+									{...field}
+								/>
 							</View>
 						)}
 					/>

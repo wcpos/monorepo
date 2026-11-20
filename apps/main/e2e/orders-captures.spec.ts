@@ -1,6 +1,18 @@
 import { type ScaleStep, scaleVariables } from '@wcpos/components/lib/scale';
 
-import { hydrateAuthenticatedPage } from './fixtures';
+import {
+	CAPTURE_DEVICES,
+	CAPTURE_SCHEMES,
+	cleanUp,
+	ensureSystemTheme as ensureCaptureSettings,
+} from './capture-matrix';
+import {
+	becomesVisible,
+	getStoreVariant,
+	hydrateAuthenticatedPage,
+	isRouteTeardownError,
+	wcposRestRoute,
+} from './fixtures';
 import { mintSearchProbeToken } from './search-probe';
 import { expect, test } from './test';
 
@@ -29,7 +41,7 @@ async function capture(page: Page, info: TestInfo, state: string, settle = SETTL
 	await page.screenshot({ path });
 	await info.attach(`orders-captures-${state}`, { path, contentType: 'image/png' });
 }
-async function navigate(page: Page, route: 'settings' | 'orders') {
+async function navigate(page: Page, route: 'settings' | 'orders' | 'pos') {
 	for (const id of ['orders-bar-menu', 'pos-drawer-open-button', 'drawer-open-button']) {
 		const button = page.getByTestId(id).locator('visible=true').first();
 		// The bar renders a beat after the page: give each candidate a second, as the register
@@ -251,5 +263,144 @@ for (const [device, viewport] of Object.entries({
 				});
 			});
 		}
+	}
+}
+
+/** Who may change a sale's cashier or store, and the plugin feature that records a cashier change. */
+const REASSIGN_CAPABILITY = 'reassign_woocommerce_pos_sales';
+const REASSIGN_FEATURE = 'order_cashier_reassignment';
+
+/**
+ * Passes one wcpos/v2 response through with its `capabilities` list edited (the body may be the
+ * `_wcpos` envelope). Only the list changes: every other byte is the store's own answer.
+ */
+async function editCapabilities(
+	page: Page,
+	route: RegExp,
+	edit: (list: string[] | undefined) => string[] | undefined
+) {
+	await page.route(
+		(url) => route.test(wcposRestRoute(url.href) ?? ''),
+		async (intercepted) => {
+			try {
+				const response = await intercepted.fetch();
+				let body: Record<string, unknown>;
+				try {
+					body = await response.json();
+				} catch {
+					await intercepted.fulfill({ response });
+					return;
+				}
+				const target = (body && '_wcpos' in body ? body.data : body) as {
+					capabilities?: unknown;
+				} | null;
+				if (target && typeof target === 'object') {
+					const list = Array.isArray(target.capabilities)
+						? (target.capabilities as string[])
+						: undefined;
+					const edited = edit(list);
+					if (edited) target.capabilities = edited;
+				}
+				await intercepted.fulfill({ response, json: body });
+			} catch (error) {
+				if (isRouteTeardownError(error)) return;
+				console.warn('[orders-captures] capability route failed; aborting request:', error);
+				await intercepted.abort().catch(() => {});
+			}
+		}
+	);
+}
+
+/**
+ * The Edit tab's Cashier and Store rows on a POS sale, editable and locked (PR #3706). Read only:
+ * nothing is pressed, so nothing is written to the store.
+ * - editable: the cashier's own `capabilities` gain `reassign_woocommerce_pos_sales` and the
+ *   plugin's status gains `order_cashier_reassignment` (the dev stores run neither yet);
+ * - locked: the status is the store's own and the cashier's list loses the capability.
+ */
+for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
+	for (const colorScheme of CAPTURE_SCHEMES) {
+		test.describe(`${device}-${colorScheme}-regular`, () => {
+			test.use({ viewport, colorScheme, hasTouch: device === 'phone' });
+			for (const editable of [true, false]) {
+				const name = editable ? 'edit-identity-editable' : 'edit-identity-locked';
+				test(`orders edit tab: cashier and store ${editable ? 'editable' : 'locked'}`, async ({
+					page,
+				}, info) => {
+					test.skip(getStoreVariant(info) === 'free', 'The Orders page is Pro-only on Free');
+					test.setTimeout(240_000);
+					page.setDefaultTimeout(15_000);
+					await hydrateAuthenticatedPage(page, info, {
+						beforeBoot: async (booting) => {
+							await editCapabilities(booting, /^\/wcpos\/v2\/cashier\/\d+$/, (list) =>
+								list && editable
+									? [...list, REASSIGN_CAPABILITY]
+									: list?.filter((capability) => capability !== REASSIGN_CAPABILITY)
+							);
+							if (editable) {
+								await editCapabilities(booting, /^\/wcpos\/v2\/status$/, (list) => [
+									...(list ?? []),
+									REASSIGN_FEATURE,
+								]);
+							}
+						},
+					});
+					// System theme and English, put back afterwards; Orders is reached from the POS.
+					const restore = await ensureCaptureSettings(page, { english: true });
+					let walked = false;
+					try {
+						await navigate(page, 'orders');
+						const root = page.getByTestId('screen-orders');
+						await expect(
+							root.getByTestId('data-table-count').or(root.getByTestId('no-data-message')).first()
+						).toBeVisible({ timeout: 30_000 });
+						// The first sale in scope with a cashier: an order created online has no Cashier row.
+						const rows = root.getByTestId(/^data-table-row-/);
+						const modal = page.getByTestId('order-modal');
+						const cashierRow = modal.getByTestId('order-row-cashier');
+						let found = false;
+						for (let index = 0; index < Math.min(await rows.count(), 10) && !found; index++) {
+							// On a fine pointer the caret is the row's one door; on touch the row is.
+							const row = rows.nth(index);
+							await (device === 'tablet' ? row.getByTestId('order-open-button') : row).click();
+							await expect(modal).toBeVisible();
+							// View, Edit, JSON: the Edit tab is the second.
+							await modal.getByRole('tab').nth(1).click();
+							found = await becomesVisible(cashierRow, 5_000);
+							if (!found) await page.getByTestId('order-modal-close').click();
+						}
+						test.skip(!found, 'No POS sale (an order with a cashier) in the active scope');
+						if (editable) {
+							await expect(modal.getByTestId('order-edit-update-cashier')).toBeVisible({
+								timeout: 30_000,
+							});
+							await expect(modal.getByTestId('order-edit-cashier')).toBeVisible();
+						} else {
+							await expect(cashierRow).toBeVisible();
+							await expect(modal.getByTestId('order-edit-update-cashier')).toHaveCount(0);
+							await expect(modal.getByTestId('order-edit-cashier')).toHaveCount(0);
+						}
+						const unscale = await applyScale(page, 'regular');
+						try {
+							await capture(page, info, name);
+						} finally {
+							await unscale();
+						}
+						await page.getByTestId('order-modal-close').click();
+						await expect(modal).toBeHidden();
+						// The restore opens Settings from the POS's own menu.
+						await navigate(page, 'pos');
+						await expect(page.getByTestId('search-products').first()).toBeVisible({
+							timeout: 30_000,
+						});
+						// The drawer's close slide ends before the restore opens it again.
+						await page.waitForTimeout(600);
+						walked = true;
+					} finally {
+						await cleanUp(walked, [['settings', restore]]);
+					}
+				});
+			}
+		});
 	}
 }
