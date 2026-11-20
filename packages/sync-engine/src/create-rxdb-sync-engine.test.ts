@@ -26,6 +26,9 @@ import {
 } from './create-rxdb-sync-engine';
 import { createEngineHarness, memoryStringStore, remoteId, scriptedConnectivity } from './testing';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
+import { withOrderReadopt } from './write-path/order-revision';
+
+import type { RxCollection } from 'rxdb';
 
 setPremiumFlag();
 
@@ -393,6 +396,35 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			],
 		},
 		{
+			name: 'a corrective readopt at an equal revision stamp adopts the server identity',
+			local: { dirty: false, pendingMutationIds: [] },
+			residentRevision: 'sha256:same',
+			serverRevision: 'sha256:same',
+			readopt: true,
+			expectedColumns: { posUserId: '999', posStoreId: '12' },
+			expectedMeta: [
+				{ key: '_pos_user', value: '999' },
+				{ key: '_pos_store', value: '12' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+		{
+			name: 'an ack under a readopt keeps the resident identity',
+			local: { dirty: false, pendingMutationIds: ['ack-1'] },
+			residentRevision: 'sha256:same',
+			serverRevision: 'sha256:same',
+			readopt: true,
+			ack: true,
+			expectedColumns: { posUserId: '7', posStoreId: '11' },
+			expectedMeta: [
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+		{
 			name: 'a pull at a different revision stamp adopts the server identity',
 			local: { dirty: false, pendingMutationIds: [] },
 			residentRevision: 'sha256:old',
@@ -452,6 +484,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			serverRevision = 'r2',
 			omitIdentity,
 			ack,
+			readopt,
 			expectedMeta,
 			expectedColumns,
 		} = testCase;
@@ -492,7 +525,8 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			resident
 		);
 
-		await repository.upsertMany(
+		const upsert = repository.upsertMany.bind(
+			repository,
 			[
 				{
 					uuid: id,
@@ -519,6 +553,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 				? { source: 'ack', mutationId: 'ack-1', recordId: id }
 				: { source: 'pull', requestedAt: 0 }
 		);
+		await (readopt ? withOrderReadopt(scope.database, [String(remoteId(1))], upsert) : upsert());
 
 		const stored = await (
 			scope.database.collections.orders as {
@@ -532,6 +567,45 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		expect(stored?.toJSON().payload.meta_data).toEqual(expectedMeta ?? resident.payload.meta_data);
 		if (expectedColumns) expect(stored?.toJSON()).toMatchObject(expectedColumns);
 		if (!expectedMeta) expect(stored?.toJSON()).toMatchObject(resident);
+		await engine.dispose();
+	});
+
+	it('a stamp between the early merge and re-merge keeps identity meta and columns equal', async () => {
+		const engine = engineWith();
+		const scope = await engine.whenActive();
+		const repository = new EngineOrderRepository(scope.database as never);
+		const orders = scope.database.collections.orders as RxCollection<OrderDocument>;
+		const id = 'order-identity-stamp-race';
+		await insertOrder(scope.database, id);
+		const resident = await (await orders.findOne(id).exec())!.incrementalModify((current) => ({
+			...current,
+			sync: { ...current.sync, revision: 'sha256:old' },
+			payload: { ...current.payload, meta_data: [{ key: '_pos_user', value: '7' }] },
+		}));
+		const incoming: OrderDocument = {
+			...resident.toMutableJSON(),
+			local: { dirty: false, pendingMutationIds: [] },
+			sync: { ...resident.sync, revision: 'sha256:new' },
+			payload: { ...resident.payload, meta_data: [{ key: '_pos_user', value: '999' }] },
+		};
+		const modify = resident.incrementalModify.bind(resident);
+		const stamp = vi
+			.spyOn(resident, 'incrementalModify')
+			.mockImplementationOnce(async (modifier) => {
+				await modify((current) => ({
+					...current,
+					sync: { ...current.sync, revision: 'sha256:new' },
+				}));
+				return modify(modifier);
+			});
+		await repository.upsertMany([incoming], { source: 'pull', requestedAt: 0 });
+		expect(stamp).toHaveBeenCalledOnce();
+		const stored = (await orders.findOne(id).exec())!.toJSON();
+		expect(stored).toMatchObject({
+			posUserId: '999',
+			payload: { meta_data: [{ key: '_pos_user', value: '999' }] },
+		});
+		stamp.mockRestore();
 		await engine.dispose();
 	});
 
