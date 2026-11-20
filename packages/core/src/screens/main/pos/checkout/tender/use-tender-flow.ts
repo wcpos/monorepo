@@ -60,6 +60,7 @@ import {
 } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useConfirm } from './use-confirm';
+import { refusedBeforeSend } from '../payments/leg-finality';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -1319,7 +1320,10 @@ export function useTenderFlow(
 				});
 				return;
 			}
-			const lost = sentMoneyCommand && !isDefinitiveMoneyRefusal(moneyRefusalOf(error));
+			const lost =
+				sentMoneyCommand &&
+				!(refusedBeforeSend(error) && liveRows.length === 0) &&
+				!isDefinitiveMoneyRefusal(moneyRefusalOf(error));
 			const sentence = lost
 				? t('pos_checkout.payment_unanswered')
 				: t('pos_checkout.payment_not_recorded');
@@ -1378,6 +1382,7 @@ export function useTenderFlow(
 		wpCredentials,
 		t,
 		tiles,
+		liveRows,
 	]);
 	const takeTender = React.useCallback(
 		() => exclusive('takeTender', runPress),

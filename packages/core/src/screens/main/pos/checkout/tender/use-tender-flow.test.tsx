@@ -1265,6 +1265,60 @@ describe('useTenderFlow', () => {
 				expect.anything()
 			);
 		});
+
+		// A pre-flight refused before the close left the till: nothing was sent, so not "unanswered".
+		it('whose pre-flight is refused before the send says it was not recorded (PAYMENT999), never PAYMENT201', async () => {
+			const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockRejectedValueOnce(
+				Object.assign(new MoneyCommandError('money_command_preflight_failed'), {
+					reason: 'preflight_failed',
+					phase: 'unsent',
+				})
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+			await act(async () => result.current.commands.takeTender());
+
+			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
+			expect(mockError).toHaveBeenCalledWith(
+				'pos_checkout.payment_not_recorded',
+				expect.objectContaining({ code: 'PAYMENT999', showToast: true })
+			);
+			expect(mockError).not.toHaveBeenCalledWith(
+				'pos_checkout.payment_unanswered',
+				expect.anything()
+			);
+		});
+
+		// A split sale: a leg already holds money, so the till never says "nothing was taken".
+		it('whose pre-flight is refused beside a captured leg stays "not answered" (PAYMENT201)', async () => {
+			const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+			mockPayload = {
+				id: 42,
+				total: '50.00',
+				meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments: [payment()] } }],
+			};
+			mockManualPost.mockRejectedValueOnce(
+				Object.assign(new MoneyCommandError('money_command_preflight_failed'), {
+					reason: 'preflight_failed',
+					phase: 'unsent',
+				})
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+			await act(async () => result.current.commands.takeTender());
+
+			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
+			expect(mockError).toHaveBeenCalledWith(
+				'pos_checkout.payment_unanswered',
+				expect.objectContaining({ code: 'PAYMENT201', showToast: true })
+			);
+			expect(mockError).not.toHaveBeenCalledWith(
+				'pos_checkout.payment_not_recorded',
+				expect.anything()
+			);
+		});
 	});
 
 	// Nothing was sent: a throw before the close is "nothing was taken", whatever the tile.
@@ -4655,6 +4709,29 @@ describe('gateway capture mode (contract 1.2)', () => {
 		);
 		expect(mockError).not.toHaveBeenCalledWith(
 			'pos_checkout.payment_not_recorded',
+			expect.anything()
+		);
+	});
+
+	// A pre-flight refused before the submit left the till: the gateway was never called.
+	it('a submit whose pre-flight is refused before the send is not recorded (PAYMENT999), never unanswered', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockManualPost.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('money_command_preflight_failed'), {
+				reason: 'preflight_failed',
+				phase: 'unsent',
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
+		expect(mockManualPost).toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.objectContaining({ code: 'PAYMENT999', showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
 			expect.anything()
 		);
 	});
