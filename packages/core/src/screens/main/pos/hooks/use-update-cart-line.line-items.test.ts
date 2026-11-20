@@ -368,6 +368,100 @@ describe('useUpdateCartLine — line_items', () => {
 		expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
 	});
 
+	it('a press after a typed quantity queued behind an open fold lands after it', async () => {
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		mockLocalPatch.mockImplementation(async ({ data }) => {
+			mockLineItemQuantity = data.line_items[1].quantity;
+			return { changes: data };
+		});
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', () => gate);
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = [
+				result.current.incrementLineItem(uuid, 1),
+				result.current.updateCartLine('line_items', uuid, { quantity: 5 }),
+				result.current.incrementLineItem(uuid, 1),
+			];
+			release();
+			expect((await Promise.all(presses)).every(Boolean)).toBe(true);
+		});
+		expect(mockLocalPatch.mock.calls.map(([args]) => args.data.line_items[1].quantity)).toEqual([
+			2, 5, 6,
+		]);
+		expect(mockLineItemQuantity).toBe(6);
+	});
+
+	it('a press after a line removal queued behind an open fold finds no line', async () => {
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		const record = jest
+			.requireMock('../contexts/current-order')
+			.useCurrentOrder()
+			.currentOrderRecord.getLatest();
+		record.toMutableJSON = () => ({ payload: record.payload });
+		mockLocalPatch.mockImplementation(async ({ data }) => {
+			record.payload = { ...record.payload, line_items: data.line_items };
+			return { changes: data };
+		});
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', async (queue) => {
+			await gate;
+			queue.order = record;
+		});
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const first = result.current.incrementLineItem(uuid, 1);
+			const removal = enqueueOrderMutation('order-uuid', async () => {
+				record.payload = { ...record.payload, line_items: [] };
+			});
+			const second = result.current.incrementLineItem(uuid, 1);
+			release();
+			const outcomes = await Promise.all([first, removal, second]);
+			expect(outcomes[0]).toBeTruthy();
+			expect(outcomes[2]).toBeUndefined();
+		});
+		expect(record.payload.line_items).toEqual([]);
+	});
+
+	it('a fold clamp counts the same product on another line', async () => {
+		mockLineItemQuantity = 0;
+		mockReadCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 5, backorders: 'no' });
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		const record = jest
+			.requireMock('../contexts/current-order')
+			.useCurrentOrder()
+			.currentOrderRecord.getLatest();
+		record.payload.line_items[0] = {
+			...record.payload.line_items[0],
+			product_id: 1,
+			variation_id: 0,
+			quantity: 2,
+		};
+		record.toMutableJSON = () => ({ payload: record.payload });
+		mockLocalPatch.mockImplementation(async ({ data }) => {
+			record.payload = { ...record.payload, line_items: data.line_items };
+			return { changes: data };
+		});
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', async (queue) => {
+			await gate;
+			queue.order = record;
+		});
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = Array.from({ length: 20 }, () => result.current.incrementLineItem(uuid, 1));
+			release();
+			const outcomes = await Promise.all(presses);
+			expect(outcomes.slice(0, 3).every(Boolean)).toBe(true);
+			expect(outcomes.slice(3)).toEqual(Array(17).fill(false));
+		});
+		expect(record.payload.line_items[1].quantity).toBe(3);
+		expect(mockLoggerWarn.mock.calls.filter(([, options]) => options?.showToast)).toHaveLength(1);
+	});
+
 	it('an increment pressed after its slot started opens a new slot', async () => {
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		let release!: () => void;

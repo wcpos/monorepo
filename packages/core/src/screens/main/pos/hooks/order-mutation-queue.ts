@@ -1,5 +1,6 @@
 import { isRecordClosed } from '@wcpos/query';
 
+import { closeIncrementFolds } from './increment-folds';
 import { createDispatchToken, type DispatchToken } from '../../../../extensions/actions/registry';
 
 import type { CurrentOrderRecord } from '../contexts/current-order';
@@ -27,6 +28,8 @@ export function enqueueOrderMutation<T>(
 	recordId: string,
 	mutation: (context: OrderMutationContext) => Promise<T>
 ): Promise<T> {
+	// Later presses must queue behind this write rather than join an earlier fold.
+	closeIncrementFolds(recordId);
 	const existing = orderMutationQueues.get(recordId);
 	const context = existing?.context ?? {
 		dispatchToken: createDispatchToken(),

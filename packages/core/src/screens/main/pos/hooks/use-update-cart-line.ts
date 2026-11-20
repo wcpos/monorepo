@@ -5,6 +5,7 @@ import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportStaleCartLine } from './cart-failure';
+import { type IncrementFold, incrementFolds } from './increment-folds';
 import { allowedLineQuantity } from './stock-guard-hook';
 import { useCartConfigReader } from './use-cart-config';
 import { extractLineItemData, lineMetaForWrite } from './utils';
@@ -20,19 +21,12 @@ import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import type { SlotWrite } from '../commands/cart-command';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
+export { resetIncrementFolds } from './increment-folds';
+
 type OrderDocument = import('@wcpos/query').OrderPayload;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];
-interface IncrementFold {
-	delta: number;
-	applied: number;
-	outcome: Promise<Awaited<ReturnType<SlotWrite>> | undefined | false>;
-}
-const incrementFolds = new Map<string, IncrementFold>();
-export function resetIncrementFolds() {
-	incrementFolds.clear();
-}
 
 interface LineItemChanges extends Partial<Omit<LineItem, 'price'>> {
 	price?: number;
@@ -258,7 +252,6 @@ export const useUpdateCartLine = () => {
 			fold.delta += by;
 			const end = fold.delta;
 			if (!open) {
-				incrementFolds.set(key, fold);
 				fold.outcome = command(
 					async ({ target, ctx, dispatch }) => {
 						if (incrementFolds.get(key) === fold) incrementFolds.delete(key);
@@ -301,6 +294,7 @@ export const useUpdateCartLine = () => {
 					(record) => ({ orderId: record.uuid, uuid }),
 					record
 				);
+				incrementFolds.set(key, fold);
 			}
 			return fold.outcome.then((v) =>
 				v === false || v === undefined ? v : end <= fold.applied ? v : false
