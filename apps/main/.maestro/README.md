@@ -206,6 +206,9 @@ These serial checks exclude rapid bursts, variations, startup and idle stalls.
 
 Native requires the next completed `e2e-cart-add-timing` sequence and emits
 `WCPOS_E2E_CART_ADD` JSON; web attaches `cart-add-performance` JSON.
+The native sample's `marks` give the elapsed ms at `queued` (the cart action
+queue entered `run`), `birthRead`, `hooks` (the `cart.line.add` hooks finished)
+and `written`, so a slow add names its segment (#3340).
 Budgets live in the web assertion and `subflows/assert-cart-add-timing.yml`.
 Change budgets only with evidence. Validate a gate by temporarily slowing the
 actual handler: correct quantity must still fail performance; remove and rerun.

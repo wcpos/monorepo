@@ -1,5 +1,6 @@
 // E2E-only, serial simple-product adds. Not native touch-to-paint or server acknowledgement.
 type Line = { product_id?: number | null; variation_id?: number; quantity?: number };
+export type CartAddMark = 'queued' | 'birthRead' | 'hooks' | 'written';
 export interface CartAddTiming {
 	sequence: number;
 	status: 'idle' | 'pending' | 'complete' | 'overlap';
@@ -7,6 +8,7 @@ export interface CartAddTiming {
 	productId: number;
 	quantity: number;
 	durationMs: number | null;
+	marks?: Partial<Record<CartAddMark, number>>;
 }
 let snapshot: CartAddTiming = {
 	sequence: 0,
@@ -17,6 +19,7 @@ let snapshot: CartAddTiming = {
 	durationMs: null,
 };
 let startedAt = 0;
+let marks: Partial<Record<CartAddMark, number>> = {};
 const listeners = new Set<() => void>();
 export const isCartAddTimingEnabled = () => process.env.EXPO_PUBLIC_WCPOS_E2E === '1';
 export const getCartAddTiming = () => snapshot;
@@ -45,6 +48,7 @@ export function beginCartAddTiming(
 ): number | undefined {
 	if (!isCartAddTimingEnabled()) return;
 	startedAt = start;
+	marks = {};
 	const sequence = snapshot.sequence + 1;
 	publish({
 		sequence,
@@ -64,7 +68,16 @@ export function commitCartAddTiming(orderId: string, lines: readonly Line[]): vo
 	if (!isCartAddTimingEnabled() || snapshot.status !== 'pending' || snapshot.orderId !== orderId)
 		return;
 	if (simpleProductQuantity(lines, snapshot.productId) !== snapshot.quantity) return;
-	publish({ ...snapshot, status: 'complete', durationMs: performance.now() - startedAt });
+	publish({
+		...snapshot,
+		status: 'complete',
+		durationMs: performance.now() - startedAt,
+		marks: { ...marks },
+	});
+}
+export function markCartAddTiming(mark: CartAddMark): void {
+	if (!isCartAddTimingEnabled() || snapshot.status !== 'pending') return;
+	if (marks[mark] === undefined) marks[mark] = Math.round(performance.now() - startedAt);
 }
 
 export async function observeCartAddWrite<T>(sequence: number | undefined, write: Promise<T>) {

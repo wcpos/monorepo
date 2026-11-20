@@ -3,6 +3,7 @@ import {
 	cancelCartAddTiming,
 	commitCartAddTiming,
 	getCartAddTiming,
+	markCartAddTiming,
 	subscribeCartAddTiming,
 } from '../../../../../e2e/cart-add-timing';
 
@@ -113,5 +114,95 @@ describe('cart add handler-to-commit timing', () => {
 		unsubscribe();
 		commitCartAddTiming('subscriber', [{ product_id: 1, quantity: 1 }]);
 		expect(sequences).toEqual([before + 1]);
+	});
+
+	describe('per-step marks', () => {
+		const now = (ms: number) => jest.mocked(performance.now).mockReturnValue(ms);
+
+		it('puts the marks of a pending add on the completed sample, rising in order', () => {
+			beginCartAddTiming('marks', 42, 0, 100);
+			now(110.4);
+			markCartAddTiming('queued');
+			now(150);
+			markCartAddTiming('birthRead');
+			now(400.6);
+			markCartAddTiming('hooks');
+			now(900);
+			markCartAddTiming('written');
+			commitCartAddTiming('marks', [{ product_id: 42, quantity: 1 }]);
+			const { marks } = getCartAddTiming();
+			expect(marks).toEqual({ queued: 10, birthRead: 50, hooks: 301, written: 800 });
+			expect(Object.keys(marks ?? {})).toEqual(['queued', 'birthRead', 'hooks', 'written']);
+		});
+
+		it('keeps the first value when a mark is recorded twice', () => {
+			beginCartAddTiming('first-wins', 42, 0, 100);
+			now(120);
+			markCartAddTiming('hooks');
+			now(700);
+			markCartAddTiming('hooks');
+			commitCartAddTiming('first-wins', [{ product_id: 42, quantity: 1 }]);
+			expect(getCartAddTiming().marks).toEqual({ hooks: 20 });
+		});
+
+		it('clears the previous add’s marks when a new add begins', () => {
+			beginCartAddTiming('previous', 42, 0, 100);
+			now(130);
+			markCartAddTiming('queued');
+			markCartAddTiming('written');
+			commitCartAddTiming('previous', [{ product_id: 42, quantity: 1 }]);
+			beginCartAddTiming('next', 42, 0, 200);
+			now(260);
+			markCartAddTiming('hooks');
+			commitCartAddTiming('next', [{ product_id: 42, quantity: 1 }]);
+			expect(getCartAddTiming().marks).toEqual({ hooks: 60 });
+		});
+
+		// The next begin resets marks, so a stray mark is only visible as a clock read.
+		it('does not record a mark while idle or overlapping', () => {
+			const idle = beginCartAddTiming('idle-marks', 42, 0, 100);
+			cancelCartAddTiming(idle);
+			expect(getCartAddTiming().status).toBe('idle');
+			jest.mocked(performance.now).mockClear();
+			markCartAddTiming('queued');
+			expect(performance.now).not.toHaveBeenCalled();
+			const first = beginCartAddTiming('overlap-marks', 42, 0, 100);
+			const second = beginCartAddTiming('overlap-marks', 42, 0, 110);
+			expect(getCartAddTiming().status).toBe('overlap');
+			markCartAddTiming('birthRead');
+			expect(performance.now).not.toHaveBeenCalled();
+			cancelCartAddTiming(first);
+			cancelCartAddTiming(second);
+		});
+
+		it('records a mark without notifying subscribers', () => {
+			const sequence = beginCartAddTiming('quiet', 42, 0, 100);
+			const listener = jest.fn();
+			const unsubscribe = subscribeCartAddTiming(listener);
+			markCartAddTiming('queued');
+			markCartAddTiming('hooks');
+			expect(listener).not.toHaveBeenCalled();
+			unsubscribe();
+			cancelCartAddTiming(sequence);
+		});
+
+		it('keeps sequence and status first and marks last in the serialised sample', () => {
+			beginCartAddTiming('serialised', 42, 0, 100);
+			markCartAddTiming('queued');
+			commitCartAddTiming('serialised', [{ product_id: 42, quantity: 1 }]);
+			const sample = getCartAddTiming();
+			expect(JSON.stringify(sample)).toMatch(/^\{"sequence":\d+,"status":"complete"/);
+			expect(Object.keys(sample).pop()).toBe('marks');
+		});
+
+		it('records no mark outside explicitly instrumented runs', () => {
+			beginCartAddTiming('inert-marks', 42, 0, 100);
+			delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+			now(500);
+			markCartAddTiming('queued');
+			process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+			commitCartAddTiming('inert-marks', [{ product_id: 42, quantity: 1 }]);
+			expect(getCartAddTiming().marks).toEqual({});
+		});
 	});
 });
