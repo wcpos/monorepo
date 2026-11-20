@@ -1338,6 +1338,166 @@ describe('PaymentWebview session expiry', () => {
 		).mock.calls.filter(([message]) => message === 'pos_checkout.reopen_payment');
 		expect(reopenWarnings).toHaveLength(1);
 	});
+
+	// Revert: append `jwt` unguarded, so a missing access_token puts `token=undefined` on the pay URL.
+	it('a missing token never reaches the pay URL: one refresh, and its token opens the frame', async () => {
+		mockCredentials$.next({ refresh_token: 'refresh' } as never);
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		expect(webViewProps.src).not.toContain('token=');
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(0);
+		});
+		expect(mockRefreshFetch).toHaveBeenCalledTimes(1);
+		expect(new URL(webViewProps.src).searchParams.getAll('token')).toEqual(['fresh-token']);
+	});
+
+	// Revert: drop the no-token outcome, so the cashier sits on a blank frame with no warning.
+	it.each([
+		['an empty', ''],
+		['a stringified undefined', 'undefined'],
+	])(
+		'%s token with a refresh that yields nothing: no frame URL, one warning, one refresh',
+		async (_label, access_token) => {
+			mockCredentials$.next({ access_token, refresh_token: 'refresh' });
+			mockRefreshFetch.mockResolvedValue({ ok: false, status: 503, statusText: 'Unavailable' });
+			const setFrameStatus = jest.fn();
+			const frame = () => (
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+			const view = render(frame());
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(0);
+			});
+			expect(webViewProps.src).toBe('');
+			expect(mockRefreshFetch).toHaveBeenCalledTimes(1);
+			expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+			// Past the refresher's own cooldown: a second attempt would now reach the network.
+			jest
+				.requireActual('@wcpos/hooks/use-http-client/refresh-access-token')
+				.resetRefreshCooldown();
+			view.rerender(frame());
+			await act(async () => {
+				await jest.advanceTimersByTimeAsync(0);
+			});
+			expect(mockRefreshFetch).toHaveBeenCalledTimes(1);
+			const reopenWarnings = (
+				getLogger(['wcpos', 'pos', 'checkout', 'payment']).warn as jest.Mock
+			).mock.calls.filter(([message]) => message === 'pos_checkout.reopen_payment');
+			expect(reopenWarnings).toHaveLength(1);
+		}
+	);
+
+	// Revert: take the origin from the tokened URL, so a missing token leaves the frame unpinned.
+	it('a missing token still pins the frame to the store origin', () => {
+		mockCredentials$.next({ refresh_token: 'refresh' } as never);
+		mockRefreshFetch.mockReturnValue(new Promise(() => {}));
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		expect(webViewProps.src).toBe('');
+		expect(webViewProps.targetOrigin).toBe('https://shop.example.com');
+	});
+
+	// Revert: never release the hold after the missing-token refresh, so the fresh frame never opens.
+	it('a missing token holds the frame through the refresh; the fresh token then reports ready', async () => {
+		mockCredentials$.next({ refresh_token: 'refresh' } as never);
+		let finish!: (response: unknown) => void;
+		mockRefreshFetch.mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+		);
+		const setFrameStatus = jest.fn();
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(0);
+		});
+		act(() => webViewProps.onLoad({}));
+		expect(setFrameStatus).not.toHaveBeenLastCalledWith('ready');
+		await act(async () => {
+			finish(response());
+		});
+		expect(new URL(webViewProps.src).searchParams.getAll('token')).toEqual(['fresh-token']);
+		act(() => webViewProps.onLoad({}));
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+	});
+
+	// Revert: accept any truthy refresh answer, so a stringified-undefined token leaves a blank frame.
+	it('a refresh that answers a stringified-undefined token fails: no frame URL, one warning', async () => {
+		mockCredentials$.next({ refresh_token: 'refresh' } as never);
+		mockRefreshFetch.mockResolvedValue(response('undefined'));
+		const setFrameStatus = jest.fn();
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(0);
+		});
+		expect(mockRefreshFetch).toHaveBeenCalledTimes(1);
+		expect(webViewProps.src).toBe('');
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		const reopenWarnings = (
+			getLogger(['wcpos', 'pos', 'checkout', 'payment']).warn as jest.Mock
+		).mock.calls.filter(([message]) => message === 'pos_checkout.reopen_payment');
+		expect(reopenWarnings).toHaveLength(1);
+	});
+
+	// Revert: guard the missing-token refresh once per mount, so a new pay URL sits blank in loading.
+	it('a new pay URL with still no token refreshes again after a failed refresh', async () => {
+		mockCredentials$.next({ refresh_token: 'refresh' } as never);
+		mockRefreshFetch.mockResolvedValue({ ok: false, status: 503, statusText: 'Unavailable' });
+		const setFrameStatus = jest.fn();
+		const frame = (href?: string) => (
+			<PaymentWebview
+				order={makeOrder(href)}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		const view = render(frame());
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(0);
+		});
+		expect(mockRefreshFetch).toHaveBeenCalledTimes(1);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		jest.requireActual('@wcpos/hooks/use-http-client/refresh-access-token').resetRefreshCooldown();
+		view.rerender(frame('https://shop.example.com/wcpos-checkout/order-pay/42?register=2'));
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(0);
+		});
+		expect(mockRefreshFetch).toHaveBeenCalledTimes(2);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+	});
 });
 
 describe('PaymentWebview refused preparation', () => {
