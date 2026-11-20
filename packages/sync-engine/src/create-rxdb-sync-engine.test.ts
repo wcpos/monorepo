@@ -367,7 +367,62 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		await engine.dispose();
 	});
 
-	it('preserves local POS identity meta during clean server order upserts', async () => {
+	it.each([
+		{
+			name: "clean pull adopts the server's cashier and store",
+			local: { dirty: false, pendingMutationIds: [] },
+			expectedMeta: [
+				{ key: '_pos_user', value: '999' },
+				{ key: '_pos_store', value: '12' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+		{
+			name: 'a pull keeps the resident identity when the local order is dirty',
+			local: { dirty: true, pendingMutationIds: [] },
+		},
+		{
+			name: 'a pull keeps the resident identity when the local order has a pending mutation',
+			local: { dirty: false, pendingMutationIds: ['m1'] },
+		},
+		{
+			name: 'a pull that omits the identity keys keeps the resident values',
+			local: { dirty: false, pendingMutationIds: [] },
+			omitIdentity: true,
+			expectedMeta: [
+				{ key: 'echo_meta', value: 'adopted' },
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+			],
+		},
+		{
+			name: 'a pull landing while a POS-side reassignment is queued keeps the reassignment',
+			local: { dirty: true, pendingMutationIds: ['reassign-1'] },
+			residentUser: '42',
+			serverUser: '7',
+		},
+		{
+			name: 'an ack keeps the resident identity (#936)',
+			local: { dirty: false, pendingMutationIds: ['ack-1'] },
+			ack: true,
+			expectedMeta: [
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+	])('$name', async (testCase) => {
+		const {
+			local,
+			residentUser = '7',
+			serverUser = '999',
+			omitIdentity,
+			ack,
+			expectedMeta,
+		} = testCase;
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
 		const scope = await engine.whenActive();
@@ -378,7 +433,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			updatedAtGmt: '2026-07-01T00:00:00.000Z',
 			revision: 'r1',
 		});
-		await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+		const resident = {
 			posUserId: '',
 			posStoreId: '',
 			uuid: id,
@@ -393,32 +448,45 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 				id: 1,
 				status: 'pos-open',
 				meta_data: [
-					{ key: '_pos_user', value: '7' },
+					{ key: '_pos_user', value: residentUser },
 					{ key: '_pos_store', value: '11' },
 					{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
 				],
 			},
 			sync: { revision: 'r1', checkpoint, partial: false, source: 'woo-rest' },
-			local: { dirty: false, pendingMutationIds: [] },
-		});
+			local,
+		};
+		await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert(
+			resident
+		);
 
-		await repository.upsertMany([
-			{
-				uuid: id,
-				remoteId: remoteId(1),
-				payload: {
-					id: 1,
-					status: 'pos-open',
-					meta_data: [
-						{ key: '_pos_user', value: '999' },
-						{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
-						{ key: 'echo_meta', value: 'adopted' },
-					],
-				},
-				sync: { revision: 'r2', checkpoint, partial: false, source: 'woo-rest' },
-				local: { dirty: false, pendingMutationIds: [] },
-			} satisfies OrderDocument,
-		]);
+		await repository.upsertMany(
+			[
+				{
+					uuid: id,
+					remoteId: remoteId(1),
+					payload: {
+						id: 1,
+						status: 'pos-open',
+						meta_data: [
+							...(omitIdentity
+								? []
+								: [
+										{ key: '_pos_user', value: serverUser },
+										{ key: '_pos_store', value: '12' },
+										{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
+									]),
+							{ key: 'echo_meta', value: 'adopted' },
+						],
+					},
+					sync: { revision: 'r2', checkpoint, partial: false, source: 'woo-rest' },
+					local: { dirty: false, pendingMutationIds: [] },
+				} satisfies OrderDocument,
+			],
+			ack
+				? { source: 'ack', mutationId: 'ack-1', recordId: id }
+				: { source: 'pull', requestedAt: 0 }
+		);
 
 		const stored = await (
 			scope.database.collections.orders as {
@@ -429,12 +497,8 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		)
 			.findOne(id)
 			.exec();
-		expect(stored?.toJSON().payload.meta_data).toEqual([
-			{ key: '_pos_user', value: '7' },
-			{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
-			{ key: 'echo_meta', value: 'adopted' },
-			{ key: '_pos_store', value: '11' },
-		]);
+		expect(stored?.toJSON().payload.meta_data).toEqual(expectedMeta ?? resident.payload.meta_data);
+		if (!expectedMeta) expect(stored?.toJSON()).toMatchObject(resident);
 		await engine.dispose();
 	});
 

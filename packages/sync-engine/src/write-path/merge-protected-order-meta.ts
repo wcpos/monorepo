@@ -5,7 +5,8 @@ import {
 	SERVER_OWNED_ORDER_META_KEYS,
 } from '@wcpos/sync-core';
 
-/** POS identity and money-ownership metadata whose resident values survive server adoption. */
+/** POS identity and money-ownership metadata protected on ack adoption;
+ * reads adopt the server's cashier and store while preserving money-ownership rules. */
 export const POS_ORDER_IDENTITY_META_KEYS = [
 	POS_META_KEYS.user,
 	POS_META_KEYS.store,
@@ -16,7 +17,7 @@ export const POS_ORDER_IDENTITY_META_KEYS = [
 export function mergeProtectedOrderMeta(
 	localMeta: MetaDataEntry[],
 	incomingMeta: MetaDataEntry[],
-	source: 'server' | 'mutation' = 'server'
+	source: 'server' | 'read' | 'mutation' = 'server'
 ) {
 	let serverMeta = [...incomingMeta];
 	const keys = source === 'mutation' ? PROTECTED_ORDER_META_KEYS : POS_ORDER_IDENTITY_META_KEYS;
@@ -41,13 +42,18 @@ export function mergeProtectedOrderMeta(
 			continue;
 		}
 
-		// Editor identity changes win; server adoption retains the resident identity.
+		// Editor changes win; a server read adopts the server's cashier and store;
+		// an ack retains the resident identity.
 		// Money ownership is one-way at either boundary.
 		const moneyOwner = key === '_wcpos_money_owner_hint';
 		const takeIncoming = moneyOwner
 			? incoming?.value === 'server' ||
 				(localEntry?.value !== 'server' && source === 'mutation' && incoming?.value != null)
-			: source === 'mutation' && incoming?.value != null;
+			: incoming?.value != null &&
+				(source === 'mutation' ||
+					(source === 'read' &&
+						(key === POS_META_KEYS.user || key === POS_META_KEYS.store) &&
+						incoming.value !== ''));
 		const winner = (takeIncoming ? incoming : localEntry) ?? incoming!;
 		// A Woo-assigned id is kept whichever value wins: a resident entry written before
 		// its acknowledgement has none, and a later full meta save without the id would

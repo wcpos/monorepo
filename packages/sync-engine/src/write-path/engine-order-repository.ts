@@ -286,6 +286,8 @@ export class EngineOrderRepository {
 			.findByIds(documents.map((document) => document.uuid))
 			.exec();
 		const ack = context?.source === 'ack' ? context : undefined;
+		// An ack echo carries the server's stamp of the authenticated user (#936); a read carries a reassignment.
+		const identitySource = ack ? 'server' : 'read';
 		// A pull requested BEFORE the resident was adopted whole answers with an older document.
 		// Measured: dev-next 2026-10-23, orders 115547/115569 — a boot pull answered mid-create
 		// landed after the ack and zeroed the till's total. WooCommerce saves an order several
@@ -338,7 +340,8 @@ export class EngineOrderRepository {
 				localMeta,
 				Array.isArray(entry.storedDocument.payload.meta_data)
 					? entry.storedDocument.payload.meta_data
-					: []
+					: [],
+				identitySource
 			);
 
 			if (serverMeta.length > 0) {
@@ -436,7 +439,8 @@ export class EngineOrderRepository {
 							...document.payload,
 							meta_data: mergeProtectedOrderMeta(
 								Array.isArray(localMeta) ? localMeta : [],
-								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : []
+								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : [],
+								identitySource
 							),
 						},
 					});
