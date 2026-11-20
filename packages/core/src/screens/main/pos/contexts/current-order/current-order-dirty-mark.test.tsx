@@ -27,15 +27,20 @@ Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcryp
 let database: RxDatabase;
 let doc: EngineRecord<'orders'>;
 let release: () => void;
-const renders = { context: 0, lines: 0 };
+const contextRender = jest.fn();
+const linesRender = jest.fn();
+const renderCounts = () => ({
+	context: contextRender.mock.calls.length,
+	lines: linesRender.mock.calls.length,
+});
 function ContextProbe() {
 	const { currentOrderRecord } = useCurrentOrder();
-	renders.context++;
+	contextRender();
 	return <span data-testid="current">{currentOrderRecord.uuid}</span>;
 }
 function LinesProbe() {
 	const { line_items } = useCartLines();
-	renders.lines++;
+	linesRender();
 	return <span data-testid="quantity">{line_items[0].quantity}</span>;
 }
 function LocalProbe() {
@@ -48,8 +53,8 @@ function LocalProbe() {
 }
 beforeEach(async () => {
 	resetCheckoutMode();
-	renders.context = 0;
-	renders.lines = 0;
+	contextRender.mockClear();
+	linesRender.mockClear();
 	database = await createEngineDatabase(['orders']);
 	doc = await database.orders.insert({
 		...engineOrder({
@@ -99,7 +104,7 @@ async function change(modifier: Parameters<EngineRecord<'orders'>['incrementalMo
 	});
 }
 it('a dirty mark does not re-render context consumers', async () => {
-	const before = { ...renders };
+	const before = renderCounts();
 	const mutation = { mutationId: 'mark-1' };
 	const prior = { mutationId: 'superseded' };
 	await change((data) => {
@@ -112,24 +117,24 @@ it('a dirty mark does not re-render context consumers', async () => {
 			local: { ...local, dirty: true, pendingMutationIds: [...pending, mutation.mutationId] },
 		};
 	});
-	expect(renders).toEqual(before);
+	expect(renderCounts()).toEqual(before);
 	expect(screen.getByTestId('local').textContent).toBe('2');
 });
 it('a bookkeeping-only ack does not re-render context consumers', async () => {
-	const before = { ...renders };
+	const before = renderCounts();
 	await change((data) => ({
 		...data,
 		local: { ...data.local, pendingMutationIds: [], dirty: false },
 	}));
-	expect(renders).toEqual(before);
+	expect(renderCounts()).toEqual(before);
 	expect(screen.getByTestId('local').textContent).toBe('0');
 });
 it('a quantity change still re-renders and shows the new quantity', async () => {
-	const before = renders.context;
+	const before = contextRender.mock.calls.length;
 	await change((data) => {
 		data.payload.line_items![0].quantity = 2;
 		return data;
 	});
-	expect(renders.context).toBeGreaterThan(before);
+	expect(contextRender.mock.calls.length).toBeGreaterThan(before);
 	expect(screen.getByTestId('quantity').textContent).toBe('2');
 });
