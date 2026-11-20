@@ -834,6 +834,38 @@ it('register attribution starts with resident metadata and retains a simultaneou
 	expect(stored.payload.meta_data).toContainEqual({ key: '_wcpos_till', value: 'installation' });
 });
 
+it('stampTill: false (a management write) adds no register or till row; the default still stamps', async () => {
+	const { patchAndEnqueueEngineResident } = await import('../../src/mutations');
+	mockStatus.mockReturnValue({ activeScopeId: 'scope-1' });
+	const write = async (stampTill?: boolean) => {
+		const stored = { payload: { meta_data: [{ key: '_pos_user', value: '7' }] } };
+		mockFindOneExec.mockResolvedValue({
+			toJSON: () => stored,
+			incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+				Object.assign(stored, modify(stored)),
+		});
+		await patchAndEnqueueEngineResident({
+			manager: manager as never,
+			collection: 'orders',
+			recordId: 'o',
+			registerId: 'register',
+			tillId: 'installation',
+			changes: { status: 'on-hold' },
+			...(stampTill === undefined ? {} : { stampTill }),
+		});
+		return { stored: stored.payload.meta_data, payload: mockWrite.mock.lastCall![0].payload };
+	};
+	const managed = await write(false);
+	expect(managed.stored).toEqual([{ key: '_pos_user', value: '7' }]);
+	expect(managed.payload).toEqual({ status: 'on-hold' });
+	const till = await write();
+	expect(till.payload.meta_data).toEqual([
+		{ key: '_pos_user', value: '7' },
+		{ key: '_wcpos_register', value: 'register' },
+		{ key: '_wcpos_till', value: 'installation' },
+	]);
+});
+
 describe('register metadata per attempt', () => {
 	it.each([false, true])(
 		'preserves duplicate entries with caller metadata=%s',

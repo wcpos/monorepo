@@ -375,7 +375,10 @@ describe('EditOrderForm customer lookup', () => {
 			tax_ids: [{ id: 2 }],
 		};
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(mockLocalPatch).toHaveBeenCalledWith({ document: order, data: patch });
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{ document: order, data: patch },
+			{ stampTill: false }
+		);
 		expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
 			mockLocalPatch.mock.invocationCallOrder[0]
 		);
@@ -404,15 +407,18 @@ describe('EditOrderForm customer lookup', () => {
 	it('attaches the guest and clears the previous tax-ID snapshot', async () => {
 		render(<EditOrderForm order={order} />);
 		await act(async () => selectCustomer('0'));
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			data: {
-				customer_id: 0,
-				billing: { first_name: undefined, last_name: undefined, email: undefined },
-				shipping: {},
-				tax_ids: [],
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{
+				document: order,
+				data: {
+					customer_id: 0,
+					billing: { first_name: undefined, last_name: undefined, email: undefined },
+					shipping: {},
+					tax_ids: [],
+				},
 			},
-		});
+			{ stampTill: false }
+		);
 	});
 
 	it.each(['flush', 'write'])(
@@ -434,10 +440,13 @@ describe('EditOrderForm autosave', () => {
 		draft.customer_note = 'Leave at reception';
 		render(<EditOrderForm order={order} />);
 		expect(await editField('customer_note', draft.customer_note)).toBe(true);
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			data: { customer_note: 'Leave at reception' },
-		});
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{
+				document: order,
+				data: { customer_note: 'Leave at reception' },
+			},
+			{ stampTill: false }
+		);
 		expect(mockMarkSaved).toHaveBeenCalledWith(['customer_note']);
 		expect(mockPushDocument).not.toHaveBeenCalled();
 		// The footer's Close is the slot stand-in's own button; Save is gone from the footer.
@@ -450,10 +459,13 @@ describe('EditOrderForm autosave', () => {
 		render(<EditOrderForm order={order} />);
 		expect(await editField('billing.city', 'Madrid')).toBe(true);
 		expect(form.trigger).toHaveBeenCalledWith('billing');
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			data: { billing: { first_name: 'Previous', city: 'Madrid' } },
-		});
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{
+				document: order,
+				data: { billing: { first_name: 'Previous', city: 'Madrid' } },
+			},
+			{ stampTill: false }
+		);
 		expect(mockMarkSaved).toHaveBeenCalledWith(['billing']);
 	});
 
@@ -474,10 +486,13 @@ describe('EditOrderForm autosave', () => {
 		];
 		render(<EditOrderForm order={order} />);
 		await editField('meta_data.1.value', 'edited');
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			data: { meta_data: [{ key: 'custom', value: 'edited' }] },
-		});
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{
+				document: order,
+				data: { meta_data: [{ key: 'custom', value: 'edited' }] },
+			},
+			{ stampTill: false }
+		);
 	});
 
 	it('never lists is_vat_exempt as a custom field', () => {
@@ -492,10 +507,13 @@ describe('EditOrderForm autosave', () => {
 		];
 		render(<EditOrderForm order={order} />);
 		await editField('tax_ids.0.value', 'ABC');
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			data: { tax_ids: [{ type: 'vat', value: 'ABC' }] },
-		});
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{
+				document: order,
+				data: { tax_ids: [{ type: 'vat', value: 'ABC' }] },
+			},
+			{ stampTill: false }
+		);
 	});
 
 	it('does not mark an edit when its local patch fails', async () => {
@@ -663,10 +681,13 @@ describe('EditOrderForm Update status', () => {
 		expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
 			mockLocalPatch.mock.invocationCallOrder[0]
 		);
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			data: { status: 'on-hold' },
-		});
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{
+				document: order,
+				data: { status: 'on-hold' },
+			},
+			{ stampTill: false }
+		);
 		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
 			mockPushDocument.mock.invocationCallOrder[0]
 		);
@@ -692,10 +713,14 @@ describe('EditOrderForm Update status', () => {
 		render(<EditOrderForm order={order} />);
 		await updateStatus();
 		expect(mockLocalPatch).toHaveBeenCalledTimes(2);
-		expect(mockLocalPatch).toHaveBeenNthCalledWith(2, {
-			document: order,
-			data: { status: 'pending' },
-		});
+		expect(mockLocalPatch).toHaveBeenNthCalledWith(
+			2,
+			{
+				document: order,
+				data: { status: 'pending' },
+			},
+			{ stampTill: false }
+		);
 		expect(mockPushDocument).toHaveBeenCalledTimes(2);
 		expect(testLogger.error).toHaveBeenCalledWith(
 			'Failed to update order status',
@@ -784,10 +809,13 @@ describe('EditOrderForm Cashier and Store', () => {
 		await press('order-edit-update-cashier');
 		const [user, ...rest] = sale();
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			data: { meta_data: [{ ...user, value: '9' }, ...rest] },
-		});
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{
+				document: order,
+				data: { meta_data: [{ ...user, value: '9' }, ...rest] },
+			},
+			{ stampTill: false }
+		);
 		expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
 			mockLocalPatch.mock.invocationCallOrder[0]
 		);
@@ -815,10 +843,13 @@ describe('EditOrderForm Cashier and Store', () => {
 		await press('order-edit-update-store');
 		const [user, store, ...rest] = sale();
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: order,
-			data: { meta_data: [user, { ...store, value: '4' }, ...rest] },
-		});
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			{
+				document: order,
+				data: { meta_data: [user, { ...store, value: '4' }, ...rest] },
+			},
+			{ stampTill: false }
+		);
 		expect(mockPushDocument).toHaveBeenCalledTimes(1);
 		expect(testLogger.success).toHaveBeenCalledWith('orders.store_updated', expect.anything());
 	});

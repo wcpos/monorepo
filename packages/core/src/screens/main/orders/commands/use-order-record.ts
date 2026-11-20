@@ -22,9 +22,11 @@ type BeforeReopen = { status: OrderPayload['status']; identity: MetaDataEntry[] 
 
 export function useOrderRecord() {
 	const { localPatch } = useLocalMutation();
+	// The Edit tab manages an order; it is not the till ringing it up, so none of its writes add
+	// this device's register or till rows to an order without them. A reopen does (`reopenOrder`).
 	const saveOrderFields = React.useCallback(
 		async (order: ReadonlyEngineRecord<'orders'>, data: Partial<OrderPayload>): Promise<boolean> =>
-			!!(await localPatch({ document: order, data }))?.document,
+			!!(await localPatch({ document: order, data }, { stampTill: false }))?.document,
 		[localPatch]
 	);
 	/**

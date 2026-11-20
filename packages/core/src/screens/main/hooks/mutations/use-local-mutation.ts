@@ -34,8 +34,13 @@ export const useLocalMutation = () => {
 			/**
 			 * `explicit`: the cashier asked for this push, so an open cart's hold never holds it.
 			 * `collectionName`: names the collection for an identity-only target (commands only).
+			 * `stampTill: false`: a management write never adds this device's register or till rows.
 			 */
-			options: { explicit?: boolean; collectionName?: WriteableCollection } = {}
+			options: {
+				explicit?: boolean;
+				collectionName?: WriteableCollection;
+				stampTill?: boolean;
+			} = {}
 		) => {
 			const { document } = input;
 			try {
@@ -43,6 +48,7 @@ export const useLocalMutation = () => {
 					registerId: getCurrentBoundRegisterId() ?? undefined,
 					...(options.explicit ? { explicit: true } : {}),
 					...(options.collectionName ? { collectionName: options.collectionName } : {}),
+					...(options.stampTill === false ? { stampTill: false } : {}),
 				});
 			} catch (failure) {
 				const error = failure instanceof ResidentWriteError ? failure.cause : failure;
