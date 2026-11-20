@@ -66,7 +66,8 @@ function processNotificationBehavior(
 			context: behavior.saveToDb && body ? { body } : undefined,
 			toast: {
 				text2:
-					behavior.toast?.text2 || (behavior.toast?.useBodyAsText2 !== false ? body : undefined),
+					behavior.toast?.text2 ||
+					(behavior.toast?.useBodyAsText2 !== false ? body || undefined : undefined),
 				dismissable: behavior.toast?.dismissable ?? true,
 				action: behavior.toast?.action
 					? {
