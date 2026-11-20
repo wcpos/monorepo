@@ -8,12 +8,24 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
 
-type Pressable = React.PropsWithChildren<{ onPress?: () => void; testID?: string }>;
+type Pressable = React.PropsWithChildren<{
+	onPress?: () => void;
+	testID?: string;
+	disabled?: boolean;
+}>;
+type Picker = { name: string; value: unknown; onChange: (value: string) => void };
 type Autosave = { persist: (data: Record<string, unknown>) => Promise<unknown> };
 
 const mockHarness: { autosave?: Autosave } = {};
-const mockSaveOrderFields = jest.fn(async () => true);
+const mockSaveOrderFields = jest.fn(async (_record: unknown, _data: object) => true);
 const mockStore = { currency: 'USD', store_country: 'US' };
+let mockCanReassign = false;
+let mockStoresPending = false;
+const mockPickers = new Map<string, Picker>();
+const mockStores = [
+	{ id: 3, name: 'Main' },
+	{ id: 4, name: 'Annex' },
+];
 
 jest.mock('@wcpos/components/form', () => {
 	const { FormProvider, Controller } = jest.requireActual('react-hook-form');
@@ -26,8 +38,14 @@ jest.mock('@wcpos/components/form', () => {
 		FormItem: Wrap,
 		FormInput: () => null,
 		FormMessage: () => null,
-		FormSelect: () => null,
-		FormCombobox: () => null,
+		FormSelect: (props: Picker) => {
+			mockPickers.set(props.name, props);
+			return null;
+		},
+		FormCombobox: (props: Picker) => {
+			mockPickers.set(props.name, props);
+			return null;
+		},
 		FormTextarea: ({ placeholder }: { placeholder?: string }) => (
 			<textarea placeholder={placeholder} />
 		),
@@ -39,7 +57,11 @@ jest.mock('@wcpos/components/form', () => {
 	};
 });
 jest.mock('@wcpos/components/button', () => ({
-	Button: ({ children, testID }: Pressable) => <button data-testid={testID}>{children}</button>,
+	Button: ({ children, testID, onPress, disabled }: Pressable) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
 	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/text', () => ({
@@ -88,8 +110,24 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: mockStore }),
-	useStoreSession: () => ({ store: mockStore }),
+	useStoreSession: () => ({ store: mockStore, wpCredentials: {} }),
 }));
+jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
+	useObservableSuspense: () => {
+		if (mockStoresPending) throw new Promise(() => {});
+		return mockStores;
+	},
+}));
+jest.mock('../../components/cashier-select', () => ({ CashierSelect: () => null }));
+jest.mock('../../hooks/store-list-resource', () => ({ storeListResource: () => ({}) }));
+jest.mock('../../hooks/use-cashier-label', () => ({
+	useCashierLabel: (id: string) => ({ label: id ? `Cashier ${id}` : '' }),
+}));
+jest.mock('../../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ known: true, caps: { canReassignSales: mockCanReassign } }),
+}));
+jest.mock('../../hooks/use-server-feature', () => ({ useServerFeature: () => true }));
 jest.mock('@wcpos/components/editable-field', () => ({ EditableField: () => null }));
 jest.mock('../../components/country-state-select/country-combobox', () => ({
 	CountryCombobox: () => null,
@@ -150,7 +188,12 @@ function order(overrides: Record<string, unknown> = {}) {
 const row = (id: string) => screen.queryByTestId(`order-row-${id}`);
 const offered = () => screen.getAllByTestId(/^order-add-/).map((add) => add.textContent);
 
-beforeEach(() => mockSaveOrderFields.mockClear());
+beforeEach(() => {
+	mockSaveOrderFields.mockClear();
+	mockCanReassign = false;
+	mockStoresPending = false;
+	mockPickers.clear();
+});
 
 it('is property rows: Customer, Status, Customer note, Billing, Shipping, a locked Payment', () => {
 	render(<EditOrderForm order={order()} />);
@@ -208,4 +251,72 @@ it('a billing write carries shipping as its copy while linked, and alone once no
 		await mockHarness.autosave!.persist({ billing });
 	});
 	expect(mockSaveOrderFields).toHaveBeenLastCalledWith(own, { billing });
+});
+
+it('a sale has Cashier then Store after Status and before Customer note, each with its verb', () => {
+	mockCanReassign = true;
+	const meta_data = [
+		{ key: '_pos_user', value: '7' },
+		{ key: '_pos_store', value: '3' },
+	];
+	render(<EditOrderForm order={order({ meta_data })} />);
+	const ids = ['status', 'cashier', 'store', 'customer_note'];
+	const rows = ids.map((id) => row(id)!);
+	rows.slice(1).forEach((next, index) => {
+		expect(
+			rows[index].compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+	expect(row('cashier')!.contains(screen.getByTestId('order-edit-update-cashier'))).toBe(true);
+	expect(row('store')!.contains(screen.getByTestId('order-edit-update-store'))).toBe(true);
+});
+
+it('without the reassign capability Cashier and Store are locked rows set at the sale', () => {
+	const meta_data = [
+		{ key: '_pos_user', value: '7' },
+		{ key: '_pos_store', value: '4' },
+	];
+	render(<EditOrderForm order={order({ meta_data })} />);
+	expect(row('cashier')!.textContent).toContain('Cashier 7');
+	expect(row('cashier')!.textContent).toContain('orders.set_at_sale');
+	expect(row('store')!.textContent).toContain('Annex');
+	expect(row('store')!.querySelector('button')).toBeNull();
+});
+
+it('draws the rest of the Edit tab while the store list is still loading', () => {
+	mockCanReassign = true;
+	mockStoresPending = true;
+	render(<EditOrderForm order={order({ meta_data: [{ key: '_pos_user', value: '7' }] })} />);
+	for (const id of ['customer', 'status', 'cashier', 'customer_note']) expect(row(id)).toBeTruthy();
+	expect(row('store')).toBeNull();
+});
+
+it('a store update keeps the cashier picked but not yet sent', async () => {
+	mockCanReassign = true;
+	const sale = order({
+		meta_data: [
+			{ key: '_pos_user', value: '7' },
+			{ key: '_pos_store', value: '3' },
+		],
+	});
+	// The write lands on the record, as the engine's would.
+	mockSaveOrderFields.mockImplementationOnce(async (record, data) => {
+		const target = record as EngineRecord<'orders'>;
+		const payload = { ...target.payload, ...data };
+		Object.assign(target, { payload });
+		(target.$ as BehaviorSubject<unknown>).next({ toJSON: () => ({ payload }) });
+		return true;
+	});
+	render(<EditOrderForm order={sale} />);
+	await act(async () => mockPickers.get('cashier_id')!.onChange('9'));
+	await act(async () => mockPickers.get('store_id')!.onChange('4'));
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('order-edit-update-store'));
+	});
+	expect(mockSaveOrderFields).toHaveBeenCalledTimes(1);
+	expect(sale.payload.meta_data).toContainEqual({ key: '_pos_store', value: '4' });
+	expect(mockPickers.get('store_id')!.value).toBe('4');
+	expect(mockPickers.get('cashier_id')!.value).toEqual(expect.objectContaining({ value: '9' }));
+	expect(screen.getByTestId('order-edit-update-cashier')).toHaveProperty('disabled', false);
+	expect(screen.getByTestId('order-edit-update-store')).toHaveProperty('disabled', true);
 });

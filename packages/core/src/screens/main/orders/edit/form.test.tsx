@@ -51,8 +51,15 @@ let draft: Record<string, unknown>;
 let mockStatus = 'on-hold';
 const fieldOnChange = jest.fn();
 let selectCustomer: (value: string) => void = () => undefined;
+// The Cashier and Store rows: the picks, who may change them, what the server offers, the stores.
+let mockPicks: Record<string, string> = {};
+let mockCanReassign = false;
+let mockFeatures: string[] = [];
+let mockStores: { id: number; name: string }[] = [];
+const mockCashierCombobox = jest.fn();
 
-const mockWatch = (name: string) => (name === 'status' ? mockStatus : draft[name]);
+const mockWatch = (name: string) =>
+	name === 'status' ? mockStatus : name in mockPicks ? mockPicks[name] : draft[name];
 
 const form = {
 	control: {},
@@ -68,6 +75,7 @@ const statusForm = {
 	handleSubmit: (callback: (data: { status: string }) => unknown) => () =>
 		callback({ status: mockStatus }),
 };
+const identityForm = { control: {} };
 
 jest.mock('../commands/use-order-record', () => {
 	const actual = jest.requireActual('../commands/use-order-record');
@@ -82,19 +90,22 @@ jest.mock('../commands/use-order-record', () => {
 });
 
 jest.mock('react-hook-form', () => ({
-	useForm: (options: { values?: unknown }) => (options.values ? statusForm : form),
+	useForm: (options: { values?: Record<string, unknown> }) =>
+		options.values ? ('status' in options.values ? statusForm : identityForm) : form,
 	useWatch: ({ name }: { name: string }) => mockWatch(name),
 }));
 
 jest.mock('observable-hooks', () => ({
 	...jest.requireActual('observable-hooks'),
 	useObservablePickState: (_observable: unknown, projector: () => unknown) => projector(),
+	useObservableSuspense: () => mockStores,
 }));
 
 jest.mock('@wcpos/components/form', () => ({
 	Form: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	FormCombobox: ({ onChange }: { onChange: (value: string) => void }) => {
-		selectCustomer = onChange;
+	FormCombobox: (props: { name: string; onChange: (value: string) => void }) => {
+		if (props.name === 'cashier_id') mockCashierCombobox(props);
+		else selectCustomer = props.onChange;
 		return null;
 	},
 	FormField: ({
@@ -171,7 +182,18 @@ jest.mock('../../components/customer/address-rows', () => ({
 	TextPart: () => null,
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: null }),
+	useStoreSession: () => ({ store: null, wpCredentials: {} }),
+}));
+jest.mock('../../components/cashier-select', () => ({ CashierSelect: () => null }));
+jest.mock('../../hooks/store-list-resource', () => ({ storeListResource: () => ({}) }));
+jest.mock('../../hooks/use-cashier-label', () => ({
+	useCashierLabel: (id: string) => ({ label: id ? `Cashier ${id}` : '' }),
+}));
+jest.mock('../../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ known: true, caps: { canReassignSales: mockCanReassign } }),
+}));
+jest.mock('../../hooks/use-server-feature', () => ({
+	useServerFeature: (name: string) => mockFeatures.includes(name),
 }));
 jest.mock('../../components/currency-select', () => ({ CurrencySelect: () => null }));
 jest.mock('../../components/customer-select', () => ({ CustomerSelect: () => null }));
@@ -303,6 +325,10 @@ beforeEach(() => {
 	draft = { ...orderPayload };
 	capturedChange = undefined;
 	modalActions.clear();
+	mockPicks = {};
+	mockCanReassign = false;
+	mockFeatures = [];
+	mockStores = [];
 	customerResources.clear();
 	customerResources.set(0, {
 		valueRef$$: new BehaviorSubject<CustomerValueRef>({ current: null }),
@@ -718,6 +744,185 @@ describe('EditOrderForm Update status', () => {
 		expect(mockDialogClose).not.toHaveBeenCalled();
 		expect(testLogger.error).not.toHaveBeenCalled();
 		if (failure === 'flush') expect(mockLocalPatch).not.toHaveBeenCalled();
+	});
+});
+
+describe('EditOrderForm Cashier and Store', () => {
+	const sale = () => [
+		{ id: 1, key: '_pos_user', value: '7' },
+		{ id: 2, key: '_pos_store', value: '3' },
+		{ id: 3, key: '_wcpos_register', value: 'r1' },
+		{ id: 4, key: '_wcpos_till', value: 't1' },
+		{ id: 5, key: 'custom', value: 'kept' },
+	];
+	const pickers = () => ({
+		cashier: mockCashierCombobox.mock.calls.length > 0,
+		store: mockFormSelect.mock.calls.some(([props]) => props.name === 'store_id'),
+	});
+
+	beforeEach(() => {
+		orderPayload.meta_data = sale();
+		mockCanReassign = true;
+		mockFeatures = ['order_cashier_reassignment'];
+		mockStores = [
+			{ id: 3, name: 'Main' },
+			{ id: 4, name: 'Annex' },
+		];
+		mockPicks = { cashier_id: '7', store_id: '3' };
+	});
+
+	async function press(testID: string) {
+		await act(async () => {
+			await modalActions.get(testID)!.onPress!();
+		});
+	}
+
+	it('writes one meta patch that changes only the cashier, then pushes without closing', async () => {
+		mockPicks.cashier_id = '9';
+		render(<EditOrderForm order={order} />);
+		expect(modalActions.get('order-edit-update-cashier')?.disabled).toBe(false);
+		await press('order-edit-update-cashier');
+		const [user, ...rest] = sale();
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { meta_data: [{ ...user, value: '9' }, ...rest] },
+		});
+		expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
+			mockLocalPatch.mock.invocationCallOrder[0]
+		);
+		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
+			mockPushDocument.mock.invocationCallOrder[0]
+		);
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(testLogger.success).toHaveBeenCalledWith('orders.cashier_updated', expect.anything());
+		expect(mockDialogClose).not.toHaveBeenCalled();
+	});
+
+	it('leaves an order without a store row without one when the cashier changes', async () => {
+		orderPayload.meta_data = sale().filter((row) => row.key !== '_pos_store');
+		mockPicks = { cashier_id: '9', store_id: '' };
+		render(<EditOrderForm order={order} />);
+		await press('order-edit-update-cashier');
+		const written = mockLocalPatch.mock.calls[0][0].data.meta_data;
+		expect(written.some((row: { key: string }) => row.key === '_pos_store')).toBe(false);
+		expect(written).toHaveLength(4);
+	});
+
+	it('writes one meta patch that changes only the store, then pushes', async () => {
+		mockPicks.store_id = '4';
+		render(<EditOrderForm order={order} />);
+		await press('order-edit-update-store');
+		const [user, store, ...rest] = sale();
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { meta_data: [user, { ...store, value: '4' }, ...rest] },
+		});
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(testLogger.success).toHaveBeenCalledWith('orders.store_updated', expect.anything());
+	});
+
+	it('disables Update cashier and Update store while each pick is the current value', async () => {
+		render(<EditOrderForm order={order} />);
+		expect(modalActions.get('order-edit-update-cashier')?.disabled).toBe(true);
+		expect(modalActions.get('order-edit-update-store')?.disabled).toBe(true);
+		await press('order-edit-update-cashier');
+		await press('order-edit-update-store');
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+	});
+
+	it('disables Update cashier and Update store while a pick is empty (a cleared picker)', async () => {
+		mockPicks = { cashier_id: '', store_id: '' };
+		render(<EditOrderForm order={order} />);
+		expect(modalActions.get('order-edit-update-cashier')?.disabled).toBe(true);
+		expect(modalActions.get('order-edit-update-store')?.disabled).toBe(true);
+	});
+
+	it('restores the previous cashier and pushes the revert when the push is refused', async () => {
+		mockPicks.cashier_id = '9';
+		mockPushDocument.mockRejectedValueOnce(new Error('HTTP 500'));
+		// The record holds each write, so the revert is built from the order carrying cashier 9.
+		mockLocalPatch.mockImplementation(async ({ data }) => {
+			Object.assign(orderPayload, data);
+			return { document: order };
+		});
+		render(<EditOrderForm order={order} />);
+		await press('order-edit-update-cashier');
+		expect(mockLocalPatch).toHaveBeenCalledTimes(2);
+		const [user, ...rest] = sale();
+		const [written, reverted] = mockLocalPatch.mock.calls.map(([call]) => call.data.meta_data);
+		expect(written).toEqual([{ ...user, value: '9' }, ...rest]);
+		// The revert turns cashier 9 back into 7 and leaves every other row as it was.
+		expect(reverted).not.toBe(written);
+		expect(reverted).toEqual(sale());
+		expect(orderPayload.meta_data).toEqual(sale());
+		expect(mockPushDocument).toHaveBeenCalledTimes(2);
+		expect(testLogger.success).not.toHaveBeenCalled();
+	});
+
+	it('keeps the cashier queued when the push is still pending: no revert, "still on its way"', async () => {
+		mockPicks.cashier_id = '9';
+		mockPushDocument.mockRejectedValueOnce(new WriteOutcomeTimeoutError('m-1', {}));
+		render(<EditOrderForm order={order} />);
+		await press('order-edit-update-cashier');
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(testLogger.warn).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				toast: expect.objectContaining({ title: 'common.order_still_sending' }),
+			})
+		);
+	});
+
+	it('locks both rows, with no picker, without the reassign capability', () => {
+		mockCanReassign = false;
+		render(<EditOrderForm order={order} />);
+		expect(pickers()).toEqual({ cashier: false, store: false });
+		expect(modalActions.has('order-edit-update-cashier')).toBe(false);
+		expect(modalActions.has('order-edit-update-store')).toBe(false);
+		expect(screen.getAllByText('orders.set_at_sale')).toHaveLength(2);
+		expect(screen.getByText('Cashier 7')).toBeTruthy();
+		expect(screen.getByText('Main')).toBeTruthy();
+	});
+
+	it('locks the Cashier and keeps the Store editable while the server feature is absent or unknown', () => {
+		mockFeatures = [];
+		render(<EditOrderForm order={order} />);
+		expect(pickers()).toEqual({ cashier: false, store: true });
+		expect(modalActions.has('order-edit-update-cashier')).toBe(false);
+		expect(modalActions.has('order-edit-update-store')).toBe(true);
+		expect(screen.getAllByText('orders.set_at_sale')).toHaveLength(1);
+	});
+
+	it('writes neither while storage is degraded', async () => {
+		mockPicks = { cashier_id: '9', store_id: '4' };
+		render(<EditOrderForm order={order} />);
+		await degradeStorage('degraded-order-edit-identity');
+		expect(modalActions.get('order-edit-update-cashier')?.disabled).toBe(true);
+		expect(modalActions.get('order-edit-update-store')?.disabled).toBe(true);
+		await press('order-edit-update-cashier');
+		await press('order-edit-update-store');
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+	});
+
+	it('draws no Store row when the site has no stores to choose from', () => {
+		mockStores = [{ id: 0, name: 'Default' }];
+		render(<EditOrderForm order={order} />);
+		expect(pickers().store).toBe(false);
+		expect(modalActions.has('order-edit-update-store')).toBe(false);
+		expect(screen.queryByText('Main')).toBeNull();
+	});
+
+	it('draws no Cashier row for an order without a cashier', () => {
+		orderPayload.meta_data = sale().filter((row) => row.key !== '_pos_user');
+		mockPicks.cashier_id = '';
+		render(<EditOrderForm order={order} />);
+		expect(pickers().cashier).toBe(false);
+		expect(modalActions.has('order-edit-update-cashier')).toBe(false);
 	});
 });
 
