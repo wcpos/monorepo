@@ -910,6 +910,42 @@ describe('EditOrderForm Cashier and Store', () => {
 		expect(orderPayload.meta_data.find((row) => row.key === '_pos_user')?.value).toBe('11');
 	});
 
+	it('restores the cashier the refused write replaced, not the one the form read', async () => {
+		mockPicks.cashier_id = '9';
+		mockPushDocument.mockRejectedValueOnce(new Error('HTTP 500'));
+		// Cashier 8 is assigned elsewhere after the form read 7, before the write lands.
+		let assigned = false;
+		beforeWrite = () => {
+			if (assigned) return;
+			assigned = true;
+			orderPayload.meta_data = orderPayload.meta_data.map((row) =>
+				row.key === '_pos_user' ? { ...row, value: '8' } : row
+			);
+		};
+		render(<EditOrderForm order={order} />);
+		await press('order-edit-update-cashier');
+		const [user, ...rest] = sale();
+		expect(writes).toEqual([
+			{ meta_data: [{ ...user, value: '9' }, ...rest] },
+			{ meta_data: [{ ...user, value: '8' }, ...rest] },
+		]);
+		expect(mockPushDocument).toHaveBeenCalledTimes(2);
+	});
+
+	it('writes, pushes and reports nothing when the order already holds the pick as the write lands', async () => {
+		mockPicks.cashier_id = '9';
+		beforeWrite = () => {
+			orderPayload.meta_data = orderPayload.meta_data.map((row) =>
+				row.key === '_pos_user' ? { ...row, value: '9' } : row
+			);
+		};
+		render(<EditOrderForm order={order} />);
+		await press('order-edit-update-cashier');
+		expect(writes).toEqual([{}]);
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		expect(testLogger.success).not.toHaveBeenCalled();
+	});
+
 	it('keeps a custom field written between the read and the identity write', async () => {
 		mockPicks.cashier_id = '9';
 		beforeWrite = () => {

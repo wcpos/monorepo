@@ -397,7 +397,26 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						await page.waitForTimeout(600);
 						walked = true;
 					} finally {
-						await cleanUp(walked, [['settings', restore]]);
+						// A walk that failed may have left the order open on Orders, whose menu the restore
+						// does not know: close it and go back to the POS first, as the walk itself ends.
+						const backToPos: [string, () => Promise<unknown>] = [
+							'back to the POS',
+							async () => {
+								const close = page.getByTestId('order-modal-close');
+								if (await close.isVisible()) {
+									await close.click();
+									await expect(page.getByTestId('order-modal')).toBeHidden();
+								}
+								if (await page.getByTestId('screen-orders').isVisible()) {
+									await navigate(page, 'pos');
+									await expect(page.getByTestId('search-products').first()).toBeVisible({
+										timeout: 30_000,
+									});
+									await page.waitForTimeout(600);
+								}
+							},
+						];
+						await cleanUp(walked, [...(walked ? [] : [backToPos]), ['settings', restore]]);
 					}
 				});
 			}

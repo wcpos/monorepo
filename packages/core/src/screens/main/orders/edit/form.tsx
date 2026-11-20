@@ -264,16 +264,24 @@ function EditOrderFormFields({ order }: Props) {
 			return (field === 'cashier' ? identity.cashierId : identity.storeId) ?? '';
 		};
 		return sendIntent((latest) => {
-			const previous = valueOf(latest.meta_data);
-			if (!next || next === previous) return null;
+			if (!next || next === valueOf(latest.meta_data)) return null;
+			// The value the write replaced, read from the payload it landed on: an assignment made
+			// after the read is what a refusal puts back. A resolver may rerun; its last run lands.
+			let replaced = '';
 			return {
-				// Applied to the payload the write lands on: a custom field written meanwhile stays.
-				patch: (payload) => ({ meta_data: withIdentityRow(payload.meta_data, key, next) }),
+				// Applied to the payload the write lands on: a custom field written meanwhile stays, and
+				// an order that already holds the pick writes (and pushes, and reports) nothing.
+				patch: (payload) => {
+					replaced = valueOf(payload.meta_data);
+					return replaced === next
+						? {}
+						: { meta_data: withIdentityRow(payload.meta_data, key, next) };
+				},
 				// Only while the order still holds the refused value: a newer assignment is left alone,
 				// and the empty change writes and pushes nothing.
 				revert: (payload) =>
 					valueOf(payload.meta_data) === next
-						? { meta_data: withIdentityRow(payload.meta_data, key, previous) }
+						? { meta_data: withIdentityRow(payload.meta_data, key, replaced) }
 						: {},
 				success: field === 'cashier' ? t('orders.cashier_updated') : t('orders.store_updated'),
 				failure:
