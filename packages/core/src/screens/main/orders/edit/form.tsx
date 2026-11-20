@@ -108,7 +108,7 @@ type FormValues = z.infer<typeof formSchema>;
 /** An intent the Edit tab sends: its write, the write that undoes it, and how it is reported. */
 type OrderFields = Partial<OrderPayload> | ((payload: OrderPayload) => Partial<OrderPayload>);
 type Intent = {
-	patch: OrderFields;
+	write: OrderFields;
 	revert: OrderFields;
 	success: string;
 	failure: string;
@@ -244,7 +244,7 @@ function EditOrderFormFields({ order }: Props) {
 			}
 			if (data.status === previous) return null;
 			return {
-				patch: { status: data.status },
+				write: { status: data.status },
 				revert: { status: previous },
 				success: t('orders.status_updated'),
 				failure: 'Failed to update order status',
@@ -271,7 +271,7 @@ function EditOrderFormFields({ order }: Props) {
 			return {
 				// Applied to the payload the write lands on: a custom field written meanwhile stays, and
 				// an order that already holds the pick writes (and pushes, and reports) nothing.
-				patch: (payload) => {
+				write: (payload) => {
 					replaced = valueOf(payload.meta_data);
 					return replaced === next
 						? {}
@@ -306,7 +306,7 @@ function EditOrderFormFields({ order }: Props) {
 			intent = prepare(order.getLatest().payload);
 			if (!intent) return;
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-			if (!(await saveOrderFields(order, intent.patch))) return;
+			if (!(await saveOrderFields(order, intent.write))) return;
 			patched = true;
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 			await pushDocument(order);
