@@ -60,6 +60,7 @@ import {
 } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useConfirm } from './use-confirm';
+import { refusedBeforeSend } from '../payments/leg-finality';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -1319,13 +1320,24 @@ export function useTenderFlow(
 				});
 				return;
 			}
-			const lost = sentMoneyCommand && !isDefinitiveMoneyRefusal(moneyRefusalOf(error));
+			// A pre-flight can adopt a changed order: a leg captured elsewhere is in its latest ledger.
+			const noLiveLeg =
+				liveRows.length === 0 &&
+				!readLedger(order.getLatest().payload.meta_data).some(({ status }) =>
+					isLivePaymentStatus(status)
+				);
+			const lost =
+				sentMoneyCommand &&
+				!(refusedBeforeSend(error) && noLiveLeg) &&
+				!isDefinitiveMoneyRefusal(moneyRefusalOf(error));
 			const sentence = lost
 				? t('pos_checkout.payment_unanswered')
 				: t('pos_checkout.payment_not_recorded');
 			logger.error(sentence, {
 				code: lost ? ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN : ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
+				// Nothing was taken: PAYMENT999's "confirm whether it went through" would contradict it.
+				...(!lost && noLiveLeg ? { toast: { title: sentence, text2: '' } } : {}),
 				context: {
 					...orderContext,
 					method: method?.id ?? null,
@@ -1378,6 +1390,7 @@ export function useTenderFlow(
 		wpCredentials,
 		t,
 		tiles,
+		liveRows,
 	]);
 	const takeTender = React.useCallback(
 		() => exclusive('takeTender', runPress),
