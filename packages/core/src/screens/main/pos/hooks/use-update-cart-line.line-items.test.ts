@@ -6,7 +6,7 @@ import { act, renderHook } from '@testing-library/react';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { enqueueOrderMutation, resetOrderMutationQueues } from './order-mutation-queue';
-import { useUpdateCartLine } from './use-update-cart-line';
+import { resetIncrementFolds, useUpdateCartLine } from './use-update-cart-line';
 
 // Mock uuid ESM module
 jest.mock('uuid', () => ({
@@ -216,6 +216,7 @@ jest.mock('./use-line-item-data', () => ({
 describe('useUpdateCartLine — line_items', () => {
 	beforeEach(() => {
 		resetOrderMutationQueues();
+		resetIncrementFolds();
 		jest.clearAllMocks();
 		mockSwitchedOrder = null;
 		mockGetCurrentOrderCalls = 0;
@@ -343,9 +344,263 @@ describe('useUpdateCartLine — line_items', () => {
 			]);
 		});
 
+		// The two same-tick presses fold into one write.
+		expect(mockLocalPatch.mock.calls.map(([args]) => args.data.line_items[1].quantity)).toEqual([
+			3,
+		]);
+	});
+
+	it('folds increments pressed while the slot is queued into one settled write', async () => {
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', () => gate);
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = Array.from({ length: 6 }, () => result.current.incrementLineItem(uuid, 1));
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			release();
+			expect((await Promise.all(presses)).every(Boolean)).toBe(true);
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.calls[0][0].data.line_items[1].quantity).toBe(7);
+		expect(mockGetCurrentOrderCalls).toBe(6);
+		expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+	});
+
+	it('an increment pressed after its slot started opens a new slot', async () => {
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let release!: () => void;
+		let started!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const writing = new Promise<void>((resolve) => (started = resolve));
+		mockLocalPatch.mockImplementation(async ({ data }) => {
+			started();
+			await gate;
+			mockLineItemQuantity = data.line_items[1].quantity;
+			return { changes: data };
+		});
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const first = result.current.incrementLineItem(uuid, 1);
+			await writing;
+			const second = result.current.incrementLineItem(uuid, 1);
+			release();
+			expect((await Promise.all([first, second])).every(Boolean)).toBe(true);
+		});
 		expect(mockLocalPatch.mock.calls.map(([args]) => args.data.line_items[1].quantity)).toEqual([
 			2, 3,
 		]);
+	});
+
+	it('folding never crosses orders or lines', async () => {
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		const other = {
+			uuid: 'other-order',
+			payload: {
+				line_items: [
+					{
+						product_id: 1,
+						quantity: 4,
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuid }],
+					},
+				],
+			},
+			getLatest() {
+				return this;
+			},
+			toMutableJSON() {
+				return { payload: this.payload };
+			},
+		};
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', () => gate);
+		void enqueueOrderMutation(other.uuid, () => gate);
+		mockLocalPatch.mockImplementation(async ({ document, data }) => {
+			if (document.uuid === 'order-uuid') mockLineItemQuantity = data.line_items[1].quantity;
+			return { changes: data };
+		});
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = [
+				result.current.incrementLineItem(uuid, 1),
+				result.current.incrementLineItem('5aa605ce-325e-47c8-96a9-fef1c55ea5b7', 1),
+			];
+			mockSwitchedOrder = other;
+			presses.push(result.current.incrementLineItem(uuid, 1));
+			release();
+			expect((await Promise.all(presses)).every(Boolean)).toBe(true);
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(3);
+		expect(
+			mockLocalPatch.mock.calls.map(([args]) => [
+				args.document.uuid,
+				...args.data.line_items.map((line: { quantity?: number }) => line.quantity),
+			])
+		).toEqual(
+			expect.arrayContaining([
+				['order-uuid', undefined, 2, undefined],
+				['order-uuid', 1, 2, undefined],
+				['other-order', 5],
+			])
+		);
+		expect(mockGetCurrentOrderCalls).toBe(3);
+	});
+
+	it('a refused fold refuses every press and presents once', async () => {
+		mockReadCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 1, backorders: 'no' });
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', () => gate);
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = Array.from({ length: 6 }, () => result.current.incrementLineItem(uuid, 1));
+			release();
+			expect(await Promise.all(presses)).toEqual(Array(6).fill(false));
+		});
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+		expect(mockLoggerWarn.mock.calls[0][1].toast.type).toBe('warning');
+	});
+
+	it('a fold clamps to stock: 3 in stock, 20 presses add 3 and refuse the rest', async () => {
+		mockLineItemQuantity = 0;
+		mockReadCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 3, backorders: 'no' });
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', () => gate);
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = Array.from({ length: 20 }, () => result.current.incrementLineItem(uuid, 1));
+			release();
+			const outcomes = await Promise.all(presses);
+			expect(outcomes.slice(0, 3).every(Boolean)).toBe(true);
+			expect(outcomes.slice(3)).toEqual(Array(17).fill(false));
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.calls[0][0].data.line_items[1].quantity).toBe(3);
+		expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+		expect(mockLoggerWarn.mock.calls[0][1].toast).toEqual({
+			title: 'pos_cart.only_n_available',
+			type: 'warning',
+		});
+	});
+
+	it('a fold whose line was removed resolves every press undefined', async () => {
+		const removed = jest
+			.requireMock('../contexts/current-order')
+			.useCurrentOrder()
+			.currentOrderRecord.getLatest();
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', async (queue) => {
+			await gate;
+			removed.toMutableJSON = () => ({ payload: { line_items: [] } });
+			queue.order = removed;
+		});
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = Array.from({ length: 6 }, () =>
+				result.current.incrementLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3', 1)
+			);
+			release();
+			expect(await Promise.all(presses)).toEqual(Array(6).fill(undefined));
+		});
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).not.toHaveBeenCalled();
+	});
+
+	it('a fold on an order paid while it was queued writes nothing and presents once', async () => {
+		const paid = jest
+			.requireMock('../contexts/current-order')
+			.useCurrentOrder()
+			.currentOrderRecord.getLatest();
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', async (queue) => {
+			await gate;
+			paid.payload.status = 'completed';
+			queue.order = paid;
+		});
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = Array.from({ length: 6 }, () =>
+				result.current.incrementLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3', 1)
+			);
+			release();
+			expect(await Promise.all(presses)).toEqual(Array(6).fill(false));
+		});
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+		expect(mockLoggerWarn.mock.calls[0][1]).toEqual(
+			expect.objectContaining({
+				showToast: true,
+				context: expect.objectContaining({ reasonKey: 'pos_checkout.order_changed_retry' }),
+			})
+		);
+	});
+
+	it('decrements and typed quantity edits are never folded', async () => {
+		mockLineItemQuantity = 5;
+		mockLocalPatch.mockImplementation(async ({ data }) => {
+			mockLineItemQuantity = data.line_items[1].quantity;
+			return { changes: data };
+		});
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		void enqueueOrderMutation('order-uuid', () => gate);
+		const { result } = renderHook(() => useUpdateCartLine());
+		await act(async () => {
+			const presses = [
+				result.current.incrementLineItem(uuid, -1),
+				result.current.incrementLineItem(uuid, -1),
+				result.current.updateCartLine('line_items', uuid, { quantity: 6 }),
+				result.current.updateCartLine('line_items', uuid, { quantity: 4 }),
+			];
+			release();
+			expect((await Promise.all(presses)).every(Boolean)).toBe(true);
+		});
+		expect(mockLocalPatch.mock.calls.map(([args]) => args.data.line_items[1].quantity)).toEqual([
+			4, 3, 6, 4,
+		]);
+	});
+
+	it('with the stock check on, folds allowed in full keep the quantity exact over 50 presses across three folds', async () => {
+		mockReadCatalog.mockResolvedValue({
+			manage_stock: true,
+			stock_quantity: 500,
+			backorders: 'no',
+		});
+		mockLocalPatch.mockImplementation(async ({ data }) => {
+			mockLineItemQuantity = data.line_items[1].quantity;
+			return { changes: data };
+		});
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		const { result } = renderHook(() => useUpdateCartLine());
+		const outcomes: unknown[] = [];
+		for (const count of [1, 24, 25]) {
+			let release!: () => void;
+			const gate = new Promise<void>((resolve) => (release = resolve));
+			void enqueueOrderMutation('order-uuid', () => gate);
+			await act(async () => {
+				const presses = Array.from({ length: count }, () =>
+					result.current.incrementLineItem(uuid, 1)
+				);
+				release();
+				outcomes.push(...(await Promise.all(presses)));
+			});
+		}
+		expect(mockLocalPatch.mock.calls.map(([args]) => args.data.line_items[1].quantity)).toEqual([
+			2, 26, 51,
+		]);
+		expect(mockLineItemQuantity).toBe(51);
+		expect(outcomes).toHaveLength(50);
+		expect(outcomes.every(Boolean)).toBe(true);
+		expect(mockGetCurrentOrderCalls).toBe(50);
 	});
 
 	it('updates line item name correctly', async () => {
@@ -617,6 +872,7 @@ it.each([false, true])(
 	'reads exemption after the preceding slot, background=%s',
 	async (background) => {
 		resetOrderMutationQueues();
+		resetIncrementFolds();
 		jest.clearAllMocks();
 		mockLocalPatch.mockResolvedValue(true);
 		const payload = {

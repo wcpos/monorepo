@@ -6,6 +6,7 @@ import {
 	reducedStockQuantity,
 } from './stock-guard';
 import { registerActionHook } from '../../../../extensions/actions';
+import { backordersAllowed } from '../../components/product/resolve-stock';
 
 import type {
 	ActionContext,
@@ -77,6 +78,38 @@ export async function evaluateCartStock(ctx: ActionContext, args: StockArgs) {
 		);
 	}
 	return { ...result, name, reasonKey, params };
+}
+
+export async function allowedLineQuantity(
+	ctx: ActionContext,
+	args: { lineItems: LineItem[]; lineUuid: string; line: LineItem }
+): Promise<number | null> {
+	const { lineItems, lineUuid, line } = args;
+	const productId = line.product_id ?? MISC_PRODUCT_ID;
+	const variationId = line.variation_id ?? 0;
+	const product = await ctx.read.catalog('product', productId);
+	const variation =
+		product && variationId ? await ctx.read.catalog('variation', variationId) : undefined;
+	if (!product || (variationId && !variation)) return null;
+	const owner = variation?.manage_stock === true ? variation : product;
+	if (
+		owner.manage_stock !== true ||
+		!Number.isFinite(owner.stock_quantity) ||
+		backordersAllowed(owner.backorders as string | undefined)
+	)
+		return null;
+	return (
+		(owner.stock_quantity as number) -
+		aggregateExistingCartQuantity({
+			lineItems,
+			productId,
+			variationId,
+			product,
+			variation,
+			excludedLineItemUuid: lineUuid,
+		}) +
+		reducedStockQuantity(line)
+	);
 }
 
 async function guardStock<E extends ActionEvent>(
