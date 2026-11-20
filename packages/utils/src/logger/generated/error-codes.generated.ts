@@ -57,6 +57,7 @@ export type ErrorCode =
 	| 'AUTH999'
 	| 'CHECKOUT999'
 	| 'PAYMENT511'
+	| 'PAYMENT521'
 	| 'PAYMENT999'
 	| 'PRINT999'
 	| 'PRODUCT999'
@@ -678,6 +679,17 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Record the balance owed from the money taken, then refund the difference.',
 		dataSafety: 'money-moved',
 		summary: 'More was taken at the till than the order still owed.',
+	},
+	PAYMENT521: {
+		code: 'PAYMENT521',
+		symbol: 'PAYMENT_ORDER_CLOSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			'Return the money to the customer, or reopen the order on the store and record the payment again.',
+		dataSafety: 'money-moved',
+		summary:
+			'The store had already closed the order, so a payment taken at the till was not recorded.',
 	},
 	PAYMENT999: {
 		code: 'PAYMENT999',
@@ -1305,6 +1317,7 @@ export const ERROR_CODES = {
 	AUTH_UNEXPECTED: 'AUTH999',
 	CHECKOUT_UNEXPECTED: 'CHECKOUT999',
 	PAYMENT_EXCEEDS_BALANCE: 'PAYMENT511',
+	PAYMENT_ORDER_CLOSED: 'PAYMENT521',
 	PAYMENT_UNEXPECTED: 'PAYMENT999',
 	PRINT_UNEXPECTED: 'PRINT999',
 	PRODUCT_UNEXPECTED: 'PRODUCT999',

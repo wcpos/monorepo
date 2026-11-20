@@ -1276,6 +1276,27 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "PAYMENT521",
+		"symbol": "PAYMENT_ORDER_CLOSED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Return the money to the customer, or reopen the order on the store and record the payment again.",
+		"retryPolicy": "never",
+		"dataSafety": "money-moved",
+		"escalation": "none",
+		"summary": "The store had already closed the order, so a payment taken at the till was not recorded.",
+		"docsBody": "The till took a manual payment (cash, or a card run on a separate machine), but the store had already cancelled, trashed or refunded the order and refused to record it. Nothing was stored on the order, so the payment is listed under needs attention until the cashier returns the money or the order is reopened and the payment recorded again.",
+		"troubleshooting": [
+			"Check the amount and method taken at the till: Store health → Database lists the order under \"… needs attention\", and the same line is in Store health → Logs.",
+			"If the sale should not go ahead, give that payment back the way it was taken: cash from the drawer, or a refund of that charge on the card machine. Do not record a paid out for cash handed back — the refused payment was never counted in the drawer's expected cash.",
+			"If the sale should go ahead, a site administrator reopens the order in WooCommerce (for example sets it back to Pending payment); then record the payment again from the money you already hold, with the same record-only method.",
+			"Site administrator: if this happens repeatedly, orders are being cancelled or refunded elsewhere while they are open on a till."
+		],
+		"logSources": [],
+		"evidence": "POS-338",
+		"introducedIn": "2.0.1"
+	},
+	{
 		"code": "PAYMENT999",
 		"symbol": "PAYMENT_UNEXPECTED",
 		"domain": "PAYMENT",

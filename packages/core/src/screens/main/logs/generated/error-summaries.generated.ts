@@ -128,6 +128,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.CHECKOUT999');
 		case 'PAYMENT511':
 			return t('health.logs.error_summary.PAYMENT511');
+		case 'PAYMENT521':
+			return t('health.logs.error_summary.PAYMENT521');
 		case 'PAYMENT999':
 			return t('health.logs.error_summary.PAYMENT999');
 		case 'PRINT999':
