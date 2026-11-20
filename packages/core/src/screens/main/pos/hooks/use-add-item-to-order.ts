@@ -229,14 +229,15 @@ export const useAddItemToOrder = () => {
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
+			const timingSequence = cartAddTiming?.pendingCartAddSequence();
 			const run = async (target: CurrentOrderRecord, context: OrderMutationContext) => {
-				cartAddTiming?.markCartAddTiming('queued');
+				cartAddTiming?.markCartAddTiming('queued', timingSequence);
 				let latest = target.getLatest();
 				let isNew = Boolean((latest as { isNew?: boolean }).isNew);
 				let orphanedSkeleton: EngineRecord<'orders'> | null = null;
 				if (isNew && !context.order) {
 					const birth = await findBirthState(runtime, recordId);
-					cartAddTiming?.markCartAddTiming('birthRead');
+					cartAddTiming?.markCartAddTiming('birthRead', timingSequence);
 					if (birth !== 'none') {
 						latest = birth.born ?? birth.orphan;
 						if (birth.born) {
@@ -267,7 +268,7 @@ export const useAddItemToOrder = () => {
 						payload: { type, line: data, lineItems: latest.payload.line_items ?? [] },
 					},
 					bottom: async (e) => {
-						cartAddTiming?.markCartAddTiming('hooks');
+						cartAddTiming?.markCartAddTiming('hooks', timingSequence);
 						latest = latest.getLatest();
 						const incoming = e.payload.line as CartLine;
 						const temporaryOrder = order.getLatest();
@@ -337,7 +338,7 @@ export const useAddItemToOrder = () => {
 								} as never,
 							});
 						}
-						cartAddTiming?.markCartAddTiming('written');
+						cartAddTiming?.markCartAddTiming('written', timingSequence);
 						return result;
 					},
 				});

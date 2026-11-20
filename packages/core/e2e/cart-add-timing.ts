@@ -75,9 +75,15 @@ export function commitCartAddTiming(orderId: string, lines: readonly Line[]): vo
 		marks: { ...marks },
 	});
 }
-export function markCartAddTiming(mark: CartAddMark): void {
-	if (!isCartAddTimingEnabled() || snapshot.status !== 'pending') return;
-	if (marks[mark] === undefined) marks[mark] = Math.round(performance.now() - startedAt);
+export function pendingCartAddSequence(): number | undefined {
+	return isCartAddTimingEnabled() && snapshot.status === 'pending' ? snapshot.sequence : undefined;
+}
+export function markCartAddTiming(mark: CartAddMark, sequence: number | undefined): void {
+	if (!isCartAddTimingEnabled() || sequence === undefined || snapshot.sequence !== sequence) return;
+	if (marks[mark] !== undefined) return;
+	if (snapshot.status !== 'pending' && snapshot.status !== 'complete') return;
+	marks[mark] = Math.round(performance.now() - startedAt);
+	if (snapshot.status === 'complete') publish({ ...snapshot, marks: { ...marks } });
 }
 
 export async function observeCartAddWrite<T>(sequence: number | undefined, write: Promise<T>) {
