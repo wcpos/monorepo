@@ -616,6 +616,147 @@ test('a main-branch web bundle is gated on its worker RXDB_VERSION against its l
 	assert.match(checkout.with.ref, /steps\.monorepo-sha\.outputs\.sha/);
 });
 
+test('main push E2E proof: wiring', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const changes = workflow.jobs.changes;
+	assert.equal(changes.outputs.e2e_proof, '${{ steps.proof.outputs.e2e_proof }}');
+	assert.deepEqual(changes.permissions, {
+		contents: 'read',
+		actions: 'read',
+		'pull-requests': 'read',
+	});
+	const step = findStep(workflow, 'changes', '🪞 Find a PR run that already passed this tree');
+	assert.equal(step.id, 'proof');
+	assert.equal(step.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'");
+	assert.deepEqual(step.env, { GH_TOKEN: '${{ github.token }}', SHA: '${{ github.sha }}' });
+	assert.equal(step.run, '.github/scripts/main-push-e2e-proof.sh');
+	assert.equal(changes.steps[changes.steps.indexOf(step) - 1].name, '🛤 Resolve E2E lane');
+	for (const job of ['e2e', 'e2e-setup']) {
+		assert.ok(workflow.jobs[job].if.includes("needs.changes.outputs.e2e_proof == ''"));
+	}
+	assert.equal(
+		findStep(workflow, 'e2e-gate', 'Check shard results').env.E2E_PROOF,
+		'${{ needs.changes.outputs.e2e_proof }}'
+	);
+});
+
+test('main push E2E proof: script', () => {
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-main-push-proof-'));
+	const binDir = path.join(workspace, 'bin');
+	const output = path.join(workspace, 'output');
+	const summary = path.join(workspace, 'summary');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		`#!/usr/bin/env bash
+[ "$#" = 2 ] && [ "$1" = api ] || exit 1
+case "$2" in
+  repos/wcpos/monorepo/git/commits/pushed) printf '%s' "$GH_PUSH" ;;
+  repos/wcpos/monorepo/commits/pushed/pulls) [ "$GH_PULLS_FAIL" != 1 ] || exit 1; printf '%s' "$GH_PULLS" ;;
+  repos/wcpos/monorepo/git/commits/pr-head) printf '%s' "$GH_HEAD" ;;
+  'repos/wcpos/monorepo/actions/workflows/deploy.yml/runs?head_sha=pr-head&event=pull_request&status=completed&per_page=10') printf '%s' "$GH_RUNS" ;;
+  'repos/wcpos/monorepo/actions/runs/2/jobs?per_page=100') printf '%s' "$GH_NEW_JOBS" ;;
+  'repos/wcpos/monorepo/actions/runs/1/jobs?per_page=100') printf '%s' "$GH_OLD_JOBS" ;;
+  *) exit 1 ;;
+esac
+`,
+		{ mode: 0o755 }
+	);
+	const pr = { number: 42, merged_at: '2026-11-20T12:00:00Z', base: { ref: 'main' }, head: { sha: 'pr-head' } };
+	const older = { id: 1, created_at: '2026-11-19T12:00:00Z', html_url: 'https://github.test/runs/1' };
+	const newer = { id: 2, created_at: '2026-11-20T12:00:00Z', html_url: 'https://github.test/runs/2' };
+	const gate = { name: '🎭 E2E Tests', conclusion: 'success' };
+	const shards = Array.from({ length: 6 }, (_, index) => ({
+		name: `🎭 E2E Tests (${index + 1}/6)`, conclusion: 'success',
+	}));
+	const green = { jobs: [gate, ...shards] };
+	const failed = { jobs: [gate, ...shards.slice(0, 5), { ...shards[5], conclusion: 'failure' }] };
+	const run = (overrides = {}, expected = '') => {
+		writeFileSync(output, '');
+		writeFileSync(summary, '');
+		const result = runShell('.github/scripts/main-push-e2e-proof.sh', {
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GITHUB_REPOSITORY: 'wcpos/monorepo', SHA: 'pushed',
+				GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary,
+				GH_PUSH: JSON.stringify({ tree: { sha: 'same-tree' } }),
+				GH_PULLS: JSON.stringify([pr]), GH_PULLS_FAIL: '',
+				GH_HEAD: JSON.stringify({ tree: { sha: 'same-tree' } }),
+				GH_RUNS: JSON.stringify({ workflow_runs: [newer] }),
+				GH_NEW_JOBS: JSON.stringify(green), GH_OLD_JOBS: JSON.stringify(green),
+				...overrides,
+			},
+		});
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		assert.equal(readFileSync(output, 'utf8'), `e2e_proof=${expected}\n`);
+		const summaryText = readFileSync(summary, 'utf8');
+		if (expected) {
+			const message = `Web E2E skipped on this main push: tree same-tree equals PR #42 head pr-head, which passed all 6 web E2E shards in ${expected}\n`;
+			assert.equal(result.stdout, message);
+			assert.equal(summaryText, message);
+		} else {
+			assert.match(result.stdout, /^No web E2E proof: [^\n]+\n$/);
+			assert.equal(summaryText, '');
+		}
+	};
+	try {
+		run({}, newer.html_url);
+		run({ GH_HEAD: JSON.stringify({ tree: { sha: 'different-tree' } }) });
+		run({ GH_NEW_JOBS: JSON.stringify(failed) });
+		run({ GH_NEW_JOBS: JSON.stringify({ jobs: [gate, ...shards.slice(0, 5)] }) });
+		run({ GH_NEW_JOBS: JSON.stringify({ jobs: [gate, { name: '🎭 E2E Tests (1/1)', conclusion: 'success' }] }) });
+		run({ GH_PULLS: JSON.stringify([{ ...pr, merged_at: null }]) });
+		run({ GH_PULLS: JSON.stringify([{ ...pr, base: { ref: 'next' } }]) });
+		run({
+			GH_RUNS: JSON.stringify({ workflow_runs: [older, newer] }),
+			GH_NEW_JOBS: JSON.stringify(failed),
+		}, older.html_url);
+		run({ GH_RUNS: JSON.stringify({ workflow_runs: [older, newer] }) }, newer.html_url);
+		run({ GH_PULLS_FAIL: '1' });
+		run({ GH_NEW_JOBS: JSON.stringify({ jobs: shards }) });
+		run({ GH_NEW_JOBS: JSON.stringify({ jobs: [{ ...gate, conclusion: 'failure' }, ...shards] }) });
+		for (const key of ['GH_PUSH', 'GH_PULLS', 'GH_HEAD', 'GH_RUNS', 'GH_NEW_JOBS']) {
+			for (const reply of ['', 'not-json', '{}']) run({ [key]: reply });
+		}
+		run({ GH_PULLS: JSON.stringify([{ ...pr, head: {} }]) });
+		run({ GH_RUNS: JSON.stringify({ workflow_runs: [{ ...newer, html_url: null }] }) });
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('main push E2E proof: gate', () => {
+	const step = findStep(readWorkflow('deploy.yml'), 'e2e-gate', 'Check shard results');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-main-push-gate-'));
+	const summary = path.join(workspace, 'summary');
+	const env = {
+		CHANGES_RESULT: 'success', DEPLOY_RESULT: 'success', DEPLOY_URL: 'https://production.test',
+		COLD_START_RESULT: 'success', E2E_RESULT: 'skipped', EVENT_NAME: 'push',
+		E2E_PROOF: 'https://github.test/runs/2', BASE_REF: 'main', SKIP_E2E_INPUT: '',
+		GITHUB_STEP_SUMMARY: summary,
+	};
+	try {
+		const proved = runShell(step.run, { env });
+		assert.equal(proved.status, 0, proved.stdout + proved.stderr);
+		assert.ok(proved.stdout.includes(env.E2E_PROOF));
+		assert.equal(readFileSync(summary, 'utf8'),
+			`⏭️ Web E2E skipped: this tree already passed all 6 web E2E shards in ${env.E2E_PROOF}\n`);
+		const unproved = runShell(step.run, { env: { ...env, E2E_PROOF: '' } });
+		assert.notEqual(unproved.status, 0);
+		assert.match(unproved.stdout, /A deployment URL was published/);
+		const coldFailure = runShell(step.run, { env: { ...env, COLD_START_RESULT: 'failure' } });
+		assert.notEqual(coldFailure.status, 0);
+		assert.match(coldFailure.stdout, /Cold-start verification did not pass/);
+		const pullRequest = runShell(step.run, {
+			env: { ...env, EVENT_NAME: 'pull_request', COLD_START_RESULT: 'skipped' },
+		});
+		assert.notEqual(pullRequest.status, 0);
+		assert.match(pullRequest.stdout, /A deployment URL was published/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('the release gate requires the push verification of the SHA and fails closed', () => {
 	const action = readAction('require-green-main/action.yml');
 	assert.equal(action.runs.using, 'composite');
