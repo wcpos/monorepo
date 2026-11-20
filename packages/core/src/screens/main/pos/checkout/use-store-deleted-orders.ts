@@ -85,7 +85,7 @@ export function useStoreDeletedOrdersSettler(storeId: number | string | undefine
 							showToast: true,
 							toast: {
 								title: t('pos_checkout.order_refused'),
-								text2: getErrorMessage(error),
+								text2: getErrorMessage(error) || undefined,
 							},
 							context: { orderId: recordId, mutationId, error: getErrorMessage(error) },
 						});

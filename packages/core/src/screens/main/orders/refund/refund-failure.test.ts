@@ -7,7 +7,7 @@ describe('classifyRefundFailure', () => {
 	// the order's refunds, never to a blind retry (each retry is a new refund).
 	it('warns that the store did not confirm the refund and sends the cashier to its refunds', () => {
 		expect(classifyRefundFailure(new RefundUnconfirmedError(77, 200), t)).toEqual({
-			level: 'warn',
+			level: 'error',
 			code: 'PAYMENT311',
 			title: 'orders.refund_unconfirmed',
 			text2: 'orders.refund_unconfirmed_check',
