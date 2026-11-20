@@ -1,3 +1,4 @@
+import { deepEqual } from 'rxdb/plugins/utils';
 import { map, type Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
@@ -147,20 +148,39 @@ export function acquireOpenOrdersQueryHandle(
 					observeEngineDatabases(target).pipe(
 						switchMap((database) => {
 							const collection = engineCollection(database, 'orders');
-							return collection
+							let previous: OpenOrdersResult | undefined;
+							const records$ = collection
 								? collection.find({
 										selector: openOrdersSelector(cashierId, storeId, registerId),
 										sort: OPEN_ORDERS_SORT,
 									}).$
 								: of([] as EngineRecord<'orders'>[]);
-						}),
-						map((records): OpenOrdersResult => ({
-							count: records.length,
-							hits: records.map((record) => ({
-								id: String(record.uuid),
-								record,
-							})) as unknown as OpenOrdersResult['hits'],
-						}))
+							return records$.pipe(
+								map((records): OpenOrdersResult => {
+									const hits = records.map((record) => {
+										const kept = previous?.hits.find((hit) => hit.id === String(record.uuid));
+										if (kept) {
+											const [before, after] = [kept.record, record].map((item) => {
+												const data: Record<string, unknown> = { ...item.toJSON(true) };
+												for (const key of ['local', '_rev', '_meta', '_attachments'])
+													delete data[key];
+												return data;
+											});
+											if (deepEqual(before, after)) return kept;
+										}
+										return { id: String(record.uuid), record };
+									}) as unknown as OpenOrdersResult['hits'];
+									if (
+										previous &&
+										previous.count === records.length &&
+										previous.hits.length === hits.length &&
+										hits.every((hit, index) => hit === previous?.hits[index])
+									)
+										return previous;
+									return (previous = { count: records.length, hits });
+								})
+							);
+						})
 					),
 				demands: OPEN_ORDERS_COMPILED.map(({ status, compiled }) =>
 					createDemand(engine, `${id}:${status}`, demandPlanFor(compiled))
