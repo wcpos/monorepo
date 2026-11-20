@@ -1442,6 +1442,35 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	// POS-338: a record the store refused because it had closed the order comes back `refused`;
+	// its attention row told the story, so the false "nothing was taken" toast never joins it.
+	it('a cash record refused because the order was closed shows no PAYMENT213 refusal toast', async () => {
+		mockRecordManualPayment.mockResolvedValueOnce({
+			kind: 'refused',
+			reason: 'order_closed',
+			row: payment(),
+			order: null,
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+
+		await act(async () => result.current.commands.takeTender());
+
+		expect(mockRecordManualPayment).toHaveBeenCalled();
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_refused_by_store',
+			expect.anything()
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ code: 'PAYMENT213' })
+		);
+		expect(mockT).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_refused_by_store',
+			expect.anything()
+		);
+	});
+
 	it('a plain Error thrown by the cash record still logs PAYMENT999', async () => {
 		mockRecordManualPayment.mockRejectedValueOnce(new Error('boom'));
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));

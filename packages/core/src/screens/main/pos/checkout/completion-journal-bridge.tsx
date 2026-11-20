@@ -17,6 +17,8 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	DRAINABLE_SCOPE_DATABASE_GENERATION,
+	ORDER_CLOSED_REFUSALS,
+	type OrderClosedRefusal,
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
 	scopeDatabaseName,
@@ -243,7 +245,8 @@ export function SaleCompletionBridge(): null {
 		 */
 		const raiseRefusal = async (uuid: string, refused: NonNullable<RecoveredOrder['refused']>) => {
 			const codes: Record<string, PaymentRowRefusal | undefined> = PAYMENT_ROW_REFUSALS;
-			const reason = codes[refused.code];
+			const closed: Record<string, OrderClosedRefusal | undefined> = ORDER_CLOSED_REFUSALS;
+			const reason = codes[refused.code] ?? closed[refused.code];
 			if (!reason || !refused.row) return;
 			const payload = (await findOrder(uuid))?.getLatest().payload;
 			await raisePaymentRefusal(storeDB, tRef.current, {
