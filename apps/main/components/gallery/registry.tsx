@@ -132,8 +132,8 @@ const registry: Record<string, Story[]> = {
 	'v2-dialog': dialogV2,
 };
 
-// Every theme is baselined (decision 12, 2026-10-16; the personality themes since 2026-11-06):
-// the list is the components package's THEME_RULES, so a new theme is shot without a second list to edit.
+// The URL's theme is checked against the components package's THEME_RULES; the shoot's own
+// split of those names lives in gallery/themes.ts and is pinned to THEMES by a unit test.
 
 function GalleryPage({ children }: React.PropsWithChildren) {
 	const { theme } = useLocalSearchParams<{ theme?: string }>();
