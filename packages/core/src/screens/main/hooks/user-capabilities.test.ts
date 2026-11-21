@@ -13,6 +13,7 @@ const ALL_FALSE = {
 	canCreateCustomers: false,
 	canDeleteCustomers: false,
 	canAcceptReaderTerms: false,
+	canReassignSales: false,
 };
 const ALL_TRUE = {
 	canEditProducts: true,
@@ -27,19 +28,32 @@ const ALL_TRUE = {
 	canCreateCustomers: true,
 	canDeleteCustomers: true,
 	canAcceptReaderTerms: true,
+	canReassignSales: true,
 };
 
 describe('deriveUserCapabilities', () => {
-	it('fails open when capabilities are unknown, except accepting reader terms', () => {
+	it('fails open when capabilities are unknown, except accepting reader terms and reassigning sales', () => {
 		const result = deriveUserCapabilities(undefined);
 
 		expect(result.known).toBe(false);
-		// Apple's Tap to Pay terms may only be accepted by a known administrator.
-		expect(result.caps).toEqual({ ...ALL_TRUE, canAcceptReaderTerms: false });
+		// Apple's Tap to Pay terms may only be accepted by a known administrator; the store
+		// ignores a reassignment it refuses, so an unknown user never sees the picker.
+		expect(result.caps).toEqual({
+			...ALL_TRUE,
+			canAcceptReaderTerms: false,
+			canReassignSales: false,
+		});
 	});
 
 	it('lets manage_woocommerce accept reader terms', () => {
 		expect(deriveUserCapabilities(['manage_woocommerce']).caps.canAcceptReaderTerms).toBe(true);
+	});
+
+	it('lets only reassign_woocommerce_pos_sales reassign sales', () => {
+		expect(deriveUserCapabilities(['reassign_woocommerce_pos_sales']).caps.canReassignSales).toBe(
+			true
+		);
+		expect(deriveUserCapabilities(['manage_woocommerce']).caps.canReassignSales).toBe(false);
 	});
 
 	it('closes every gate for a known empty capability list', () => {

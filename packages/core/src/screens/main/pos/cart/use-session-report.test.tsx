@@ -8,6 +8,11 @@ import { useSessionReport } from '../../../../services/register-session/use-sess
 const mockSite = { populate$: () => of([{ id: 8, display_name: 'Alex' }]) };
 let mockOpenedBy = 8;
 
+jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
+	observeSiteCredentials: (site: { populate$: (key: string) => never }) =>
+		jest.requireActual('rxjs').defer(() => site.populate$('wp_credentials')),
+}));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
 	useStoreSession: () => ({
