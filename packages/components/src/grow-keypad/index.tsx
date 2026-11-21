@@ -17,23 +17,14 @@ const KEY_NAMES: Record<string, string> = { Backspace: 'backspace', Enter: 'done
 type GrowDisplay = { display: React.ReactNode; span?: number };
 export type GrowCell = KeypadKey | GrowDisplay;
 
-/**
- * The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel. Given
- * a `sign` label (a signed quantity), the last row is `± | ✓` with ✓ spanning the other two cells.
- */
+/** The last two rows of both keypads: the store's separator, 0, ⌫, then ✓ across the panel. */
 export function closingRows(
 	decimalSeparator: string | undefined,
-	labels: { backspace: string; done: string; sign?: string }
+	labels: { backspace: string; done: string }
 ): KeypadKey[][] {
-	const done: KeypadKey = { name: 'done', label: labels.done, icon: 'check', variant: 'primary' };
 	return [
 		decimalRow(decimalSeparator, labels.backspace),
-		labels.sign === undefined
-			? [{ ...done, span: 3 }]
-			: [
-					{ name: 'sign', label: labels.sign, text: '±' },
-					{ ...done, span: 2 },
-				],
+		[{ name: 'done', label: labels.done, icon: 'check', variant: 'primary', span: 3 }],
 	];
 }
 
@@ -50,6 +41,11 @@ type GrowKeypadProps = {
 	rows: GrowCell[][];
 	/** How many leading rows a hairline sets off from the keys. */
 	ruled: number;
+	/**
+	 * How many leading rows stay on the trigger growing up: they come last, in reverse, so a row
+	 * under the first (the signed quantity's Return) stays beside it. One by default.
+	 */
+	landing?: number;
 	/** An anchored cell's width. */
 	cell: number;
 	align: 'center' | 'end';
@@ -87,6 +83,7 @@ export function GrowKeypad({
 	children,
 	rows,
 	ruled,
+	landing = 1,
 	cell,
 	align,
 	animation,
@@ -193,6 +190,7 @@ export function GrowKeypad({
 					panel={panel}
 					rows={rows}
 					ruled={ruled}
+					landing={landing}
 					cell={cell}
 					grow={frame.grow}
 					onPress={press}
@@ -212,6 +210,7 @@ function Keys({
 	panel,
 	rows,
 	ruled,
+	landing,
 	cell,
 	grow,
 	onPress,
@@ -220,14 +219,16 @@ function Keys({
 	panel: React.RefObject<ViewInstance | null>;
 	rows: GrowCell[][];
 	ruled: number;
+	landing: number;
 	cell: number;
 	grow: Grow;
 	onPress: (name: string) => void;
 	onKeyDown: (event: KeyDownEvent) => void;
 }) {
 	const sheet = useOverlayPresentation() === 'bottom';
-	// Growing up, the keys sit above and the first row lands on the trigger.
-	const ordered = grow === 'up' && !sheet ? [...rows.slice(1), rows[0]] : rows;
+	// Growing up, the keys sit above and the landing rows, reversed, end on the trigger.
+	const up = grow === 'up' && !sheet;
+	const ordered = up ? [...rows.slice(landing), ...rows.slice(0, landing).reverse()] : rows;
 	const size = (span = 1) => (sheet ? undefined : { width: cell * span, height: ROW });
 	return (
 		<View
@@ -249,7 +250,7 @@ function Keys({
 							sheet && (first ? 'border-border overflow-hidden rounded-lg border' : 'gap-2'),
 							!sheet &&
 								index < ruled &&
-								(first && grow === 'up' ? 'border-border border-t' : 'border-border border-b')
+								(up && index < landing ? 'border-border border-t' : 'border-border border-b')
 						)}
 					>
 						{row.map((key) =>
@@ -267,8 +268,6 @@ function Keys({
 									key="done"
 									testID="keypad-key-done"
 									className="flex-1"
-									// Beside ± (a signed quantity), Done keeps the two cells it spans anchored.
-									style={row.length > 1 ? { flex: key.span } : undefined}
 									onPress={() => onPress('done')}
 								>
 									{key.label}

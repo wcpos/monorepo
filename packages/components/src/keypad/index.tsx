@@ -22,6 +22,8 @@ export type KeypadKey = {
 	span?: number;
 	/** A quick key: lit (`true`) while its value is the draft. */
 	on?: boolean;
+	/** On the `key` face (the phone sheet), lit is `Chip`'s on face, not the primary fill. */
+	litAsChip?: boolean;
 	disabled?: boolean;
 	testID?: string;
 };
@@ -51,14 +53,14 @@ const keyFace = cva('items-center justify-center', {
 			key: 'bg-muted min-h-ctl rounded-lg active:opacity-70',
 			cell: 'web:hover:bg-accent active:bg-accent',
 		},
-		quick: { none: '', off: '', lit: 'bg-primary' },
+		quick: { none: '', off: '', lit: 'bg-primary', chip: 'bg-selected border-selected border' },
 	},
 	compoundVariants: [{ face: 'key', quick: 'off', class: 'border-border border bg-transparent' }],
 });
 const keyText = cva('font-semibold', {
 	variants: {
 		face: { key: 'text-xl', cell: 'text-lg' },
-		quick: { none: '', off: 'text-sm', lit: 'text-sm' },
+		quick: { none: '', off: 'text-sm', lit: 'text-sm', chip: 'text-sm' },
 	},
 });
 
@@ -78,20 +80,26 @@ export function Key({
 	icon,
 	variant,
 	on,
+	litAsChip,
 	textClassName,
 	...props
 }: KeyProps) {
-	const quick = on === undefined ? 'none' : on ? 'lit' : 'off';
+	const lit = litAsChip && face === 'key' ? 'chip' : 'lit';
+	const quick = on === undefined ? 'none' : on ? lit : 'off';
+	// An icon with text leads the word (the lit Return's minus); alone it is the key.
+	const lead = icon !== undefined && text !== undefined;
 	const ink =
 		quick === 'lit'
 			? 'text-primary-foreground'
-			: quick === 'off'
-				? 'text-primary'
-				: variant === 'bad'
-					? 'text-bad'
-					: variant === 'primary'
-						? 'text-primary'
-						: undefined;
+			: quick === 'chip'
+				? 'text-selected-foreground'
+				: quick === 'off'
+					? 'text-primary'
+					: variant === 'bad'
+						? 'text-bad'
+						: variant === 'primary'
+							? 'text-primary'
+							: undefined;
 	return (
 		<PressableSurface
 			{...props}
@@ -101,12 +109,11 @@ export function Key({
 			testID={props.testID ?? `keypad-key-${name}`}
 			accessibilityLabel={label}
 			aria-pressed={on}
-			className={cn(keyFace({ face, quick }), props.className)}
+			className={cn(keyFace({ face, quick }), lead && 'flex-row gap-1.5', props.className)}
 		>
 			<TextClassContext.Provider value={ink}>
-				{icon ? (
-					<Icon name={icon} />
-				) : (
+				{icon ? <Icon name={icon} /> : null}
+				{icon && !lead ? null : (
 					<Text className={cn(keyText({ face, quick }), textClassName)}>{text ?? label}</Text>
 				)}
 			</TextClassContext.Provider>

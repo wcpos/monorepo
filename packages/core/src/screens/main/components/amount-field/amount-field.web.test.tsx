@@ -17,6 +17,7 @@ type MockKeypadProps = {
 	discounts?: number[];
 	rest?: string;
 	tone?: string;
+	signed?: boolean;
 	labelledBy?: string;
 	invalid?: boolean;
 	labels: Record<string, unknown>;
@@ -134,6 +135,14 @@ it("names the quick keys with the store's separator, and passes the quick discou
 	expect((mockKeypad.labels.discountKey as (p: number) => string)(12.5)).toBe('−12,5%');
 	renderField({ kind: 'quantity', tone: 'attention' });
 	expect(mockKeypad.tone).toBe('attention');
+});
+
+it('a signed quantity hands its keypad the Return key’s word, English "Return"', () => {
+	renderField({ kind: 'quantity', signed: true });
+	expect(mockKeypad.signed).toBe(true);
+	expect(mockKeypad.labels.sign).toBe('pos_cart.quantity_return');
+	const catalog = jest.requireActual('../../../../contexts/translations/locales/en/core.json');
+	expect(catalog['pos_cart.quantity_return']).toBe('Return');
 });
 
 it("a form's label and invalid state reach the trigger; its label press opens and closes the keypad", () => {

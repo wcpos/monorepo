@@ -87,6 +87,24 @@ it('is the one face: the grid and every keypad draw the flat key; a quick key', 
 	expect(screen.getByTestId('keypad-key-l')).toHaveAttribute('aria-pressed', 'true');
 });
 
+it('an icon with text leads the word in its ink; litAsChip is Chip’s on face on the key face only', () => {
+	render(<Key name="r" label="Return" text="Return" icon="minus" on litAsChip />);
+	render(<Key name="c" label="Return" text="Return" icon="minus" face="cell" on litAsChip />);
+	render(<Key name="o" label="Return" text="Return" on={false} litAsChip />);
+	expect(classes('keypad-key-r')).toContain('flex-row gap-1.5');
+	expect(classes('keypad-key-r')).toContain('bg-selected border-selected border');
+	expect(classes('keypad-key-r')).not.toContain('bg-primary');
+	const glyph = screen.getByTestId('keypad-key-r').querySelector('[data-icon="minus"]');
+	expect(glyph?.getAttribute('data-classes')).toContain('text-selected-foreground');
+	expect(screen.getByTestId('keypad-key-r')).toHaveTextContent('Return');
+	// Anchored (`cell`), lit is the price keypad's lit quick key; off is the quick off face.
+	expect(classes('keypad-key-c')).toContain('bg-primary');
+	expect(classes('keypad-key-c')).not.toContain('bg-selected');
+	expect(classes('keypad-key-o')).toContain('border-border border bg-transparent');
+	expect(classes('keypad-key-o')).not.toContain('flex-row');
+	expect(screen.getByTestId('keypad-key-o').querySelector('[data-icon]')).toBeNull();
+});
+
 it('a span is its flex; fit tile is h-tile, shrink lets rows give way to the control floor', () => {
 	const { rerender } = render(<Keypad rows={rows} onPress={jest.fn()} testID="pad" />);
 	expect(screen.getByTestId('pad-key-0')).toHaveStyle({ flexGrow: 2 });

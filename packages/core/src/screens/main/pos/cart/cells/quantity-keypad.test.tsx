@@ -76,7 +76,7 @@ jest.mock('../../../components/amount-field', () => ({
 		className?: string;
 	}) => {
 		mockOnChangeText = onCommit;
-		// The real keypad's signed rows are components' quantity-keypad tests; here ± stands for them.
+		// The real keypad's signed rows are components' quantity-keypad tests; here Return stands for them.
 		return (
 			<>
 				{signed ? <button data-testid="keypad-key-sign" /> : null}
@@ -142,7 +142,7 @@ it('a mounted keypad is what the notice opens; it registers no scroll of its own
 	expect(document.activeElement).not.toBe(input);
 });
 
-describe('the ± key follows signedQuantityAllowed()', () => {
+describe('the Return key follows signedQuantityAllowed()', () => {
 	const props = {
 		row: { original: { uuid: 'line-s', type: 'line_items', item: { quantity: 2 } } },
 		column: { columnDef: { meta: { show: () => false } } },
@@ -159,7 +159,7 @@ describe('the ± key follows signedQuantityAllowed()', () => {
 		expect(mockUpdateCartLine).toHaveBeenCalledWith('line_items', 'line-s', { quantity: -1 });
 	});
 
-	it('not allowed (a fiscal module): no ± key', () => {
+	it('not allowed (a fiscal module): no Return key, the unsigned keypad', () => {
 		mockSignedQuantityAllowed.mockReturnValue(false);
 		render(<Quantity {...props} />);
 		expect(screen.queryByTestId('keypad-key-sign')).toBeNull();
