@@ -245,6 +245,12 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 	const peek = () => {
 		offset.set(reduced ? -PEEK : withSpring(-PEEK, PEEK_SPRING));
 	};
+	// While a strip rests open, its offset is -stripWidth: a width measured after the open (Close
+	// arriving, a resized row, a locale) moves the rest with it, never under a drag or the flight.
+	const rest = React.useEffectEvent(() => {
+		if (opened.get() && !dragging && !leaving.get()) offset.set(-stripWidth);
+	});
+	React.useEffect(() => rest(), [stripWidth]);
 	// Web, while open: a press outside closes it and still lands (heard on the way down, never
 	// stopped). Escape closes it too, unless the focus is elsewhere (an Edit sheet's Escape is its own).
 	const onOutsidePress = React.useEffectEvent((event: PointerEvent) => {

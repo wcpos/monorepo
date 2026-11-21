@@ -329,6 +329,23 @@ it('Enter or Space on Remove (a pointerless click, `detail` 0) removes the line'
 	fireEvent.click(screen.getByTestId('cart-line-remove'), { detail: 0 });
 	expect(pulseRemove).toHaveBeenCalledTimes(1);
 });
+it('an open strip rests at its own width when a slot is measured again', () => {
+	renderStrip();
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(-STRIP);
+	// Edit narrower (a locale, a resized row): the rest follows, Edit stays in the row.
+	layout('cart-line-edit-slot', EDIT - 20);
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(-(STRIP - 20));
+});
+it('a slot measured again under an active drag does not move the pull', () => {
+	renderStrip();
+	fireEvent.click(screen.getByTestId('cart-line-total'));
+	act(() => mockStart());
+	act(() => mockUpdate({ translationX: -20 }));
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(-STRIP - 20);
+	layout('cart-line-edit-slot', EDIT - 20);
+	expect(mockOffsetSet).toHaveBeenLastCalledWith(-STRIP - 20);
+});
 it('a failed removal brings the row back on stage and leaves it removable', async () => {
 	const { pulseRemove, armRemove } = renderStrip();
 	mockRemoveLineItem.mockRejectedValueOnce(new Error('write failed'));
