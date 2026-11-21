@@ -45,7 +45,6 @@ import {
 	censusQueryKey,
 	type CensusTotal,
 	type CensusTotals,
-	orderIngestInput,
 	parseOrderBrowserSchedulerDescriptor,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
 	type ProductBrowseWindowDescriptor,
@@ -85,7 +84,6 @@ import { isReportedRequestStatus, requestStatusOf } from '../transport-failure';
 import { findAllUncached } from '../collections/find-all-uncached';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import { OPEN_CART_ORDER_STATUS } from '../write-path/open-cart-hold';
-import { type OrderViewDeltaCursor, tickOrderViewDelta } from './order-view-delta';
 
 import type {
 	BarcodeSelectors,
@@ -284,7 +282,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		'existence-prime',
 		'existence-reconcile',
 		'query-total-retry',
-		'order-view-delta',
 	]);
 	// Pressure still wins each ordinary tick, but it cannot suppress convergence for an
 	// entire slow-server session (mono#1159, owner ruling 2026-08-12).
@@ -715,29 +712,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		);
 	});
 
-	const orderViewCursors = new Map<string, Map<string, OrderViewDeltaCursor>>();
-	const unsupportedOrderDeltaScopes = new Set<string>();
-	const orderViewDelta = lane('order-view-delta', async (db, scopeId, signal, fetcher) => {
-		if (unsupportedOrderDeltaScopes.has(scopeId)) return { summary: null };
-		const cursors = orderViewCursors.get(scopeId) ?? new Map<string, OrderViewDeltaCursor>();
-		orderViewCursors.set(scopeId, cursors);
-		const result = await tickOrderViewDelta({
-			baseUrl: deps.syncBaseUrl,
-			fetcher,
-			ingest: () => orderIngestInput(db as unknown as SchedulerDrainDatabase),
-			viewKeys: deps.liveOrderBrowseQueryKeys?.() ?? [],
-			cursors,
-			now,
-			signal,
-			diagnostics: deps.diagnostics,
-		});
-		if (result.unsupported) unsupportedOrderDeltaScopes.add(scopeId);
-		if (result.scopes === 0) return { summary: null };
-		return {
-			summary: `Order view delta: ${result.scopes} scopes, ${result.requests} requests, ${result.documents} documents`,
-		};
-	});
-
 	const productBrowseWindowSeed = lane('product-browse-window-seed', async (db) => {
 		const result = await seedProductBrowseWindowSchedulerTask({
 			limit: PRODUCT_BROWSE_WINDOW_LIMIT,
@@ -1090,7 +1064,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	return {
 		schedulerDrain,
 		orderWindowSeed,
-		orderViewDelta,
 		productBrowseWindowSeed,
 		referenceSeed,
 		queryTotalRetry,

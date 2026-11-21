@@ -262,7 +262,7 @@ type OrderIngestInput = {
  * about. The repository is a thin wrapper and the guard resolves `db.recordMutations` here,
  * at build time, so per-call construction is both cheap and reset-correct.
  */
-export function orderIngestInput(db: SchedulerDrainDatabase): OrderIngestInput {
+function orderIngestInput(db: SchedulerDrainDatabase): OrderIngestInput {
 	return {
 		repository: new EngineOrderRepository(db),
 		pendingMutationOrderIds: createOrderPendingMutationIds(db.recordMutations as never),

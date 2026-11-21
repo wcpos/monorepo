@@ -3,7 +3,6 @@ export {
 	adoptOrderSnapshot,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	ORDER_SCHEDULER_LEASE_FOR_MS,
-	orderIngestInput,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
 	type SchedulerDrainDatabase,
@@ -89,11 +88,6 @@ export {
 
 // Fetchers
 export { orderDocumentFromWooPayload } from './rx-scheduler-order-fetcher';
-export {
-	ingestPulledOrderPayloads,
-	type OrdersSchedulerFetcherInput,
-} from './rx-scheduler-order-fetcher';
-export { wooGmtDate } from './woo-gmt-date';
 export { chunk } from './chunk';
 export { exactSkuLegRequired } from './exact-sku-leg';
 
