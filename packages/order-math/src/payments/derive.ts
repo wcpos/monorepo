@@ -2,7 +2,7 @@
  * Pure derivation mirrors the server ledger so balance and order status have one contract.
  */
 
-import { isLivePaymentStatus } from './ledger';
+import { isLivePaymentStatus, type MetaDataEntry, readLedger } from './ledger';
 import { fromMinor, toMinor } from './money';
 
 import type { DerivedOrderView, PaymentMethodDescriptor, PaymentRow } from './types';
@@ -176,4 +176,26 @@ export function derive(
 
 export function isCompletingStatus(status: string): boolean {
 	return !['pos-open', 'pos-partial', 'pending', 'failed', ''].includes(status);
+}
+
+/**
+ * Whether Mark completed (monorepo#3648) is offered: a processing order that is fully paid. Rows
+ * in the ledger decide by its own balance (`derive`), none pending; an order with no rows (paid
+ * at the web checkout) by `date_paid_gmt`. The store's `not_paid` check is the judge; this only
+ * hides the action where it cannot pass.
+ */
+export function canMarkCompleted(order: {
+	status?: string | null;
+	date_paid_gmt?: string | null;
+	needs_payment?: boolean | null;
+	total?: string | number | null;
+	meta_data?: readonly MetaDataEntry[] | null;
+}): boolean {
+	if (String(order.status ?? '').replace(/^wc-/, '') !== 'processing') return false;
+	if (typeof order.date_paid_gmt !== 'string' || order.date_paid_gmt === '') return false;
+	if (order.needs_payment === true) return false;
+	const rows = readLedger(order.meta_data);
+	if (rows.length === 0) return true;
+	if (rows.some((row) => row.status === 'pending')) return false;
+	return Number(derive(order.total, rows, []).balance) <= 0;
 }

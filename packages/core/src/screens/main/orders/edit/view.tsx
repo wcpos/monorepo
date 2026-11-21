@@ -152,7 +152,17 @@ export function OrderView({
 						loading: actions.reopening,
 						disabled: actions.storageDegraded || actions.reopening,
 					}}
-					secondary={[...invoice.secondary, receipt]}
+					secondary={[
+						...invoice.secondary,
+						receipt,
+						actions.canMarkCompleted && {
+							label: t('orders.mark_completed'),
+							testID: 'order-mark-completed',
+							onPress: () => void actions.markCompleted(),
+							loading: actions.completing,
+							disabled: actions.completing,
+						},
+					]}
 					record={
 						!!payload.id && {
 							label: t('common.sync'),

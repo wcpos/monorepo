@@ -140,6 +140,11 @@ describe('the money answer rule, per kind', () => {
 		expect(isMoneyAnswer('close', { order })).toBe(false);
 		expect(isMoneyAnswer('close', null)).toBe(false);
 	});
+	it('complete (monorepo#3648) needs the summary, as close does', () => {
+		expect(isMoneyAnswer('complete', { order: { status: 'completed' }, revision: 'r' })).toBe(true);
+		expect(isMoneyAnswer('complete', {})).toBe(false);
+		expect(isMoneyAnswer('complete', { order: {} })).toBe(false);
+	});
 });
 
 // Server SPEC §4.3: a close whose stamp could not persist answers `completion: null` with the

@@ -159,6 +159,11 @@ describe('the order wire (ADR 0040)', () => {
 		expect(isPushableOrderStatus(undefined)).toBe(false);
 	});
 
+	// monorepo#3648: Mark completed is its own command; a queued `completed` never reaches the wire.
+	it('still drops status completed', () => {
+		expect(toOrderWirePayload({ status: 'completed' })).toEqual({});
+	});
+
 	it('server-owned keys, unchanged meta or an unchanged status assert nothing', () => {
 		const meta = [
 			{ id: 1, key: 'custom', value: 'a' },

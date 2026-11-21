@@ -169,12 +169,21 @@ const isSummary = (value: unknown) => isObject(value) && typeof value.status ===
  * the summary (`payment_response`, :174, :297, :370, and their replays, :475-478); `refund`
  * answers the row alone (:368, :475); `submit` answers a known `outcome` with the summary (and
  * the row for `recorded`), `cancel`
- * the summary (:451); `close` as `isCloseAnswer`. Anything else (a proxy page, a plugin filter's
+ * the summary (:451), and so does Pro's `complete`; `close` as `isCloseAnswer`. Anything else (a proxy page, a plugin filter's
  * `{}`) proves nothing: it never settles the command and never stands in for a row the store did
  * not send. The command stays journaled and its outcome is unknown until a re-send answers it.
  */
 export function isMoneyAnswer(
-	kind: 'record' | 'intent' | 'capture' | 'void' | 'refund' | 'submit' | 'cancel' | 'close',
+	kind:
+		| 'record'
+		| 'intent'
+		| 'capture'
+		| 'void'
+		| 'refund'
+		| 'submit'
+		| 'cancel'
+		| 'close'
+		| 'complete',
 	data: unknown
 ): boolean {
 	if (!isObject(data)) return false;
@@ -189,6 +198,7 @@ export function isMoneyAnswer(
 			if (!SUBMIT_OUTCOMES.includes(data.outcome as string) || !isSummary(data.order)) return false;
 			return data.outcome !== 'recorded' || isRow(data.payment);
 		case 'cancel':
+		case 'complete': // Mark completed (monorepo#3648): `{order, revision}`
 			return isSummary(data.order);
 		default:
 			return isRow(data.payment) && isSummary(data.order);

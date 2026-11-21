@@ -65,6 +65,7 @@ export type {
 export {
 	allowedOrderStatuses,
 	availableForRefund,
+	canMarkCompleted,
 	countsTowardPaid,
 	hasRefundableMoney,
 	netRefundable,

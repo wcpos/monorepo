@@ -42,6 +42,14 @@ jest.mock('../../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ storageDegraded: false, blockIfDegraded: () => false }),
 }));
 jest.mock('../use-reopen-order', () => ({ useReopenOrder: () => ({ reopening: false }) }));
+jest.mock('../use-mark-completed', () => ({
+	markCompletedTier: (isPro: boolean) => isPro,
+	useMarkCompleted: () => ({ completing: false, markCompleted: jest.fn() }),
+}));
+jest.mock('../use-store-capability', () => ({ useStoreCapability: () => false }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: !mockReadOnly } }),

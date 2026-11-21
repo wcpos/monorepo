@@ -10,6 +10,7 @@ test('public value surface is exactly the spec', () => {
 		'allowedOrderStatuses',
 		'availableForRefund',
 		'calculateCartLine',
+		'canMarkCompleted',
 		'captureEntry',
 		'countsTowardPaid',
 		'createCartConfig',
