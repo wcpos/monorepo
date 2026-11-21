@@ -85,25 +85,37 @@ verify_cdn_path() {
 
 # A throttled purge still answers 200 "finished" but purges nothing; it returns 0 (just
 # poll) and records the throttle. A body that is not JSON, or lacks the path, is "unknown".
-purge_cdn_path() {
-	local suffix="${2:+build/$2}" body code entry="" throttled="" reset=0
+# $1 lane, $2 the suffix exactly as sent. When jsDelivr's .paths lacks the key sent, the
+# line names the key it did report, so a live run shows which spelling it purged.
+purge_cdn_spelling() {
+	local suffix="$2" body code entry="" throttled="" reset=0 other=""
 	body=$(mktemp) || { echo "purge @$1/${suffix} -> HTTP 000, unknown"; return 0; }
 	code=$(curl -g -sS --connect-timeout 10 --max-time 120 -o "$body" -w '%{http_code}' \
 		"https://purge.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/${suffix}") || true
 	entry=$(jq -r --arg k "/gh/${WEB_BUNDLE_REPO}@$1/${suffix}" '(.paths[$k] // first(.paths[]?)) |
 		select(type == "object") | "\(.throttled == true) \(.throttlingReset // 0 | tonumber? // 0 | floor)"' \
 		"$body" 2>/dev/null) || entry=""
+	other=$(jq -r --arg k "/gh/${WEB_BUNDLE_REPO}@$1/${suffix}" \
+		'.paths | select(type == "object" and (has($k) | not)) | keys_unsorted | first // empty' \
+		"$body" 2>/dev/null) || other=""
+	other="${other:+ (jsDelivr key: $other)}"
 	rm -f "$body"
 	read -r throttled reset <<< "$entry" || true
 	if [[ "$throttled" == true ]]; then
 		CDN_PURGE_THROTTLED=1
 		if ((reset > CDN_PURGE_THROTTLE_RESET)); then CDN_PURGE_THROTTLE_RESET=$reset; fi
-		echo "purge @$1/${suffix} -> HTTP ${code:-000}, THROTTLED (reset in ${reset}s)"
+		echo "purge @$1/${suffix} -> HTTP ${code:-000}, THROTTLED (reset in ${reset}s)${other}"
 	elif [[ "$throttled" == false ]]; then
-		echo "purge @$1/${suffix} -> HTTP ${code:-000}, accepted"
+		echo "purge @$1/${suffix} -> HTTP ${code:-000}, accepted${other}"
 	else
-		echo "purge @$1/${suffix} -> HTTP ${code:-000}, unknown"
+		echo "purge @$1/${suffix} -> HTTP ${code:-000}, unknown${other}"
 	fi
+}
+
+# jsDelivr normalises %5B/%5D to the same key, so one purge per path (D4, 2026-11-21).
+purge_cdn_path() {
+	local suffix="${2:+build/$2}"
+	purge_cdn_spelling "$1" "$suffix"
 }
 
 purge_cdn_root() { purge_cdn_path "$1" ""; }
