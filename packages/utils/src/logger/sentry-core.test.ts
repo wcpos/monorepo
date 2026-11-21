@@ -1,4 +1,10 @@
-import { describeBareException, prepareEvent, scrubBreadcrumb, scrubEvent } from './sentry-core';
+import {
+	buildCaptureOptions,
+	describeBareException,
+	prepareEvent,
+	scrubBreadcrumb,
+	scrubEvent,
+} from './sentry-core';
 
 describe('scrubEvent personal data', () => {
 	const email = 'jane@example.com';
@@ -372,5 +378,54 @@ describe('scrubEvent origin stripping', () => {
 		const event = scrubEvent({ extra: { error: 'write: failed with Bearer secret-token' } });
 		expect(event.extra).toEqual({ error: 'write: failed with Bearer [REDACTED]' });
 		expect(JSON.stringify(event)).not.toContain('secret-token');
+	});
+});
+
+describe('PAYMENT201 fingerprint groups by cause', () => {
+	const fp = (code: string, context: Record<string, unknown>) =>
+		buildCaptureOptions({ message: 'Payment unanswered', code, context }).fingerprint;
+
+	it('splits different causes and folds numbers and UUIDs', () => {
+		expect(fp('PAYMENT201', { reason: 'timeout of 30000 ms exceeded' })).toEqual([
+			'PAYMENT201',
+			'timeout of {} ms exceeded',
+		]);
+		expect(fp('PAYMENT201', { reason: 'timeout of 30000 ms exceeded' })).toEqual(
+			fp('PAYMENT201', { reason: 'timeout of 15000 ms exceeded' })
+		);
+		expect(fp('PAYMENT201', { reason: 'Network Error' })).not.toEqual(
+			fp('PAYMENT201', { reason: 'settled_elsewhere' })
+		);
+		expect(fp('PAYMENT201', { error: 'row 8f14e45f-ceea-467f-a0e6-b8b4f1c6e1a1 locked' })).toEqual(
+			fp('PAYMENT201', { error: 'row 1b4e28ba-2fa1-41d2-883f-0016d3cca427 locked' })
+		);
+	});
+
+	it('uses an empty cause when none is a string, and leaves PAYMENT202 alone', () => {
+		expect(fp('PAYMENT201', { orderId: 1 })).toEqual(['PAYMENT201', '']);
+		expect(fp('PAYMENT202', { reason: 'Network Error' })).toEqual(['PAYMENT202']);
+	});
+});
+
+describe('BUILD_COMMIT', () => {
+	const loadBuildCommit = () => {
+		let value: string | undefined;
+		jest.isolateModules(() => {
+			value = jest.requireActual<typeof import('./sentry-core')>('./sentry-core').BUILD_COMMIT;
+		});
+		return value;
+	};
+	afterEach(() => {
+		delete process.env.EXPO_PUBLIC_BUILD_COMMIT;
+	});
+
+	it('falls back to unknown when the build did not stamp a commit', () => {
+		delete process.env.EXPO_PUBLIC_BUILD_COMMIT;
+		expect(loadBuildCommit()).toBe('unknown');
+	});
+
+	it('reads the commit app.config.ts stamped', () => {
+		process.env.EXPO_PUBLIC_BUILD_COMMIT = 'abc123def456';
+		expect(loadBuildCommit()).toBe('abc123def456');
 	});
 });

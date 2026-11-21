@@ -1,5 +1,6 @@
 import { AppInfo } from '../app-info';
 import {
+	BUILD_COMMIT,
 	buildCaptureOptions,
 	createPendingCaptures,
 	prepareEvent,
@@ -143,6 +144,7 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 					beforeSend: prepareEvent,
 					beforeBreadcrumb: scrubBreadcrumb,
 					ignoreErrors: [/ResizeObserver loop/],
+					initialScope: { tags: { build_commit: BUILD_COMMIT } },
 				});
 				const installId = getInstallId();
 				if (installId) sdk.setUser({ id: installId });

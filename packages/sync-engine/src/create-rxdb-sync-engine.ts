@@ -1722,6 +1722,7 @@ export function createRxdbSyncEngine(
 		variationCensusTotal: async () => (await censusPublisher.totals()).variations,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
 		currentProductBrowseWindowKey: requirePlane.lastProductBrowseQueryKey,
+		liveOrderBrowseQueryKeys: requirePlane.liveOrderBrowseQueryKeys,
 		...(ports.defaultProductBrowseSort !== undefined
 			? { defaultProductBrowseSort: ports.defaultProductBrowseSort }
 			: {}),
@@ -2350,6 +2351,9 @@ export function createRxdbSyncEngine(
 				});
 				scheduleStatusChange();
 				reports.push(report);
+			}
+			if (!options?.signal?.aborted) {
+				await requirePlane.refreshLiveOrderBrowseWindows();
 			}
 			const drain = reports[1]!;
 			const worst = reports.some((report) => report.status === 'error')

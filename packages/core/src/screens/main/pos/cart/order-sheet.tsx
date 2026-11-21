@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { Dialog, DialogFooter } from '@wcpos/components/dialog';
+import { Dialog, DialogFooter, type FooterButton } from '@wcpos/components/dialog';
 import { useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
@@ -30,15 +30,25 @@ export function OrderSheet({
 	// still in flight would otherwise be pushed as the value before it).
 	const flushRef = React.useRef<(() => Promise<boolean>) | null>(null);
 	const payload = useRecordField(order, (record) => record.payload);
+	const [unsent, setUnsent] = React.useState(false);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<RecordDialog
 				side={side}
 				title={t('pos_cart.order_details')}
 				record={order}
-				form={(record) => <EditOrderMeta order={record} flushRef={flushRef} />}
+				form={(record) => (
+					<EditOrderMeta order={record} flushRef={flushRef} onUnsentChange={setUnsent} />
+				)}
 				payload={payload}
-				footer={<OrderSheetFooter order={order} flushRef={flushRef} onOpenChange={onOpenChange} />}
+				footer={
+					<OrderSheetFooter
+						order={order}
+						flushRef={flushRef}
+						onOpenChange={onOpenChange}
+						unsent={unsent}
+					/>
+				}
 				testID="order-meta-dialog"
 			/>
 		</Dialog>
@@ -49,10 +59,13 @@ function OrderSheetFooter({
 	order,
 	flushRef,
 	onOpenChange,
+	unsent,
 }: {
 	order: CurrentOrderRecord;
 	flushRef: React.RefObject<(() => Promise<boolean>) | null>;
 	onOpenChange: (open: boolean) => void;
+	/** A hand-over change not yet sent: its Send is the primary, so Save to store follows Print. */
+	unsent: boolean;
 }) {
 	const t = useT();
 	const router = useRouter();
@@ -63,6 +76,25 @@ function OrderSheetFooter({
 	);
 	/** The cart column registers the void surface; this hook registers nothing (roadmap#428, PR 1b). */
 	const { voidOrder, storageDegraded } = useVoidOrder({ onBeforeVoid: () => onOpenChange(false) });
+	const print: FooterButton = {
+		label: t('common.print'),
+		icon: 'print',
+		testID: 'order-print-button',
+		onPress: () => {
+			onOpenChange(false);
+			router.push({
+				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+				params: { orderId: order.uuid },
+			});
+		},
+	};
+	const save: FooterButton = {
+		label: t('pos_cart.sync_order'),
+		testID: 'save-to-server-button',
+		onPress: () => void sync(),
+		loading,
+		disabled,
+	};
 	return (
 		<DialogFooter
 			destructive={{
@@ -71,25 +103,8 @@ function OrderSheetFooter({
 				onPress: () => void voidOrder(),
 				disabled: storageDegraded,
 			}}
-			secondary={{
-				label: t('common.print'),
-				icon: 'print',
-				testID: 'order-print-button',
-				onPress: () => {
-					onOpenChange(false);
-					router.push({
-						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-						params: { orderId: order.uuid },
-					});
-				},
-			}}
-			intent={{
-				label: t('pos_cart.sync_order'),
-				testID: 'save-to-server-button',
-				onPress: () => void sync(),
-				loading,
-				disabled,
-			}}
+			secondary={unsent ? [print, save] : print}
+			intent={unsent ? null : save}
 		/>
 	);
 }

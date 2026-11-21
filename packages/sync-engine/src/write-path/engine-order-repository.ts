@@ -25,7 +25,7 @@ import {
 import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
-import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
+import { hasPendingLocalWork, stampedRevision, withoutUnchanged } from './local-work-guard';
 import { adoptedSync, carriedFacts, readoptRequested, residentRevision } from './order-revision';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
@@ -286,6 +286,15 @@ export class EngineOrderRepository {
 			.findByIds(documents.map((document) => document.uuid))
 			.exec();
 		const ack = context?.source === 'ack' ? context : undefined;
+		// An ack echo carries the server's stamp of the authenticated user (#936); a read carries a reassignment.
+		// An equal stamp means nothing new on the server; adopting would undo the ack's kept identity (#936).
+		// A readopt is a corrective adoption and takes the server's identity (ADR 0040 §1.3).
+		const identitySourceFor = (resident: unknown, incoming: { remoteId: unknown }) => {
+			if (ack) return 'server';
+			if (readoptRequested(this.db, incoming.remoteId)) return 'read';
+			const stamp = stampedRevision(resident);
+			return stamp !== null && stamp === stampedRevision(incoming) ? 'server' : 'read';
+		};
 		// A pull requested BEFORE the resident was adopted whole answers with an older document.
 		// Measured: dev-next 2026-10-23, orders 115547/115569 — a boot pull answered mid-create
 		// landed after the ack and zeroed the till's total. WooCommerce saves an order several
@@ -310,6 +319,7 @@ export class EngineOrderRepository {
 		const materialized = applicable.map((document) => ({
 			storedDocument: stripOrderManifestDigest(document),
 		}));
+		const identitySources = new Map<string, 'server' | 'read'>();
 		for (const entry of materialized) {
 			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
 				{ payload?: Record<string, unknown>; local?: { receiptPrintCount?: number } } | undefined;
@@ -334,11 +344,14 @@ export class EngineOrderRepository {
 			const localMeta = Array.isArray(resident?.payload?.meta_data)
 				? resident.payload.meta_data
 				: [];
+			const identitySource = identitySourceFor(resident, entry.storedDocument);
+			if (resident) identitySources.set(entry.storedDocument.uuid, identitySource);
 			const serverMeta = mergeProtectedOrderMeta(
 				localMeta,
 				Array.isArray(entry.storedDocument.payload.meta_data)
 					? entry.storedDocument.payload.meta_data
-					: []
+					: [],
+				identitySource
 			);
 
 			if (serverMeta.length > 0) {
@@ -436,7 +449,9 @@ export class EngineOrderRepository {
 							...document.payload,
 							meta_data: mergeProtectedOrderMeta(
 								Array.isArray(localMeta) ? localMeta : [],
-								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : []
+								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : [],
+								// Promoted columns come from the early merge; deciding again could split meta from columns.
+								identitySources.get(document.uuid) ?? identitySourceFor(current, document)
 							),
 						},
 					});

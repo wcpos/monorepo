@@ -79,6 +79,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ debug: jest.fn(), info: jest.fn(), error: jest.fn(), warn: jest.fn() }),
 	getDatabaseEpoch: () => 0,
+	redactSensitiveText: jest.requireActual('@wcpos/utils/logger').redactSensitiveText,
 }));
 jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({

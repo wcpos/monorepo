@@ -38,6 +38,9 @@ export function createPendingCaptures() {
 export const SENTRY_DSN =
 	'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733';
 
+// The bundle's commit, stamped by app.config.ts at build time; `release` stays the package version.
+export const BUILD_COMMIT = process.env.EXPO_PUBLIC_BUILD_COMMIT || 'unknown';
+
 export type SentryBreadcrumbLike = { message?: string; data?: Record<string, unknown> };
 
 type SentryEventLike = {
@@ -372,6 +375,8 @@ export function renderErrorTemplate(message: string): string {
  * groups by the thrown message alone: the same `useStoreSession` throw surfaces
  * from whichever component rendered first, and one issue per screen would hide
  * that it is one bug (#2112).
+ * PAYMENT201 (outcome unknown) groups by its cause (`context.reason`, `error` or `cause`), because
+ * a timeout, a refused session and a held lock are different bugs behind one code.
  */
 function fingerprintFor(message: string, code: string, context: unknown) {
 	const fields =
@@ -381,6 +386,10 @@ function fingerprintFor(message: string, code: string, context: unknown) {
 		// shape the hydration logger uses too); the log message merely prefixes it.
 		const thrownMessage = typeof fields.message === 'string' ? fields.message : message;
 		return [code, renderErrorTemplate(thrownMessage)];
+	}
+	if (code === 'PAYMENT201') {
+		const cause = [fields.reason, fields.error, fields.cause].find((v) => typeof v === 'string');
+		return [code, typeof cause === 'string' ? messageTemplate(cause) : ''];
 	}
 	const endpoint = fields.endpoint;
 	if (typeof endpoint === 'string' && endpoint.length > 0) {

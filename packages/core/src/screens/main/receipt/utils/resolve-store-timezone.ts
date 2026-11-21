@@ -7,7 +7,7 @@ interface SiteLike {
 	gmt_offset?: unknown;
 }
 
-function offsetToTimezone(offset: number): string {
+export function offsetToTimezone(offset: number): string {
 	if (!Number.isFinite(offset) || offset === 0) {
 		return 'UTC';
 	}

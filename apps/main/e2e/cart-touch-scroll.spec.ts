@@ -93,15 +93,20 @@ async function scrollsAndSwipes(page: Page) {
 	const swipeBody = bodies.nth(visibleIndex);
 	const swipeBox = (await swipeBody.boundingBox())!;
 	const restX = swipeBox.x;
+	const restRight = swipeBox.x + swipeBox.width;
+	// nth(visibleIndex): every cart-line-row renders exactly one body and one strip window, so the indexes pair.
+	const swipeWindow = page.getByTestId('cart-line-strip-window').nth(visibleIndex);
 	const swipeFrom = {
 		x: swipeBox.x + swipeBox.width * 0.75,
 		y: swipeBox.y + swipeBox.height / 2,
 	};
+	// The swipe moves the strip's window in from the row's trailing edge; the body holds still (decision 7A).
 	await untilRowIsUnder(page, swipeFrom);
 	await touchDrag(page, swipeFrom, { x: swipeFrom.x - 150, y: swipeFrom.y });
 	await expect
-		.poll(async () => (await swipeBody.boundingBox())!.x, { timeout: 5_000 })
-		.toBeLessThan(restX - 40);
+		.poll(async () => (await swipeWindow.boundingBox())!.x, { timeout: 5_000 })
+		.toBeLessThan(restRight - 40);
+	expect(Math.abs((await swipeBody.boundingBox())!.x - restX)).toBeLessThanOrEqual(1);
 }
 
 test.describe('Cart touch scroll — phone', () => {

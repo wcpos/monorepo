@@ -135,4 +135,15 @@ export async function pickSuiteRegister(page: Page, timeout: number): Promise<vo
 	log.info(`[register] picker shown, picking the suite register ${id}`);
 	await row.click();
 	await expect(rows.first()).toBeHidden({ timeout });
+	// The bind is still running when the rows hide, and navigating then is undone when it finishes (#3684).
+	const bar = page.getByTestId('register-bar-place').first();
+	if (id !== undefined)
+		await expect
+			.poll(
+				async () => registerIdOf(await bar.getAttribute('data-register-id').catch(() => null)),
+				{ timeout }
+			)
+			.toBe(id);
+	await expect(page.getByTestId('cart-column-loading')).toHaveCount(0, { timeout });
+	log.info(`[register] bound to ${id}, cart ready`);
 }

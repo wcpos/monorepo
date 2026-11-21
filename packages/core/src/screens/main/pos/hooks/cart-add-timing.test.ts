@@ -3,6 +3,8 @@ import {
 	cancelCartAddTiming,
 	commitCartAddTiming,
 	getCartAddTiming,
+	markCartAddTiming,
+	pendingCartAddSequence,
 	subscribeCartAddTiming,
 } from '../../../../../e2e/cart-add-timing';
 
@@ -113,5 +115,142 @@ describe('cart add handler-to-commit timing', () => {
 		unsubscribe();
 		commitCartAddTiming('subscriber', [{ product_id: 1, quantity: 1 }]);
 		expect(sequences).toEqual([before + 1]);
+	});
+
+	describe('per-step marks', () => {
+		const now = (ms: number) => jest.mocked(performance.now).mockReturnValue(ms);
+
+		it('puts the marks of a pending add on the completed sample, rising in order', () => {
+			const sequence = beginCartAddTiming('marks', 42, 0, 100);
+			now(110.4);
+			markCartAddTiming('queued', sequence);
+			now(150);
+			markCartAddTiming('birthRead', sequence);
+			now(400.6);
+			markCartAddTiming('hooks', sequence);
+			now(900);
+			markCartAddTiming('written', sequence);
+			commitCartAddTiming('marks', [{ product_id: 42, quantity: 1 }]);
+			const { marks } = getCartAddTiming();
+			expect(marks).toEqual({ queued: 10, birthRead: 50, hooks: 301, written: 800 });
+			expect(Object.keys(marks ?? {})).toEqual(['queued', 'birthRead', 'hooks', 'written']);
+		});
+
+		it('keeps the first value when a mark is recorded twice', () => {
+			const sequence = beginCartAddTiming('first-wins', 42, 0, 100);
+			now(120);
+			markCartAddTiming('hooks', sequence);
+			now(700);
+			markCartAddTiming('hooks', sequence);
+			commitCartAddTiming('first-wins', [{ product_id: 42, quantity: 1 }]);
+			expect(getCartAddTiming().marks).toEqual({ hooks: 20 });
+		});
+
+		it('clears the previous add’s marks when a new add begins', () => {
+			const previous = beginCartAddTiming('previous', 42, 0, 100);
+			now(130);
+			markCartAddTiming('queued', previous);
+			markCartAddTiming('written', previous);
+			commitCartAddTiming('previous', [{ product_id: 42, quantity: 1 }]);
+			const next = beginCartAddTiming('next', 42, 0, 200);
+			now(260);
+			markCartAddTiming('hooks', next);
+			commitCartAddTiming('next', [{ product_id: 42, quantity: 1 }]);
+			expect(getCartAddTiming().marks).toEqual({ hooks: 60 });
+		});
+
+		// The next begin resets marks, so a stray mark is only visible as a clock read.
+		it('does not record a mark while idle or overlapping', () => {
+			const idle = beginCartAddTiming('idle-marks', 42, 0, 100);
+			cancelCartAddTiming(idle);
+			expect(getCartAddTiming().status).toBe('idle');
+			jest.mocked(performance.now).mockClear();
+			markCartAddTiming('queued', idle);
+			expect(performance.now).not.toHaveBeenCalled();
+			const first = beginCartAddTiming('overlap-marks', 42, 0, 100);
+			const second = beginCartAddTiming('overlap-marks', 42, 0, 110);
+			expect(getCartAddTiming().status).toBe('overlap');
+			markCartAddTiming('birthRead', second);
+			expect(performance.now).not.toHaveBeenCalled();
+			cancelCartAddTiming(first);
+			cancelCartAddTiming(second);
+		});
+
+		it('records a mark without notifying subscribers', () => {
+			const sequence = beginCartAddTiming('quiet', 42, 0, 100);
+			const listener = jest.fn();
+			const unsubscribe = subscribeCartAddTiming(listener);
+			markCartAddTiming('queued', sequence);
+			markCartAddTiming('hooks', sequence);
+			expect(listener).not.toHaveBeenCalled();
+			unsubscribe();
+			cancelCartAddTiming(sequence);
+		});
+
+		it('keeps sequence and status first and marks last in the serialised sample', () => {
+			const sequence = beginCartAddTiming('serialised', 42, 0, 100);
+			markCartAddTiming('queued', sequence);
+			commitCartAddTiming('serialised', [{ product_id: 42, quantity: 1 }]);
+			const sample = getCartAddTiming();
+			expect(JSON.stringify(sample)).toMatch(/^\{"sequence":\d+,"status":"complete"/);
+			expect(Object.keys(sample).pop()).toBe('marks');
+		});
+
+		it('records no mark outside explicitly instrumented runs', () => {
+			const sequence = beginCartAddTiming('inert-marks', 42, 0, 100);
+			delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+			now(500);
+			markCartAddTiming('queued', sequence);
+			process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+			commitCartAddTiming('inert-marks', [{ product_id: 42, quantity: 1 }]);
+			expect(getCartAddTiming().marks).toEqual({});
+		});
+
+		it('a mark that arrives after the commit is published into the completed sample', () => {
+			const sequence = beginCartAddTiming('late-written', 42, 0, 100);
+			now(150);
+			commitCartAddTiming('late-written', [{ product_id: 42, quantity: 1 }]);
+			const completed = getCartAddTiming();
+			expect(completed).toMatchObject({ status: 'complete', durationMs: 50 });
+			const listener = jest.fn();
+			const unsubscribe = subscribeCartAddTiming(listener);
+			now(251.4);
+			markCartAddTiming('written', sequence);
+			expect(getCartAddTiming()).toEqual({ ...completed, marks: { written: 151 } });
+			expect(listener).toHaveBeenCalledTimes(1);
+			unsubscribe();
+		});
+
+		it("a late mark from an older add never lands on a newer add's sample", () => {
+			const s1 = beginCartAddTiming('older', 42, 0, 100);
+			commitCartAddTiming('older', [{ product_id: 42, quantity: 1 }]);
+			beginCartAddTiming('newer', 42, 0, 100);
+			now(180);
+			markCartAddTiming('written', s1);
+			expect(getCartAddTiming().marks?.written).toBeUndefined();
+			commitCartAddTiming('newer', [{ product_id: 42, quantity: 1 }]);
+			expect(getCartAddTiming()).toMatchObject({ status: 'complete', marks: {} });
+			expect(getCartAddTiming().marks?.written).toBeUndefined();
+		});
+
+		it('a mark without a sequence is ignored', () => {
+			beginCartAddTiming('no-sequence', 42, 0, 100);
+			markCartAddTiming('queued', undefined);
+			commitCartAddTiming('no-sequence', [{ product_id: 42, quantity: 1 }]);
+			expect(getCartAddTiming()).toMatchObject({ status: 'complete' });
+			expect(getCartAddTiming().marks).toEqual({});
+		});
+
+		it('pendingCartAddSequence names only a pending add', () => {
+			cancelCartAddTiming(getCartAddTiming().sequence);
+			expect(pendingCartAddSequence()).toBeUndefined();
+			const sequence = beginCartAddTiming('pending-sequence', 42, 0, 100);
+			expect(pendingCartAddSequence()).toBe(sequence);
+			delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+			expect(pendingCartAddSequence()).toBeUndefined();
+			process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+			commitCartAddTiming('pending-sequence', [{ product_id: 42, quantity: 1 }]);
+			expect(pendingCartAddSequence()).toBeUndefined();
+		});
 	});
 });

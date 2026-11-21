@@ -4,6 +4,7 @@ import { File, Paths } from 'expo-file-system';
 import { AppInfo } from '../app-info';
 import { DEFAULT_APP_SCHEME } from '../app-info/scheme';
 import {
+	BUILD_COMMIT,
 	buildCaptureOptions,
 	createPendingCaptures,
 	prepareEvent,
@@ -70,6 +71,7 @@ function initialize(): void {
 		enableWatchdogTerminationTracking: true,
 		// iOS native request breadcrumbs bypass beforeBreadcrumb, so a URL query could reach Sentry unmasked.
 		enableNetworkBreadcrumbs: false,
+		initialScope: { tags: { build_commit: BUILD_COMMIT } },
 	});
 	isInitialized = true;
 	const file = installIdFile();

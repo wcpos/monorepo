@@ -9,17 +9,11 @@ import type { SyncCollectionName } from '@wcpos/sync-engine';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { manualSyncInFlight$ } from './manual-sync-in-flight';
 import { useT } from '../../../contexts/translations';
 
 const manualSyncLogger = getLogger(['wcpos', 'health', 'manual-sync']);
 
-/**
- * One in-flight flag shared by every full manual-sync control. Row checks use the
- * collection subject below, and both operations refuse to start while either is active.
- * Transient by construction (true only while a sync promise is in flight), so it never
- * carries stale state across store switches.
- */
-const manualSyncInFlight$ = new BehaviorSubject(false);
 const collectionCheckInFlight$ = new BehaviorSubject<string | null>(null);
 
 function showReportToast(
