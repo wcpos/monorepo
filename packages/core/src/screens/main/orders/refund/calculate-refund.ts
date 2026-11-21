@@ -32,13 +32,14 @@ export function calculateLineItemRefund(input: LineItemInput): LineItemRefund {
 	const { quantity, total, taxes, refundQty, dp = 2 } = input;
 
 	const zeroPad = (0).toFixed(dp);
+	const zero = {
+		refund_total: zeroPad,
+		refund_tax: taxes.map((tax) => ({ id: tax.id, refund_total: zeroPad })),
+	};
+	// A returned line (a negative quantity) sold nothing: its money went back inside the sale.
+	if (quantity <= 0) return zero;
 	const safeRefundQty = Math.min(Math.max(refundQty, 0), quantity);
-	if (safeRefundQty === 0 || quantity === 0) {
-		return {
-			refund_total: zeroPad,
-			refund_tax: taxes.map((tax) => ({ id: tax.id, refund_total: zeroPad })),
-		};
-	}
+	if (safeRefundQty === 0) return zero;
 
 	const ratio = safeRefundQty / quantity;
 	const refundTotal = roundHalfUp(parseFloat(total) * ratio, dp).toFixed(dp);

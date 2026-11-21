@@ -59,3 +59,29 @@ describe('countConditionsInSlot: the snapshot it judges', () => {
 		]);
 	});
 });
+
+describe('countConditionsInSlot: a sale below zero and a returned line', () => {
+	const slot = (payload: Record<string, unknown>) =>
+		countConditionsInSlot(
+			{ getLatest: () => ({ payload: payload as never }) },
+			{ read: { catalog: async () => managed(0) } },
+			ON
+		);
+
+	it('a total below zero, net of refunds, is unmet; exactly zero is not', async () => {
+		expect(await slot({ line_items: [line('b', -1)], total: '-4.00' })).toMatchObject([
+			{ id: 'total', reasonKey: 'pos.checkout_negative_total', lineUuid: '' },
+		]);
+		expect(await slot({ line_items: [line('b', -1)], total: '0.00' })).toEqual([]);
+		expect(
+			await slot({ line_items: [line('b', -1)], total: '6.00', refunds: [{ total: '-10.00' }] })
+		).toMatchObject([{ id: 'total' }]);
+	});
+
+	it('a returned line is never over stock and frees nothing for another line', async () => {
+		expect(await slot({ line_items: [line('b', -1)], total: '0' })).toEqual([]);
+		expect(await slot({ line_items: [line('a', 1), line('b', -1)], total: '0' })).toMatchObject([
+			{ id: 'stock', lineUuid: 'a' },
+		]);
+	});
+});

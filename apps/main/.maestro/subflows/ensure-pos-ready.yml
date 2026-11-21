@@ -138,6 +138,13 @@ appId: com.wcpos.main.dev
     commands:
       - tapOn:
           id: "products-settings-button"
+      # On phones #3674's footer leaves the Variations row below the dialog
+      # body's fold, so the tap landed on the footer (run 44903204312).
+      - scrollUntilVisible:
+          element:
+            id: "products-variations-style-inline"
+          direction: DOWN
+          timeout: 15000
       - tapOn:
           id: "products-variations-style-inline"
       - tapOn:

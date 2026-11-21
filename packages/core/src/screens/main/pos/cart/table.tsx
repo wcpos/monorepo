@@ -66,11 +66,12 @@ const cartTableFeatures = tableFeatures({ columnVisibilityFeature });
 const INPUT_COLUMN = { head: 'w-18 flex-none px-2', cell: 'w-18 flex-none px-2' };
 const TEXT_COLUMN = { head: 'w-20 flex-none pr-3 pl-2', cell: 'min-w-20 flex-none pr-3 pl-2' };
 const AMOUNT_COLUMNS: Record<string, { head: string; cell: string } | undefined> = {
-	quantity: { head: 'w-12 flex-none pr-2 pl-3', cell: 'w-12 flex-none pr-2 pl-3' },
+	// The abbreviated head fits 42 px after a left gutter; Qty + Total equal main's, so Item keeps its width (#3652).
+	quantity: { head: 'w-14 flex-none pl-2 pr-0', cell: 'w-14 flex-none pl-2 pr-0' },
 	price: INPUT_COLUMN,
 	regular_price: INPUT_COLUMN,
 	subtotal: TEXT_COLUMN,
-	total: TEXT_COLUMN,
+	total: { head: 'w-18 flex-none pr-3 pl-0', cell: 'min-w-18 flex-none pr-3 pl-0' },
 };
 /** The split picker's quantity column holds `− n of m +`: two 44 buttons and the count. */
 const PICKER_QUANTITY_COLUMN = { head: 'w-40 flex-none px-2', cell: 'w-40 flex-none px-2' };
@@ -277,9 +278,14 @@ export function CartTable({
 				return {
 					id: col.key,
 					header: ({ column }: { column: Column<CartTableLine, unknown, CartTableFeatures> }) => (
-						<Text numberOfLines={1}>
+						<Text
+							numberOfLines={1}
+							accessibilityLabel={
+								column.id === 'quantity' && !picking ? t('pos_cart.quantity') : undefined
+							}
+						>
 							{{
-								quantity: picking ? t('pos_checkout.this_payment') : t('pos_cart.col_qty'),
+								quantity: picking ? t('pos_checkout.this_payment') : t('pos_cart.qty_abbrev'),
 								name: t('pos_cart.col_item'),
 								price: t('pos_cart.col_price'),
 								total: t('pos_cart.col_total'),

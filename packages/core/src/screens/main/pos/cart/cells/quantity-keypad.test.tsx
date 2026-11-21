@@ -11,6 +11,10 @@ const mockUpdateCartLine = jest.fn().mockResolvedValue({});
 let mockOnChangeText: (value: number) => Promise<boolean>;
 const mockSplitLineItem = jest.fn();
 const mockRemoveLineItem = jest.fn();
+const mockSignedQuantityAllowed = jest.fn(() => true);
+jest.mock('../signed-quantity', () => ({
+	signedQuantityAllowed: () => mockSignedQuantityAllowed(),
+}));
 jest.mock('../../hooks/use-remove-line-item', () => ({
 	useRemoveLineItem: () => ({ removeLineItem: mockRemoveLineItem }),
 }));
@@ -61,8 +65,10 @@ jest.mock('../../../components/amount-field', () => ({
 		onRemove,
 		ref,
 		className,
+		signed,
 	}: {
 		testID: string;
+		signed?: boolean;
 		value: number;
 		onCommit: (value: number) => Promise<boolean>;
 		onRemove: () => void;
@@ -70,17 +76,21 @@ jest.mock('../../../components/amount-field', () => ({
 		className?: string;
 	}) => {
 		mockOnChangeText = onCommit;
+		// The real keypad's signed rows are components' quantity-keypad tests; here Return stands for them.
 		return (
-			<input
-				ref={ref}
-				className={className}
-				data-testid={testID}
-				defaultValue={value}
-				onKeyDown={(event) => {
-					if (event.key === 'Enter') void onCommit(Number(event.currentTarget.value));
-					if (event.key === 'Delete') onRemove();
-				}}
-			/>
+			<>
+				{signed ? <button data-testid="keypad-key-sign" /> : null}
+				<input
+					ref={ref}
+					className={className}
+					data-testid={testID}
+					defaultValue={value}
+					onKeyDown={(event) => {
+						if (event.key === 'Enter') void onCommit(Number(event.currentTarget.value));
+						if (event.key === 'Delete') onRemove();
+					}}
+				/>
+			</>
 		);
 	},
 }));
@@ -130,6 +140,30 @@ it('a mounted keypad is what the notice opens; it registers no scroll of its own
 	unmount();
 	openLineQuantity('line-q');
 	expect(document.activeElement).not.toBe(input);
+});
+
+describe('the Return key follows signedQuantityAllowed()', () => {
+	const props = {
+		row: { original: { uuid: 'line-s', type: 'line_items', item: { quantity: 2 } } },
+		column: { columnDef: { meta: { show: () => false } } },
+	} as unknown as React.ComponentProps<typeof Quantity>;
+	afterEach(() => mockSignedQuantityAllowed.mockReturnValue(true));
+
+	it('allowed: the cart line keypad is signed, and a −1 commits as the line quantity', () => {
+		mockUpdateCartLine.mockClear();
+		render(<Quantity {...props} />);
+		expect(screen.getByTestId('keypad-key-sign')).toBeTruthy();
+		const input = screen.getByTestId('cart-quantity-input');
+		fireEvent.change(input, { target: { value: '-1' } });
+		fireEvent.keyDown(input, { key: 'Enter' });
+		expect(mockUpdateCartLine).toHaveBeenCalledWith('line_items', 'line-s', { quantity: -1 });
+	});
+
+	it('not allowed (a fiscal module): no Return key, the unsigned keypad', () => {
+		mockSignedQuantityAllowed.mockReturnValue(false);
+		render(<Quantity {...props} />);
+		expect(screen.queryByTestId('keypad-key-sign')).toBeNull();
+	});
 });
 
 it('the Split link passes its line uuid to the split hook', () => {
