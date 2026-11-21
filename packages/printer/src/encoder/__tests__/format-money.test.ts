@@ -181,5 +181,7 @@ describe('formatMoney sign', () => {
 	it('writes a true minus in the ISO-code and plain fallbacks', () => {
 		expect(formatMoney(-3, 'EUR', 'en-US', 2, asciiOnly)).toMatch(/^\u2212EUR\s3\.00$/);
 		expect(formatMoney(-5, 'NOPE!', 'en-US', 2)).toBe('NOPE! \u22125.00');
+		// A hyphen in the currency label is the label's own; only the amount's sign changes.
+		expect(formatMoney(-5, 'CUSTOM-USD', 'en-US', 2)).toBe('CUSTOM-USD \u22125.00');
 	});
 });
