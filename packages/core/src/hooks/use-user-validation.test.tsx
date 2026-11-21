@@ -48,8 +48,6 @@ const mockLogWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	...jest.requireActual('@wcpos/utils/logger'),
 	getDatabaseEpoch: () => 0,
-	// The shared logger mock has no redactor; the preview test needs the real one.
-	redactSensitiveText: jest.requireActual('../../../utils/src/logger/redact').redactSensitiveText,
 	// Delegate lazily: the hook calls getLogger at module scope, before the spies exist.
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockLogError(...args),
@@ -513,5 +511,21 @@ describe('useUserValidation when the cashier body is text, not JSON (POS-2KN)', 
 		expect(context.bodyPreview as string).toMatch(/^xxxx/);
 		expect((context.bodyPreview as string).length).toBeLessThanOrEqual(120);
 		expect(context.bodyPreview as string).not.toContain('admin:');
+	});
+
+	it("redacts URL userinfo that crosses the parser's own preview cut", async () => {
+		// A `{` with no parseable JSON makes extractValidJSON log its own SYNC131 row; the
+		// userinfo starts before char 200 and its `@` falls after it.
+		await validateWith(
+			'x'.repeat(180) + ' { https://admin:hunter2secretpw@example.com/ <html>no json</html>'
+		);
+
+		const rows = callsWithCode(mockLogError, 'SYNC131');
+		expect(rows).toHaveLength(1);
+		const preview = rows[0][1]?.context?.responsePreview;
+		expect(typeof preview).toBe('string');
+		expect((preview as string).length).toBeLessThanOrEqual(200);
+		expect(preview as string).not.toContain('admin:');
+		auth999Context();
 	});
 });

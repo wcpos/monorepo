@@ -1,4 +1,4 @@
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, redactSensitiveText } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const httpLogger = getLogger(['wcpos', 'http', 'rest']);
@@ -47,7 +47,7 @@ export function extractValidJSON(responseString: string) {
 		httpLogger.error('Server returned invalid response - no JSON found', {
 			code: ERROR_CODES.STORE_SERVER_ERROR,
 			context: {
-				responsePreview: responseString.substring(0, 200),
+				responsePreview: redactSensitiveText(responseString).substring(0, 200),
 			},
 		});
 		return null;
@@ -73,7 +73,7 @@ export function extractValidJSON(responseString: string) {
 	httpLogger.error('Unable to parse server response', {
 		code: ERROR_CODES.STORE_SERVER_ERROR,
 		context: {
-			responsePreview: responseString.substring(0, 200),
+			responsePreview: redactSensitiveText(responseString).substring(0, 200),
 		},
 	});
 	return null;
