@@ -227,6 +227,24 @@ it('passes a fee or shipping line edit straight through', async () => {
 	expect(readCatalog).not.toHaveBeenCalled();
 	expect(next).toHaveBeenCalledTimes(1);
 });
+it('passes a returned line stepping towards zero (−2 to −1) straight through: it takes no stock', async () => {
+	readCatalog.mockResolvedValue({ manage_stock: false, stock_status: 'outofstock' });
+	const line = { ...e.payload.line, quantity: -2 };
+	const event = {
+		...e,
+		event: 'cart.line.update' as const,
+		payload: {
+			type: 'line_items' as const,
+			lineUuid: 'line',
+			line,
+			lineItems: [line],
+			changes: { quantity: -1 },
+			options: {},
+		},
+	};
+	expect(await stockGuardOnUpdate(ctx, event, next)).toBe('saved');
+	expect(readCatalog).not.toHaveBeenCalled();
+});
 it('evaluates a quantity increase excluding the target line from the stock total', async () => {
 	readCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 3, backorders: 'no' });
 	const line = { ...e.payload.line, meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line' }] };
