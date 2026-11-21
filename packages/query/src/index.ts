@@ -114,6 +114,7 @@ export {
 export {
 	fetchFreshRecords,
 	refreshStockFor,
+	requireRenderedOrders,
 	watchVariationParentRefresh,
 } from './reads/refresh-demands';
 export { searchCatalogByBarcode, readProductByWooId } from './reads/barcode-search';

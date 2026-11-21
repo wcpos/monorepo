@@ -3,11 +3,13 @@
  */
 import { act, waitFor } from '@testing-library/react';
 
+import type { RemoteId } from '@wcpos/sync-core';
 import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import {
 	fetchFreshRecords,
 	refreshStockFor,
+	requireRenderedOrders,
 	watchVariationParentRefresh,
 } from '../src/reads/refresh-demands';
 
@@ -390,5 +392,20 @@ describe('fetchFreshRecords', () => {
 		});
 		await expect(fetchFreshRecords(engine, requests)).rejects.toBe(error);
 		expect(releases[0]).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('requireRenderedOrders', () => {
+	it('forces a re-read of the rendered orders and returns the engine handle', () => {
+		const handle = requireRenderedOrders(engine, ['37', '38'] as RemoteId[]);
+		expect(mockRequire).toHaveBeenCalledTimes(1);
+		expect(mockRequire).toHaveBeenCalledWith({
+			id: 'orders:rendered-refresh',
+			collection: 'orders',
+			kind: 'targeted-records',
+			remoteIds: ['37', '38'],
+			forceRefresh: true,
+		});
+		expect(handle).toBe(mockRequire.mock.results[0].value);
 	});
 });

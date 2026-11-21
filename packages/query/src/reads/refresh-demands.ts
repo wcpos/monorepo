@@ -36,6 +36,20 @@ export async function fetchFreshRecords(
 	}
 }
 
+/** Force a re-read of the orders a view is showing; the caller owns the handle and releases it. */
+export function requireRenderedOrders(
+	engine: RxdbSyncEngine,
+	remoteIds: readonly RemoteId[]
+): ReturnType<RxdbSyncEngine['require']> {
+	return engine.require({
+		id: 'orders:rendered-refresh',
+		collection: 'orders',
+		kind: 'targeted-records',
+		remoteIds: [...remoteIds],
+		forceRefresh: true,
+	});
+}
+
 type LineItems = import('@wcpos/database').OrderDocument['line_items'];
 
 const stockLogger = getLogger(['wcpos', 'stock-adjustment']);

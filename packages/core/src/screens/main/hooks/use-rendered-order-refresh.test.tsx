@@ -32,7 +32,10 @@ jest.mock('react-native', () => ({
 		return mockAppState;
 	},
 }));
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: mockEngine }) }));
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: mockEngine }),
+	requireRenderedOrders: jest.requireActual('@wcpos/query').requireRenderedOrders,
+}));
 jest.mock('../health/manual-sync-in-flight', () => ({
 	manualSyncInFlight$: new (jest.requireActual('rxjs').BehaviorSubject)(false),
 }));

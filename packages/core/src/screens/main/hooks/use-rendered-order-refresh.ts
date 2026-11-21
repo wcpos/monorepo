@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 import { useIsFocused } from 'expo-router';
 import { distinctUntilChanged, type Observable, skip } from 'rxjs';
 
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, requireRenderedOrders, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { manualSyncInFlight$ } from '../health/manual-sync-in-flight';
@@ -16,11 +16,11 @@ const logger = getLogger(['wcpos', 'orders', 'rendered-refresh']);
 export function useRenderedOrderRefresh(
 	results$: Observable<{ hits: { record?: Pick<EngineRecord<'orders'>, 'remoteId'> }[] }>
 ): void {
-	const { engine } = useQueryRuntime();
+	const runtime = useQueryRuntime();
 	const focused = useIsFocused();
 	const [appState, setAppState] = React.useState(AppState.currentState);
 	const ids = React.useRef<NonNullable<EngineRecord<'orders'>['remoteId']>[]>([]);
-	const inFlight = React.useRef<ReturnType<typeof engine.require> | null>(null);
+	const inFlight = React.useRef<ReturnType<typeof requireRenderedOrders> | null>(null);
 	const active = focused && appState === 'active';
 
 	// Subscribe without rendering: each pass reads the latest rows, not a queued snapshot.
@@ -52,13 +52,7 @@ export function useRenderedOrderRefresh(
 		if (!active) return;
 		const pass = () => {
 			if (inFlight.current || ids.current.length === 0) return;
-			const handle = engine.require({
-				id: 'orders:rendered-refresh',
-				collection: 'orders',
-				kind: 'targeted-records',
-				remoteIds: ids.current,
-				forceRefresh: true,
-			});
+			const handle = requireRenderedOrders(runtime.engine, ids.current);
 			inFlight.current = handle;
 			void handle.ready
 				.catch(() => {
@@ -81,5 +75,5 @@ export function useRenderedOrderRefresh(
 			clearInterval(timer);
 			subscription.unsubscribe();
 		};
-	}, [active, engine]);
+	}, [active, runtime.engine]);
 }
