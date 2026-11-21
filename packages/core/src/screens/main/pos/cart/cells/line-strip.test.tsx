@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { LineStrip, onStage } from './line-strip';
 import { createOpenLine, type OpenLine } from '../open-line';
+import { StripEdgeContext } from './strip-clear';
 
 let mockPointer = 'coarse';
 const mockRemoveLineItem = jest.fn().mockResolvedValue(undefined);
@@ -541,5 +542,38 @@ describe('the strip closes with a mouse (the 2026-11-21 board)', () => {
 	it('the strip draws its tiles’ focus ring inside them', () => {
 		renderStrip();
 		expect(screen.getByTestId('cart-line-strip').getAttribute('data-ring')).toBe('inset');
+	});
+});
+
+describe('the open line tells its name cell where the strip begins', () => {
+	function Probe() {
+		const edge = React.useContext(StripEdgeContext);
+		return <span data-testid="edge">{edge === null ? 'none' : 'edge'}</span>;
+	}
+	function renderWithProbe() {
+		render(
+			<LineStrip
+				line={{ uuid: 'p', type: 'line_items', item: { name: 'p' } } as never}
+				rowRefs={{ current: new Map() }}
+				openLine={createOpenLine()}
+			>
+				{(wrapTotal) => [<Probe key="probe" />, wrapTotal('10')]}
+			</LineStrip>
+		);
+	}
+	const edge = () => screen.getByTestId('edge').textContent;
+	it('fine pointer: only while open', () => {
+		mockPointer = 'fine';
+		renderWithProbe();
+		expect(edge()).toBe('none');
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		expect(edge()).toBe('edge');
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		expect(edge()).toBe('none');
+	});
+	it('touch: never, open or not', () => {
+		renderWithProbe();
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		expect(edge()).toBe('none');
 	});
 });

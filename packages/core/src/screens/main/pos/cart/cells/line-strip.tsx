@@ -36,6 +36,7 @@ import { EditCartItemButton } from './edit-cart-item-button';
 import { EditFeeLineForm } from './edit-fee-line/form';
 import { EditLineItemForm } from './edit-line-item/form';
 import { EditShippingLineForm } from './edit-shipping-line/form';
+import { StripEdgeContext } from './strip-clear';
 
 import type { CartLine } from '../../hooks/utils';
 import type { OpenLine } from '../open-line';
@@ -79,6 +80,8 @@ const CLOSE_MIN = 72;
  * its 2 px `--card` gap) is drawn inside each tile: `global.css`, Controls tier.
  */
 const INSET_RING = 'inset';
+/** An open line's name ends this far before the strip's leading edge (the board's 12 px). */
+const NAME_CLEAR = 12;
 /** The row leaving: accelerate into the edge, the shared exit. */
 const FLY = { duration: PANEL_SLIDE_OUT, easing: EASE_EXIT };
 /**
@@ -114,6 +117,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 	const [closeWidth, setCloseWidth] = React.useState(0);
 	/** Fine pointer: the total's leading edge to the row's trailing edge, the footprint Close covers. */
 	const [totalReach, setTotalReach] = React.useState(0);
+	const [rowRight, setRowRight] = React.useState(0);
 	// Touch has no Close tile: the strip is pulled open and pushed back by the finger.
 	const trailing = removeWidth + (fine ? closeWidth : 0);
 	const stripWidth = editWidth + trailing;
@@ -122,12 +126,15 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 	const measureReach = () => {
 		const row = dom(rowView)?.getBoundingClientRect?.();
 		const total = dom(totalView)?.getBoundingClientRect?.();
-		if (fine && row && total) setTotalReach(Math.round(row.right - total.left));
+		if (!fine || !row || !total) return;
+		setTotalReach(Math.round(row.right - total.left));
+		setRowRight(row.right);
 	};
 	const focusTotal = () => dom(totalView)?.focus?.({ preventScroll: true });
 	/** Close was pressed with the pointer over the total: no peek until the pointer has left it. */
 	const hushed = React.useRef(false);
 	const [open, setOpenState] = React.useState(false);
+	const edge = fine && open ? rowRight - stripWidth - NAME_CLEAR : null;
 	const [dragging, setDragging] = React.useState(false);
 	/**
 	 * Web: the body's DOM node, and the pointer that is down on it. Gesture Handler captures
@@ -497,7 +504,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 					}
 					style={style}
 				>
-					{children(wrapTotal)}
+					<StripEdgeContext.Provider value={edge}>{children(wrapTotal)}</StripEdgeContext.Provider>
 					{open ? (
 						// A press on the open line's own name or quantity closes the strip and does nothing else.
 						<Pressable
