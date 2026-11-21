@@ -136,7 +136,8 @@ function WebView({
 			source={source}
 			onMessage={(event: WebViewMessageEvent) => {
 				// Admit only the pin's host/www twin and same scheme or http-to-https upgrade;
-				// react-native-webview names the sending frame's URL.
+				// on iOS react-native-webview names the sending frame's URL; on Android it names the
+				// top-level page (`mWebView.getUrl()`), so a frame inside the pinned page is admitted there.
 				if (targetOrigin && !senderAdmitted(eventURL(event), targetOrigin)) {
 					if (!loggedDropRef.current) {
 						loggedDropRef.current = true;
