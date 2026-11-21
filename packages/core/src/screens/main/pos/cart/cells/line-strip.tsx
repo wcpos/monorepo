@@ -75,10 +75,7 @@ const ARM = 120;
  * Remove, and a double click opens and closes (the 2026-11-21 strip board).
  */
 const CLOSE_MIN = 72;
-/**
- * The strip's tiles abut and the row clips, so their focus ring (the Button's 2 px `--ring` and
- * its 2 px `--card` gap) is drawn inside each tile: `global.css`, Controls tier.
- */
+/** The abutting tiles draw the Button's focus ring and gap inside them (`global.css`, Controls tier). */
 const INSET_RING = 'inset';
 /** An open line's name ends this far before the strip's leading edge (the board's 12 px). */
 const NAME_CLEAR = 12;
@@ -98,6 +95,11 @@ export function onStage(x: number): number {
 /** A view's web DOM node: a fine pointer and its keyboard exist only there. */
 function dom(ref: React.RefObject<unknown>) {
 	return ref.current as unknown as HTMLElement | null;
+}
+/** Enter or Space: react-native-web presses with a click no pointer made (`detail` 0, Chromium). */
+function byKey(event: unknown) {
+	const press = event as { detail?: number; nativeEvent?: { detail?: number } } | undefined;
+	return (press?.nativeEvent ?? press)?.detail === 0;
 }
 type Props = {
 	line: { uuid: string; type: 'line_items' | 'fee_lines' | 'shipping_lines'; item: CartLine };
@@ -135,6 +137,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 	const hushed = React.useRef(false);
 	const [open, setOpenState] = React.useState(false);
 	const edge = fine && open ? rowRight - stripWidth - NAME_CLEAR : null;
+	const tile = open ? 0 : -1; // Closed, no tab stops: Tab never walks into a hidden Remove.
 	const [dragging, setDragging] = React.useState(false);
 	/**
 	 * Web: the body's DOM node, and the pointer that is down on it. Gesture Handler captures
@@ -250,12 +253,8 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 	const peek = () => {
 		offset.set(reduced ? -PEEK : withSpring(-PEEK, PEEK_SPRING));
 	};
-	/**
-	 * Web, while open: a press anywhere outside this line closes it and still does what it landed
-	 * on (a product tile adds, another total opens its line), so it is heard on the way down and
-	 * never stopped. Escape closes it too, unless the focus is somewhere else (an Edit sheet's own
-	 * Escape is the sheet's).
-	 */
+	// Web, while open: a press outside closes it and still lands (heard on the way down, never
+	// stopped). Escape closes it too, unless the focus is elsewhere (an Edit sheet's Escape is its own).
 	const onOutsidePress = React.useEffectEvent((event: PointerEvent) => {
 		if (!dom(rowView)?.contains(event.target as Node)) close();
 	});
@@ -395,7 +394,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 				// Interrupted (another gesture took it, the touch was cancelled): not a release,
 				// never a removal. Back to the rest it started from (Codex, #2447).
 				arm(false);
-				settle(open ? -stripWidth : 0);
+				settle(opened.get() ? -stripWidth : 0);
 				return;
 			}
 			const revealed = -Math.max(
@@ -454,9 +453,8 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 					if (leaving.get()) return;
 					setOpen(!open);
 					settle(open ? 0 : -stripWidth);
-					// Enter or Space (react-native-web presses on the keyup): the strip opens onto Edit,
-					// the first of its buttons in reading order.
-					if (!open && (event as { type?: string }).type === 'keyup') {
+					// Enter or Space: the strip opens onto Edit, its first button in reading order.
+					if (!open && byKey(event)) {
 						dom(rowView)
 							?.querySelector<HTMLElement>(`[data-ring="${INSET_RING}"] [role="button"]`)
 							?.focus({ preventScroll: true });
@@ -484,10 +482,11 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 	 * rowRefs); this cell only handles the remove flow.
 	 */
 	return (
+		// Clipped, not hidden, on web: focus scrolls an `overflow: hidden` box, and slid the row sideways.
 		<View
 			ref={rowView}
 			testID="cart-line-row"
-			className="relative flex-1 overflow-hidden"
+			className="web:overflow-clip relative flex-1 overflow-hidden"
 			onLayout={(e) => {
 				setRowWidth(e.nativeEvent.layout.width);
 				measureReach();
@@ -510,7 +509,8 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 						<Pressable
 							testID="cart-line-close-catch"
 							className="absolute inset-0"
-							focusable={false}
+							tabIndex={-1}
+							aria-hidden
 							onPress={() => {
 								if (swiped.get()) swiped.set(false);
 								else close();
@@ -521,7 +521,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 			</GestureDetector>
 			<Animated.View
 				testID="cart-line-strip-window"
-				className="absolute inset-0 overflow-hidden"
+				className="web:overflow-clip absolute inset-0 overflow-hidden"
 				style={windowStyle}
 				pointerEvents="box-none"
 			>
@@ -552,6 +552,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 					    would show a hairline of the strip's red there. */}
 						<View className="bg-primary absolute inset-y-0 right-full w-1" />
 						<EditCartItemButton
+							tabIndex={tile}
 							title={title}
 							item={item}
 							form={
@@ -583,6 +584,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 						<Button
 							variant="destructive"
 							testID="cart-line-remove"
+							tabIndex={tile}
 							// The swipe block fills the row it sits under, square (the 2026-10-08 swipe ruling).
 							// eslint-disable-next-line no-restricted-syntax
 							className="min-w-tile h-auto rounded-none px-5"
@@ -603,11 +605,12 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 							<Button
 								variant="ghost"
 								testID="cart-line-close"
+								tabIndex={tile}
 								// eslint-disable-next-line no-restricted-syntax
 								className="h-auto flex-1 rounded-none"
 								onPress={(event) => {
 									// The pointer that pressed Close is over the total again once the strip leaves.
-									hushed.current = (event as { type?: string } | undefined)?.type !== 'keyup';
+									hushed.current = !byKey(event);
 									close();
 									focusTotal();
 								}}

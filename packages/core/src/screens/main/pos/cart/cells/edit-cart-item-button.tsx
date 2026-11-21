@@ -13,10 +13,11 @@ interface Props {
 	/** The cart line: the record the form edits and what the JSON tab shows. */
 	item: object;
 	form: React.ReactNode;
+	tabIndex?: 0 | -1;
 }
 
 /** The line strip's Edit block and the record dialog it opens on the line. */
-function EditCartItemButton({ title, item, form }: Props) {
+function EditCartItemButton({ title, item, form, tabIndex }: Props) {
 	const t = useT();
 	const side = usePanelSide('cart');
 	const [openDialog, setOpenDialog] = React.useState(false);
@@ -32,6 +33,7 @@ function EditCartItemButton({ title, item, form }: Props) {
 					// eslint-disable-next-line no-restricted-syntax
 					className="min-w-tile h-auto flex-1 rounded-none px-5"
 					testID="cart-line-edit"
+					tabIndex={tabIndex}
 					onPress={() => setOpenDialog(true)}
 				>
 					{t('pos_cart.edit_line')}

@@ -17,12 +17,12 @@ let mockFinalize: (event: { translationX: number; velocityX: number }, success: 
 let mockTotalProps: {
 	onHoverIn?: () => void;
 	onHoverOut?: () => void;
-	onPress?: (event: { type: string; stopPropagation: () => void }) => void;
 	className?: string;
 };
 const mockLayouts: Record<string, (event: { nativeEvent: { layout: { width: number } } }) => void> =
 	{};
 const mockDisabled: unknown[] = [];
+let mockRowClasses: string | undefined;
 const mockButtonProps: Record<string, { variant?: string; className?: string }> = {};
 
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => mockPointer }));
@@ -38,7 +38,9 @@ jest.mock('../../hooks/use-remove-line-item', () => ({
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
 jest.mock('./edit-cart-item-button', () => ({
-	EditCartItemButton: () => <button role="button" data-testid="cart-line-edit" />,
+	EditCartItemButton: ({ tabIndex }: { tabIndex?: number }) => (
+		<button role="button" data-testid="cart-line-edit" tabIndex={tabIndex} />
+	),
 }));
 jest.mock('./edit-line-item/form', () => ({ EditLineItemForm: () => null }));
 jest.mock('./edit-fee-line/form', () => ({ EditFeeLineForm: () => null }));
@@ -51,7 +53,9 @@ jest.mock('@wcpos/components/button', () => ({
 		disabled,
 		variant,
 		className,
+		tabIndex,
 	}: React.PropsWithChildren<{
+		tabIndex?: number;
 		testID: string;
 		onPress: () => void;
 		disabled?: boolean;
@@ -61,7 +65,7 @@ jest.mock('@wcpos/components/button', () => ({
 		mockDisabled.push(disabled);
 		mockButtonProps[testID] = { variant, className };
 		return (
-			<button role="button" data-testid={testID} onClick={onPress}>
+			<button role="button" data-testid={testID} onClick={onPress} tabIndex={tabIndex}>
 				{children}
 			</button>
 		);
@@ -77,6 +81,7 @@ jest.mock('react-native', () => {
 		// Not a component to the compiler lint: the mock only records each slot's layout handler.
 		View: (props: React.ComponentProps<typeof actual.View>) => {
 			if (props.onLayout && props.testID) mockLayouts[props.testID] = props.onLayout;
+			if (props.testID === 'cart-line-row') mockRowClasses = props.className;
 			return <actual.View {...props} />;
 		},
 		Pressable: (props: React.ComponentProps<typeof actual.Pressable>) => {
@@ -447,11 +452,21 @@ describe('the strip closes with a mouse (the 2026-11-21 board)', () => {
 	it('after Close, the pointer still on the total does not peek until it has left and come back', () => {
 		mockPointer = 'fine';
 		renderStrip({ close: CLOSE });
-		fireEvent.click(screen.getByTestId('cart-line-total'));
-		fireEvent.click(screen.getByTestId('cart-line-close'));
+		// A mouse click: the browser counts it (`detail` 1).
+		fireEvent.click(screen.getByTestId('cart-line-total'), { detail: 1 });
+		fireEvent.click(screen.getByTestId('cart-line-close'), { detail: 1 });
 		act(() => mockTotalProps.onHoverIn?.());
 		expect(mockOffsetSet).toHaveBeenLastCalledWith(0);
 		act(() => mockTotalProps.onHoverOut?.());
+		act(() => mockTotalProps.onHoverIn?.());
+		expect(mockOffsetSet).toHaveBeenLastCalledWith(-16);
+	});
+	it('Close pressed from the keyboard does not hold back the next peek', () => {
+		mockPointer = 'fine';
+		renderStrip({ close: CLOSE });
+		fireEvent.click(screen.getByTestId('cart-line-total'), { detail: 0 });
+		// Enter or Space on a Button: react-native-web presses with a click no pointer made.
+		fireEvent.click(screen.getByTestId('cart-line-close'), { detail: 0 });
 		act(() => mockTotalProps.onHoverIn?.());
 		expect(mockOffsetSet).toHaveBeenLastCalledWith(-16);
 	});
@@ -475,9 +490,56 @@ describe('the strip closes with a mouse (the 2026-11-21 board)', () => {
 	it('Enter or Space on the total opens the strip with the focus on Edit', () => {
 		mockPointer = 'fine';
 		renderStrip({ close: CLOSE });
-		act(() => mockTotalProps.onPress?.({ type: 'keyup', stopPropagation: () => {} }));
+		const total = screen.getByTestId('cart-line-total');
+		total.focus();
+		// What Chromium hands react-native-web for Enter on the total: a click with `detail` 0.
+		fireEvent.click(total, { detail: 0 });
 		expect(isOpen()).toBe(true);
 		expect(document.activeElement).toBe(screen.getByTestId('cart-line-edit'));
+	});
+	it('an interrupted gesture bound before the strip opened sends it back to open, not home', () => {
+		// Gesture Handler finalizes a pan from an earlier render (seen in Chromium after Enter on the total).
+		renderStrip();
+		// The pan's finalize as bound while the strip was closed.
+		const bound = mockFinalize;
+		fireEvent.click(screen.getByTestId('cart-line-total'), { detail: 0 });
+		act(() => bound({ translationX: 0, velocityX: 0 }, false));
+		expect(mockOffsetSet).toHaveBeenLastCalledWith(-STRIP);
+		expect(isOpen()).toBe(true);
+	});
+	it('a mouse click on the total opens the strip and leaves the focus where it is', () => {
+		mockPointer = 'fine';
+		renderStrip({ close: CLOSE });
+		const total = screen.getByTestId('cart-line-total');
+		total.focus();
+		fireEvent.click(total, { detail: 1 });
+		expect(isOpen()).toBe(true);
+		expect(document.activeElement).toBe(total);
+	});
+	it('a closed strip offers no tab stops; open, Edit, Remove and Close are the tab order', () => {
+		mockPointer = 'fine';
+		renderStrip({ close: CLOSE });
+		const tiles = ['cart-line-edit', 'cart-line-remove', 'cart-line-close'];
+		const stops = () => tiles.map((id) => screen.getByTestId(id).getAttribute('tabindex'));
+		expect(stops()).toEqual(['-1', '-1', '-1']);
+		fireEvent.click(screen.getByTestId('cart-line-total'), { detail: 1 });
+		expect(stops()).toEqual(['0', '0', '0']);
+		const order = screen.getByTestId('cart-line-strip').querySelectorAll('[role="button"]');
+		expect(Array.from(order, (el) => el.getAttribute('data-testid'))).toEqual(tiles);
+	});
+	it("the open line's press catch is no tab stop and is hidden from assistive tech", () => {
+		renderStrip();
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		const catcher = screen.getByTestId('cart-line-close-catch');
+		expect(catcher.getAttribute('tabindex')).toBe('-1');
+		expect(catcher.getAttribute('aria-hidden')).toBe('true');
+	});
+	it('focus never scrolls the row: the row and the strip window clip on web', () => {
+		renderStrip();
+		expect(screen.getByTestId('cart-line-strip-window').getAttribute('data-classes')).toMatch(
+			/\bweb:overflow-clip\b/
+		);
+		expect(mockRowClasses).toMatch(/\bweb:overflow-clip\b/);
 	});
 	it('a press outside the open line closes it and still reaches what it landed on', () => {
 		const outside = jest.fn();

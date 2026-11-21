@@ -5,9 +5,8 @@ import type { LayoutChangeEvent } from 'react-native';
 export const StripEdgeContext = React.createContext<number | null>(null);
 
 /**
- * A cart line's name and meta while its strip is open on a fine pointer (the 2026-11-21 board):
- * each ends clear of the strip with an ellipsis and keeps the lines it had at rest, so the row's
- * height never moves. Measured from the DOM at rest; touch, native and a closed strip change nothing.
+ * A line's name and meta while its strip is open on a fine pointer: each ends clear of the strip
+ * on the lines it had at rest (measured from the DOM), so the row's height never moves.
  */
 export function useStripClear() {
 	const edge = React.useContext(StripEdgeContext);

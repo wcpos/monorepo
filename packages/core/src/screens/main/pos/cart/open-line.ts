@@ -1,15 +1,13 @@
 /**
- * Which cart line has its strip open: one per cart (the 2026-11-21 strip board). The cart table
- * holds one; a row says here when it opens and when it closes, and a row opening closes the row
- * that was open before it. The rows keep their own motion; only this fact is shared.
+ * Which cart line has its strip open: one per cart (2026-11-21 strip board), held by the cart
+ * table. Rows report opening and closing; a row opening closes the one open before it.
  */
 export type OpenLine = {
 	/** `uuid` opened; whichever row was open before it closes through its own `close`. */
 	opened: (uuid: string, close: () => void) => void;
 	/** `uuid` closed or left the cart: it is no longer the open row. */
 	closed: (uuid: string) => void;
-	/** Close whichever row is open (the cart scrolled). */
-	close: () => void;
+	close: () => void; // whichever row is open: the cart scrolled
 };
 
 export function createOpenLine(): OpenLine {
