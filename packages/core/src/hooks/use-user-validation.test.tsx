@@ -500,4 +500,18 @@ describe('useUserValidation when the cashier body is text, not JSON (POS-2KN)', 
 		expect(typeof context.bodyPreview).toBe('string');
 		expect(context.bodyPreview as string).not.toContain('SECRET123');
 	});
+
+	it('redacts URL userinfo that crosses the preview cut', async () => {
+		// The userinfo starts at char 109 and its `@` is at char 130: slicing first would
+		// drop the `@` and leave `admin:hunte…` unredacted.
+		await validateWith(
+			'x'.repeat(100) + ' https://admin:hunter2secretpw@example.com/ <html>no json</html>'
+		);
+
+		const context = auth999Context();
+		expect(typeof context.bodyPreview).toBe('string');
+		expect(context.bodyPreview as string).toMatch(/^xxxx/);
+		expect((context.bodyPreview as string).length).toBeLessThanOrEqual(120);
+		expect(context.bodyPreview as string).not.toContain('admin:');
+	});
 });

@@ -40,7 +40,7 @@ const appLogger = getLogger(['wcpos', 'app', 'validation']);
 const BODY_PREVIEW_CHARS = 120;
 
 function bodyPreview(body: string): string {
-	return redactSensitiveText(body.slice(0, BODY_PREVIEW_CHARS));
+	return redactSensitiveText(body).slice(0, BODY_PREVIEW_CHARS);
 }
 
 /** Mark an error as already logged, so the outer catch does not write a second row. */
