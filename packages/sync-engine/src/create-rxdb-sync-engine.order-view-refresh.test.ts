@@ -186,6 +186,43 @@ describe('manual order view refresh', () => {
 		}
 	});
 
+	it('an aborted manual sync does not re-walk the live order window', async () => {
+		let walks = 0;
+		const harness = await createEngineHarness({
+			mode: 'manual',
+			startAtMs: NOW,
+			fetch: async (url) => {
+				const params = new URL(url).searchParams;
+				if (
+					params.has('include') ||
+					params.get('pos_cashier') !== '7' ||
+					params.get('status') !== 'completed'
+				)
+					return Response.json([]);
+				walks += 1;
+				return Response.json([order()]);
+			},
+		});
+		const handle = harness.engine.require({
+			...view,
+			cashierId: 7,
+			store: '3',
+			status: 'completed',
+		});
+		try {
+			await handle.ready;
+			const before = walks;
+			expect(before).toBeGreaterThan(0);
+			const controller = new AbortController();
+			controller.abort();
+			await harness.engine.sync(undefined, { signal: controller.signal }).catch(() => undefined);
+			expect(walks).toBe(before);
+		} finally {
+			handle.release();
+			await harness.dispose();
+		}
+	});
+
 	it('does not walk an orders window when no view is live', async () => {
 		const harness = await createEngineHarness({
 			mode: 'manual',
