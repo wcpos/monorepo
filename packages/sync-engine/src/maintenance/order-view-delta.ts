@@ -23,12 +23,14 @@ export type OrderIngestPort = Pick<
 	'repository' | 'pendingMutationOrderIds' | 'discardHeldOpenCartRows'
 >;
 
+export type OrderViewDeltaCursor = { cursorSeconds: number; continuing: boolean };
+
 export async function tickOrderViewDelta(input: {
 	baseUrl: string;
 	fetcher: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 	ingest: () => OrderIngestPort;
 	viewKeys: readonly string[];
-	cursors: Map<string, number>;
+	cursors: Map<string, OrderViewDeltaCursor>;
 	now: () => number;
 	signal?: AbortSignal;
 	diagnostics?: SyncObserver;
@@ -38,17 +40,21 @@ export async function tickOrderViewDelta(input: {
 		const decision = parseOrderBrowserSchedulerDescriptor(key);
 		if (!decision?.descriptor || decision.skipReason || decision.descriptor.complete) continue;
 		const { cashierId, store } = decision.descriptor;
+		if (cashierId === undefined) continue;
 		scopes.set(`cashier=${cashierId ?? ''}|store=${store ?? ''}`, decision.descriptor);
 	}
 	const result = { scopes: 0, requests: 0, documents: 0, unsupported: false };
 	for (const [scopeKey, descriptor] of scopes) {
 		if (result.scopes >= ORDER_VIEW_DELTA_MAX_SCOPES) break;
 		result.scopes++;
-		const cursor =
-			input.cursors.get(scopeKey) ??
-			Math.floor(input.now() / 1_000) - ORDER_VIEW_DELTA_FIRST_LOOKBACK_SECONDS;
-		const bound = cursor - ORDER_VIEW_DELTA_OVERLAP_SECONDS;
-		let latest = cursor;
+		const cursor = input.cursors.get(scopeKey) ?? {
+			cursorSeconds: Math.floor(input.now() / 1_000) - ORDER_VIEW_DELTA_FIRST_LOOKBACK_SECONDS,
+			continuing: false,
+		};
+		const bound = cursor.cursorSeconds - (cursor.continuing ? 1 : ORDER_VIEW_DELTA_OVERLAP_SECONDS);
+		let latest = -Infinity;
+		let complete = false;
+		let serverNowSeconds = -Infinity;
 		const query = new URLSearchParams({
 			modified_after: wooGmtDate(bound),
 			dates_are_gmt: 'true',
@@ -70,17 +76,19 @@ export async function tickOrderViewDelta(input: {
 			result.requests++;
 			if (!response.ok && response.status !== 400)
 				throw new Error(`order-view-delta: HTTP ${response.status}`);
+			if (response.status === 400 && page > 1) break;
 			const payloads: WooOrderPayload[] = response.status === 400 ? [] : await response.json();
-			const modified = payloads.map((payload) =>
-				Math.floor(checkpointInstantMs(payload.date_modified_gmt) / 1_000)
-			);
+			const modified = payloads
+				.map((payload) => checkpointInstantMs(payload.date_modified_gmt))
+				.filter((ms) => Number.isFinite(ms) && ms > 0)
+				.map((ms) => Math.floor(ms / 1_000));
 			const reason =
 				response.status === 400
 					? 'status-400'
 					: modified.some((seconds) => seconds < bound)
 						? 'modified-after-ignored'
 						: null;
-			if (reason) {
+			if (page === 1 && reason) {
 				result.unsupported = true;
 				input.diagnostics?.({
 					type: 'engine.guard',
@@ -93,10 +101,23 @@ export async function tickOrderViewDelta(input: {
 			}
 			result.documents += await ingestPulledOrderPayloads(input.ingest(), payloads, requestedAt);
 			latest = Math.max(latest, ...modified);
-			if (payloads.length < ORDER_VIEW_DELTA_PER_PAGE) break;
+			if (payloads.length < ORDER_VIEW_DELTA_PER_PAGE) {
+				const date = Date.parse(response.headers.get('Date') ?? '');
+				if (Number.isFinite(date)) serverNowSeconds = Math.floor(date / 1_000);
+				complete = true;
+				break;
+			}
 		}
 		if (result.unsupported) break;
-		input.cursors.set(scopeKey, latest);
+		let cursorSeconds = complete
+			? Math.max(cursor.cursorSeconds, latest, serverNowSeconds)
+			: latest;
+		if (!Number.isFinite(cursorSeconds)) continue;
+		if (!complete && cursor.continuing && latest <= cursor.cursorSeconds) {
+			// May skip rows at this second; the include= re-read covers recent resident orders.
+			cursorSeconds = cursor.cursorSeconds + 1;
+		}
+		input.cursors.set(scopeKey, { cursorSeconds, continuing: !complete });
 	}
 	for (const key of input.cursors.keys()) if (!scopes.has(key)) input.cursors.delete(key);
 	return result;

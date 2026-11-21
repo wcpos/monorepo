@@ -182,7 +182,12 @@ describe('change-signal server-pressure adaptation', () => {
 		});
 		await context.respond(new Response(null, { status: 429 }));
 
-		for (const lane of ['customer-trickle', 'product-trickle', 'query-total-retry'] as const) {
+		for (const lane of [
+			'customer-trickle',
+			'product-trickle',
+			'query-total-retry',
+			'order-view-delta',
+		] as const) {
 			await expect(context.engine.sync(lane)).resolves.toMatchObject({
 				lane,
 				status: 'skipped',

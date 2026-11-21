@@ -30,6 +30,21 @@ const order = (overrides: Partial<WooOrderPayload> = {}): WooOrderPayload => ({
 });
 
 describe('open order view maintenance', () => {
+	it('a manual delta sync has no lane summary without an open orders view', async () => {
+		const harness = await createEngineHarness({ mode: 'manual', startAtMs: NOW });
+		try {
+			const report = await harness.engine.sync('order-view-delta');
+			expect(report.status).toBe('ran');
+			expect(
+				harness
+					.ofType('maintenance.lane.tick')
+					.filter((event) => event.fields?.lane === 'order-view-delta')
+			).toEqual([]);
+		} finally {
+			await harness.dispose();
+		}
+	});
+
 	it('an older order whose status changed on the server updates within one delta pass', async () => {
 		const urls: URL[] = [];
 		const harness = await createEngineHarness({
@@ -57,7 +72,7 @@ describe('open order view maintenance', () => {
 			await new EngineOrderRepository(scope.database as never).upsertMany([
 				materializeLocalOnly(order()).storedDocument,
 			]);
-			const handle = harness.engine.require({ ...view, status: 'completed' });
+			const handle = harness.engine.require({ ...view, status: 'completed', cashierId: 7 });
 			await handle.ready;
 			await harness.engine.sync('order-view-delta');
 			expect((await harness.collection('orders').findOne(UUID).exec())!.get('status')).toBe(
@@ -71,6 +86,7 @@ describe('open order view maintenance', () => {
 			).toHaveLength(0);
 			expect(urls).toHaveLength(1);
 			expect(Object.fromEntries(urls[0].searchParams)).toMatchObject({
+				pos_cashier: '7',
 				orderby: 'modified',
 				order: 'asc',
 				modified_after: expect.any(String),
@@ -179,7 +195,7 @@ describe('open order view maintenance', () => {
 			},
 		});
 		try {
-			const handle = harness.engine.require(view);
+			const handle = harness.engine.require({ ...view, cashierId: 7 });
 			await handle.ready;
 			await harness.engine.sync('order-view-delta');
 			expect(requests).toBe(1);
