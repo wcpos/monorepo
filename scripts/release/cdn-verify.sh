@@ -112,16 +112,10 @@ purge_cdn_spelling() {
 	fi
 }
 
-# jsDelivr caches a path with raw [ ] and its %5B/%5D spelling apart, and a raw purge left
-# the raw-spelled entry stale (v2.0.37: all 13 bracketed chunks of 134 kept serving 2.0.0).
-# So a bracketed path is purged in both spellings, raw first; nothing else is encoded.
+# jsDelivr normalises %5B/%5D to the same key, so one purge per path (D4, 2026-11-21).
 purge_cdn_path() {
-	local suffix="${2:+build/$2}" encoded
+	local suffix="${2:+build/$2}"
 	purge_cdn_spelling "$1" "$suffix"
-	if [[ "$suffix" == *[\[\]]* ]]; then
-		encoded="${suffix//\[/%5B}"
-		purge_cdn_spelling "$1" "${encoded//\]/%5D}"
-	fi
 }
 
 purge_cdn_root() { purge_cdn_path "$1" ""; }

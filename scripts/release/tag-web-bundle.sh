@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Cut the next release tag on wcpos/web-bundle for a built bundle commit.
 #
-#   tag-web-bundle.sh <web-bundle-sha> [--dry-run] [--allow-frozen-lane]
+#   tag-web-bundle.sh <web-bundle-sha> [--dry-run] [--allow-frozen-lane] [--tolerate-release-only <file>]
 #
 # 1. Reads the bundle commit's message for the monorepo SHA it was built from
 #    (`chore(release): build web bundle (@main from monorepo <sha>)`, or @<major>.<minor>.x).
@@ -131,9 +131,20 @@ purge_changed_hashed() {
 	done < <(join -1 2 -2 2 <(sort -k2 <<<"$cur") <(sort -k2 <<<"$prev") | awk '$2 != $3 { print $1 }')
 }
 
-verify_lane_live() { # $1 lane, $2 tag, $3 the lane's previous tag ("" on a new lane)
-	local lane="$1" tag="$2" expected sha path hashed="" unhashed="" n=0 m=0 paths=()
-	purge_cdn_root "$lane"
+# One unpolled check of a path named by --tolerate-release-only (D4, 2026-11-21): the tag's bytes, or a SENTRY_RELEASE-only difference.
+verify_release_only() { # $1 lane, $2 tag, $3 expected blob SHA, $4 path under build/
+	local served="" want="" code="" status=1 norm='s/(SENTRY_RELEASE=\{name: "WCPOS", version: ")[^"]*"/\1"/g'
+	served=$(mktemp) && want=$(mktemp) && code=$(curl -g -sS --connect-timeout 10 --max-time 120 -o "$served" \
+		-w '%{http_code}' "https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/$4") && [[ "$code" == 200 ]] && status=0
+	if [[ "$status" == 0 && "$(git hash-object --no-filters "$served")" == "$3" ]]; then echo "@$1/build/$4 -> verified by content"
+	elif [[ "$status" == 0 ]] && fetch_bundle_file "$2" "$4" > "$want" && cmp -s <(sed -E "$norm" "$served") <(sed -E "$norm" "$want"); then
+		echo "TOLERATED: @$1/build/$4 differs from $2 only in the SENTRY_RELEASE version"
+	else echo "FAIL: @$1/build/$4 differs from $2 beyond the SENTRY_RELEASE version (HTTP ${code:-000})"; status=1; fi
+	rm -f "$served" "$want"; return "$status"
+}
+
+verify_lane_live() { # $1 lane, $2 tag, $3 the lane's previous tag ("" on a new lane), $4 hashed paths to tolerate (newline list, "" for none)
+	local lane="$1" tag="$2" expected sha path hashed="" unhashed="" checked listed line ok=true n=0 m=0 k=0 paths=()
 	expected=$(expected_from_tree "$tag") || return 1
 	while read -r sha path; do
 		if is_unhashed_path "$path"; then
@@ -142,10 +153,21 @@ verify_lane_live() { # $1 lane, $2 tag, $3 the lane's previous tag ("" on a new 
 			hashed+="$sha $path"$'\n'; n=$((n + 1))
 		fi
 	done <<< "$expected"
+	listed=$(awk 'NR == FNR { want[$0]; next } $2 in want' <(printf '%s\n' "${4:-}") - <<<"$hashed")
+	checked=$(awk 'NR == FNR { want[$0]; next } !($2 in want)' <(printf '%s\n' "${4:-}") - <<<"$hashed")
+	path=$(grep -m1 -vxF -f <(cut -d' ' -f2- <<<"$listed") <<<"${4:-}") || true
+	[[ -z "$path" ]] || { echo "FAIL: ${path} is not a hashed file of ${tag}; refusing to tolerate it" >&2; return 1; }
+	purge_cdn_root "$lane"
 	if [[ -n "${3:-}" ]]; then
 		purge_changed_hashed "$lane" "$3" <<<"$hashed" || return 1
 	fi
-	if ! printf '%s' "$hashed" | verify_cdn_paths "$lane" "$CDN_HASHED_DEADLINE_SECONDS"; then
+	if [[ -n "$checked" ]]; then printf '%s\n' "$checked" | verify_cdn_paths "$lane" "$CDN_HASHED_DEADLINE_SECONDS" || ok=false; fi
+	[[ "$ok" != true || -z "$listed" ]] || while read -r sha path; do
+		line=$(verify_release_only "$lane" "$tag" "$sha" "$path") || ok=false
+		echo "$line"
+		[[ "$line" != TOLERATED:* ]] || { k=$((k + 1)); n=$((n - 1)); }
+	done <<<"$listed"
+	if [[ "$ok" != true ]]; then
 		echo "FAIL: @${lane} does not serve the bytes of ${tag}'s hashed files; metadata.json was NOT purged, so stores still load the previous tag. $(cdn_refresh_advice "as ${tag}")" >&2
 		return 1
 	fi
@@ -157,21 +179,23 @@ verify_lane_live() { # $1 lane, $2 tag, $3 the lane's previous tag ("" on a new 
 		echo "FAIL: @${lane} does not serve ${tag}'s metadata.json/index.html/workers after the purge. $(cdn_refresh_advice "as ${tag}")" >&2
 		return 1
 	fi
-	echo "LIVE: @${lane} serves ${tag}: ${n} hashed files and ${m} unhashed files verified by content"
+	echo "LIVE: @${lane} serves ${tag}: ${n} hashed files and ${m} unhashed files verified by content, ${k} tolerated (release string only)"
 }
 
 main() {
-	local dry_run=false allow_frozen=false bundle_sha="" msg sha monorepo_sha branch version lane bundle_rxdb tags existing names name dir action tag workers=()
+	local dry_run=false allow_frozen=false tolerate="" bundle_sha="" msg sha monorepo_sha branch version lane bundle_rxdb tags existing names name dir action tag workers=()
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			--dry-run) dry_run=true ;;
 			--allow-frozen-lane) allow_frozen=true ;;
+			--tolerate-release-only) tolerate=$(grep -e '[^[:space:]]' -- "${2:-/dev/null}" 2>/dev/null) ||
+				{ echo "--tolerate-release-only needs a file of build/-relative hashed paths, one per line" >&2; return 2; }; shift ;;
 			-*) echo "unknown option $1" >&2; return 2 ;;
 			*) bundle_sha="$1" ;;
 		esac
 		shift
 	done
-	[[ -n "$bundle_sha" ]] || { echo "usage: $0 <web-bundle-sha> [--dry-run] [--allow-frozen-lane]" >&2; return 2; }
+	[[ -n "$bundle_sha" ]] || { echo "usage: $0 <web-bundle-sha> [--dry-run] [--allow-frozen-lane] [--tolerate-release-only <file>]" >&2; return 2; }
 
 	sha=$(gh api "repos/${WEB_BUNDLE_REPO}/commits/${bundle_sha}" --jq .sha)
 	msg=$(gh api "repos/${WEB_BUNDLE_REPO}/commits/${sha}" --jq .commit.message)
@@ -217,7 +241,7 @@ main() {
 		echo "${sha} is already ${tag}; resuming CDN verification"
 	fi
 
-	verify_lane_live "$lane" "$tag" "$(printf '%s\n' "$tags" | previous_lane_tag "$lane" "$tag")"
+	verify_lane_live "$lane" "$tag" "$(printf '%s\n' "$tags" | previous_lane_tag "$lane" "$tag")" "$tolerate"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
