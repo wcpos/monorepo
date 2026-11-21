@@ -183,5 +183,6 @@ describe('formatMoney sign', () => {
 		expect(formatMoney(-5, 'NOPE!', 'en-US', 2)).toBe('NOPE! \u22125.00');
 		// A hyphen in the currency label is the label's own; only the amount's sign changes.
 		expect(formatMoney(-5, 'CUSTOM-USD', 'en-US', 2)).toBe('CUSTOM-USD \u22125.00');
+		expect(formatMoney(-5, '💰', 'en-US', 2)).toBe('💰 \u22125.00');
 	});
 });
