@@ -5,7 +5,8 @@ import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportStaleCartLine } from './cart-failure';
-import './stock-guard-hook';
+import { type IncrementFold, incrementFolds } from './increment-folds';
+import { allowedLineQuantity } from './stock-guard-hook';
 import { useCartConfigReader } from './use-cart-config';
 import { extractLineItemData, lineMetaForWrite } from './utils';
 import {
@@ -14,15 +15,19 @@ import {
 	isActionRefusal,
 } from '../../../../extensions/actions';
 import { useCartCommand } from '../commands/use-cart-command';
+import { useCurrentOrderActions } from '../contexts/current-order';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 import type { SlotWrite } from '../commands/cart-command';
 import type { CurrentOrderRecord } from '../contexts/current-order';
 
+export { resetIncrementFolds } from './increment-folds';
+
 type OrderDocument = import('@wcpos/query').OrderPayload;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];
+
 interface LineItemChanges extends Partial<Omit<LineItem, 'price'>> {
 	price?: number;
 	regular_price?: number;
@@ -93,6 +98,7 @@ const lineInfo = {
  */
 export const useUpdateCartLine = () => {
 	const command = useCartCommand('cart.line.update');
+	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const write = React.useCallback(
@@ -233,8 +239,71 @@ export const useUpdateCartLine = () => {
 		[apply]
 	);
 	const incrementLineItem = React.useCallback(
-		(uuid: string, by: number) => apply('line_items', uuid, by),
-		[apply]
+		(uuid: string, by: number) => {
+			if (by <= 0) return apply('line_items', uuid, by);
+			const record = getCurrentOrderRecord();
+			const key = `${record.uuid}:${uuid}`;
+			const open = incrementFolds.get(key);
+			const fold: IncrementFold = open ?? {
+				delta: 0,
+				applied: 0,
+				outcome: Promise.resolve(undefined),
+			};
+			fold.delta += by;
+			const end = fold.delta;
+			if (!open) {
+				fold.outcome = command(
+					async ({ target, ctx, dispatch }) => {
+						if (incrementFolds.get(key) === fold) incrementFolds.delete(key);
+						const order = target.getLatest();
+						const json = order.toMutableJSON().payload;
+						const lineItems = json.line_items ?? [];
+						const line = lineItems.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
+						if (!line) return;
+						const quantity = line.quantity ?? 0;
+						const payload = {
+							type: 'line_items' as const,
+							lineUuid: uuid,
+							changes: { quantity: quantity + fold.delta },
+							line,
+							lineItems,
+							options: {},
+						};
+						let result = await dispatch(payload, (e, settledWrite) =>
+							write(target, 'line_items', uuid, { ...e.payload.changes }, settledWrite)
+						);
+						if (!isActionRefusal(result)) fold.applied = fold.delta;
+						else if (
+							result.deny.reasonKey === 'pos_cart.only_n_available' &&
+							fold.delta > by &&
+							ctx.store.preventOverselling
+						) {
+							const max = await allowedLineQuantity(ctx, { lineItems, lineUuid: uuid, line });
+							const units = Math.min(
+								fold.delta,
+								max === null ? 0 : Math.floor(max - quantity + 1e-9)
+							);
+							if (units >= 1) {
+								result = await dispatch(
+									{ ...payload, changes: { quantity: quantity + units } },
+									(e, settledWrite) =>
+										write(target, 'line_items', uuid, { ...e.payload.changes }, settledWrite)
+								);
+								fold.applied = units;
+							}
+						}
+						return result as Awaited<ReturnType<SlotWrite>> | undefined | ActionRefusal;
+					},
+					(record) => ({ orderId: record.uuid, uuid }),
+					record
+				);
+				incrementFolds.set(key, fold);
+			}
+			return fold.outcome.then((v) =>
+				v === false || v === undefined ? v : end <= fold.applied ? v : false
+			);
+		},
+		[apply, command, getCurrentOrderRecord, write]
 	);
 	return { updateCartLine, incrementLineItem };
 };

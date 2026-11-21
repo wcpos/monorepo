@@ -23,6 +23,12 @@ import { observeSessionAccounting } from '../../src/register-session/reads';
 import { remintRegister } from '../../src/register-session/register-document';
 import * as sessionStore from '../../src/register-session/session-store';
 
+// The fake site answers populate$; the live read's get$/find path needs a real site document.
+jest.mock('../../src/user-db/reads', () => ({
+	...jest.requireActual('../../src/user-db/reads'),
+	observeSiteCredentials: (site: { populate$: (key: string) => never }) =>
+		jest.requireActual('rxjs').defer(() => site.populate$('wp_credentials')),
+}));
 jest.mock('@wcpos/utils/logger', () => {
 	const logger = { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() };
 	return { getLogger: () => logger };
