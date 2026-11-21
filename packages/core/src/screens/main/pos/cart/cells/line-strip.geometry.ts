@@ -2,7 +2,8 @@
  * The cart line's swipe, as numbers. Everything the strip decides from a position or a
  * release lives here so it can be read and tested without a gesture.
  *
- * A pull has three rests: home, open (Edit · Remove showing) and gone. Between open and gone
+ * A pull has three rests: home, open (Edit · Remove showing, and Close after them on a fine
+ * pointer: the strip is that much wider, and so is the band's start) and gone. Between open and gone
  * is the remove point — "the line" — where Remove swallows Edit, the row takes its red and
  * one haptic ticks; let go past it and the line leaves (chosen 2026-10-08).
  */
@@ -63,12 +64,13 @@ export function editOffset(
 }
 
 /**
- * Remove's travel. At rest it is the block at the row's far right; past the line it rides
- * beside the row's trailing edge, `LABEL_INSET` in, and never right of its rest.
+ * Remove's travel. At rest its leading edge sits `trailing` in from the row's far right (its own
+ * width, plus the Close tile after it on a fine pointer); past the line it rides beside the row's
+ * trailing edge, `LABEL_INSET` in, and never right of its rest.
  */
-export function removeOffset(revealed: number, removeWidth: number, swallow: number): number {
+export function removeOffset(revealed: number, trailing: number, swallow: number): number {
 	'worklet';
-	return 0 - swallow * Math.max(0, revealed - removeWidth - LABEL_INSET);
+	return 0 - swallow * Math.max(0, revealed - trailing - LABEL_INSET);
 }
 
 /**

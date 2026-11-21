@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { LineStrip, onStage } from './line-strip';
+import { createOpenLine, type OpenLine } from '../open-line';
 
 let mockPointer = 'coarse';
 const mockRemoveLineItem = jest.fn().mockResolvedValue(undefined);
@@ -12,11 +13,16 @@ const mockHaptic = jest.fn();
 let mockStart: () => void;
 let mockUpdate: (event: { translationX: number }) => void;
 let mockFinalize: (event: { translationX: number; velocityX: number }, success: boolean) => void;
-let mockTotalProps: { onHoverIn?: () => void; onHoverOut?: () => void; className?: string };
+let mockTotalProps: {
+	onHoverIn?: () => void;
+	onHoverOut?: () => void;
+	onPress?: (event: { type: string; stopPropagation: () => void }) => void;
+	className?: string;
+};
 const mockLayouts: Record<string, (event: { nativeEvent: { layout: { width: number } } }) => void> =
 	{};
 const mockDisabled: unknown[] = [];
-let mockRemoveProps: { variant?: string; className?: string };
+const mockButtonProps: Record<string, { variant?: string; className?: string }> = {};
 
 jest.mock('@wcpos/components/lib/device', () => ({ usePointer: () => mockPointer }));
 jest.mock('@wcpos/components/lib/haptics', () => ({ hapticTick: () => mockHaptic() }));
@@ -30,7 +36,9 @@ jest.mock('../../hooks/use-remove-line-item', () => ({
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
-jest.mock('./edit-cart-item-button', () => ({ EditCartItemButton: () => null }));
+jest.mock('./edit-cart-item-button', () => ({
+	EditCartItemButton: () => <button role="button" data-testid="cart-line-edit" />,
+}));
 jest.mock('./edit-line-item/form', () => ({ EditLineItemForm: () => null }));
 jest.mock('./edit-fee-line/form', () => ({ EditFeeLineForm: () => null }));
 jest.mock('./edit-shipping-line/form', () => ({ EditShippingLineForm: () => null }));
@@ -50,13 +58,16 @@ jest.mock('@wcpos/components/button', () => ({
 		className?: string;
 	}>) => {
 		mockDisabled.push(disabled);
-		mockRemoveProps = { variant, className };
+		mockButtonProps[testID] = { variant, className };
 		return (
-			<button data-testid={testID} onClick={onPress}>
+			<button role="button" data-testid={testID} onClick={onPress}>
 				{children}
 			</button>
 		);
 	},
+	ButtonText: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<span data-classes={className}>{children}</span>
+	),
 }));
 jest.mock('react-native', () => {
 	const actual = jest.requireActual('react-native');
@@ -68,7 +79,7 @@ jest.mock('react-native', () => {
 			return <actual.View {...props} />;
 		},
 		Pressable: (props: React.ComponentProps<typeof actual.Pressable>) => {
-			mockTotalProps = props;
+			if (props.testID === 'cart-line-total') mockTotalProps = props;
 			return <actual.Pressable {...props} />;
 		},
 	};
@@ -82,7 +93,9 @@ jest.mock('react-native-reanimated', () => {
 			// test can read what a slot paints (the Edit slot's primary).
 			View: (props: React.ComponentProps<typeof actual.View> & { className?: string }) => {
 				if (props.onLayout && props.testID) mockLayouts[props.testID] = props.onLayout;
-				return <actual.View {...props} dataSet={{ classes: props.className ?? '' }} />;
+				return (
+					<actual.View {...props} dataSet={{ ...props.dataSet, classes: props.className ?? '' }} />
+				);
 			},
 		},
 		useReducedMotion: () => true,
@@ -160,7 +173,10 @@ const LINE = 264;
 function layout(testID: string, width: number) {
 	act(() => mockLayouts[testID]({ nativeEvent: { layout: { width } } }));
 }
-function renderStrip() {
+function renderStrip({
+	close,
+	openLine = createOpenLine(),
+}: { close?: number; openLine?: OpenLine } = {}) {
 	const pulseRemove = jest.fn();
 	const armRemove = jest.fn();
 	const rowPress = jest.fn();
@@ -174,7 +190,7 @@ function renderStrip() {
 	};
 	render(
 		<div onClick={rowPress}>
-			<LineStrip line={line} rowRefs={rowRefs}>
+			<LineStrip line={line} rowRefs={rowRefs} openLine={openLine}>
 				{(wrapTotal) => wrapTotal('10')}
 			</LineStrip>
 		</div>
@@ -182,7 +198,8 @@ function renderStrip() {
 	layout('cart-line-row', ROW);
 	layout('cart-line-edit-slot', EDIT);
 	layout('cart-line-remove-slot', REMOVE);
-	return { pulseRemove, armRemove, rowPress };
+	if (close) layout('cart-line-close-slot', close);
+	return { pulseRemove, armRemove, rowPress, openLine };
 }
 /** A pull to `x` (leftwards negative) and the release, at `velocityX`. */
 function pull(x: number, velocityX = 0) {
@@ -210,9 +227,9 @@ it('coarse uses a pan target without hover affordances', () => {
 });
 it('Remove is a solid red block, square and as tall as the row', () => {
 	renderStrip();
-	expect(mockRemoveProps.variant).toBe('destructive');
-	expect(mockRemoveProps.className).toMatch(/\brounded-none\b/);
-	expect(mockRemoveProps.className).toMatch(/\bh-auto\b/);
+	expect(mockButtonProps['cart-line-remove'].variant).toBe('destructive');
+	expect(mockButtonProps['cart-line-remove'].className).toMatch(/\brounded-none\b/);
+	expect(mockButtonProps['cart-line-remove'].className).toMatch(/\bh-auto\b/);
 });
 it('the Edit slot is the solid primary beside it, not the muted surface grey (Paul 2026-10-30)', () => {
 	renderStrip();
@@ -390,4 +407,139 @@ it("the actions paint over the row: the strip's window comes after the body and 
 	const body = row.firstElementChild;
 	expect(body).not.toBe(windowEl);
 	expect(body?.contains(strip)).toBe(false);
+});
+
+describe('the strip closes with a mouse (the 2026-11-21 board)', () => {
+	// The en Close tile: the Total column's 72.
+	const CLOSE = 72;
+	const isOpen = () => !!screen.queryByTestId('cart-line-close-catch');
+	it('coarse pointer: no Close tile, and the strip opens to Edit and Remove only', () => {
+		renderStrip({ close: CLOSE });
+		expect(screen.queryByTestId('cart-line-close')).toBeNull();
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		expect(mockOffsetSet).toHaveBeenLastCalledWith(-STRIP);
+	});
+	it('fine pointer: Close is the quiet Button at the trailing end, and the strip makes room for it', () => {
+		mockPointer = 'fine';
+		renderStrip({ close: CLOSE });
+		const strip = screen.getByTestId('cart-line-strip');
+		expect(strip.lastElementChild).toBe(screen.getByTestId('cart-line-close-slot'));
+		expect(screen.getByTestId('cart-line-close-slot').getAttribute('data-classes')).toMatch(
+			/\bbg-card\b/
+		);
+		expect(mockButtonProps['cart-line-close'].variant).toBe('ghost');
+		expect(mockButtonProps['cart-line-close'].className).toMatch(/\brounded-none\b/);
+		expect(mockButtonProps['cart-line-close'].className).toMatch(/\bh-auto\b/);
+		expect(screen.getByTestId('cart-line-close').textContent).toBe('common.close');
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		expect(mockOffsetSet).toHaveBeenLastCalledWith(-(STRIP + CLOSE));
+	});
+	it('Close closes the strip', () => {
+		mockPointer = 'fine';
+		renderStrip({ close: CLOSE });
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		expect(isOpen()).toBe(true);
+		fireEvent.click(screen.getByTestId('cart-line-close'));
+		expect(isOpen()).toBe(false);
+		expect(mockOffsetSet).toHaveBeenLastCalledWith(0);
+	});
+	it('after Close, the pointer still on the total does not peek until it has left and come back', () => {
+		mockPointer = 'fine';
+		renderStrip({ close: CLOSE });
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		fireEvent.click(screen.getByTestId('cart-line-close'));
+		act(() => mockTotalProps.onHoverIn?.());
+		expect(mockOffsetSet).toHaveBeenLastCalledWith(0);
+		act(() => mockTotalProps.onHoverOut?.());
+		act(() => mockTotalProps.onHoverIn?.());
+		expect(mockOffsetSet).toHaveBeenLastCalledWith(-16);
+	});
+	it('Escape closes an open strip and hands the focus back to the total', () => {
+		mockPointer = 'fine';
+		renderStrip({ close: CLOSE });
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		fireEvent.keyDown(document, { key: 'Escape' });
+		expect(isOpen()).toBe(false);
+		expect(document.activeElement).toBe(screen.getByTestId('cart-line-total'));
+	});
+	it('Escape struck in another surface (an Edit sheet) is that surface’s', () => {
+		renderStrip();
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		const field = document.body.appendChild(document.createElement('input'));
+		field.focus();
+		fireEvent.keyDown(field, { key: 'Escape' });
+		expect(isOpen()).toBe(true);
+		field.remove();
+	});
+	it('Enter or Space on the total opens the strip with the focus on Edit', () => {
+		mockPointer = 'fine';
+		renderStrip({ close: CLOSE });
+		act(() => mockTotalProps.onPress?.({ type: 'keyup', stopPropagation: () => {} }));
+		expect(isOpen()).toBe(true);
+		expect(document.activeElement).toBe(screen.getByTestId('cart-line-edit'));
+	});
+	it('a press outside the open line closes it and still reaches what it landed on', () => {
+		const outside = jest.fn();
+		renderStrip();
+		const tile = document.body.appendChild(document.createElement('button'));
+		tile.addEventListener('click', outside);
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		// Inside the line (its own strip) it stays open.
+		fireEvent.pointerDown(screen.getByTestId('cart-line-remove-slot'));
+		expect(isOpen()).toBe(true);
+		fireEvent.pointerDown(tile);
+		fireEvent.click(tile);
+		expect(isOpen()).toBe(false);
+		expect(outside).toHaveBeenCalledTimes(1);
+		tile.remove();
+	});
+	it("a press on the open line's own name or quantity closes it and does nothing else", () => {
+		const { rowPress } = renderStrip();
+		fireEvent.click(screen.getByTestId('cart-line-total'));
+		// The catch lies over the body's cells, under the strip.
+		const catcher = screen.getByTestId('cart-line-close-catch');
+		expect(screen.getByTestId('cart-line-body').lastElementChild).toBe(catcher);
+		fireEvent.click(catcher);
+		expect(isOpen()).toBe(false);
+		expect(rowPress).not.toHaveBeenCalled();
+	});
+	it('one open strip per cart: opening a line closes the other, and a scroll closes it', () => {
+		const openLine = createOpenLine();
+		const rowRefs = { current: new Map() };
+		const row = (uuid: string) => (
+			<LineStrip
+				line={{ uuid, type: 'line_items', item: { name: uuid } } as never}
+				rowRefs={rowRefs}
+				openLine={openLine}
+			>
+				{(wrapTotal) => wrapTotal(uuid)}
+			</LineStrip>
+		);
+		render(
+			<>
+				{row('a')}
+				{row('b')}
+			</>
+		);
+		const [a, b] = screen.getAllByTestId('cart-line-total');
+		fireEvent.click(a);
+		expect(screen.getAllByTestId('cart-line-close-catch')).toHaveLength(1);
+		// Opened by a swipe, by the keyboard or by a click alike: the store closes the one before.
+		fireEvent.click(b);
+		const catches = screen.getAllByTestId('cart-line-close-catch');
+		expect(catches).toHaveLength(1);
+		expect(screen.getAllByTestId('cart-line-body')[1].contains(catches[0])).toBe(true);
+		act(() => openLine.close());
+		expect(screen.queryByTestId('cart-line-close-catch')).toBeNull();
+	});
+	it("Remove's label reads Edit's weight", () => {
+		renderStrip();
+		expect(
+			screen.getByTestId('cart-line-remove').querySelector('span')?.getAttribute('data-classes')
+		).toMatch(/\bfont-strong\b/);
+	});
+	it('the strip draws its tiles’ focus ring inside them', () => {
+		renderStrip();
+		expect(screen.getByTestId('cart-line-strip').getAttribute('data-ring')).toBe('inset');
+	});
 });

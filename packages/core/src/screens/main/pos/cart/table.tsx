@@ -29,6 +29,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { LineStrip } from './cells/line-strip';
+import { createOpenLine } from './open-line';
 import { type LineSort, sortLines } from './sort-lines';
 import { FeeAndShippingTotal } from './cells/fee-and-shipping-total';
 import { FeeName } from './cells/fee-name';
@@ -197,6 +198,10 @@ export function CartTable({
 	const rowRefs = React.useRef<Map<string, PulseTableRowRef | null>>(new Map());
 	const rowLayouts = React.useRef<Map<string, { y: number; height: number }>>(new Map());
 	const scrollViewRef = React.useRef<ScrollViewInstance>(null);
+	/** One open line strip per cart, the rows' one shared fact; scrolling the cart closes it. */
+	const [openLine] = React.useState(createOpenLine);
+	// The scroll's end reports where it stopped: only a move closes the strip, not that report.
+	const scrollY = React.useRef(0);
 	const { currentOrderRecord } = useCurrentOrder();
 	// Track previous cart data
 	const prevDataRef = React.useRef<CartTableLine[]>([]);
@@ -437,6 +442,11 @@ export function CartTable({
 						// A tap on a control (another line's field or button) reaches it with the native
 						// price field's keyboard up; a tap on empty cart space still dismisses the keyboard.
 						keyboardShouldPersistTaps="handled"
+						onScroll={({ nativeEvent }) => {
+							if (nativeEvent.contentOffset.y === scrollY.current) return;
+							scrollY.current = nativeEvent.contentOffset.y;
+							openLine.close();
+						}}
 					>
 						<TableBody>
 							{table.getRowModel().rows.map((row, index) => (
@@ -454,7 +464,7 @@ export function CartTable({
 										rowLayouts.current.set(row.id, { y, height });
 									}}
 								>
-									<LineStrip line={row.original} rowRefs={rowRefs}>
+									<LineStrip line={row.original} rowRefs={rowRefs} openLine={openLine}>
 										{(wrapTotal) => {
 											const visible = row.getVisibleCells();
 											// The strip's press target is the Total cell; with Total hidden in the

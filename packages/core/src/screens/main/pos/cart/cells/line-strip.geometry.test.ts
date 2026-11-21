@@ -130,3 +130,50 @@ describe('the window moves, never resizes', () => {
 		expect(windowOpacity(ROW_WIDTH)).toBe(1);
 	});
 });
+
+describe('the strip with a Close tile (fine pointer, 2026-11-21 board)', () => {
+	// Edit · Remove is 159 at a 482 row in every locale below; Close is the Total column's 72, or its
+	// word plus the Button's padding where that is wider (de "Schließen" 98, nl "Sluiten" 78).
+	const EDIT_REMOVE = 159;
+	const CLOSE = { en: 72, de: 98, nl: 78 };
+	for (const [locale, close] of Object.entries(CLOSE)) {
+		for (const rowWidth of [390, 482]) {
+			it(`${locale} at a ${rowWidth} row: the band between open and remove stays at least ${REMOVE_BAND} px`, () => {
+				const stripWidth = EDIT_REMOVE + close;
+				const line = removePoint(rowWidth, stripWidth);
+				expect(line - stripWidth).toBeGreaterThanOrEqual(REMOVE_BAND);
+				// The line is still inside the row: a long swipe can reach it.
+				expect(line).toBeLessThan(rowWidth);
+				expect(releaseOutcome({ rowWidth, stripWidth, revealed: line, velocityX: 0 })).toBe(
+					'remove'
+				);
+				expect(releaseOutcome({ rowWidth, stripWidth, revealed: line - 1, velocityX: 0 })).toBe(
+					'open'
+				);
+				// A fast flick past the open strip still removes.
+				expect(
+					releaseOutcome({ rowWidth, stripWidth, revealed: stripWidth + 1, velocityX: -900 })
+				).toBe('remove');
+			});
+		}
+	}
+	it('Remove rests one Close tile in from the edge and, past the line, rides the row edge as before', () => {
+		// en at 482: Edit 70 · Remove 89 · Close 72 (strip 231); the row 280 out, Remove fully over Edit.
+		const trailing = 89 + 72;
+		expect(removeOffset(280, trailing, 0)).toBe(0);
+		// Its leading edge lands LABEL_INSET in from the row's trailing edge (482 - 280).
+		const restLeft = 482 - trailing;
+		expect(restLeft + removeOffset(280, trailing, 1)).toBe(482 - 280 + LABEL_INSET);
+		// Pressed open (the row at the open strip), Remove covers Edit's place, LABEL_INSET in.
+		expect(restLeft + removeOffset(231, trailing, 1)).toBe(482 - 231 + LABEL_INSET);
+	});
+	it('a touch drag from 85 % to 10 % of a coarse row crosses the line', () => {
+		// The e2e check (cart-touch-scroll.spec.ts): the phone's 412 row with the touch strip.
+		const rowWidth = 412;
+		expect(rowWidth * 0.75).toBeGreaterThanOrEqual(removePoint(rowWidth, EDIT_REMOVE));
+		// A 150 px drag only opens it.
+		expect(releaseOutcome({ rowWidth, stripWidth: EDIT_REMOVE, revealed: 150, velocityX: 0 })).toBe(
+			'open'
+		);
+	});
+});
