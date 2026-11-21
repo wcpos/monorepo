@@ -36,6 +36,19 @@ export function closeMinWidth(reach: number, rowWidth: number, editRemove: numbe
 	return Math.max(CLOSE_MIN, Math.min(reach, rowWidth - editRemove));
 }
 
+/**
+ * The clicks behind a press: react-native-web presses Enter or Space with a pointerless click
+ * (`detail` 0, measured in Chromium) and counts a double click's second click as 2; native has none.
+ */
+function clicks(event: unknown): number | undefined {
+	const press = event as { detail?: number; nativeEvent?: { detail?: number } } | undefined;
+	return (press?.nativeEvent ?? press)?.detail;
+}
+/** Enter or Space. */
+export const byKey = (event: unknown) => clicks(event) === 0;
+/** The second click of a double click never removes or edits a line, whatever the geometry. */
+export const secondClick = (event: unknown) => (clicks(event) ?? 0) > 1;
+
 /** How far the row has to travel before letting go removes it. */
 export function removePoint(rowWidth: number, stripWidth: number): number {
 	return Math.max(stripWidth + REMOVE_BAND, Math.round(rowWidth * REMOVE_SHARE));

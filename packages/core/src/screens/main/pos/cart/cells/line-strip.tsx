@@ -22,11 +22,13 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import {
 	bodyOffset,
+	byKey,
 	closeMinWidth,
 	editOffset,
 	releaseOutcome,
 	removeOffset,
 	removePoint,
+	secondClick,
 	stripInWindow,
 	windowOffset,
 	windowOpacity,
@@ -90,11 +92,6 @@ export function onStage(x: number): number {
 /** A view's web DOM node: a fine pointer and its keyboard exist only there. */
 function dom(ref: React.RefObject<unknown>) {
 	return ref.current as unknown as HTMLElement | null;
-}
-/** Enter or Space: react-native-web presses with a click no pointer made (`detail` 0, Chromium). */
-function byKey(event: unknown) {
-	const press = event as { detail?: number; nativeEvent?: { detail?: number } } | undefined;
-	return (press?.nativeEvent ?? press)?.detail === 0;
 }
 type Props = {
 	line: { uuid: string; type: 'line_items' | 'fee_lines' | 'shipping_lines'; item: CartLine };
@@ -583,7 +580,9 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 							// The swipe block fills the row it sits under, square (the 2026-10-08 swipe ruling).
 							// eslint-disable-next-line no-restricted-syntax
 							className="min-w-tile h-auto rounded-none px-5"
-							onPress={() => leave(true)}
+							onPress={(event) => {
+								if (!secondClick(event)) leave(true);
+							}}
 						>
 							{/* The strip's words read alike: Remove's label takes Edit's weight. */}
 							<ButtonText className="font-strong">{t('pos_cart.remove_line')}</ButtonText>

@@ -1,5 +1,6 @@
 import {
 	bodyOffset,
+	byKey,
 	CLOSE_MIN,
 	closeMinWidth,
 	editOffset,
@@ -8,6 +9,7 @@ import {
 	REMOVE_BAND,
 	removeOffset,
 	removePoint,
+	secondClick,
 	stripInWindow,
 	stripOffset,
 	windowOffset,
@@ -191,5 +193,18 @@ describe("Close's width", () => {
 		// The last visible cell is the Name: its footprint is most of the row.
 		expect(closeMinWidth(400, 482, 159)).toBe(482 - 159);
 		expect(482 - closeMinWidth(400, 482, 159)).toBeGreaterThanOrEqual(159);
+	});
+});
+
+describe('the clicks behind a press', () => {
+	const web = (detail: number) => ({ nativeEvent: { detail } });
+	it('reads Enter or Space (a pointerless click) and a double click’s second click', () => {
+		expect([0, 1, 2, 3].map((n) => byKey(web(n)))).toEqual([true, false, false, false]);
+		expect([0, 1, 2, 3].map((n) => secondClick(web(n)))).toEqual([false, false, true, true]);
+	});
+	it('native presses carry no count: never the keyboard, never a second click', () => {
+		const native = { nativeEvent: { locationX: 4, pageX: 10 } };
+		expect(byKey(native)).toBe(false);
+		expect(secondClick(native)).toBe(false);
 	});
 });

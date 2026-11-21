@@ -5,6 +5,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Button } from '@wcpos/components/button';
 
 import { useT } from '../../../../../contexts/translations';
+import { secondClick } from './line-strip.geometry';
 import { RecordDialog } from '../../../components/record-dialog';
 import { usePanelSide } from '../../contexts/overlay-side';
 
@@ -34,7 +35,9 @@ function EditCartItemButton({ title, item, form, tabIndex }: Props) {
 					className="min-w-tile h-auto flex-1 rounded-none px-5"
 					testID="cart-line-edit"
 					tabIndex={tabIndex}
-					onPress={() => setOpenDialog(true)}
+					onPress={(event) => {
+						if (!secondClick(event)) setOpenDialog(true);
+					}}
 				>
 					{t('pos_cart.edit_line')}
 				</Button>

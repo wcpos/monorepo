@@ -315,6 +315,20 @@ it('a press of Remove arms the row, then forwards one removal to pulseRemove, ne
 	expect(mockRemoveLineItem).toHaveBeenCalledTimes(1);
 	expect(mockRemoveLineItem).toHaveBeenCalledWith('line-1', 'line_items');
 });
+it('the second click of a double click never removes the line; one click does', () => {
+	const { pulseRemove } = renderStrip();
+	const remove = screen.getByTestId('cart-line-remove');
+	// A double click whose second click lands on Remove (Total hidden, a wide trigger cell).
+	fireEvent.click(remove, { detail: 2 });
+	expect(pulseRemove).not.toHaveBeenCalled();
+	fireEvent.click(remove, { detail: 1 });
+	expect(pulseRemove).toHaveBeenCalledTimes(1);
+});
+it('Enter or Space on Remove (a pointerless click, `detail` 0) removes the line', () => {
+	const { pulseRemove } = renderStrip();
+	fireEvent.click(screen.getByTestId('cart-line-remove'), { detail: 0 });
+	expect(pulseRemove).toHaveBeenCalledTimes(1);
+});
 it('a failed removal brings the row back on stage and leaves it removable', async () => {
 	const { pulseRemove, armRemove } = renderStrip();
 	mockRemoveLineItem.mockRejectedValueOnce(new Error('write failed'));
