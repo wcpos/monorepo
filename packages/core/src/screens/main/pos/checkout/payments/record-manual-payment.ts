@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
+import { isAsleepBlock } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage } from '@wcpos/utils/logger';
 import { MoneyCommandError, type MoneyCommandErrorReason } from '@wcpos/query';
 import {
@@ -68,6 +69,8 @@ export interface RecordManualPaymentDeps {
 	/** Every descriptor the till holds: the derived status reads the primary leg's method. */
 	methods?: readonly PaymentMethodDescriptor[];
 	sleep?: (ms: number) => Promise<void>;
+	/** Resolves when the app is awake (a hidden tab's requests are refused before they leave). */
+	awaitWake?: () => Promise<void>;
 	/**
 	 * A record the store may hold but never answered (the journal keeps it sent): the press
 	 * replays it, same row id and frozen body, instead of minting a second payment for the same
@@ -114,6 +117,24 @@ export type RecordManualPaymentOutcome =
  * body: long enough to ride out a proxy restart, short enough to wait for at a till.
  */
 export const RECORD_UNKNOWN_RETRY_DELAYS_MS = [1000, 3000, 9000] as const;
+
+// A backstop against a wake signal that never clears the sleeping block: a real hidden tab
+// waits in `awaitWake` and never spins (POS-34N).
+export const RECORD_ASLEEP_RESEND_LIMIT = 10;
+
+/** Resolves at once when the app is awake, else on the manager's first wake callback. */
+export function awaitAwake(manager: {
+	isAppSleeping(): boolean;
+	onWake(cb: () => void): () => void;
+}): Promise<void> {
+	if (!manager.isAppSleeping()) return Promise.resolve();
+	return new Promise((resolve) => {
+		const unsubscribe = manager.onWake(() => {
+			unsubscribe();
+			resolve();
+		});
+	});
+}
 
 export class RecordManualPaymentError extends Error {
 	public constructor(
@@ -196,6 +217,7 @@ export async function recordManualPayment(
 	// Every attempt is the same call: the poster re-sends the journaled record for this row id,
 	// its frozen body and identity, and the server replays a row it already stored.
 	let accepted: { payment: PaymentRow; order: OrderPaymentSummary } | undefined;
+	let asleepResends = 0;
 	for (let attempt = 0; !accepted; attempt++)
 		try {
 			const response = await deps.post(`orders/${order.id}/payments`, { payment: row });
@@ -220,6 +242,14 @@ export async function recordManualPayment(
 			// changed): nothing was sent, so it is terminal, never the unknown re-send path.
 			if (error instanceof MoneyCommandError && error.phase === 'unsent')
 				return { kind: 'failed', reason: error.reason, cause: error.cause };
+			// The sleeping block is thrown before dispatch, so nothing left the till: once the app
+			// wakes, the journal's copy is re-sent without using a re-send (POS-34N).
+			if (isAsleepBlock(error) && deps.awaitWake && asleepResends < RECORD_ASLEEP_RESEND_LIMIT) {
+				asleepResends++;
+				await deps.awaitWake();
+				attempt--;
+				continue;
+			}
 			const refusal = moneyRefusalOf(error);
 			const refused = refusal?.data as
 				{ payment?: PaymentRow; order?: OrderPaymentSummary } | undefined;
