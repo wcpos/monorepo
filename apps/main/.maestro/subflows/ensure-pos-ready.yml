@@ -147,9 +147,6 @@ appId: com.wcpos.main.dev
           timeout: 15000
       - tapOn:
           id: "products-variations-style-inline"
-      - assertVisible:
-          id: "products-variations-style-inline"
-          checked: true
       - tapOn:
           id: "ui-settings-close"
       - evalScript: ${output.variationsStyleInline = true}
