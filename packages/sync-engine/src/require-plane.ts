@@ -451,6 +451,7 @@ export type RequirePlane = {
 	 * active scope that reads them; later scope switches never carry them across.
 	 */
 	liveOrderBrowseQueryKeys(): readonly string[];
+	refreshLiveOrderBrowseWindows(): Promise<void>;
 	/**
 	 * The customers sibling of {@link lastProductBrowseQueryKey} — the lane identity of the
 	 * LAST customers browse window a grid declared, and therefore the sort the idle customer
@@ -535,7 +536,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const activeScope = () => deps.manager.activeScope;
 	const productBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
 	const customerBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
-	const liveOrderKeys = new Map<string | null, Map<string, number>>();
+	type LiveOrderKey = {
+		count: number;
+		requirement: Extract<EngineRequirement, { kind: 'orders-browse' }>;
+	};
+	const liveOrderKeys = new Map<string | null, Map<string, LiveOrderKey>>();
 	let beforeReadyOrders = { scopeId: null as string | null };
 	// Demand-path reference refreshes dedupe ONLY against their own last pull
 	// (#1302 round 2): the persisted task timestamp is shared with the idle
@@ -1775,14 +1780,45 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			const scopeId = activeScope();
 			const pending = liveOrderKeys.get(null);
 			if (scopeId !== null && pending) {
-				const keys = liveOrderKeys.get(scopeId) ?? new Map<string, number>();
-				for (const [key, count] of pending) keys.set(key, (keys.get(key) ?? 0) + count);
+				const keys = liveOrderKeys.get(scopeId) ?? new Map<string, LiveOrderKey>();
+				for (const [key, entry] of pending) {
+					const existing = keys.get(key);
+					keys.set(key, {
+						count: (existing?.count ?? 0) + entry.count,
+						requirement: entry.requirement,
+					});
+				}
 				liveOrderKeys.set(scopeId, keys);
 				liveOrderKeys.delete(null);
 				beforeReadyOrders.scopeId = scopeId;
 				beforeReadyOrders = { scopeId: null };
 			}
 			return [...(liveOrderKeys.get(scopeId)?.keys() ?? [])];
+		},
+		async refreshLiveOrderBrowseWindows() {
+			// A full manual sync before any scope is active must not wait on admission.
+			if (activeScope() === null) return;
+			for (const key of this.liveOrderBrowseQueryKeys()) {
+				const decision = parseOrderBrowserSchedulerDescriptor(key);
+				if (!decision || 'skipReason' in decision || decision.descriptor.complete === true)
+					continue;
+				const entry = liveOrderKeys.get(activeScope())?.get(key);
+				if (!entry) continue;
+				try {
+					const handle = this.require({
+						...entry.requirement,
+						id: `${entry.requirement.id}:manual-sync`,
+						forceRefresh: true,
+					});
+					try {
+						await handle.ready;
+					} finally {
+						handle.release();
+					}
+				} catch {
+					// The require path records diagnostics; full sync keeps its existing report.
+				}
+			}
 		},
 		require: (requirement) => {
 			// The runaway backstop is the ONE ceiling left on a browse window (#948/#957),
@@ -1813,8 +1849,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					const key = orderBrowserQueryKey(requirement);
 					const scopeId = activeScope();
 					orderScope = scopeId === null ? beforeReadyOrders : { scopeId };
-					const keys = liveOrderKeys.get(scopeId) ?? new Map<string, number>();
-					keys.set(key, (keys.get(key) ?? 0) + 1);
+					const keys = liveOrderKeys.get(scopeId) ?? new Map<string, LiveOrderKey>();
+					const entry = keys.get(key) ?? { count: 0, requirement };
+					entry.count += 1;
+					keys.set(key, entry);
 					liveOrderKeys.set(scopeId, keys);
 					return key;
 				}
@@ -1924,9 +1962,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					subscriber.released = true;
 					if (orderScope) {
 						const keys = liveOrderKeys.get(orderScope.scopeId)!;
-						const remaining = keys.get(queryKey!)! - 1;
-						if (remaining === 0) keys.delete(queryKey!);
-						else keys.set(queryKey!, remaining);
+						const entry = keys.get(queryKey!)!;
+						entry.count -= 1;
+						if (entry.count === 0) keys.delete(queryKey!);
 					}
 					entry.subscribers.delete(subscriber);
 					// Resolve NOW — a released (unmounting) caller must not wait for

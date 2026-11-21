@@ -2352,6 +2352,9 @@ export function createRxdbSyncEngine(
 				scheduleStatusChange();
 				reports.push(report);
 			}
+			if (!options?.signal?.aborted) {
+				await requirePlane.refreshLiveOrderBrowseWindows();
+			}
 			const drain = reports[1]!;
 			const worst = reports.some((report) => report.status === 'error')
 				? ('error' as const)
