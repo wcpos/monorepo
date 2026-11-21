@@ -137,12 +137,12 @@ it("names the quick keys with the store's separator, and passes the quick discou
 	expect(mockKeypad.tone).toBe('attention');
 });
 
-it('a signed quantity hands its keypad the Return key’s word, English "Return"', () => {
+it('a signed quantity hands its keypad the Return key’s word, English "Return item"', () => {
 	renderField({ kind: 'quantity', signed: true });
 	expect(mockKeypad.signed).toBe(true);
 	expect(mockKeypad.labels.sign).toBe('pos_cart.quantity_return');
 	const catalog = jest.requireActual('../../../../contexts/translations/locales/en/core.json');
-	expect(catalog['pos_cart.quantity_return']).toBe('Return');
+	expect(catalog['pos_cart.quantity_return']).toBe('Return item');
 });
 
 it("a form's label and invalid state reach the trigger; its label press opens and closes the keypad", () => {

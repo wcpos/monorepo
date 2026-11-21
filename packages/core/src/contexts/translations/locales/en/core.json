@@ -1155,7 +1155,7 @@
 	"pos_cart.quantity": "Quantity",
 	"pos_cart.quantity_decrease": "One fewer",
 	"pos_cart.quantity_increase": "One more",
-	"pos_cart.quantity_return": "Return",
+	"pos_cart.quantity_return": "Return item",
 	"pos_cart.update_customer_too": "Also save to customer",
 	"pos_cart.same_as_billing": "Same as billing",
 	"pos_cart.use_different_address": "Use a different address",
