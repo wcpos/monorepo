@@ -55,7 +55,16 @@ const keyFace = cva('items-center justify-center', {
 		},
 		quick: { none: '', off: '', lit: 'bg-primary', chip: 'bg-selected border-selected border' },
 	},
-	compoundVariants: [{ face: 'key', quick: 'off', class: 'border-border border bg-transparent' }],
+	compoundVariants: [
+		{ face: 'key', quick: 'off', class: 'border-border border bg-transparent' },
+		// A lit cell keeps its fill under the pointer (the filled Button's wash), or the cell's
+		// accent hover leaves primary-foreground ink on a pale key.
+		{
+			face: 'cell',
+			quick: 'lit',
+			class: 'web:hover:bg-primary active:bg-primary web:hover:opacity-90 active:opacity-90',
+		},
+	],
 });
 const keyText = cva('font-semibold', {
 	variants: {

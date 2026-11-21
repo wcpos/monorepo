@@ -100,6 +100,9 @@ it('an icon with text leads the word in its ink; litAsChip is Chip’s on face o
 	// Anchored (`cell`), lit is the price keypad's lit quick key; off is the quick off face.
 	expect(classes('keypad-key-c')).toContain('bg-primary');
 	expect(classes('keypad-key-c')).not.toContain('bg-selected');
+	// Under the pointer a lit cell keeps its fill: the accent hover would leave its ink on a pale key.
+	expect(classes('keypad-key-c')).toContain('web:hover:bg-primary');
+	expect(classes('keypad-key-c')).not.toContain('hover:bg-accent');
 	expect(classes('keypad-key-o')).toContain('border-border border bg-transparent');
 	expect(classes('keypad-key-o')).not.toContain('flex-row');
 	expect(screen.getByTestId('keypad-key-o').querySelector('[data-icon]')).toBeNull();
