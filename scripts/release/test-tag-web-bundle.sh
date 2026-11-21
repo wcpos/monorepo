@@ -211,13 +211,35 @@ expect_status "changed chunks purge runs" pass cdn purge_changed_hashed 1.11 v1.
 expect_eq "a same-named chunk with different bytes is purged on the lane" 1 "$(grep -Fc "purge.jsdelivr.net/gh/wcpos/web-bundle@1.11/build/$entry" "$MOCK_LOG" || true)"
 expect_eq "a same-named chunk with the same bytes is not purged" 0 "$(grep -Fc "/$kept" "$MOCK_LOG" || true)"
 expect_eq "a chunk only the previous tag carries is not purged" 0 "$(grep -Fc "/$gone" "$MOCK_LOG" || true)"
-expect_eq "only the one purge was sent" 1 "$(grep -c 'purge.jsdelivr.net' "$MOCK_LOG" || true)"
+expect_eq "only the one chunk was purged (raw and %5B/%5D spellings)" 2 "$(grep -c 'purge.jsdelivr.net' "$MOCK_LOG" || true)"
 MOCK_GH_EXIT=1 expect_status "a failed previous-tree listing fails closed" fail cdn purge_changed_hashed 1.11 v1.11.1 <<<"$good_sha $entry"
 CDN_PURGE_THROTTLED=""; CDN_PURGE_THROTTLE_RESET=0
 MOCK_PURGE_BODY='{"paths":{"x":{"throttled":true,"throttlingReset":120}}}' PATH="$tmpdir/cdn:$tmpdir:$PATH" \
 	purge_changed_hashed 1.11 v1.11.0 <<<"$good_sha $entry" > "$tmpdir/out"
 expect_eq "a throttled chunk purge reaches the caller's throttle state" "1 120" "$CDN_PURGE_THROTTLED $CDN_PURGE_THROTTLE_RESET"
 CDN_PURGE_THROTTLED=""; CDN_PURGE_THROTTLE_RESET=0
+# jsDelivr caches the raw [ ] and %5B/%5D spellings apart (v2.0.37), so both are purged.
+bracketed='_expo/static/js/web/[...orderId]-abc.js'
+bracketed_enc='_expo/static/js/web/%5B...orderId%5D-abc.js'
+purge_url='https://purge.jsdelivr.net/gh/wcpos/web-bundle@1.11/build'
+printf '{"truncated":false,"tree":[{"type":"blob","path":"build/%s","sha":"%s"}]}' "$bracketed" "$other_sha" > "$tmpdir/tree-prev-bracketed"
+: > "$MOCK_LOG"
+MOCK_TREE_PREV="$tmpdir/tree-prev-bracketed" expect_status "a bracketed changed chunk purge runs" pass cdn purge_changed_hashed 1.11 v1.11.0 <<<"$good_sha $bracketed"
+expect_eq "a bracketed chunk is purged raw" 1 "$(grep -Fxc "$purge_url/$bracketed" "$MOCK_LOG" || true)"
+expect_eq "and in its %5B/%5D spelling" 1 "$(grep -Fxc "$purge_url/$bracketed_enc" "$MOCK_LOG" || true)"
+expect_eq "a bracketed chunk sends two purges" 2 "$(grep -c 'purge.jsdelivr.net' "$MOCK_LOG" || true)"
+expect_eq "raw first, then encoded" "$(printf '%s\n%s' "$purge_url/$bracketed" "$purge_url/$bracketed_enc")" "$(grep 'purge.jsdelivr.net' "$MOCK_LOG")"
+: > "$MOCK_LOG"
+PATH="$tmpdir/cdn:$PATH" purge_cdn_path 1.11 _expo/static/js/web/plain-abc.js > "$tmpdir/out"
+expect_eq "a path without brackets is purged once" 1 "$(grep -c 'purge.jsdelivr.net' "$MOCK_LOG" || true)"
+MOCK_PURGE_BODY="{\"paths\":{\"/gh/wcpos/web-bundle@1.11/build/$bracketed\":{\"throttled\":false},\"/gh/wcpos/web-bundle@1.11/build/$bracketed_enc\":{\"throttled\":true,\"throttlingReset\":300}}}" \
+	PATH="$tmpdir/cdn:$PATH" purge_cdn_path 1.11 "$bracketed" > "$tmpdir/out"
+expect_eq "a throttle on the encoded purge reaches the caller" "1 300" "$CDN_PURGE_THROTTLED $CDN_PURGE_THROTTLE_RESET"
+expect_eq "only the encoded purge is logged as throttled" "accepted THROTTLED (reset in 300s)" "$(sed -n 's/.*HTTP 200, //p' "$tmpdir/out" | paste -sd ' ' -)"
+CDN_PURGE_THROTTLED=""; CDN_PURGE_THROTTLE_RESET=0
+out=$(MOCK_PURGE_BODY="{\"paths\":{\"/gh/wcpos/web-bundle@1.11/build/$bracketed_enc\":{\"throttled\":false}}}" PATH="$tmpdir/cdn:$PATH" purge_cdn_path 1.11 "$bracketed")
+expect_eq "the purged key is named when it differs from the one sent" \
+	"$(printf '%s\n%s' "purge @1.11/build/$bracketed -> HTTP 200, accepted (jsDelivr key: /gh/wcpos/web-bundle@1.11/build/$bracketed_enc)" "purge @1.11/build/$bracketed_enc -> HTTP 200, accepted")" "$out"
 expect_eq "previous lane tag is the newest below this one" v1.11.11 "$(printf 'v1.10.40\nv1.11.9\nv1.11.11\nv1.11.12\nv2.0.9\n' | previous_lane_tag 1.11 v1.11.12)"
 expect_eq "previous lane tag ignores other lanes and a later tag" v1.11.2 "$(printf 'v1.11.2\nv1.11.3\nv1.10.40\nv1.11.4\n' | previous_lane_tag 1.11 v1.11.3)"
 expect_eq "a new lane has no previous tag" "" "$(printf 'v1.10.40\n' | previous_lane_tag 1.11 v1.11.0)"
