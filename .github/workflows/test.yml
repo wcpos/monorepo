@@ -10,7 +10,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  # Each labeled event runs in a group keyed by its label, so a label event never cancels the code
+  # run and the code run never cancels a label run (push events have no action, so they key as `code`).
+  # Do not replace this with a job `if` that skips label runs: skipped jobs post skipped check runs,
+  # GitHub counts skipped as passing for a required check and the newest check run of a name wins,
+  # so a label added after a red Lint would read green (#3719, 2026-11-21).
+  # `labeled` stays a trigger because `gallery:update-baselines` starts the baseline commit.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name || 'code' }}
   cancel-in-progress: true
 
 jobs:
