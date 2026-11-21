@@ -1134,11 +1134,18 @@ export async function drainMutationQueue(input: {
 					...(current !== null && current !== undefined ? { conflictDocument: current } : {}),
 					conflictRevision: result.conflict?.currentRevision ?? result.currentRevision,
 				});
+				// The server names what moved; without it the log can only say "the store
+				// refused" and the cause is a DevTools dig on the merchant's machine.
+				const differs = result.conflict?.differs ?? [];
 				emit({
 					type: 'queue.write.conflict-transition',
 					level: 'warn',
 					collection: mutation.collectionName,
-					fields: { recordId: mutation.recordId, mutationId: mutation.mutationId },
+					fields: {
+						recordId: mutation.recordId,
+						mutationId: mutation.mutationId,
+						...(differs.length > 0 ? { differs: differs.slice(0, 25).join(',') } : {}),
+					},
 				});
 				blockedRecords.add(recordKey(mutation)); // hold later edits to this record until it's resolved
 				continue;
