@@ -893,4 +893,31 @@ describe('a hidden tab (POS-34N)', () => {
 		await pending;
 		expect(unsubscribe).toHaveBeenCalledTimes(1);
 	});
+
+	it('the re-send after a wake carries the same path and the same row body', async () => {
+		const deps = { ...createDeps(), awaitWake: jest.fn(async () => undefined) };
+		deps.post.mockRejectedValueOnce(asleep()).mockImplementationOnce(echo);
+		expect(await run(deps)).toMatchObject({ kind: 'recorded' });
+		expect(deps.post).toHaveBeenCalledTimes(2);
+		expect(deps.post.mock.calls[1]).toEqual(deps.post.mock.calls[0]);
+		const [first, second] = deps.post.mock.calls as [string, { payment: PaymentRow }][];
+		expect(second[1].payment.id).toBe(first[1].payment.id);
+	});
+
+	it('an offline pre-flight block never takes the wake branch', async () => {
+		const offline = Object.assign(new Error('offline'), {
+			isPreFlightBlocked: true,
+			blockCode: 'preflight-offline',
+		});
+		const control = createDeps();
+		control.post.mockRejectedValue(offline);
+		const controlResult = await run(control);
+		const deps = { ...createDeps(), awaitWake: jest.fn(async () => undefined) };
+		deps.post.mockRejectedValue(offline);
+		const result = await run(deps);
+		expect(deps.awaitWake).not.toHaveBeenCalled();
+		expect(result.kind).toBe(controlResult.kind);
+		expect(deps.post).toHaveBeenCalledTimes(control.post.mock.calls.length);
+		expect(deps.sleep.mock.calls).toEqual(control.sleep.mock.calls);
+	});
 });
