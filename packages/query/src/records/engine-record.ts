@@ -19,7 +19,9 @@ import type { RxDocument } from 'rxdb';
  * The engine record interface — a TYPE DISCIPLINE, not a runtime layer (ADR 0028).
  *
  * An engine record IS the RxDocument: immutable snapshot instances, doc-cache identity
- * (new instance ⟺ changed data), `getLatest()` as the explicit escape to current. Nothing
+ * (new instance ⟺ changed data), `getLatest()` as the explicit escape to current.
+ * As an exception, the open-orders handle may keep an instance across a `local`-only revision
+ * (see `acquireOpenOrdersQueryHandle`). Nothing
  * here wraps, caches, or re-emits; these types give the domain a typed face onto what the
  * engine already stores.
  */

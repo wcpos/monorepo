@@ -206,6 +206,9 @@ These serial checks exclude rapid bursts, variations, startup and idle stalls.
 
 Native requires the next completed `e2e-cart-add-timing` sequence and emits
 `WCPOS_E2E_CART_ADD` JSON; web attaches `cart-add-performance` JSON.
+The native sample's `marks` give the elapsed ms at `queued` (the cart action
+queue entered `run`), `birthRead`, `hooks` (the `cart.line.add` hooks finished)
+and `written`, so a slow add names its segment (#3340).
 Budgets live in the web assertion and `subflows/assert-cart-add-timing.yml`.
 Change budgets only with evidence. Validate a gate by temporarily slowing the
 actual handler: correct quantity must still fail performance; remove and rerun.
@@ -222,6 +225,12 @@ local iPhone 16 Pro simulator measured 7454 / 5261 on 2026-09-09) and
 `totalMs`; web attaches `cart-add-burst` JSON and gates first burst click ->
 quantity 20 in the DOM at a provisional 8000 ms. After two green four-device
 runs, tighten both ceilings to the observed CI maximum plus ~30%.
+Phones time `settleAfterLastTapMs` to the Cart tab badge reading 20, before
+the tab tap; tablets and local runs time the quantity field.
+On phones, `settleSignal` is `badge` when the badge read 20, or `field` when
+the badge read another count, so the cart was slow and the field was timed.
+If the label matched no count, `settleSignal` is `badge-unreadable` and the
+flow fails on its own assertion before the gate. The 15000 ms ceiling is unchanged.
 
 Known blind spot: Maestro asserts the accessibility value, not the pixels.
 On 2026-09-09 the field's value was `20` while it painted `2`: the shared

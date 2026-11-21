@@ -29,7 +29,8 @@ async function applyPayloadChanges<TDocument extends WriteTarget>(
 	manager: QueryManager,
 	collection: WriteableCollection,
 	{ document, changes: resolveChanges }: { document: TDocument; changes: PayloadChanges },
-	registerId?: string
+	registerId?: string,
+	stampTill?: boolean
 ) {
 	const recordId = documentRecordId(document);
 	if (!recordId) throw new Error('Payload changes require an engine record');
@@ -58,6 +59,7 @@ async function applyPayloadChanges<TDocument extends WriteTarget>(
 					recordId,
 					changes: resolve,
 					registerId: registerId,
+					...(stampTill === false ? { stampTill } : {}),
 				});
 	if (!patched) throw new Error('Temporary order is missing from the temporary DB');
 	return { changes, document: patched as TDocument };
@@ -70,11 +72,14 @@ export async function applyLocalPatch<TDocument extends WriteTarget, TData exten
 		registerId,
 		collectionName,
 		explicit,
+		stampTill,
 	}: {
 		registerId?: string;
 		collectionName?: string;
 		/** The row is the cashier asking for the push: an open cart's hold never holds it. */
 		explicit?: boolean;
+		/** `false`: never add this device's register or till rows (`patchAndEnqueueEngineResident`). */
+		stampTill?: boolean;
 	} = {}
 ): Promise<{ changes: Record<string, unknown>; document: TDocument; mutationId?: string }> {
 	const named = collectionName ?? recordCollectionName(document);
@@ -86,7 +91,8 @@ export async function applyLocalPatch<TDocument extends WriteTarget, TData exten
 				manager,
 				engineCollection,
 				{ document, changes: resolveChanges },
-				registerId
+				registerId,
+				stampTill
 			);
 		// `cloneDeep`, not a spread: RxDB serves object-valued document fields as
 		// **Proxies** (`getDocumentProperty`), nested ones included, and a Proxy
@@ -163,6 +169,7 @@ export async function applyLocalPatch<TDocument extends WriteTarget, TData exten
 				initial: scopedEngineResident!,
 				registerId: registerId,
 				...(explicit ? { explicit: true } : {}),
+				...(stampTill === false ? { stampTill } : {}),
 				onEnqueued: (id) => (mutationId = id),
 			});
 		} else {

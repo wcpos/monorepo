@@ -199,12 +199,15 @@ export function CurrentOrderProvider({
 	return (
 		<CurrentOrderActionsContext.Provider value={actions}>
 			<CurrentOrderContext.Provider
-				value={{
-					currentOrderRecord,
-					openOrders,
-					openOrdersScope: scope,
-					setCurrentOrderID,
-				}}
+				value={React.useMemo(
+					() => ({
+						currentOrderRecord,
+						openOrders,
+						openOrdersScope: scope,
+						setCurrentOrderID,
+					}),
+					[currentOrderRecord, openOrders, scope, setCurrentOrderID]
+				)}
 			>
 				{children}
 			</CurrentOrderContext.Provider>
