@@ -527,6 +527,20 @@ describe('the strip closes with a mouse (the 2026-11-21 board)', () => {
 		const order = screen.getByTestId('cart-line-strip').querySelectorAll('[role="button"]');
 		expect(Array.from(order, (el) => el.getAttribute('data-testid'))).toEqual(tiles);
 	});
+	it('a wide fallback press target never pushes Edit and Remove out of the row', () => {
+		mockPointer = 'fine';
+		// The Total column hidden: the Name is the press target, its leading edge 40 px into a 440 row.
+		const rect = jest
+			.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+			.mockImplementation(function (this: HTMLElement) {
+				const total = this.getAttribute('data-testid') === 'cart-line-total';
+				return { left: total ? 40 : 0, right: 440 } as DOMRect;
+			});
+		renderStrip({ close: CLOSE });
+		const slot = screen.getByTestId('cart-line-close-slot');
+		expect(parseFloat(slot.style.minWidth)).toBe(ROW - STRIP);
+		rect.mockRestore();
+	});
 	it("the open line's press catch is no tab stop and is hidden from assistive tech", () => {
 		renderStrip();
 		fireEvent.click(screen.getByTestId('cart-line-total'));

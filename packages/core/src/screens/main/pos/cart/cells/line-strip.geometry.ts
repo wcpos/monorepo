@@ -21,6 +21,21 @@ export const REMOVE_FLICK = 800;
 /** Past the line the Remove label rides this far in from the row's trailing edge. */
 export const LABEL_INSET = 20;
 
+/**
+ * The Close tile is never narrower than the Total column's floor (`min-w-18` in the cart table).
+ */
+export const CLOSE_MIN = 72;
+
+/**
+ * Close's width (fine pointer): the press target's footprint (`reach`, the total's leading edge to
+ * the row's end), so the click that opened the strip rests on Close, never on Remove, and a double
+ * click opens and closes (the 2026-11-21 board). A target wider than the row can spare (the Total
+ * column hidden, so the last visible cell is the target) still leaves Edit and Remove in the row.
+ */
+export function closeMinWidth(reach: number, rowWidth: number, editRemove: number): number {
+	return Math.max(CLOSE_MIN, Math.min(reach, rowWidth - editRemove));
+}
+
 /** How far the row has to travel before letting go removes it. */
 export function removePoint(rowWidth: number, stripWidth: number): number {
 	return Math.max(stripWidth + REMOVE_BAND, Math.round(rowWidth * REMOVE_SHARE));

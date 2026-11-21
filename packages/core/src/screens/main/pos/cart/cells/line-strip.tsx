@@ -22,6 +22,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import {
 	bodyOffset,
+	closeMinWidth,
 	editOffset,
 	releaseOutcome,
 	removeOffset,
@@ -69,12 +70,6 @@ const SWALLOW = { duration: OVERLAY_FADE, easing: EASE };
  * "lit" duration (`table/pulse-row.tsx`).
  */
 const ARM = 120;
-/**
- * The Close tile is never narrower than the Total column's floor (`min-w-18` in the cart table):
- * it sits in the total's footprint, so the click that opened the strip rests on Close, never on
- * Remove, and a double click opens and closes (the 2026-11-21 strip board).
- */
-const CLOSE_MIN = 72;
 /** The abutting tiles draw the Button's focus ring and gap inside them (`global.css`, Controls tier). */
 const INSET_RING = 'inset';
 /** An open line's name ends this far before the strip's leading edge (the board's 12 px). */
@@ -599,7 +594,10 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 							testID="cart-line-close-slot"
 							// The row's own surface under a quiet Button: the row's end, not a third coloured action.
 							className="bg-card flex-row items-stretch"
-							style={[{ minWidth: Math.max(CLOSE_MIN, totalReach) }, closeStyle]}
+							style={[
+								{ minWidth: closeMinWidth(totalReach, rowWidth, editWidth + removeWidth) },
+								closeStyle,
+							]}
 							onLayout={(e) => setCloseWidth(e.nativeEvent.layout.width)}
 						>
 							<Button

@@ -109,13 +109,20 @@ async function scrollsAndSwipes(page: Page) {
 	expect(Math.abs((await swipeBody.boundingBox())!.x - restX)).toBeLessThanOrEqual(1);
 }
 
-async function addNamedLine(page: Page, name: string) {
+/** Adds a miscellaneous line and returns its row's id-bearing testID (`cart-line-row-<uuid>`). */
+async function addLine(page: Page) {
+	const ids = () =>
+		page
+			.locator('[data-testid^="cart-line-row-"]')
+			.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-testid') ?? ''));
+	const before = new Set(await ids());
 	await page.getByTestId('add-cart-item-menu').click();
 	await page.getByTestId('menu-add-misc-product').click();
-	await page.getByTestId('misc-product-row-name').locator('input').fill(name);
 	await page.getByTestId('add-to-cart-submit').click();
 	const cartTab = page.getByTestId('pos-tab-cart');
 	if (await cartTab.isVisible()) await cartTab.tap();
+	await expect.poll(async () => (await ids()).filter((id) => !before.has(id))).toHaveLength(1);
+	return (await ids()).find((id) => !before.has(id))!;
 }
 
 /**
@@ -127,16 +134,9 @@ async function longSwipeRemoves(page: Page) {
 	const cartTab = page.getByTestId('pos-tab-cart');
 	if (await cartTab.isVisible()) await cartTab.tap();
 	await ensureRegisterOpen(page);
-	const stamp = Date.now();
-	const kept = `Swipe kept ${stamp}`;
-	const gone = `Swipe gone ${stamp}`;
-	await addNamedLine(page, kept);
-	await addNamedLine(page, gone);
+	const keptRow = page.getByTestId(await addLine(page));
+	const goneRow = page.getByTestId(await addLine(page));
 	const rows = page.getByTestId('cart-line-row');
-	const keptRow = rows.filter({ hasText: kept });
-	const goneRow = rows.filter({ hasText: gone });
-	await expect(keptRow).toHaveCount(1);
-	await expect(goneRow).toHaveCount(1);
 
 	// 150 px: the strip opens and the line stays.
 	const keptBox = (await keptRow.boundingBox())!;

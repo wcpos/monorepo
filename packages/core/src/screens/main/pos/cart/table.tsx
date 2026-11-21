@@ -452,6 +452,8 @@ export function CartTable({
 							{table.getRowModel().rows.map((row, index) => (
 								<PulseTableRow
 									key={row.id}
+									// Id-bearing, so a spec finds the line it created (CODING_STANDARDS, E2E rule 3).
+									testID={`cart-line-row-${row.id}`}
 									ref={(ref) => {
 										rowRefs.current.set(row.id, ref);
 									}}

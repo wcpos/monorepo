@@ -1,5 +1,7 @@
 import {
 	bodyOffset,
+	CLOSE_MIN,
+	closeMinWidth,
 	editOffset,
 	LABEL_INSET,
 	releaseOutcome,
@@ -175,5 +177,19 @@ describe('the strip with a Close tile (fine pointer, 2026-11-21 board)', () => {
 		expect(releaseOutcome({ rowWidth, stripWidth: EDIT_REMOVE, revealed: 150, velocityX: 0 })).toBe(
 			'open'
 		);
+	});
+});
+
+describe("Close's width", () => {
+	it("covers the total's footprint, never under the Total column's floor", () => {
+		expect(closeMinWidth(72, 482, 159)).toBe(72);
+		// A $1,240.00 total widens its cell, and Close with it.
+		expect(closeMinWidth(76, 482, 159)).toBe(76);
+		expect(closeMinWidth(0, 482, 159)).toBe(CLOSE_MIN);
+	});
+	it('a wide fallback target (Total hidden) still leaves Edit and Remove in the row', () => {
+		// The last visible cell is the Name: its footprint is most of the row.
+		expect(closeMinWidth(400, 482, 159)).toBe(482 - 159);
+		expect(482 - closeMinWidth(400, 482, 159)).toBeGreaterThanOrEqual(159);
 	});
 });
