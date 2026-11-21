@@ -25,3 +25,21 @@ it('a cell starting with = is prefixed', () => {
 		})
 	).toBe('"Product","Amount"\r\n"\'=1+1","£2.00"\r\n');
 });
+it('a negative cell is written with the hyphen it had before the screen showed a true minus', () => {
+	expect(
+		panelCsv({
+			...spec,
+			rows: [{ key: 'a', cells: ['A', '\u2212£5.00'], raw: ['A', -5] }],
+			total: [],
+		})
+	).toBe('"Product","Amount"\r\n"A","\'-£5.00"\r\n');
+});
+it('a name that starts with a true minus is the merchant\u2019s text and is exported as it reads', () => {
+	expect(
+		panelCsv({
+			...spec,
+			rows: [{ key: 'a', cells: ['\u22125°C gloves', '£2.00'], raw: ['\u22125°C gloves', 2] }],
+			total: [],
+		})
+	).toBe('"Product","Amount"\r\n"\u22125°C gloves","£2.00"\r\n');
+});

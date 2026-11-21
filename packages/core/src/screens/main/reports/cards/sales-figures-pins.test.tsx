@@ -79,10 +79,10 @@ it("the heads read gross, Categories its rows' total; Taxes, Refunds and Orders 
 // A period with a refund: the card's rows are its panel's rows (Paul 2026-11-09, ruling 1).
 describe('Top products and Categories show what their panels show', () => {
 	const t = createTestT();
-	// The store's money format, so a panel cell reads as the card prints it.
+	// The store's money format, so a panel cell reads as the card prints it: a true minus.
 	const formats = {
 		money: (n: number | null | undefined) =>
-			`${Number(n) < 0 ? '-' : ''}£${Math.abs(Number(n)).toFixed(2)}`,
+			`${Number(n) < 0 ? '\u2212' : ''}£${Math.abs(Number(n)).toFixed(2)}`,
 		number: String,
 		quantity: String,
 		percent: String,
@@ -140,7 +140,7 @@ describe('Top products and Categories show what their panels show', () => {
 		expect(rows.map((row) => [row.cells[0], row.cells[2]])).toEqual([
 			['Hat', '£20.00'],
 			['Shirt', '£10.00'],
-			['Scarf', '-£5.00'],
+			['Scarf', '\u2212£5.00'],
 		]);
 		for (const [index, row] of rows.entries()) {
 			const shown = await screen.findByTestId(`card-products-row-${index}`);

@@ -84,6 +84,8 @@ describe("separators: typed or pasted text reads with the store's", () => {
 		['.', ',', '1,234,567', 1234567], // a separator twice is grouping
 		[',', ' ', '1 234,50', 1234.5], // a space thousands separator is never a decimal
 		['.', ',', '-12.5', -12.5],
+		['.', ',', '\u22125', -5], // a pasted true minus (U+2212), as the app shows a negative
+		[',', '.', '\u22121.234,50', -1234.5],
 	])('decimal %s, thousands %s: %s commits %d', (decimal, thousands, typed, committed) => {
 		mockStore.price_decimal_sep = decimal;
 		mockStore.price_thousand_sep = thousands;

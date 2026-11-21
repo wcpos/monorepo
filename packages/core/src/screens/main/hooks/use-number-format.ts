@@ -77,7 +77,12 @@ export const useNumberFormat = (options?: NumberFormatOptions) => {
 				safeValue = round(safeValue, mergedOptions.decimalScale);
 			}
 			// Plain digits, never "1.11e+21": the formatter keeps only the digits it finds.
-			return numericFormatter(plainNumberString(safeValue), mergedOptions);
+			const text = numericFormatter(plainNumberString(safeValue), mergedOptions);
+			if (!(safeValue < 0) || !text.startsWith('-')) return text;
+			// A negative reads with a true minus (U+2212); one that formats to zero ("-0,0") with none.
+			const { prefix = '', suffix = '' } = mergedOptions;
+			const digits = text.slice(1 + prefix.length, text.length - suffix.length);
+			return /[1-9]/.test(digits) ? `\u2212${text.slice(1)}` : text.slice(1);
 		},
 		[mergedOptions]
 	);

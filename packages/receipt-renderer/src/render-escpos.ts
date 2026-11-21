@@ -193,8 +193,8 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		// ASCII-folding of dashes and quotes stays ESC/POS-only: on Star the encoder switches
 		// code page and maps them faithfully (– → CP1252 0x96, “ ” → 0x93/0x94), so folding
 		// them there would lose typography the printer can actually render. The no-break and
-		// fixed-width SPACES are the opposite case and are handled separately — see
-		// `normalizeThermalSpaces`.
+		// fixed-width SPACES, and the minus sign, are the opposite case and are handled
+		// separately — see `normalizeThermalSpacesAndMinus`.
 		normalizeText: resolvedLanguage === 'esc-pos',
 		emitEscPrintMode: resolvedLanguage === 'esc-pos' && emitEscPrintMode,
 		textScale: { width: 1, height: 1 },
@@ -804,7 +804,9 @@ function writeText(
 	supportsCp932: boolean,
 	normalizeText: boolean
 ): void {
-	const normalized = normalizeText ? normalizeThermalText(value) : normalizeThermalSpaces(value);
+	const normalized = normalizeText
+		? normalizeThermalText(value)
+		: normalizeThermalSpacesAndMinus(value);
 	if (!supportsCp932 || !containsJapaneseText(normalized)) {
 		encoder.text(normalized);
 		return;
@@ -1039,8 +1041,9 @@ function alignedPadding(
 }
 
 /**
- * Fold the no-break and fixed-width spaces to an ASCII space. Applied in EVERY language,
- * unlike the punctuation folding below.
+ * Fold the no-break and fixed-width spaces to an ASCII space, and the minus sign (U+2212, how
+ * the app writes a negative amount) to a hyphen. Applied in EVERY language, unlike the
+ * punctuation folding below: on Star the encoder printed `?5.00` for a minus.
  *
  * These are spaces: on a monospace thermal line there is no typography to preserve, and no
  * printer character table carries them. Measured against `@point-of-sale/receipt-printer-
@@ -1048,14 +1051,14 @@ function alignedPadding(
  * 0x80 (Ç in the default Star table) — which is how a CLDR short time, whose hour and day
  * period ICU >= 72 separates with U+202F, printed as `2:05?pm` on a merchant's receipt.
  */
-export function normalizeThermalSpaces(value: string): string {
-	return value.replace(/[\u00A0\u202F\u2009\u2007]/g, ' ');
+export function normalizeThermalSpacesAndMinus(value: string): string {
+	return value.replace(/[\u00A0\u202F\u2009\u2007]/g, ' ').replace(/\u2212/g, '-');
 }
 
 export function normalizeThermalText(value: string): string {
-	return normalizeThermalSpaces(
+	return normalizeThermalSpacesAndMinus(
 		value
-			.replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-')
+			.replace(/[\u2010\u2011\u2012\u2013\u2014]/g, '-')
 			.replace(/[\u2018\u2019]/g, "'")
 			.replace(/[\u201C\u201D]/g, '"')
 	);
@@ -1063,10 +1066,12 @@ export function normalizeThermalText(value: string): string {
 
 /**
  * Normalize one string for the current language: punctuation too where the context asks for
- * it, spaces always.
+ * it, spaces and the minus sign always.
  */
 function normalizeForContext(context: RenderContext, value: string): string {
-	return context.normalizeText ? normalizeThermalText(value) : normalizeThermalSpaces(value);
+	return context.normalizeText
+		? normalizeThermalText(value)
+		: normalizeThermalSpacesAndMinus(value);
 }
 
 function containsJapaneseText(value: string): boolean {

@@ -17,7 +17,8 @@ import type { Amount } from './use-amount';
  * points left over, is NaN: the caller writes nothing.
  */
 function parseNumber(text: string, decimal: string, thousands: string): number {
-	let t = text.trim();
+	// A pasted true minus (U+2212), as the app shows a negative, reads as a typed one.
+	let t = text.trim().replace(/^\u2212/, '-');
 	if (t === '' || t === '-') return 0;
 	if (thousands && thousands !== decimal && t.includes(thousands) && t.includes(decimal)) {
 		t = t.split(thousands).join('').replace(decimal, '.');
