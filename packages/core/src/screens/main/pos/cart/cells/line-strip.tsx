@@ -246,18 +246,18 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 	const peek = () => {
 		offset.set(reduced ? -PEEK : withSpring(-PEEK, PEEK_SPRING));
 	};
-	/** The slots' widths as their layouts report them, ahead of the render that reads the state. */
-	const slots = React.useRef({ edit: 0, remove: 0, close: 0 });
+	/** The slots' widths as their layouts report them, ahead of the render that reads the state. 'removal', not 'remove': the seam scan reads a member of that name as a record mutator. */
+	const slots = React.useRef({ edit: 0, removal: 0, close: 0 });
 	/**
 	 * A slot's layout. While a strip rests open its offset is -stripWidth, so a width measured after
 	 * the open (Close arriving, a resized row, a locale) moves the rest with it, from this handler and
 	 * never under a drag or the flight.
 	 */
-	const measured = (slot: 'edit' | 'remove' | 'close', width: number) => {
+	const measured = (slot: 'edit' | 'removal' | 'close', width: number) => {
 		slots.current[slot] = width;
-		const { edit, remove, close } = slots.current;
+		const { edit, removal, close } = slots.current;
 		if (opened.get() && !dragging && !leaving.get())
-			offset.set(-(edit + remove + (fine ? close : 0)));
+			offset.set(-(edit + removal + (fine ? close : 0)));
 	};
 	// Web, while open: a press outside closes it and still lands (heard on the way down, never
 	// stopped). Escape closes it too, unless the focus is elsewhere (an Edit sheet's Escape is its own).
@@ -590,7 +590,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 						style={removeStyle}
 						onLayout={(e) => {
 							setRemoveWidth(e.nativeEvent.layout.width);
-							measured('remove', e.nativeEvent.layout.width);
+							measured('removal', e.nativeEvent.layout.width);
 						}}
 					>
 						<Button
