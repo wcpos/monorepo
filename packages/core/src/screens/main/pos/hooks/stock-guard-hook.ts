@@ -183,6 +183,8 @@ export const stockGuardOnUpdate: ActionHook<'cart.line.update'> = async (ctx, e,
 		!line ||
 		isMiscProductLine(line) ||
 		requested === null ||
+		// A returned line (0 or below) takes no stock, so −2 to −1 is not new demand.
+		requested <= 0 ||
 		requested <= (line.quantity ?? 0)
 	)
 		return next(e);

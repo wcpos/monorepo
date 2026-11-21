@@ -1077,6 +1077,8 @@ const RETRY_DECISIONS: Record<BoundaryReason, boolean> = {
 	in_checkout: true,
 	'pos_cart.only_n_available': true,
 	'pos_products.out_of_stock': true,
+	// No catalog, register or session change lifts a sale above zero: the cashier edits the cart.
+	'pos.checkout_negative_total': false,
 	'pos_checkout.choose_register_first': false,
 	'pos_checkout.open_register_first': false,
 };

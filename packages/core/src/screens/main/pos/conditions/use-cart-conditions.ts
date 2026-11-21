@@ -5,6 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 import { distinctUntilChanged, switchMap } from 'rxjs/operators';
 
+import { getNetPaymentTotal } from '@wcpos/order-math';
 import {
 	observeCatalogByWooIds,
 	readStockPayload,
@@ -13,13 +14,16 @@ import {
 	useRecordField,
 } from '@wcpos/query';
 
-import { conditionRules, type UnmetCondition } from './evaluate';
+import { conditionRules, evaluateTotal, type UnmetCondition } from './evaluate';
 import { countConditionsInSlot } from './snapshot';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order/context';
 
 const NONE: UnmetCondition[] = [];
-/** Re-judged when the lines or the catalog records they name move; idle with overselling allowed. */
+/**
+ * Re-judged when the lines or the catalog records they name move, the stock idle with overselling
+ * allowed; the total (what Pay shows) is judged as it moves, with no read.
+ */
 export function useCartConditions(order: CurrentOrderRecord | undefined): {
 	unmet: UnmetCondition[];
 } {
@@ -27,9 +31,12 @@ export function useCartConditions(order: CurrentOrderRecord | undefined): {
 	const { store } = useStoreSession();
 	const preventOverselling = useDocField(store, (value) => value.prevent_overselling) === true;
 	const lineItems = useRecordField(order, (value) => value.payload.line_items);
+	const total = useRecordField(order, (value) =>
+		getNetPaymentTotal(value.payload.total, value.payload.refunds)
+	);
 	const unmet$ = React.useMemo(() => {
 		const items = lineItems ?? [];
-		const rules = conditionRules(preventOverselling);
+		const rules = conditionRules(preventOverselling).filter((rule) => rule.kind === 'stock');
 		if (!preventOverselling || !order || items.length === 0) return of(NONE);
 		const catalog = (kind: 'product' | 'variation', id: number) =>
 			readStockPayload(runtime.engine, kind === 'product' ? 'products' : 'variations', id);
@@ -42,7 +49,12 @@ export function useCartConditions(order: CurrentOrderRecord | undefined): {
 			distinctUntilChanged(isEqual)
 		);
 	}, [runtime, preventOverselling, lineItems, order]);
-	return { unmet: useObservableState(unmet$, NONE) };
+	const stock = useObservableState(unmet$, NONE);
+	const unmet = React.useMemo(() => {
+		const below = order ? evaluateTotal(total, conditionRules(preventOverselling)) : NONE;
+		return below.length === 0 ? stock : [...stock, ...below];
+	}, [order, stock, total, preventOverselling]);
+	return { unmet };
 }
 
 const CartConditionsContext = React.createContext<UnmetCondition[]>(NONE);

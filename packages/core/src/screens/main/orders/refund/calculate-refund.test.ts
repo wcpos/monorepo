@@ -10,6 +10,17 @@ import {
 } from './calculate-refund';
 
 describe('calculateLineItemRefund', () => {
+	it('a returned line (quantity −1) refunds nothing: its money went back inside the sale', () => {
+		expect(
+			calculateLineItemRefund({
+				quantity: -1,
+				total: '-4.00',
+				taxes: [{ id: 1, total: '-0.40' }],
+				refundQty: 1,
+			})
+		).toEqual({ refund_total: '0.00', refund_tax: [{ id: 1, refund_total: '0.00' }] });
+	});
+
 	it('calculates proportional refund for a single unit', () => {
 		const result = calculateLineItemRefund({
 			quantity: 3,

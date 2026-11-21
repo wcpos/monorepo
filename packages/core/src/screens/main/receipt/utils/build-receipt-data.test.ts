@@ -525,6 +525,38 @@ describe('buildReceiptData', () => {
 		expect(result.presentation_hints.prices_entered_with_tax).toBe(false);
 	});
 
+	describe('a returned line (−1 × 4.00 inside the sale)', () => {
+		const returnOrder = {
+			...mockOrder,
+			total: '-4.40',
+			total_tax: '-0.40',
+			line_items: [
+				{
+					id: 3,
+					name: 'Returned Widget',
+					quantity: -1,
+					price: 4,
+					total: '-4.00',
+					total_tax: '-0.40',
+					subtotal: '-4.00',
+					subtotal_tax: '-0.40',
+				},
+			],
+		};
+
+		it.each([
+			['excl', exclStore, '4.00', '-4.00'],
+			['incl', inclStore, '4.40', '-4.40'],
+		])('prints qty −1 and its positive unit price, tax %s', (_, store, unit, lineTotal) => {
+			const [line] = buildReceiptData(returnOrder, store).lines;
+			expect(line.quantity).toBe(-1);
+			expect(line.unit_price).toBe(unit);
+			expect(line.unit_price_excl).toBe('4.00');
+			expect(line.unit_price_incl).toBe('4.40');
+			expect(line.line_total).toBe(lineTotal);
+		});
+	});
+
 	it('uses order-level discount totals when they differ from summed line discounts', () => {
 		const inclResult = buildReceiptData(orderLevelDiscountOrder, inclStore);
 		const exclResult = buildReceiptData(orderLevelDiscountOrder, exclStore);
@@ -811,6 +843,11 @@ describe('buildReceiptData', () => {
 						{
 							...aliasOrder.line_items[0],
 							quantity: -2,
+							// A returned line's money is signed with its quantity, so its unit price is positive.
+							subtotal: '-25.00',
+							subtotal_tax: '-5.00',
+							total: '-20.00',
+							total_tax: '-4.00',
 							meta_data: [posData(15, 18)],
 						},
 					],
@@ -820,13 +857,14 @@ describe('buildReceiptData', () => {
 
 			expect(result.lines[0]).toMatchObject({
 				quantity: -2,
-				unit_price: '0.00',
-				line_regular_total: '-36.00',
-				line_savings: '-6.00',
+				unit_price: '15.00',
+				// A returned line carries no savings fields (plugin #2684), so the sale saved nothing.
+				line_regular_total: null,
+				line_savings: null,
 			});
 			expect(result.totals).toMatchObject({
 				total_qty: -2,
-				sale_savings_total: '-6.00',
+				sale_savings_total: '0.00',
 			});
 		});
 
@@ -983,6 +1021,54 @@ describe('buildReceiptData', () => {
 				line_savings_excl: '0.00',
 			});
 			expect(result.totals.sale_savings_total).toBe('0.00');
+		});
+
+		describe('a returned line of a sale-priced product (plugin #2684)', () => {
+			const saleLine = (quantity: number, money: string, total = money) => ({
+				...mockOrder.line_items[0],
+				quantity,
+				subtotal: money,
+				subtotal_tax: '0.00',
+				total,
+				total_tax: '0.00',
+				meta_data: [posData(15, 20, 'none')],
+			});
+			const order = (discountTotal: string, returned: ReturnType<typeof saleLine>) => ({
+				...mockOrder,
+				total: '0.00',
+				total_tax: '0.00',
+				discount_total: discountTotal,
+				discount_tax: '0.00',
+				line_items: [saleLine(1, '15.00'), returned],
+			});
+
+			it('the −1 line carries no savings, and the +1 line’s savings are the sale’s', () => {
+				const result = buildReceiptData(order('0.00', saleLine(-1, '-15.00')), exclStore);
+				expect(result.lines[0]).toMatchObject({ line_savings: '5.00', unit_savings: '5.00' });
+				expect(result.lines[1]).toMatchObject({
+					quantity: -1,
+					unit_savings: null,
+					unit_savings_incl: null,
+					unit_savings_excl: null,
+					line_regular_total: null,
+					line_selling_total: null,
+					line_savings: null,
+					line_savings_incl: null,
+					line_savings_excl: null,
+					savings_in_discounts: false,
+				});
+				expect(result.totals.sale_savings_total).toBe('5.00');
+				expect(result.totals.total_saved).toBe('5.00');
+			});
+
+			it('the saved total nets the lines but never goes below 0', () => {
+				// The returned line gave back 8.00 of discount: 5.00 saved − 8.00 nets to −3.00.
+				const result = buildReceiptData(order('-8.00', saleLine(-1, '-15.00', '-7.00')), exclStore);
+				expect(result.totals.total_saved).toBe('0.00');
+				expect(result.totals.total_saved_incl).toBe('0.00');
+				expect(result.totals.total_saved_excl).toBe('0.00');
+				expect(result.totals.total_saved_complete).toBe(true);
+			});
 		});
 
 		it('detects legacy savings already included in WooCommerce discounts', () => {
