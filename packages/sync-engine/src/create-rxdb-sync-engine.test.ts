@@ -26,6 +26,9 @@ import {
 } from './create-rxdb-sync-engine';
 import { createEngineHarness, memoryStringStore, remoteId, scriptedConnectivity } from './testing';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
+import { withOrderReadopt } from './write-path/order-revision';
+
+import type { RxCollection } from 'rxdb';
 
 setPremiumFlag();
 
@@ -367,7 +370,124 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		await engine.dispose();
 	});
 
-	it('preserves local POS identity meta during clean server order upserts', async () => {
+	it.each([
+		{
+			name: "clean pull adopts the server's cashier and store",
+			local: { dirty: false, pendingMutationIds: [] },
+			expectedColumns: { posUserId: '999', posStoreId: '12' },
+			expectedMeta: [
+				{ key: '_pos_user', value: '999' },
+				{ key: '_pos_store', value: '12' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+		{
+			name: 'a pull at an equal revision stamp keeps the resident identity',
+			local: { dirty: false, pendingMutationIds: [] },
+			residentRevision: 'sha256:same',
+			serverRevision: 'sha256:same',
+			expectedColumns: { posUserId: '7', posStoreId: '11' },
+			expectedMeta: [
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+		{
+			name: 'a corrective readopt at an equal revision stamp adopts the server identity',
+			local: { dirty: false, pendingMutationIds: [] },
+			residentRevision: 'sha256:same',
+			serverRevision: 'sha256:same',
+			readopt: true,
+			expectedColumns: { posUserId: '999', posStoreId: '12' },
+			expectedMeta: [
+				{ key: '_pos_user', value: '999' },
+				{ key: '_pos_store', value: '12' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+		{
+			name: 'an ack under a readopt keeps the resident identity',
+			local: { dirty: false, pendingMutationIds: ['ack-1'] },
+			residentRevision: 'sha256:same',
+			serverRevision: 'sha256:same',
+			readopt: true,
+			ack: true,
+			expectedColumns: { posUserId: '7', posStoreId: '11' },
+			expectedMeta: [
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+		{
+			name: 'a pull at a different revision stamp adopts the server identity',
+			local: { dirty: false, pendingMutationIds: [] },
+			residentRevision: 'sha256:old',
+			serverRevision: 'sha256:new',
+			expectedColumns: { posUserId: '999', posStoreId: '12' },
+			expectedMeta: [
+				{ key: '_pos_user', value: '999' },
+				{ key: '_pos_store', value: '12' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+		{
+			name: 'a pull keeps the resident identity when the local order is dirty',
+			local: { dirty: true, pendingMutationIds: [] },
+		},
+		{
+			name: 'a pull keeps the resident identity when the local order has a pending mutation',
+			local: { dirty: false, pendingMutationIds: ['m1'] },
+		},
+		{
+			name: 'a pull that omits the identity keys keeps the resident values',
+			local: { dirty: false, pendingMutationIds: [] },
+			omitIdentity: true,
+			expectedColumns: { posUserId: '7', posStoreId: '11' },
+			expectedMeta: [
+				{ key: 'echo_meta', value: 'adopted' },
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+			],
+		},
+		{
+			name: 'a pull landing while a POS-side reassignment is queued keeps the reassignment',
+			local: { dirty: true, pendingMutationIds: ['reassign-1'] },
+			residentUser: '42',
+			serverUser: '7',
+		},
+		{
+			name: 'an ack keeps the resident identity (#936)',
+			local: { dirty: false, pendingMutationIds: ['ack-1'] },
+			ack: true,
+			expectedColumns: { posUserId: '7', posStoreId: '11' },
+			expectedMeta: [
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		},
+	])('$name', async (testCase) => {
+		const {
+			local,
+			residentUser = '7',
+			serverUser = '999',
+			residentRevision = 'r1',
+			serverRevision = 'r2',
+			omitIdentity,
+			ack,
+			readopt,
+			expectedMeta,
+			expectedColumns,
+		} = testCase;
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
 		const scope = await engine.whenActive();
@@ -378,7 +498,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			updatedAtGmt: '2026-07-01T00:00:00.000Z',
 			revision: 'r1',
 		});
-		await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+		const resident = {
 			posUserId: '',
 			posStoreId: '',
 			uuid: id,
@@ -393,32 +513,47 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 				id: 1,
 				status: 'pos-open',
 				meta_data: [
-					{ key: '_pos_user', value: '7' },
+					{ key: '_pos_user', value: residentUser },
 					{ key: '_pos_store', value: '11' },
 					{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
 				],
 			},
-			sync: { revision: 'r1', checkpoint, partial: false, source: 'woo-rest' },
-			local: { dirty: false, pendingMutationIds: [] },
-		});
+			sync: { revision: residentRevision, checkpoint, partial: false, source: 'woo-rest' },
+			local,
+		};
+		await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert(
+			resident
+		);
 
-		await repository.upsertMany([
-			{
-				uuid: id,
-				remoteId: remoteId(1),
-				payload: {
-					id: 1,
-					status: 'pos-open',
-					meta_data: [
-						{ key: '_pos_user', value: '999' },
-						{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
-						{ key: 'echo_meta', value: 'adopted' },
-					],
-				},
-				sync: { revision: 'r2', checkpoint, partial: false, source: 'woo-rest' },
-				local: { dirty: false, pendingMutationIds: [] },
-			} satisfies OrderDocument,
-		]);
+		const upsert = repository.upsertMany.bind(
+			repository,
+			[
+				{
+					uuid: id,
+					remoteId: remoteId(1),
+					payload: {
+						id: 1,
+						status: 'pos-open',
+						meta_data: [
+							...(omitIdentity
+								? []
+								: [
+										{ key: '_pos_user', value: serverUser },
+										{ key: '_pos_store', value: '12' },
+										{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
+									]),
+							{ key: 'echo_meta', value: 'adopted' },
+						],
+					},
+					sync: { revision: serverRevision, checkpoint, partial: false, source: 'woo-rest' },
+					local: { dirty: false, pendingMutationIds: [] },
+				} satisfies OrderDocument,
+			],
+			ack
+				? { source: 'ack', mutationId: 'ack-1', recordId: id }
+				: { source: 'pull', requestedAt: 0 }
+		);
+		await (readopt ? withOrderReadopt(scope.database, [String(remoteId(1))], upsert) : upsert());
 
 		const stored = await (
 			scope.database.collections.orders as {
@@ -429,12 +564,48 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		)
 			.findOne(id)
 			.exec();
-		expect(stored?.toJSON().payload.meta_data).toEqual([
-			{ key: '_pos_user', value: '7' },
-			{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
-			{ key: 'echo_meta', value: 'adopted' },
-			{ key: '_pos_store', value: '11' },
-		]);
+		expect(stored?.toJSON().payload.meta_data).toEqual(expectedMeta ?? resident.payload.meta_data);
+		if (expectedColumns) expect(stored?.toJSON()).toMatchObject(expectedColumns);
+		if (!expectedMeta) expect(stored?.toJSON()).toMatchObject(resident);
+		await engine.dispose();
+	});
+
+	it('a stamp between the early merge and re-merge keeps identity meta and columns equal', async () => {
+		const engine = engineWith();
+		const scope = await engine.whenActive();
+		const repository = new EngineOrderRepository(scope.database as never);
+		const orders = scope.database.collections.orders as RxCollection<OrderDocument>;
+		const id = 'order-identity-stamp-race';
+		await insertOrder(scope.database, id);
+		const resident = await (await orders.findOne(id).exec())!.incrementalModify((current) => ({
+			...current,
+			sync: { ...current.sync, revision: 'sha256:old' },
+			payload: { ...current.payload, meta_data: [{ key: '_pos_user', value: '7' }] },
+		}));
+		const incoming: OrderDocument = {
+			...resident.toMutableJSON(),
+			local: { dirty: false, pendingMutationIds: [] },
+			sync: { ...resident.sync, revision: 'sha256:new' },
+			payload: { ...resident.payload, meta_data: [{ key: '_pos_user', value: '999' }] },
+		};
+		const modify = resident.incrementalModify.bind(resident);
+		const stamp = vi
+			.spyOn(resident, 'incrementalModify')
+			.mockImplementationOnce(async (modifier) => {
+				await modify((current) => ({
+					...current,
+					sync: { ...current.sync, revision: 'sha256:new' },
+				}));
+				return modify(modifier);
+			});
+		await repository.upsertMany([incoming], { source: 'pull', requestedAt: 0 });
+		expect(stamp).toHaveBeenCalledOnce();
+		const stored = (await orders.findOne(id).exec())!.toJSON();
+		expect(stored).toMatchObject({
+			posUserId: '999',
+			payload: { meta_data: [{ key: '_pos_user', value: '999' }] },
+		});
+		stamp.mockRestore();
 		await engine.dispose();
 	});
 
