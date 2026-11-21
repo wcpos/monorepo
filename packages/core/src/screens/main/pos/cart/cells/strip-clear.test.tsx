@@ -86,3 +86,15 @@ it('a name already clear of the strip is not padded', () => {
 	rerender(<Cell edge={300} />);
 	expect(mockBox.style?.paddingRight).toBe(0);
 });
+
+it('the cart column resized while open: the padding follows the new edge, the lines stay', () => {
+	const { rerender } = render(<Cell edge={null} />);
+	laidOut(400, 1);
+	rerender(<Cell edge={300} />);
+	expect(mockBox.style?.paddingRight).toBe(100);
+	// The column widens by 50: the row (and so the strip's edge) and the name's box move with it.
+	rerender(<Cell edge={350} />);
+	laidOut(450, 2);
+	expect(mockBox.style?.paddingRight).toBe(100);
+	expect(lines()).toBe(1);
+});

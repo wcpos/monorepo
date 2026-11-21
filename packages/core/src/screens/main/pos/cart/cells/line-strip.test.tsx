@@ -217,6 +217,8 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	mockDisabled.length = 0;
 	mockPointer = 'coarse';
+	// Each test lays out only the slots its own render registered.
+	for (const testID of Object.keys(mockLayouts)) delete mockLayouts[testID];
 });
 it('U1: gives vertical touch pans to the browser', () => {
 	renderStrip();
@@ -420,7 +422,7 @@ describe('the strip closes with a mouse (the 2026-11-21 board)', () => {
 	const CLOSE = 72;
 	const isOpen = () => !!screen.queryByTestId('cart-line-close-catch');
 	it('coarse pointer: no Close tile, and the strip opens to Edit and Remove only', () => {
-		renderStrip({ close: CLOSE });
+		renderStrip();
 		expect(screen.queryByTestId('cart-line-close')).toBeNull();
 		fireEvent.click(screen.getByTestId('cart-line-total'));
 		expect(mockOffsetSet).toHaveBeenLastCalledWith(-STRIP);

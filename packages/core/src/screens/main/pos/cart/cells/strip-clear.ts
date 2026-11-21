@@ -21,11 +21,16 @@ export function useStripClear() {
 			onLayout: (event: LayoutChangeEvent) => {
 				const el = (event.nativeEvent as { target?: HTMLElement }).target;
 				const text = el?.matches?.('[dir]') ? el : el?.querySelector?.<HTMLElement>('[dir]');
-				if (edge !== null || !el || !text) return;
-				const { height } = text.getBoundingClientRect();
-				const lines = Math.round(height / parseFloat(getComputedStyle(text).lineHeight));
+				if (!el || !text) return;
+				// The box's own padding never moves its right edge, so it is re-read while open too (the
+				// cart column resized); the line count is the rest one and stays frozen until closed.
 				const { right } = el.getBoundingClientRect();
-				if (lines > 0) setRest((before) => ({ ...before, [key]: { right, lines } }));
+				const { height } = text.getBoundingClientRect();
+				const lines =
+					edge === null
+						? Math.round(height / parseFloat(getComputedStyle(text).lineHeight))
+						: rest[key]?.lines;
+				if (lines && lines > 0) setRest((before) => ({ ...before, [key]: { right, lines } }));
 			},
 		}),
 	};
