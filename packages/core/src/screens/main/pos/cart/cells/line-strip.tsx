@@ -211,6 +211,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 		setOpen(false);
 		settle(0);
 	};
+	// Cleanup only: a row that leaves the cart while open is no longer the cart's open line.
 	React.useEffect(() => () => openLine.closed(uuid), [openLine, uuid]);
 	const swiped = useSharedValue(false);
 	const offset = useSharedValue(0);
@@ -245,12 +246,19 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 	const peek = () => {
 		offset.set(reduced ? -PEEK : withSpring(-PEEK, PEEK_SPRING));
 	};
-	// While a strip rests open, its offset is -stripWidth: a width measured after the open (Close
-	// arriving, a resized row, a locale) moves the rest with it, never under a drag or the flight.
-	const rest = React.useEffectEvent(() => {
-		if (opened.get() && !dragging && !leaving.get()) offset.set(-stripWidth);
-	});
-	React.useEffect(() => rest(), [stripWidth]);
+	/** The slots' widths as their layouts report them, ahead of the render that reads the state. */
+	const slots = React.useRef({ edit: 0, remove: 0, close: 0 });
+	/**
+	 * A slot's layout. While a strip rests open its offset is -stripWidth, so a width measured after
+	 * the open (Close arriving, a resized row, a locale) moves the rest with it, from this handler and
+	 * never under a drag or the flight.
+	 */
+	const measured = (slot: 'edit' | 'remove' | 'close', width: number) => {
+		slots.current[slot] = width;
+		const { edit, remove, close } = slots.current;
+		if (opened.get() && !dragging && !leaving.get())
+			offset.set(-(edit + remove + (fine ? close : 0)));
+	};
 	// Web, while open: a press outside closes it and still lands (heard on the way down, never
 	// stopped). Escape closes it too, unless the focus is elsewhere (an Edit sheet's Escape is its own).
 	const onOutsidePress = React.useEffectEvent((event: PointerEvent) => {
@@ -541,7 +549,10 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 						// it changed word and surface on hover while Remove only dimmed.
 						className="bg-primary flex-row items-stretch"
 						style={editStyle}
-						onLayout={(e) => setEditWidth(e.nativeEvent.layout.width)}
+						onLayout={(e) => {
+							setEditWidth(e.nativeEvent.layout.width);
+							measured('edit', e.nativeEvent.layout.width);
+						}}
 						pointerEvents={armed || !open ? 'none' : 'auto'}
 						aria-hidden={armed}
 					>
@@ -577,7 +588,10 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 						testID="cart-line-remove-slot"
 						className="flex-row items-stretch"
 						style={removeStyle}
-						onLayout={(e) => setRemoveWidth(e.nativeEvent.layout.width)}
+						onLayout={(e) => {
+							setRemoveWidth(e.nativeEvent.layout.width);
+							measured('remove', e.nativeEvent.layout.width);
+						}}
 					>
 						<Button
 							variant="destructive"
@@ -603,7 +617,10 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, child
 								{ minWidth: closeMinWidth(totalReach, rowWidth, editWidth + removeWidth) },
 								closeStyle,
 							]}
-							onLayout={(e) => setCloseWidth(e.nativeEvent.layout.width)}
+							onLayout={(e) => {
+								setCloseWidth(e.nativeEvent.layout.width);
+								measured('close', e.nativeEvent.layout.width);
+							}}
 						>
 							<Button
 								variant="ghost"
