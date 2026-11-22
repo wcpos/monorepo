@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { type ControllerRenderProps, useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField, FormSelect, FormSwitch } from '@wcpos/components/form';
-import { PropertyRow } from '@wcpos/components/property-row';
+import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
 import { Text } from '@wcpos/components/text';
 
 import { DrawerEmulationWarning } from './drawer-emulation-warning';
@@ -38,7 +38,7 @@ function SwitchRow(props: {
 	);
 }
 
-function SelectRow(props: {
+type SelectRowProps = {
 	name: 'vendor' | 'language' | 'columns' | 'codePage' | 'drawerConnector';
 	label: string;
 	options: { value: string; label: string }[];
@@ -47,7 +47,9 @@ function SelectRow(props: {
 	/** Columns is a number in the form and a string in the select. */
 	numeric?: boolean;
 	onManualChange?: () => void;
-}) {
+};
+
+function SelectRow(props: SelectRowProps) {
 	const { name, numeric } = props;
 	const { control } = useFormContext<PrinterFormValues>();
 	return (
@@ -68,6 +70,59 @@ function SelectRow(props: {
 					/>
 				)}
 			/>
+		</PropertyRow>
+	);
+}
+
+/** What this session's probe wrote into the form (null where it wrote nothing); `id` is per scan. */
+export type PrinterDetection = {
+	language: PrinterFormValues['language'] | null;
+	columns: number | null;
+	id: number;
+};
+
+/**
+ * A select the scan filled in (rule 5, a copy is derived): while the form still holds the detected
+ * value the row reads the value and "detected", and Change breaks the link for the dialog's life.
+ * Only a new detection (a new `detectionId`) links it again; a value that moved off the detected one,
+ * even back onto it, is the plain select.
+ */
+function DetectedSelectRow(
+	props: SelectRowProps & { detected: string | number | null; detectionId: number }
+) {
+	const { detected, detectionId } = props;
+	const t = useT();
+	const value = useWatch<PrinterFormValues>({ name: props.name });
+	const [changing, setChanging] = React.useState(false);
+	const [prevId, setPrevId] = React.useState(detectionId);
+	const [prevValue, setPrevValue] = React.useState(value);
+	if (detectionId !== prevId) {
+		setPrevId(detectionId);
+		setChanging(false);
+	} else if (!changing && detected != null && prevValue === detected && value !== detected) {
+		// A linked row whose value moved (Change, or the vendor's derivation) is unlinked for good:
+		// picking the detected value again is a choice, not a detection.
+		setChanging(true);
+	}
+	if (value !== prevValue) setPrevValue(value);
+	if (detected == null || value !== detected || changing) return <SelectRow {...props} />;
+	const label = props.options.find((option) => option.value === String(value))?.label;
+	return (
+		<PropertyRow
+			prefix="printer"
+			id={props.name}
+			label={props.label}
+			derived
+			verb={
+				<PropertyVerb testID={`printer-${props.name}-change`} onPress={() => setChanging(true)}>
+					{t('common.change')}
+				</PropertyVerb>
+			}
+		>
+			<View className="flex-row flex-wrap items-center gap-x-2">
+				<Text>{label ?? String(value)}</Text>
+				<Text variant="help">{t('settings.detected')}</Text>
+			</View>
 		</PropertyRow>
 	);
 }
@@ -119,6 +174,7 @@ export function PrinterToggleRows({ connector }: { connector?: boolean }) {
 export function PrinterSettingsRows(props: {
 	vendorOptions?: VendorOption[];
 	onVendorManualChange?: () => void;
+	detected?: PrinterDetection;
 }) {
 	const { vendorOptions } = props;
 	const t = useT();
@@ -137,18 +193,22 @@ export function PrinterSettingsRows(props: {
 					onManualChange={props.onVendorManualChange}
 				/>
 			) : null}
-			<SelectRow
+			<DetectedSelectRow
 				name="language"
 				label={t('settings.printer_language')}
 				options={options.languages}
 				placeholder={t('settings.select_language')}
+				detected={props.detected?.language ?? null}
+				detectionId={props.detected?.id ?? 0}
 			/>
-			<SelectRow
+			<DetectedSelectRow
 				name="columns"
 				label={t('settings.setup_paper_label')}
 				options={options.columns}
 				placeholder={t('settings.select_printer_text_width')}
 				numeric
+				detected={props.detected?.columns ?? null}
+				detectionId={props.detected?.id ?? 0}
 			/>
 			{language === 'esc-pos' ? (
 				<SelectRow

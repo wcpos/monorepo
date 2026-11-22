@@ -208,6 +208,47 @@ it("a variation's attribute is locked and the line's developer meta stays in the
 	expect(has('line-item-remove-meta-2')).toBe(true);
 });
 
+it("a line's own `_` key is a Hidden field, not dropped: only the till's keys stay out of the form", () => {
+	const meta_data = [
+		{ id: 1, key: '_woocommerce_pos_data', value: '{}' },
+		{ id: 2, key: '_gift_note', value: 'wrap it' },
+	];
+	render(<EditLineItemForm uuid="l1" item={line({ regular_price: '69', meta_data })} />);
+	expect(has('line-item-row-meta-0')).toBe(false);
+	expect(has('line-item-row-meta-1')).toBe(false);
+	expect(has('line-item-hidden-fields')).toBe(true);
+	fireEvent.click(screen.getByTestId('line-item-hidden-fields-toggle'));
+	expect(has('line-item-row-meta-1')).toBe(true);
+	expect(has('line-item-row-meta-0')).toBe(false);
+});
+
+it('a custom field typed as `_…` stays while it saves and after the line comes back carrying it', () => {
+	const saved = [{ id: 1, key: '_woocommerce_pos_data', value: '{}' }];
+	const { rerender } = render(
+		<EditLineItemForm uuid="l1" item={line({ regular_price: '69', meta_data: saved })} />
+	);
+	fireEvent.click(screen.getByTestId('line-item-add-meta_data'));
+	const key = screen.getByTestId('line-item-row-meta-1').querySelector('input')!;
+	fireEvent.change(key, { target: { value: '_gift' } });
+	expect(has('line-item-row-meta-1')).toBe(true);
+	// The autosave lands and the line comes back carrying the key: the row stays, editable. (Before,
+	// the live item's `_` keys were the hidden set, so this rerender made the row vanish.)
+	rerender(
+		<EditLineItemForm
+			uuid="l1"
+			item={line({
+				regular_price: '69',
+				meta_data: [...saved, { id: 9, key: '_gift', value: '' }],
+			})}
+		/>
+	);
+	expect(has('line-item-row-meta-1')).toBe(true);
+	expect(has('line-item-remove-meta-1')).toBe(true);
+	expect(
+		(screen.getByTestId('line-item-row-meta-1').querySelector('input') as HTMLInputElement).value
+	).toBe('_gift');
+});
+
 it('the fee line is Fee name, Amount with its unit, Amount includes tax, Tax; it offers Custom field', () => {
 	render(<EditFeeLineForm uuid="f1" item={{ name: 'Fee', meta_data: [] } as never} />);
 	for (const row of ['name', 'amount', 'includes-tax', 'tax'])

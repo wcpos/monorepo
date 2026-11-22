@@ -11,7 +11,7 @@ it('uses the controls-tier skin', () => {
 	expect(source).not.toContain('focus-visible');
 });
 
-it('gives the muted variant the default hover tint, not a near-invisible fraction of it', () => {
-	expect(source).toContain("muted: 'web:hover:bg-accent active:bg-accent'");
+it('keeps the muted variant a fraction of the hover wash, distinct from the default', () => {
+	expect(source).toContain("muted: 'web:hover:bg-accent/15 active:bg-accent/15'");
 	expect(source).not.toContain('bg-muted/15');
 });

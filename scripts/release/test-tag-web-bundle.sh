@@ -244,7 +244,7 @@ MOCK_BAD_PATH=metadata.json expect_status "wrong unhashed bytes fail phase B" fa
 MOCK_VERSION=1.11.0 expect_status "matching bytes but stale version fails phase B" fail cdn phase
 # --- --tolerate-release-only: a listed chunk may differ from the tag only in the SENTRY_RELEASE version ---
 rel='_expo/static/js/web/[id]-rel.js'
-banner() { printf 'var SENTRY_RELEASE;SENTRY_RELEASE={name: "WCPOS", version: "%s"};%s' "$1" "$2"; }
+banner() { printf 'a();\nvar SENTRY_RELEASE;SENTRY_RELEASE={name: "WCPOS", version: "%s"};\n%s' "$1" "$2"; }
 mkdir -p "$tmpdir/tol/ref-v1.11.1/_expo/static/js/web" && banner 1.0.1 'x()' > "$tmpdir/tol/ref-v1.11.1/$rel"
 jq -n --arg g "$good_sha" --arg r "$(banner 1.0.1 'x()' | git hash-object --stdin)" --arg e "$entry" --arg l "$rel" \
 	'{truncated: false, tree: ([["metadata.json", $g], ["index.html", $g], [$e, $g], [$l, $r]] | map({type: "blob", path: "build/\(.[0])", sha: .[1]}))}' > "$tmpdir/tree-tol"
@@ -256,7 +256,16 @@ expect_eq "tolerate: it is TOLERATED and counted apart" 2 "$(grep -Fc -e "TOLERA
 MOCK_BAD_PATH="$entry" expect_status "tolerate: an unlisted stale chunk still fails" fail tol "$rel"
 banner 1.0.0 'y()' > "$tmpdir/served"
 expect_status "tolerate: a listed chunk that differs beyond the release string fails" fail tol "$rel"
-expect_eq "tolerate: and says so" 1 "$(grep -Fc "FAIL: @1.11/build/$rel differs from v1.11.1 beyond the SENTRY_RELEASE version (HTTP 200)" "$tmpdir/out")"
+expect_eq "tolerate: and says so" 1 "$(grep -Fc "FAIL: @1.11/build/$rel differs from v1.11.1 beyond the SENTRY_RELEASE banner (HTTP 200)" "$tmpdir/out")"
+# Part A transition: the tag has no banner line, a stale edge still serves it.
+mkdir -p "$tmpdir/tol2/ref-v1.11.1/_expo/static/js/web" && printf 'a();\n%s' 'x()' > "$tmpdir/tol2/ref-v1.11.1/$rel"
+sed "s/$(banner 1.0.1 'x()' | git hash-object --stdin)/$(printf 'a();\n%s' 'x()' | git hash-object --stdin)/" "$tmpdir/tree-tol" > "$tmpdir/tree-tol2"
+tol2() { MOCK_TREE="$tmpdir/tree-tol2" MOCK_DIR="$tmpdir/tol2" MOCK_SERVE_PATH="$rel" MOCK_SERVE_FILE="$tmpdir/served" cdn phase_tol "$@"; }
+banner 1.0.0 'x()' > "$tmpdir/served"
+expect_status "tolerate: a listed chunk served with the banner line while the tag has none passes" pass tol2 "$rel"
+expect_eq "tolerate: banner gone is TOLERATED" 1 "$(grep -Fc "TOLERATED: @1.11/build/$rel differs from v1.11.1 only in the SENTRY_RELEASE banner" "$tmpdir/out")"
+banner 1.0.0 'y()' > "$tmpdir/served"
+expect_status "tolerate: banner gone plus any other difference fails" fail tol2 "$rel"
 : > "$MOCK_LOG"
 expect_status "tolerate: a listed path not in the tree is refused" fail tol _expo/static/js/web/typo.js
 expect_eq "tolerate: refusing to tolerate it, before any purge" "1 0" "$(grep -c 'refusing to tolerate it' "$tmpdir/out") $(grep -c purge.jsdelivr.net "$MOCK_LOG" || true)"

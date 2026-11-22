@@ -131,15 +131,15 @@ purge_changed_hashed() {
 	done < <(join -1 2 -2 2 <(sort -k2 <<<"$cur") <(sort -k2 <<<"$prev") | awk '$2 != $3 { print $1 }')
 }
 
-# One unpolled check of a path named by --tolerate-release-only (D4, 2026-11-21): the tag's bytes, or a SENTRY_RELEASE-only difference.
+# One unpolled check of a path named by --tolerate-release-only (D4, 2026-11-21): the tag's bytes, or a difference only in the SENTRY_RELEASE banner line: its version, or its absence on one side (Part A transition).
 verify_release_only() { # $1 lane, $2 tag, $3 expected blob SHA, $4 path under build/
-	local served="" want="" code="" status=1 norm='s/(SENTRY_RELEASE=\{name: "WCPOS", version: ")[^"]*"/\1"/g'
+	local served="" want="" code="" status=1 norm='/^var SENTRY_RELEASE;SENTRY_RELEASE=\{name: "[^"]*", version: "[^"]*"\};$/d'
 	served=$(mktemp) && want=$(mktemp) && code=$(curl -g -sS --connect-timeout 10 --max-time 120 -o "$served" \
 		-w '%{http_code}' "https://cdn.jsdelivr.net/gh/${WEB_BUNDLE_REPO}@$1/build/$4") && [[ "$code" == 200 ]] && status=0
 	if [[ "$status" == 0 && "$(git hash-object --no-filters "$served")" == "$3" ]]; then echo "@$1/build/$4 -> verified by content"
 	elif [[ "$status" == 0 ]] && fetch_bundle_file "$2" "$4" > "$want" && cmp -s <(sed -E "$norm" "$served") <(sed -E "$norm" "$want"); then
-		echo "TOLERATED: @$1/build/$4 differs from $2 only in the SENTRY_RELEASE version"
-	else echo "FAIL: @$1/build/$4 differs from $2 beyond the SENTRY_RELEASE version (HTTP ${code:-000})"; status=1; fi
+		echo "TOLERATED: @$1/build/$4 differs from $2 only in the SENTRY_RELEASE banner"
+	else echo "FAIL: @$1/build/$4 differs from $2 beyond the SENTRY_RELEASE banner (HTTP ${code:-000})"; status=1; fi
 	rm -f "$served" "$want"; return "$status"
 }
 
