@@ -14,12 +14,20 @@ export const useUISettings = <T extends UISettingID>(id: T) => {
 		throw new Error(`useUISettings must be called within UISettingsProvider`);
 	}
 
-	const { resources, getLabel, reset, patchSettings, modifySettings } = context;
+	const { resources, getLabel, getDisplayLabel, reset, patchSettings, modifySettings } = context;
 
 	/**
 	 * Get UI Label
 	 */
 	const getUILabel = React.useCallback((key: string) => getLabel(id, key), [getLabel, id]);
+
+	/**
+	 * Get the label of a column's display sub-option
+	 */
+	const getUIDisplayLabel = React.useCallback(
+		(columnKey: string, displayKey: string) => getDisplayLabel(id, columnKey, displayKey),
+		[getDisplayLabel, id]
+	);
 
 	/**
 	 * Get UI Settings for the specified ID
@@ -32,6 +40,7 @@ export const useUISettings = <T extends UISettingID>(id: T) => {
 	return {
 		uiSettings,
 		getUILabel,
+		getUIDisplayLabel,
 		resetUI: () => reset(id),
 		patchUI: (data: Partial<UISettingSchema<T>>) => patchSettings(id, data),
 		modifyUI: <K extends keyof UISettingSchema<T>>(

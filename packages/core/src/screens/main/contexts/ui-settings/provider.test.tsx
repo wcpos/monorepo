@@ -16,7 +16,9 @@ jest.mock('@wcpos/query/store-local', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: mockStoreDB }),
 }));
-jest.mock('./use-ui-label', () => ({ useUILabel: () => ({ getLabel: jest.fn() }) }));
+jest.mock('./use-ui-label', () => ({
+	useUILabel: () => ({ getLabel: jest.fn(), getDisplayLabel: jest.fn() }),
+}));
 jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 
 beforeEach(() => {
