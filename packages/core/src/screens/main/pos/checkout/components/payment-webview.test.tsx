@@ -373,6 +373,51 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
 	});
 
+	it('a forged completed snapshot for another order does not settle the sale', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const setLoading = jest.fn();
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'pos-open', number: '42', line_items: [] }],
+		});
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={setLoading}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: {
+					data: {
+						action: 'wcpos-payment-received',
+						payload: {
+							id: 1,
+							number: '1',
+							status: 'completed',
+							meta_data: [
+								{ key: '_woocommerce_pos_uuid', value: '5b8e1a3c-2f4d-4a6b-9c8e-000000000001' },
+							],
+							line_items: [],
+						},
+					},
+				},
+			});
+			await Promise.resolve();
+		});
+
+		expect(logger.success).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		// The sale is left to server truth, which still says pos-open.
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(setLoading).toHaveBeenCalledWith(false);
+	});
+
 	it.each([
 		['missing', undefined],
 		['empty', ''],
@@ -1522,5 +1567,50 @@ describe('PaymentWebview refused preparation', () => {
 		} finally {
 			preparation.mockImplementation(exposeLink);
 		}
+	});
+});
+
+describe('PaymentWebview pay link host', () => {
+	const siteApiURL = mockSite.wcpos_api_url;
+	const renderFrame = (href: string) => {
+		const setFrameStatus = jest.fn();
+		render(
+			<PaymentWebview
+				order={makeOrder(href)}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		return { setFrameStatus };
+	};
+	beforeEach(() => {
+		jest.clearAllMocks();
+		webViewMounts = 0;
+		webViewProps = {};
+		mockCredentials$.next({ access_token: 'jwt-token', refresh_token: 'refresh' });
+	});
+	afterEach(() => {
+		mockSite.wcpos_api_url = siteApiURL;
+	});
+
+	it('a pay link on another host gets no token and no frame', () => {
+		const { setFrameStatus } = renderFrame('https://pay.elsewhere.example/wcpos-checkout/order-pay/42');
+		expect(webViewMounts).toBe(0);
+		expect(webViewProps.src).toBeUndefined();
+		expect(setFrameStatus).not.toHaveBeenCalledWith('ready');
+	});
+
+	it('a www twin of the site still loads', () => {
+		renderFrame('https://www.shop.example.com/wcpos-checkout/order-pay/42');
+		expect(webViewMounts).toBe(1);
+		expect(new URL(webViewProps.src).searchParams.getAll('token')).toEqual(['jwt-token']);
+	});
+
+	it('an http site with an https pay link still loads', () => {
+		mockSite.wcpos_api_url = 'http://shop.example.com/wp-json/wcpos/v2/';
+		renderFrame('https://shop.example.com/wcpos-checkout/order-pay/42');
+		expect(webViewMounts).toBe(1);
+		expect(new URL(webViewProps.src).searchParams.getAll('token')).toEqual(['jwt-token']);
 	});
 });

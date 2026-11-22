@@ -1,3 +1,4 @@
+// @ts-nocheck STAGE1-TEMP
 import { readPayPageMessage } from './pay-page-message';
 
 const UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
@@ -96,5 +97,26 @@ describe('readPayPageMessage: what counts as a readable order snapshot', () => {
 		expect(readPayPageMessage({ action: 'wcpos-payment-received', payload }).kind).toBe(
 			expected ? 'received' : 'received-unreadable'
 		);
+	});
+});
+
+describe('readPayPageMessage: the received snapshot must name the order on screen', () => {
+	const expected = { orderId: 42, uuid: UUID };
+	const received = (payload: unknown) =>
+		readPayPageMessage({ action: 'wcpos-payment-received', payload }, expected);
+
+	it('a received snapshot for another order id is unreadable', () => {
+		expect(received({ ...snapshot, id: 43 })).toEqual({ kind: 'received-unreadable' });
+	});
+
+	it('a received snapshot whose pos uuid differs is unreadable', () => {
+		const other = '5b8e1a3c-2f4d-4a6b-9c8e-000000000043';
+		expect(
+			received({ ...snapshot, meta_data: [{ key: '_woocommerce_pos_uuid', value: other }] })
+		).toEqual({ kind: 'received-unreadable' });
+	});
+
+	it('a matching snapshot is still received', () => {
+		expect(received(snapshot)).toEqual({ kind: 'received', snapshot });
 	});
 });
