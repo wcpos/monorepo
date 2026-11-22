@@ -144,6 +144,7 @@ function EditPrinterDialog({
 		detectedVendor,
 		detectedLanguage,
 		detectedColumns,
+		detectionId,
 		canOpenDrawer,
 		setManualVendor,
 		handleOpenDrawer,
@@ -286,7 +287,7 @@ function EditPrinterDialog({
 	return (
 		<PrinterDialogLayout
 			form={form}
-			detected={{ language: detectedLanguage, columns: detectedColumns }}
+			detected={{ language: detectedLanguage, columns: detectedColumns, id: detectionId }}
 			open={open}
 			onOpenChange={(next) => {
 				if (!next) void handleClose();

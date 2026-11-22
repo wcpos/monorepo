@@ -164,7 +164,7 @@ describe('Edit Printer rows', () => {
 });
 
 describe('Edit Printer detected rows', () => {
-	const detected: PrinterDetection = { language: 'esc-pos', columns: 42 };
+	const detected: PrinterDetection = { language: 'esc-pos', columns: 42, id: 1 };
 	const languageRow = () => screen.getByTestId('printer-row-language');
 	const paperRow = () => screen.getByTestId('printer-row-columns');
 
@@ -191,6 +191,18 @@ describe('Edit Printer detected rows', () => {
 		expect(within(languageRow()).getByTestId('select')).toBeInTheDocument();
 		expect(within(languageRow()).queryByTestId('printer-language-change')).toBeNull();
 		expect(within(paperRow()).queryByTestId('select')).toBeNull();
+	});
+
+	it('links the row again when a new scan detects the same value after Change', () => {
+		const values = { language: 'esc-pos', columns: 42 } as const;
+		const { rerender } = render(<Layout detected={detected} values={values} />);
+		fireEvent.click(screen.getByTestId('printer-language-change'));
+		expect(within(languageRow()).getByTestId('select')).toBeInTheDocument();
+
+		rerender(<Layout detected={{ ...detected, id: 2 }} values={values} />);
+
+		expect(within(languageRow()).queryByTestId('select')).toBeNull();
+		expect(within(languageRow()).getByTestId('printer-language-change')).toBeInTheDocument();
 	});
 
 	it('renders both rows as selects when nothing was detected', () => {

@@ -110,6 +110,8 @@ export function usePrinterDialogForm({
 		PrinterFormValues['language'] | null
 	>(null);
 	const [detectedColumns, setDetectedColumns] = React.useState<number | null>(null);
+	// Bumped on every detection, so a row the cashier changed links again on a new scan.
+	const [detectionId, setDetectionId] = React.useState(0);
 
 	const manualVendorRef = React.useRef(false);
 	// #18: the vendor's default port may only overwrite a configured one when the vendor is known
@@ -250,6 +252,10 @@ export function usePrinterDialogForm({
 		}
 	}, [vendor, form, deriveVendorDefaults]);
 
+	// A probe of the saved address re-reads the saved printer: its fields are the profile's, not a
+	// detection, so an edited printer never reads "detected" until another address answers.
+	const savedAddress = printer ? (printer.address ?? '').trim() : null;
+
 	// IP probe → auto-detect vendor (network only).
 	React.useEffect(() => {
 		if (connectionType !== 'network') {
@@ -289,19 +295,22 @@ export function usePrinterDialogForm({
 						form.setValue('vendor', result as PrinterFormValues['vendor']);
 						const d = deriveVendorDefaults(result as PrinterFormValues['vendor']);
 						form.setValue('language', d.language);
-						setDetectedLanguage(d.language);
 						form.setValue('port', d.port);
 						if (canPrintLane(identity.lane.protocol, probes)) {
 							form.setValue('port', identity.lane.port);
 						}
-						setDetectedColumns(null);
+						let wroteColumns: number | null = null;
 						if (
 							identity.columns !== undefined &&
 							form.getValues('columns') === defaultValues.columns
 						) {
 							form.setValue('columns', identity.columns);
-							setDetectedColumns(identity.columns);
+							wroteColumns = identity.columns;
 						}
+						const detection = trimmed !== savedAddress;
+						setDetectedLanguage(detection ? d.language : null);
+						setDetectedColumns(detection ? wroteColumns : null);
+						if (detection) setDetectionId((id) => id + 1);
 						prevVendorRef.current = result as PrinterFormValues['vendor'];
 					} else {
 						setDetectedVendor(null);
@@ -324,7 +333,7 @@ export function usePrinterDialogForm({
 				});
 		}, 500);
 		return () => clearTimeout(timer);
-	}, [address, connectionType, form, deriveVendorDefaults, defaultValues.columns]);
+	}, [address, connectionType, form, deriveVendorDefaults, defaultValues.columns, savedAddress]);
 
 	const setManualVendor = React.useCallback(() => {
 		manualVendorRef.current = true;
@@ -457,6 +466,7 @@ export function usePrinterDialogForm({
 		detectedVendor,
 		detectedLanguage,
 		detectedColumns,
+		detectionId,
 		canOpenDrawer,
 		setManualVendor,
 		handleOpenDrawer,

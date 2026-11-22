@@ -74,26 +74,29 @@ function SelectRow(props: SelectRowProps) {
 	);
 }
 
-/** What this session's probe wrote into the form; null where it wrote nothing. */
+/** What this session's probe wrote into the form (null where it wrote nothing); `id` is per scan. */
 export type PrinterDetection = {
 	language: PrinterFormValues['language'] | null;
 	columns: number | null;
+	id: number;
 };
 
 /**
  * A select the scan filled in (rule 5, a copy is derived): while the form still holds the detected
  * value the row reads the value and "detected", and Change breaks the link for the dialog's life.
- * Only a new detection links it again; any other value is the plain select.
+ * Only a new detection (a new `detectionId`) links it again; any other value is the plain select.
  */
-function DetectedSelectRow(props: SelectRowProps & { detected: string | number | null }) {
-	const { detected } = props;
+function DetectedSelectRow(
+	props: SelectRowProps & { detected: string | number | null; detectionId: number }
+) {
+	const { detected, detectionId } = props;
 	const t = useT();
 	const value = useWatch<PrinterFormValues>({ name: props.name });
 	const [changing, setChanging] = React.useState(false);
-	const [prevDetected, setPrevDetected] = React.useState(detected);
-	if (detected !== prevDetected) {
-		setPrevDetected(detected);
-		if (detected != null) setChanging(false);
+	const [prevId, setPrevId] = React.useState(detectionId);
+	if (detectionId !== prevId) {
+		setPrevId(detectionId);
+		setChanging(false);
 	}
 	if (detected == null || value !== detected || changing) return <SelectRow {...props} />;
 	const label = props.options.find((option) => option.value === String(value))?.label;
@@ -189,6 +192,7 @@ export function PrinterSettingsRows(props: {
 				options={options.languages}
 				placeholder={t('settings.select_language')}
 				detected={props.detected?.language ?? null}
+				detectionId={props.detected?.id ?? 0}
 			/>
 			<DetectedSelectRow
 				name="columns"
@@ -197,6 +201,7 @@ export function PrinterSettingsRows(props: {
 				placeholder={t('settings.select_printer_text_width')}
 				numeric
 				detected={props.detected?.columns ?? null}
+				detectionId={props.detected?.id ?? 0}
 			/>
 			{language === 'esc-pos' ? (
 				<SelectRow
