@@ -1013,10 +1013,20 @@ export async function drainMutationQueue(input: {
 			status: 'claimed' as const,
 			...lease,
 		};
-		const draining =
-			pushedBefore || !input.prepareOutbound
-				? claimed
-				: { ...(await input.prepareOutbound(claimed)) };
+		let prepared: QueuedMutation | undefined;
+		if (!pushedBefore && input.prepareOutbound) {
+			try {
+				prepared = await input.prepareOutbound(claimed);
+			} catch (error) {
+				if (input.signal?.aborted) break;
+				// No backoff: the row was never pushed, so it stays never-pushed and is prepared again next drain.
+				failed += 1;
+				reportFailure({ mutation, reason: error instanceof Error ? error.name : 'unknown' });
+				blockedRecords.add(recordKey(mutation));
+				continue;
+			}
+		}
+		const draining = prepared ? { ...prepared } : claimed;
 		// CONDITIONAL durable claim BEFORE the push (CAS): from here until this row
 		// settles, the write-intent layer refuses to coalesce it (an edit queues
 		// behind it). If the row left the queue between the scan and this claim —

@@ -2005,6 +2005,36 @@ describe('POS-2PN: a pushed-before row is re-sent byte-identical', () => {
 		});
 		expect(await q.all()).toEqual([]);
 	});
+
+	it('U4: a failed graft skips its record this drain, leaves it never-pushed, and other records drain', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'mA', recordId: 'rec-A', payload: { id: 'rec-A' } }),
+			mut({ mutationId: 'mB', recordId: 'rec-B', payload: { id: 'rec-B' } })
+		);
+		let calls = 0;
+		const sent: RecordMutation[] = [];
+		const input = {
+			queue: q,
+			now: () => 100_000,
+			prepareOutbound: async (m: QueuedMutation) => {
+				calls += 1;
+				if (calls === 1) throw new Error('resident read failed');
+				return { ...m, payload: { ...m.payload, grafted: true } };
+			},
+			push: async (m: RecordMutation) => {
+				sent.push(m);
+				return ok(m);
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, failed: 1 });
+		expect(sent.map((m) => m.mutationId)).toEqual(['mB']);
+		const [rowA] = await q.all();
+		expect(rowA).toMatchObject({ mutationId: 'mA', status: 'pending' });
+		expect(rowA.attempts ?? 0).toBe(0);
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, failed: 0 });
+		expect(sent.map((m) => m.mutationId)).toEqual(['mB', 'mA']);
+		expect(sent[1].payload).toEqual({ id: 'rec-A', grafted: true });
+	});
 });
 
 const iso = (ms: number): string => new Date(ms).toISOString();
