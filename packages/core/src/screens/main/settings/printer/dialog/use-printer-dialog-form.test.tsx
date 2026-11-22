@@ -359,6 +359,48 @@ describe('usePrinterDialogForm detection and port rewrites', () => {
 		expect(latest().detectedVendor).toBeNull();
 	});
 
+	it('reads a probe of the saved address as the profile, another address that answers as a detection, and a manual vendor clears it', async () => {
+		const lane = { port: 8043, protocol: 'epos-print', encrypted: true };
+		jest
+			.mocked(identifyPrinter)
+			.mockResolvedValueOnce({ vendor: 'epson', lane, ports: [] } as never)
+			.mockResolvedValueOnce({ vendor: 'epson', lane, ports: [], columns: 48 } as never)
+			.mockResolvedValueOnce({ vendor: 'epson', lane, ports: [] } as never);
+		const latest = mount();
+		await runProbe();
+
+		expect(latest().detectedVendor).toBe('epson');
+		expect(latest().detectedLanguage).toBeNull();
+		expect(latest().detectedColumns).toBeNull();
+		expect(latest().detectionId).toBe(0);
+
+		act(() => {
+			latest().form.setValue('address', '192.168.1.24');
+		});
+		await runProbe();
+
+		expect(latest().form.getValues('columns')).toBe(48);
+		expect(latest().detectedLanguage).toBe('esc-pos');
+		expect(latest().detectedColumns).toBe(48);
+		expect(latest().detectionId).toBe(1);
+
+		// Another address, before it answers: the last printer's rows are not "detected" any more.
+		act(() => {
+			latest().form.setValue('address', '192.168.1.25');
+		});
+		expect(latest().detectedLanguage).toBeNull();
+		expect(latest().detectedColumns).toBeNull();
+		expect(latest().detectionId).toBe(1);
+		await runProbe();
+		expect(latest().detectedLanguage).toBe('esc-pos');
+		expect(latest().detectionId).toBe(2);
+
+		act(() => latest().setManualVendor());
+
+		expect(latest().detectedLanguage).toBeNull();
+		expect(latest().detectedColumns).toBeNull();
+	});
+
 	it('rewrites the port when the cashier picks the vendor (#18)', async () => {
 		jest
 			.mocked(identifyPrinter)

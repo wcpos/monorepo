@@ -56,6 +56,8 @@ const mockNoStores: never[] = [];
 jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: () => jest.requireActual('rxjs').of(mockNoStores),
+	observeSiteCredentials: (site: { populate$: (key: string) => never }) =>
+		jest.requireActual('rxjs').defer(() => site.populate$('wp_credentials')),
 }));
 const appState = () => ({
 	store: {

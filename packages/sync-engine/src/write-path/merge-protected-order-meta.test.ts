@@ -8,6 +8,15 @@ it.each([
 	['is_vat_exempt', 'yes', 'no', undefined, 10, 'no', 10, 'mutation'],
 	['is_vat_exempt', 'no', 'yes', undefined, 10, 'yes', 10, 'server'],
 	['_pos_user', 'local', 'remote', undefined, 9, 'local', 9, 'server'],
+	['_pos_user', 'local', 'remote', 8, 9, 'remote', 9, 'read'],
+	['_pos_user', 'local', 'remote', 8, undefined, 'remote', 8, 'read'],
+	['_pos_user', 'local', 'remote', undefined, 9, 'remote', 9, 'read'],
+	['_pos_store', 'local', 'remote', 8, 9, 'remote', 9, 'read'],
+	['_pos_store', 'local', 'remote', 8, undefined, 'remote', 8, 'read'],
+	['_pos_store', 'local', 'remote', undefined, 9, 'remote', 9, 'read'],
+	['_woocommerce_pos_tax_based_on', 'shipping', 'billing', undefined, 9, 'shipping', 9, 'read'],
+	['_wcpos_money_owner_hint', 'server', null, undefined, 8, 'server', 8, 'read'],
+	['_wcpos_money_owner_hint', null, 'server', 8, undefined, 'server', 8, 'read'],
 ] as const)(
 	'merges %s (%s / %s), retaining identity',
 	(key, local, remote, localId, remoteId, value, id, source) => {
@@ -21,7 +30,20 @@ it.each([
 	}
 );
 
-it.each(['server', 'mutation'] as const)(
+it.each([
+	['_pos_user', undefined],
+	['_pos_user', ''],
+	['_pos_user', null],
+	['_pos_store', undefined],
+	['_pos_store', ''],
+	['_pos_store', null],
+] as const)('a read keeps resident %s when incoming is %s', (key, value) => {
+	const resident = { key, value: 'local', id: 9 };
+	const incoming = value === undefined ? [] : [{ key, value }];
+	expect(mergeProtectedOrderMeta([resident], incoming, 'read')).toEqual([resident]);
+});
+
+it.each(['server', 'read', 'mutation'] as const)(
 	'deduplicates protected aliases by row identity: %s',
 	(source) => {
 		const genuine = { id: 9, key: '_pos_user', value: 'cashier' };

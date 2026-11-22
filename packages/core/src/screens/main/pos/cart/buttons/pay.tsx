@@ -240,9 +240,10 @@ export function PayButton() {
 				onPress={handlePay}
 				// The sale button (size lg, 56), as the foot's Open/Close register. `w-full`, not
 				// `flex-1`: the foot's wrapper is a column, where `flex-1` would stretch it vertically.
-				className="w-full"
+				className={displayTotal < 0 ? 'w-full opacity-100' : 'w-full'}
 				loading={loading}
-				disabled={storageDegraded || counting}
+				// Below 0 also `disabled` for assistive tech; the frame's dim alone, not the surface's too (#3652).
+				disabled={storageDegraded || counting || displayTotal < 0}
 			>
 				{counting
 					? t('register.counting_the_drawer')

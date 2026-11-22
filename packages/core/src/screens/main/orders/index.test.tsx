@@ -156,6 +156,7 @@ jest.mock('../components/record-text-cell', () => ({ RecordTextCell: () => null 
 jest.mock('../hooks/use-referenced-customer-demand', () => ({
 	useReferencedCustomerDemand: jest.fn(),
 }));
+jest.mock('../hooks/use-rendered-order-refresh', () => ({ useRenderedOrderRefresh: jest.fn() }));
 
 function latestState(): QueryStateOf<'orders'> {
 	const call = mockUseCollectionQueryHandle.mock.calls.at(-1);

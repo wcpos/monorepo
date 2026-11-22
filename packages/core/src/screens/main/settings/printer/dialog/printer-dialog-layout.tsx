@@ -14,7 +14,7 @@ import { Form, FormField, FormInput } from '@wcpos/components/form';
 import { PropertyList, PropertyRow } from '@wcpos/components/property-row';
 
 import { usePageSheetHost } from '../../../components/page-sheet-host';
-import { PrinterSettingsRows } from './printer-rows';
+import { type PrinterDetection, PrinterSettingsRows } from './printer-rows';
 import { FormErrors } from '../../../components/form-errors';
 import { useT } from '../../../../../contexts/translations';
 
@@ -33,6 +33,8 @@ interface PrinterDialogLayoutProps {
 	/** Native and Electron choose a vendor from these; the web chooses it in its network lane. */
 	vendorOptions?: VendorOption[];
 	onVendorManualChange?: () => void;
+	/** What this session's probe wrote: those rows read "detected" while they still hold it. */
+	detected?: PrinterDetection;
 	/** Test failure alert, rendered inside the form body above the footer. */
 	errorSection?: React.ReactNode;
 	footer: DialogFooterProps;
@@ -47,6 +49,7 @@ export function PrinterDialogLayout({
 	connectionLane,
 	vendorOptions,
 	onVendorManualChange,
+	detected,
 	errorSection,
 	footer,
 }: PrinterDialogLayoutProps) {
@@ -82,6 +85,7 @@ export function PrinterDialogLayout({
 							<PrinterSettingsRows
 								vendorOptions={vendorOptions}
 								onVendorManualChange={onVendorManualChange}
+								detected={detected}
 							/>
 							{errorSection}
 						</PropertyList>

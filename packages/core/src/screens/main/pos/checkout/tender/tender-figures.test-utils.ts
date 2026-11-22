@@ -11,6 +11,7 @@ export function splitWith(over: Partial<SplitView> = {}): SplitView {
 		lines,
 		allocations: {},
 		paidUnits,
+		pickable: true,
 		unpaidUnits: Object.fromEntries(
 			lines.map(({ id, quantity }) => [
 				String(id),

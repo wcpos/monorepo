@@ -97,7 +97,17 @@ const DealRelaidContext = React.createContext<(() => void) | undefined>(undefine
  */
 export function useLiftedLayout(lifted: boolean | undefined): (() => void) | undefined {
 	const relaid = React.useContext(DealRelaidContext);
-	return lifted ? relaid : undefined;
+	// On the web `onLayout` is a ResizeObserver armed once, when the node mounts with a handler
+	// (react-native-web `useElementLayout` observes in an effect keyed to the ref alone): a handler
+	// that arrives when the tile is lifted is stored and never observed, so the re-measure #2967
+	// added never fired on web or Electron. Every tile on a web stage carries the handler from its
+	// mount and only the lifted one answers; native attaches on lift, as before, so a grid of
+	// tiles pays nothing there.
+	const always = React.useCallback(() => {
+		if (lifted) relaid?.();
+	}, [lifted, relaid]);
+	if (!relaid) return undefined;
+	return Platform.OS === 'web' ? always : lifted ? relaid : undefined;
 }
 
 export const useDeal = () => React.useContext(DealContext);

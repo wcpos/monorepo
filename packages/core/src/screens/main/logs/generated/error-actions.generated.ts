@@ -26,6 +26,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.SYNC202');
 		case 'SYNC203':
 			return t('health.logs.error_action.SYNC203');
+		case 'SYNC204':
+			return t('health.logs.error_action.SYNC204');
 		case 'SYNC211':
 			return t('health.logs.error_action.SYNC211');
 		case 'SYNC301':
@@ -120,6 +122,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CHECKOUT999');
 		case 'PAYMENT511':
 			return t('health.logs.error_action.PAYMENT511');
+		case 'PAYMENT521':
+			return t('health.logs.error_action.PAYMENT521');
 		case 'PAYMENT999':
 			return t('health.logs.error_action.PAYMENT999');
 		case 'PRINT999':

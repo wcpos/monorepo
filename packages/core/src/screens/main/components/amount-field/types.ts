@@ -15,6 +15,11 @@ export interface AmountFieldProps {
 	onDraftChange?: (value: number | null | undefined) => void;
 	/** A quantity committed as 0, or the keypad's − at 1: the line's own remove. */
 	onRemove?: () => void;
+	/**
+	 * A quantity that may go below 0 (a cart line returned inside the sale): the web keypad gets
+	 * its ± key. Native already types a `-`; no other caller passes it.
+	 */
+	signed?: boolean;
 	/** `quiet`: a grid cell's text, pressed to edit in place. A quantity or count is always the box. */
 	/** `key`: the price keypad's own quick-key cell, for the Quick Discounts setting. */
 	look?: 'quiet' | 'field' | 'key';

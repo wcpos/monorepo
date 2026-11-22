@@ -65,8 +65,14 @@ export function useDisplaySnapshot() {
 				getStatusLabel,
 				receiptI18n,
 			});
+			const value = formatReceiptData(
+				mapReceiptData(receipt as unknown as Record<string, unknown>)
+			);
+			// Templates use total_qty only as an "anything in the cart" gate; an even exchange nets to 0.
+			const qty = value.lines.reduce((n: number, l: { qty: number }) => n + Math.abs(l.qty), 0);
+			value.totals.total_qty = qty;
 			return {
-				value: formatReceiptData(mapReceiptData(receipt as unknown as Record<string, unknown>)),
+				value,
 				failed: false,
 			};
 		} catch {

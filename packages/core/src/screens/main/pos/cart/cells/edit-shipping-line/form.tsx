@@ -143,7 +143,7 @@ function EditShippingLineFormFields({ uuid, item }: Props) {
 							)}
 						/>
 					</PropertyRow>
-					<CustomFieldRows prefix="shipping-line" meta={item.meta_data} />
+					<CustomFieldRows prefix="shipping-line" />
 				</PropertyList>
 			</DialogBody>
 			<DialogFooter close />

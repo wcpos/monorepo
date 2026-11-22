@@ -37,6 +37,12 @@ Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcryp
 addRxPlugin(RxDBLocalDocumentsPlugin);
 
 const mockApp: Record<string, unknown> = {};
+// close.ts imports the reads file by path, so the fake site's populate$ is mocked there.
+jest.mock('../../../../query/src/user-db/reads', () => ({
+	...jest.requireActual('../../../../query/src/user-db/reads'),
+	observeSiteCredentials: (site: { populate$: (key: string) => never }) =>
+		jest.requireActual('rxjs').defer(() => site.populate$('wp_credentials')),
+}));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: mockApp.engine }),
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,

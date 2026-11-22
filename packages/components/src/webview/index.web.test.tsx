@@ -95,3 +95,34 @@ describe('WebView web base for a page read from src', () => {
 		expect(frame.getAttribute('srcdoc')).toBe('<head></head><p>R</p>');
 	});
 });
+
+// Revert: drop the origin/source pin, so any window may post the pay page's session signal.
+describe('WebView web pay page session signal', () => {
+	const STORE = 'https://shop.example.com';
+	const SIGNAL = { action: 'wcpos-session-expired', orderId: 42 };
+
+	it('hands the plugin signal from the store frame to onMessage unchanged; another origin is dropped', () => {
+		const onMessage = jest.fn();
+		const ref = React.createRef<WebViewHandle>();
+		render(
+			<WebView
+				ref={ref}
+				src={`${STORE}/wcpos-checkout/order-pay/42?token=jwt-token`}
+				targetOrigin={STORE}
+				onMessage={onMessage}
+			/>
+		);
+		const source = ref.current!.contentWindow!;
+		act(() => {
+			window.dispatchEvent(
+				new MessageEvent('message', { data: SIGNAL, origin: 'https://other.example', source })
+			);
+		});
+		expect(onMessage).not.toHaveBeenCalled();
+		act(() => {
+			window.dispatchEvent(new MessageEvent('message', { data: SIGNAL, origin: STORE, source }));
+		});
+		expect(onMessage).toHaveBeenCalledTimes(1);
+		expect(onMessage.mock.calls[0][0].nativeEvent.data).toBe(SIGNAL);
+	});
+});

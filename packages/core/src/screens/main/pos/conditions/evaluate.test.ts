@@ -1,4 +1,9 @@
-import { conditionRules, type ConditionSnapshot, evaluateConditions } from './evaluate';
+import {
+	conditionRules,
+	type ConditionSnapshot,
+	evaluateConditions,
+	NEGATIVE_TOTAL,
+} from './evaluate';
 
 const ON = conditionRules(true);
 const line = (uuid: string, quantity: number, productId = 1, variationId = 0) => ({
@@ -154,5 +159,42 @@ describe('evaluateConditions (stock)', () => {
 			'z',
 			'a',
 		]);
+	});
+});
+
+describe('evaluateConditions (a sale below zero)', () => {
+	const stock = { '1:0': { product: managed(5), variation: null } };
+
+	it('a total below zero is unmet with the refund pointer, and no line to fix', () => {
+		expect(evaluateConditions({ ...snapshot([line('a', 1)], stock), total: -0.01 }, ON)).toEqual([
+			{
+				id: 'total',
+				reasonKey: 'pos.checkout_negative_total',
+				params: {},
+				lineUuid: '',
+				fix: 'none',
+				available: null,
+			},
+		]);
+		expect(evaluateConditions({ lines: [], stock: {}, total: -4 }, conditionRules(false))).toEqual([
+			NEGATIVE_TOTAL,
+		]);
+	});
+
+	it('a total of exactly zero, or above, checks out', () => {
+		expect(evaluateConditions({ ...snapshot([line('a', 1)], stock), total: 0 }, ON)).toEqual([]);
+		expect(evaluateConditions({ ...snapshot([line('a', 1)], stock), total: 6 }, ON)).toEqual([]);
+		expect(evaluateConditions(snapshot([line('a', 1)], stock), ON)).toEqual([]);
+	});
+});
+
+describe('evaluateConditions (a negative line and stock)', () => {
+	it('a returned line is never over its stock, even with none left', () => {
+		expect(
+			evaluateConditions(
+				snapshot([line('a', -1)], { '1:0': { product: managed(0), variation: null } }),
+				ON
+			)
+		).toEqual([]);
 	});
 });

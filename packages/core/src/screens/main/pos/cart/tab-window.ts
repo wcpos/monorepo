@@ -21,6 +21,29 @@ export function centredOffset({
 	return Math.max(0, Math.min(tabX + tabWidth / 2 - rowWidth / 2, contentWidth - rowWidth));
 }
 
+/**
+ * Phone: the row starts at a tab's start, never through a tab. The tab before the active one
+ * leads when the active one still fits whole beside it; otherwise the active one leads. The
+ * row cannot scroll past its end, so the last carts sit at the far edge.
+ */
+export function leadingOffset({
+	rowWidth,
+	contentWidth,
+	tabX,
+	tabWidth,
+	previousX,
+}: {
+	rowWidth: number;
+	contentWidth: number;
+	tabX: number;
+	tabWidth: number;
+	previousX?: number;
+}): number {
+	const start =
+		previousX !== undefined && tabX + tabWidth - previousX <= rowWidth ? previousX : tabX;
+	return Math.max(0, Math.min(start, contentWidth - rowWidth));
+}
+
 export function rowOverflows({
 	stripWidth,
 	contentWidth,
@@ -37,15 +60,19 @@ export function snapOffsets({
 	rowWidth,
 	contentWidth,
 	tabs,
+	align = 'centre',
 }: {
 	rowWidth: number;
 	contentWidth: number;
 	tabs: readonly { x: number; width: number }[];
+	align?: 'centre' | 'start';
 }): number[] {
 	return [
 		...new Set(
 			tabs.map(({ x, width }) =>
-				centredOffset({ rowWidth, contentWidth, tabX: x, tabWidth: width })
+				align === 'start'
+					? Math.max(0, Math.min(x, contentWidth - rowWidth))
+					: centredOffset({ rowWidth, contentWidth, tabX: x, tabWidth: width })
 			)
 		),
 	].sort((a, b) => a - b);

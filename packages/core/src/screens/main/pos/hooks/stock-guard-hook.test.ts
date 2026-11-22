@@ -1,5 +1,5 @@
 import { type ActionEventInput, createActionContext } from '../../../../extensions/actions';
-import { stockGuardOnAdd, stockGuardOnUpdate } from './stock-guard-hook';
+import { allowedLineQuantity, stockGuardOnAdd, stockGuardOnUpdate } from './stock-guard-hook';
 
 const readCatalog = jest.fn();
 const log = jest.fn();
@@ -33,6 +33,71 @@ beforeEach(() => {
 		backorders: 'no',
 		name: 'Item',
 	});
+});
+it('allowedLineQuantity returns stock minus other lines plus reduced stock', async () => {
+	const product = { manage_stock: true, stock_quantity: 10, backorders: 'no' };
+	const line = {
+		product_id: 1,
+		variation_id: 2,
+		quantity: 4,
+		meta_data: [
+			{ key: '_woocommerce_pos_uuid', value: 'line' },
+			{ key: '_reduced_stock', value: '2' },
+		],
+	};
+	const args = {
+		lineUuid: 'line',
+		line,
+		lineItems: [
+			line,
+			{
+				product_id: 1,
+				variation_id: 2,
+				quantity: 3,
+				meta_data: [{ key: '_reduced_stock', value: '1' }],
+			},
+			{ product_id: 1, variation_id: 3, quantity: 4 },
+			{ product_id: 9, quantity: 100 },
+		],
+	};
+	readCatalog.mockResolvedValueOnce(product).mockResolvedValueOnce({ manage_stock: 'parent' });
+	expect(await allowedLineQuantity(ctx, args)).toBe(6);
+	expect(readCatalog.mock.calls).toEqual([
+		['product', 1],
+		['variation', 2],
+	]);
+	readCatalog.mockResolvedValueOnce(product).mockResolvedValueOnce({
+		manage_stock: true,
+		stock_quantity: 7,
+		backorders: 'unknown',
+	});
+	expect(await allowedLineQuantity(ctx, args)).toBe(7);
+	expect(log).not.toHaveBeenCalled();
+});
+it('allowedLineQuantity is null for unmanaged stock, backorders or a missing record', async () => {
+	const product = { manage_stock: true, stock_quantity: 10, backorders: 'no' };
+	const parent = { manage_stock: 'parent' };
+	const line = { product_id: 1, variation_id: 2, quantity: 1 };
+	for (const [catalogProduct, variation] of [
+		[null, parent],
+		[product, null],
+		[{ ...product, manage_stock: false }, parent],
+		[{ ...product, stock_quantity: null }, parent],
+		[{ ...product, stock_quantity: NaN }, parent],
+		[{ ...product, stock_quantity: Infinity }, parent],
+		[{ ...product, backorders: 'yes' }, parent],
+		[{ ...product, backorders: 'notify' }, parent],
+		[product, { ...product, backorders: 'yes' }],
+		[product, { ...product, backorders: 'notify' }],
+	]) {
+		readCatalog.mockImplementation(async (kind: string) =>
+			kind === 'product' ? catalogProduct : variation
+		);
+		expect(
+			await allowedLineQuantity(ctx, { line, lineUuid: 'line', lineItems: [line] })
+		).toBeNull();
+	}
+	expect(log).not.toHaveBeenCalled();
 });
 it('allows a stocked product', async () => {
 	expect(await stockGuardOnAdd(ctx, e, next)).toBe('saved');
@@ -161,6 +226,24 @@ it('passes a fee or shipping line edit straight through', async () => {
 	);
 	expect(readCatalog).not.toHaveBeenCalled();
 	expect(next).toHaveBeenCalledTimes(1);
+});
+it('passes a returned line stepping towards zero (−2 to −1) straight through: it takes no stock', async () => {
+	readCatalog.mockResolvedValue({ manage_stock: false, stock_status: 'outofstock' });
+	const line = { ...e.payload.line, quantity: -2 };
+	const event = {
+		...e,
+		event: 'cart.line.update' as const,
+		payload: {
+			type: 'line_items' as const,
+			lineUuid: 'line',
+			line,
+			lineItems: [line],
+			changes: { quantity: -1 },
+			options: {},
+		},
+	};
+	expect(await stockGuardOnUpdate(ctx, event, next)).toBe('saved');
+	expect(readCatalog).not.toHaveBeenCalled();
 });
 it('evaluates a quantity increase excluding the target line from the stock total', async () => {
 	readCatalog.mockResolvedValue({ manage_stock: true, stock_quantity: 3, backorders: 'no' });

@@ -46,23 +46,25 @@ function StilledCartBody({ order }: { order: EngineRecord<'orders'> }) {
 	const view = useLedgerView(order);
 	const { split } = view;
 	// While Split is on the bill is the picker; the pane (the other column) reads the same picks.
-	const picker = split.splitOn
-		? {
-				picked: split.picked,
-				paid: split.paidUnits,
-				// What `units` more add after the paid ones: the cents ride on the last unit, as in the pane.
-				unitMinor: (key: TenderLineId, units: number) => {
-					const line = split.lines.find(({ id }) => String(id) === String(key));
-					const paid = split.paidUnits[key]?.units ?? 0;
-					return line
-						? unitsMinor(line.totalMinor, line.quantity, paid + units) -
-								unitsMinor(line.totalMinor, line.quantity, paid)
-						: 0;
-				},
-				format: view.format,
-				pick: (key: TenderLineId, units: number) => pickUnits(order.uuid, key, units),
-			}
-		: undefined;
+	// A returned line in the sale leaves the bill as text (`itemsPickable`).
+	const picker =
+		split.splitOn && split.pickable
+			? {
+					picked: split.picked,
+					paid: split.paidUnits,
+					// What `units` more add after the paid ones: the cents ride on the last unit, as in the pane.
+					unitMinor: (key: TenderLineId, units: number) => {
+						const line = split.lines.find(({ id }) => String(id) === String(key));
+						const paid = split.paidUnits[key]?.units ?? 0;
+						return line
+							? unitsMinor(line.totalMinor, line.quantity, paid + units) -
+									unitsMinor(line.totalMinor, line.quantity, paid)
+							: 0;
+					},
+					format: view.format,
+					pick: (key: TenderLineId, units: number) => pickUnits(order.uuid, key, units),
+				}
+			: undefined;
 	return (
 		<View className="flex-1">
 			<ErrorBoundary>

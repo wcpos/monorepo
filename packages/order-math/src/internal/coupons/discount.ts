@@ -39,9 +39,13 @@ export interface DiscountResult {
  */
 export function calculateCouponDiscount(
 	config: CouponDiscountConfig,
-	items: CouponLineItem[],
+	lineItems: CouponLineItem[],
 	dp = 2
 ): DiscountResult {
+	// WC: WC_Discounts::get_items_to_apply_coupon skips `0 >= $item->quantity`, so a returned
+	// line (a negative quantity) is never discounted, counted toward a unit limit or given a
+	// share of a fixed cart amount. Validation (minimum spend included) still sees every line.
+	const items = lineItems.filter((item) => item.quantity > 0);
 	const amount = parseFloat(config.amount) || 0;
 	if (amount === 0 || items.length === 0) {
 		return { totalDiscount: 0, perItem: [] };
@@ -54,7 +58,7 @@ export function calculateCouponDiscount(
 	if (
 		config.discount_type === 'fixed_cart' &&
 		config.exclude_sale_items &&
-		items.some((item) => item.on_sale)
+		lineItems.some((item) => item.on_sale)
 	) {
 		return { totalDiscount: 0, perItem: [] };
 	}

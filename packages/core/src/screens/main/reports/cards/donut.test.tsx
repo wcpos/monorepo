@@ -112,7 +112,7 @@ it('a negative bucket in the tail keeps Other and the arcs within one circle', (
 	const arcs = arcFractions(container);
 	expect(arcs).toHaveLength(5);
 	expect(arcs.reduce((sum, arc) => sum + arc.length, 0)).toBeCloseTo(1);
-	expect(screen.getByTestId('ring-row-other').textContent).toContain('-11.1%');
+	expect(screen.getByTestId('ring-row-other').textContent).toContain('\u221211.1%');
 });
 it('positive parts short of the period gross still leave the gap', () => {
 	const rows = [30, 20, -10].map((value, i) => ({ ...parts[0], key: String(i), value }));

@@ -156,7 +156,72 @@ export const useUILabel = () => {
 		[t]
 	);
 
+	/**
+	 * A column's display sub-option, in the owner's words: what the switch adds, not the
+	 * column header it belongs to (property rows rule 8, the name test).
+	 */
+	const getDisplayLabel = React.useCallback(
+		(id: string, columnKey: string, displayKey: string) => {
+			const labels = {
+				'pos-products': {
+					name: {
+						stock_quantity: t('ui_settings.stock_under_the_name'),
+						sku: t('ui_settings.sku_under_the_name'),
+						barcode: t('ui_settings.barcode_under_the_name'),
+						categories: t('ui_settings.categories_under_the_name'),
+						tags: t('ui_settings.tags_under_the_name'),
+						brands: t('ui_settings.brands_under_the_name'),
+						attributes: t('ui_settings.attributes_under_the_name'),
+						meta_data: t('ui_settings.custom_fields_under_the_name'),
+					},
+					price: {
+						tax: t('ui_settings.tax_under_the_price'),
+						on_sale: t('ui_settings.show_the_sale'),
+					},
+				},
+				'pos-cart': {
+					quantity: { split: t('ui_settings.split_link') },
+					name: { sku: t('ui_settings.sku_under_the_name') },
+					price: { on_sale: t('ui_settings.show_the_sale') },
+					subtotal: { tax: t('ui_settings.tax_under_the_subtotal') },
+					total: {
+						tax: t('ui_settings.tax_under_the_total'),
+						on_sale: t('ui_settings.show_the_sale'),
+					},
+				},
+				products: {
+					name: {
+						sku: t('ui_settings.sku_under_the_name'),
+						barcode: t('ui_settings.barcode_under_the_name'),
+						attributes: t('ui_settings.attributes_under_the_name'),
+					},
+					price: { tax: t('ui_settings.tax_under_the_price') },
+					regular_price: { tax: t('ui_settings.tax_under_the_price') },
+					sale_price: { tax: t('ui_settings.tax_under_the_price') },
+				},
+				orders: {
+					customer_id: {
+						billing: t('ui_settings.billing_address_under_the_customer'),
+						shipping: t('ui_settings.shipping_address_under_the_customer'),
+					},
+					total: { payment_method: t('ui_settings.payment_method_under_the_total') },
+				},
+				'reports-orders': {
+					total: { payment_method: t('ui_settings.payment_method_under_the_total') },
+				},
+			};
+
+			return get(
+				labels,
+				[id, columnKey, displayKey],
+				t('common.label_not_found', { item: displayKey })
+			);
+		},
+		[t]
+	);
+
 	return {
 		getLabel,
+		getDisplayLabel,
 	};
 };

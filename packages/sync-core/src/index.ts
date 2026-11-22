@@ -93,9 +93,12 @@ export {
 	MONEY_ANSWER_CODES,
 	moneyInMotionOf,
 	moneyRefusalOf,
+	ORDER_CLOSED_REFUSALS,
+	type OrderClosedRefusal,
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
 } from './woo/moneyCommandAnswer';
+export { isClosedOrderStatus, roundingFeeAmount } from './woo/closed-order-refusal';
 export {
 	identifyRecord,
 	isRecordUuid,

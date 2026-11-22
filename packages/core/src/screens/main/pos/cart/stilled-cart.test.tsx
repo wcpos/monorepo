@@ -52,6 +52,7 @@ jest.mock('../checkout/tender/use-ledger-view', () => ({
 			lines: [{ id: 'line-1', name: 'Tea', quantity: 3, totalMinor: 1000 }],
 			paidUnits: { 'line-1': { units: 1, methods: ['Cash'] } },
 			picked: { 'line-1': 1 },
+			pickable: true,
 			splitOn: mockSplitOn,
 		},
 		format: (minor: number) => `$${(minor / 100).toFixed(2)}`,

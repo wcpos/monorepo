@@ -3,6 +3,8 @@ import * as React from 'react';
 import isString from 'lodash/isString';
 import { WebView as RNWebView } from 'react-native-webview';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import type {
 	WebViewErrorEvent,
 	WebViewEvent,
@@ -17,10 +19,44 @@ export type WebViewHandle = Omit<RNWebView<object>, 'postMessage'> & {
 
 export type { WebViewLoadErrorEvent };
 
+const log = getLogger(['wcpos', 'ui', 'webview']);
+
 /** The URL a navigation event names, when it names one. */
 function eventURL(event: { nativeEvent?: { url?: unknown } }): string | null {
 	const url = event.nativeEvent?.url;
 	return typeof url === 'string' && url !== '' ? url : null;
+}
+
+/** The origin of the URL an event names, when it names a parseable one. */
+function senderOrigin(event: { nativeEvent?: { url?: unknown } }): string | null {
+	return originOf(eventURL(event));
+}
+
+function originOf(url: string | null): string | null {
+	if (url === null) return null;
+	try {
+		return new URL(url).origin || null;
+	} catch {
+		return null;
+	}
+}
+
+function senderAdmitted(senderURL: string | null, pinnedOrigin: string): boolean {
+	if (senderURL === null) return false;
+	try {
+		const sender = new URL(senderURL);
+		const pin = new URL(pinnedOrigin);
+		return (
+			['http:', 'https:'].includes(sender.protocol) &&
+			['http:', 'https:'].includes(pin.protocol) &&
+			(sender.protocol === pin.protocol ||
+				(pin.protocol === 'http:' && sender.protocol === 'https:')) &&
+			sender.hostname.replace(/^www\./, '') === pin.hostname.replace(/^www\./, '') &&
+			sender.port === pin.port
+		);
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -30,7 +66,7 @@ function WebView({
 	ref,
 	src,
 	srcDoc,
-	targetOrigin: _targetOrigin,
+	targetOrigin,
 	onMessage,
 	onContentSizeChange,
 	onLoad,
@@ -39,6 +75,7 @@ function WebView({
 	...props
 }: WebViewProps<WebViewHandle>) {
 	const localRef = React.useRef<RNWebView<object>>(null);
+	const loggedDropRef = React.useRef(false);
 	// react-native-webview 14.0.1 on Android (RNCWebViewClient.onReceivedError) reports a
 	// failed navigation as a FINISH and then an error, so `onLoad` fires for a document that
 	// never loaded. `loadSinceStartRef` holds the URL of a load since the last navigation
@@ -98,6 +135,18 @@ function WebView({
 			ref={localRef}
 			source={source}
 			onMessage={(event: WebViewMessageEvent) => {
+				// Admit only the pin's host/www twin and same scheme or http-to-https upgrade;
+				// on iOS react-native-webview names the sending frame's URL; on Android it names the
+				// top-level page (`mWebView.getUrl()`), so a frame inside the pinned page is admitted there.
+				if (targetOrigin && !senderAdmitted(eventURL(event), targetOrigin)) {
+					if (!loggedDropRef.current) {
+						loggedDropRef.current = true;
+						log.warn('Ignored a message from a page outside the pinned origin', {
+							context: { senderOrigin: senderOrigin(event), pinnedOrigin: originOf(targetOrigin) },
+						});
+					}
+					return;
+				}
 				/**
 				 * https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#onmessage
 				 * data from the webview must be a string, we want to convert this to an object

@@ -2136,6 +2136,22 @@ describe('@wcpos/receipt-renderer exports', () => {
 		}
 	});
 
+	// The app formats a negative amount with a true minus (U+2212); no thermal character table
+	// carries it, and on Star the encoder printed `?5.00` for it.
+	it('prints a negative amount with an ASCII hyphen on every printer language', () => {
+		for (const language of ['esc-pos', 'star-line', 'star-prnt'] as const) {
+			const bytes = encodeThermalTemplate(
+				'<receipt><text>Change −5.00</text><row><col width="*">Discount</col><col width="10" align="right">−1.25</col></row></receipt>',
+				{},
+				{ columns: 42, language }
+			);
+
+			expect(includesSequence(bytes, [0x2d, 0x35, 0x2e, 0x30, 0x30])).toBe(true);
+			expect(includesSequence(bytes, [0x2d, 0x31, 0x2e, 0x32, 0x35])).toBe(true);
+			expect(Array.from(bytes)).not.toContain(0x3f);
+		}
+	});
+
 	// Centering pads with literal spaces INSIDE the scaled run, so each one is `width` columns
 	// wide. Counting them against width 1 while the printer is in double width laid down twice
 	// the margin and wrapped the line — a merchant's 48-column receipt printed the store name as

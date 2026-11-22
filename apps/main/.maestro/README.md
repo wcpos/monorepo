@@ -206,6 +206,9 @@ These serial checks exclude rapid bursts, variations, startup and idle stalls.
 
 Native requires the next completed `e2e-cart-add-timing` sequence and emits
 `WCPOS_E2E_CART_ADD` JSON; web attaches `cart-add-performance` JSON.
+The native sample's `marks` give the elapsed ms at `queued` (the cart action
+queue entered `run`), `birthRead`, `hooks` (the `cart.line.add` hooks finished)
+and `written`, so a slow add names its segment (#3340).
 Budgets live in the web assertion and `subflows/assert-cart-add-timing.yml`.
 Change budgets only with evidence. Validate a gate by temporarily slowing the
 actual handler: correct quantity must still fail performance; remove and rerun.
@@ -222,6 +225,12 @@ local iPhone 16 Pro simulator measured 7454 / 5261 on 2026-09-09) and
 `totalMs`; web attaches `cart-add-burst` JSON and gates first burst click ->
 quantity 20 in the DOM at a provisional 8000 ms. After two green four-device
 runs, tighten both ceilings to the observed CI maximum plus ~30%.
+Phones time `settleAfterLastTapMs` to the Cart tab badge reading 20, before
+the tab tap; tablets and local runs time the quantity field.
+On phones, `settleSignal` is `badge` when the badge read 20, or `field` when
+the badge read another count, so the cart was slow and the field was timed.
+If the label matched no count, `settleSignal` is `badge-unreadable` and the
+flow fails on its own assertion before the gate. The 15000 ms ceiling is unchanged.
 
 Known blind spot: Maestro asserts the accessibility value, not the pixels.
 On 2026-09-09 the field's value was `20` while it painted `2`: the shared
@@ -296,6 +305,7 @@ Known classes, by what the screenshot shows:
 | Tablet flow 10 `10-cart-add-burst`: on iOS `"WCPOS E2E Simple" is visible` fails on every search retry after typing; on Android `false is true`, which is the `Last burst tap → quantity 20 within 15000 ms` gate | Open, mechanism not established. 3 of the 5 `main` push runs on 2026-11-17/18 (44169545811, 44196631459, 44232539798). It also fails with a healthy store (iOS tablet, run 44232539798, probe 555/587 ms), so store load alone does not explain it | Not handled; draft #3627 waits on the owner | read it as store slowness without the `[store-health]` lines; loosen the 15 s gate |
 | Tablet flow 06 `Add handler to cart commit is within 3000 ms (not touch-to-paint)` FAILED in `assert-cart-add-timing.yml` (Android prints only `false is true` from that subflow); typing the search takes minutes | Store load, as in the flow 04 `cart-subtotal` row: seen only while dev-pro was saturated (Android tablet run 44169545811, iOS tablet run 44218549118, whose probe median went from 614 ms before the flows to 2510 ms after) | The store-health probe labels the run environmental; nothing in the flow. Not yet seen on a quiet store: a failure there is a new class | loosen the 3000 ms gate; read it as a cart regression from a saturated-store run |
 | Android, any flow: `##[error]adb transport never stabilised after the offline retry window`; teardown `adb emu kill` gets Connection refused on port 5554 | The emulator died mid-suite. After `device offline`, the suite step polls `adb get-state` for up to 180 s and never sees three `device` reads in a row (Android tablet run 44218549118, flow 02; seen once) | The suite step does not re-run on a dead transport; each poll is in `adb-state.log` in the `maestro-*` artifact | re-run the suite on a dead emulator; read it as an app crash without logcat's `Fatal signal` |
+| Android phone flow 04 `id: (checkout-tab-payments\|process-payment-button) is visible` FAILED after the 60 s wait; the ❌ frame is all white; the hierarchy has `checkout-dialog-scrim` full-screen over an empty `KeyboardAvoidingView`; logcat repeats Maestro `Skipping invisible child … boundsInScreen: Rect(0, 128 - 1080, 2337)` from 1–2 s after the checkout tap until the timeout (a passing run logs none) | **An app bug, not latency: the cashier is left at a blank checkout.** The panel mounts and lays out, but its Reanimated `entering` fade (`FadeIn`, presentation `center`, `packages/components/src/lib/overlay/index.tsx`) never finishes, and Android reports a view at alpha 0 as invisible. Runs 44546458970, 44546619244, 44546930900 (#3678). In two of the three the panel was invisible before the order push landed. Seen on the CI emulator only; whether a real phone hits it is not established | #3679 (open): native non-anchored panels enter through an animated style driven by `withTiming`, which is re-applied on every commit | raise flow 04's 60 s wait; read it as store load or overlapping jobs (both ruled out in #3678) |
 
 When a red matches none of these, the thing to produce is a new row: the
 signature, the mechanism with the evidence that established it, and where the

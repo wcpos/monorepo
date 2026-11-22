@@ -6,6 +6,7 @@ import {
 	type RetryBackoffPolicy,
 	retryJitterSeed,
 } from './recordRetryBackoff';
+import { isClosedOrderStatus, roundingFeeAmount } from './woo/closed-order-refusal';
 import { toOrderWirePayload } from './woo/orderWriteContract';
 
 import type { RecordMutation } from './recordMutation';
@@ -736,6 +737,7 @@ export async function drainMutationQueue(input: {
 			// is then invisible to recovery and to anyone reading the logs.
 			rejection = { mutation, status, reason, serverMessage, ...(data ? { data } : {}) };
 			rejected.push(rejection);
+			const amount = roundingFeeAmount(mutation.payload);
 			// Emitted only once the verdict is DURABLE, for the same reason. The log
 			// pipeline classifies `push.rejected` as a terminal rejection and the
 			// health banner reads that classification, so emitting it on a failed
@@ -752,6 +754,9 @@ export async function drainMutationQueue(input: {
 					mutationId: mutation.mutationId,
 					status,
 					reason,
+					// Sentry POS-338: a closed order's reopen_required refusal logs apart (SYNC204).
+					...(isClosedOrderStatus(data?.order_status) ? { orderClosed: true } : {}),
+					...(amount !== undefined ? { roundingFeeAmount: amount } : {}),
 				},
 			});
 		} catch (error) {

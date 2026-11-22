@@ -78,7 +78,12 @@ jobs:
   changes:
     name: 🔍 Detect Deploy Changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     outputs:
+      e2e_proof: ${{ steps.proof.outputs.e2e_proof }}
       lint: ${{ steps.plan.outputs.lint }}
       unit: ${{ steps.plan.outputs.unit }}
       web: ${{ steps.plan.outputs.web }}
@@ -142,6 +147,14 @@ jobs:
           esac
           echo "lane=${lane:-<unresolved>} (event=$EVENT_NAME base_ref=${BASE_REF:-} ref_name=$REF_NAME input=${INPUT_LANE:-auto})"
           echo "lane=$lane" >> "$GITHUB_OUTPUT"
+      # desk ruling 2026-11-20: tree hash equality only
+      - name: 🪞 Find a PR run that already passed this tree
+        id: proof
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: .github/scripts/main-push-e2e-proof.sh
 
   deploy:
     name: 🚀 Deploy
@@ -255,7 +268,7 @@ jobs:
   e2e-setup:
     name: 🔑 E2E shared setup
     needs: [changes, deploy]
-    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && needs.changes.outputs.e2e_proof == ''
     runs-on: ubuntu-latest
     # One shared login per lane at a time: every setup logs in as the same free-store user (2026-11-17 AUTH101 race).
     concurrency:
@@ -388,7 +401,7 @@ jobs:
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     needs: [changes, deploy, e2e-setup]
-    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' }}
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && needs.changes.outputs.e2e_proof == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -709,6 +722,7 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           DEPLOY_URL: ${{ needs.deploy.outputs.deployment_url }}
           E2E_RESULT: ${{ needs.e2e.result }}
+          E2E_PROOF: ${{ needs.changes.outputs.e2e_proof }}
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           SKIP_E2E_INPUT: ${{ github.event.inputs.skip_e2e }}
@@ -761,6 +775,11 @@ jobs:
           fi
 
           # ---- E2E was skipped: was that legitimate? ----
+          if [ "$EVENT_NAME" = "push" ] && [ "$DEPLOY_RESULT" = "success" ] && [ -n "${E2E_PROOF:-}" ]; then
+            echo "⏭️ Web E2E skipped: this tree already passed all 6 web E2E shards in $E2E_PROOF"
+            echo "⏭️ Web E2E skipped: this tree already passed all 6 web E2E shards in $E2E_PROOF" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 0
+          fi
 
           # Nothing was deployed, so there was nothing to test. Covers draft
           # PRs, dependabot, and PRs that touch no app-affecting paths.

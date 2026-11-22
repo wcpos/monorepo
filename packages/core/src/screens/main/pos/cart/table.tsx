@@ -29,6 +29,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { LineStrip } from './cells/line-strip';
+import { createOpenLine } from './open-line';
 import { type LineSort, sortLines } from './sort-lines';
 import { FeeAndShippingTotal } from './cells/fee-and-shipping-total';
 import { FeeName } from './cells/fee-name';
@@ -66,11 +67,12 @@ const cartTableFeatures = tableFeatures({ columnVisibilityFeature });
 const INPUT_COLUMN = { head: 'w-18 flex-none px-2', cell: 'w-18 flex-none px-2' };
 const TEXT_COLUMN = { head: 'w-20 flex-none pr-3 pl-2', cell: 'min-w-20 flex-none pr-3 pl-2' };
 const AMOUNT_COLUMNS: Record<string, { head: string; cell: string } | undefined> = {
-	quantity: { head: 'w-12 flex-none pr-2 pl-3', cell: 'w-12 flex-none pr-2 pl-3' },
+	// The abbreviated head fits 42 px after a left gutter; Qty + Total equal main's, so Item keeps its width (#3652).
+	quantity: { head: 'w-14 flex-none pl-2 pr-0', cell: 'w-14 flex-none pl-2 pr-0' },
 	price: INPUT_COLUMN,
 	regular_price: INPUT_COLUMN,
 	subtotal: TEXT_COLUMN,
-	total: TEXT_COLUMN,
+	total: { head: 'w-18 flex-none pr-3 pl-0', cell: 'min-w-18 flex-none pr-3 pl-0' },
 };
 /** The split picker's quantity column holds `− n of m +`: two 44 buttons and the count. */
 const PICKER_QUANTITY_COLUMN = { head: 'w-40 flex-none px-2', cell: 'w-40 flex-none px-2' };
@@ -196,6 +198,10 @@ export function CartTable({
 	const rowRefs = React.useRef<Map<string, PulseTableRowRef | null>>(new Map());
 	const rowLayouts = React.useRef<Map<string, { y: number; height: number }>>(new Map());
 	const scrollViewRef = React.useRef<ScrollViewInstance>(null);
+	/** One open line strip per cart, the rows' one shared fact; scrolling the cart closes it. */
+	const [openLine] = React.useState(createOpenLine);
+	// The scroll's end reports where it stopped: only a move closes the strip, not that report.
+	const scrollY = React.useRef(0);
 	const { currentOrderRecord } = useCurrentOrder();
 	// Track previous cart data
 	const prevDataRef = React.useRef<CartTableLine[]>([]);
@@ -277,9 +283,14 @@ export function CartTable({
 				return {
 					id: col.key,
 					header: ({ column }: { column: Column<CartTableLine, unknown, CartTableFeatures> }) => (
-						<Text numberOfLines={1}>
+						<Text
+							numberOfLines={1}
+							accessibilityLabel={
+								column.id === 'quantity' && !picking ? t('pos_cart.quantity') : undefined
+							}
+						>
 							{{
-								quantity: picking ? t('pos_checkout.this_payment') : t('pos_cart.col_qty'),
+								quantity: picking ? t('pos_checkout.this_payment') : t('pos_cart.qty_abbrev'),
 								name: t('pos_cart.col_item'),
 								price: t('pos_cart.col_price'),
 								total: t('pos_cart.col_total'),
@@ -431,11 +442,18 @@ export function CartTable({
 						// A tap on a control (another line's field or button) reaches it with the native
 						// price field's keyboard up; a tap on empty cart space still dismisses the keyboard.
 						keyboardShouldPersistTaps="handled"
+						onScroll={({ nativeEvent }) => {
+							if (nativeEvent.contentOffset.y === scrollY.current) return;
+							scrollY.current = nativeEvent.contentOffset.y;
+							openLine.close();
+						}}
 					>
 						<TableBody>
 							{table.getRowModel().rows.map((row, index) => (
 								<PulseTableRow
 									key={row.id}
+									// Id-bearing, so a spec finds the line it created (CODING_STANDARDS, E2E rule 3).
+									testID={`cart-line-row-${row.id}`}
 									ref={(ref) => {
 										rowRefs.current.set(row.id, ref);
 									}}
@@ -448,7 +466,7 @@ export function CartTable({
 										rowLayouts.current.set(row.id, { y, height });
 									}}
 								>
-									<LineStrip line={row.original} rowRefs={rowRefs}>
+									<LineStrip line={row.original} rowRefs={rowRefs} openLine={openLine}>
 										{(wrapTotal) => {
 											const visible = row.getVisibleCells();
 											// The strip's press target is the Total cell; with Total hidden in the
