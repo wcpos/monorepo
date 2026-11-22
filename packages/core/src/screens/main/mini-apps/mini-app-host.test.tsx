@@ -7,6 +7,7 @@ import { MiniAppHost } from './mini-app-host';
 
 interface MockWebViewProps {
 	onLoad?: () => void;
+	onShouldStartLoadWithRequest?: (request: { url: string }) => boolean;
 }
 
 let mockWebViewProps: MockWebViewProps = {};
@@ -57,6 +58,7 @@ jest.mock('uniwind', () => ({
 	useUniwind: () => ({ theme: 'light' }),
 }));
 jest.mock('./bridge/use-bridge', () => ({
+	...jest.requireActual('./bridge/use-bridge'),
 	useBridge: () => ({
 		onMessage: mockOnMessage,
 		ready: mockReady,
@@ -67,13 +69,13 @@ jest.mock('./bridge/use-bridge', () => ({
 jest.mock('./capabilities/host', () => ({ useHostCapabilities: () => ({}) }));
 jest.mock('./capabilities/printers', () => ({ usePrinterCapabilities: () => ({}) }));
 jest.mock('./catalog', () => ({
-	MINI_APP_ORIGIN: 'https://mini-apps.example',
+	MINI_APP_ORIGIN: 'https://cdn.example/gh/wcpos/mini-apps@1',
 	meetsMinAppVersion: () => true,
 	useMiniAppCatalog: () => [
 		{
 			id: 'printer-wizard',
 			title: { en: 'Printer wizard' },
-			url: 'https://mini-apps.example/printer-wizard/',
+			url: 'https://cdn.example/gh/wcpos/mini-apps@1/printer-wizard/index.html',
 			capabilities: [],
 			minAppVersion: '1.0.0',
 			entry: [],
@@ -146,6 +148,32 @@ describe('MiniAppHost readiness deadline', () => {
 		act(() => jest.advanceTimersByTime(29_999));
 		expect(screen.queryByTestId('mock-fallback')).toBeNull();
 		act(() => jest.advanceTimersByTime(1));
+		expect(screen.getByTestId('mock-fallback')).toBeTruthy();
+	});
+
+	it('navigation to another jsDelivr repo is refused', () => {
+		render(<MiniAppHost id="printer-wizard" onClose={jest.fn()} />);
+		const shouldStart = mockWebViewProps.onShouldStartLoadWithRequest;
+
+		expect(
+			shouldStart?.({ url: 'https://cdn.example/gh/wcpos/mini-apps@1/printer-wizard/step.html' })
+		).toBe(true);
+		expect(shouldStart?.({ url: 'https://cdn.example/gh/someone/else@1/index.html' })).toBe(false);
+		expect(shouldStart?.({ url: 'https://cdn.example/gh/wcpos/mini-apps@10/index.html' })).toBe(
+			false
+		);
+	});
+
+	it('on web a second frame load closes the bridge', () => {
+		mockReady = true;
+		render(<MiniAppHost id="printer-wizard" onClose={jest.fn()} />);
+
+		act(() => mockWebViewProps.onLoad?.());
+		expect(screen.getByTestId('mock-webview')).toBeTruthy();
+		act(() => mockWebViewProps.onLoad?.());
+
+		expect(mockReset).toHaveBeenCalledTimes(1);
+		expect(screen.queryByTestId('mock-webview')).toBeNull();
 		expect(screen.getByTestId('mock-fallback')).toBeTruthy();
 	});
 });
