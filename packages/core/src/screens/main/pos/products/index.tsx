@@ -351,9 +351,12 @@ function POSProductsContent({
 		sort: getPOSProductSort(sortBy, sortDirection),
 	};
 	const conditionLabels = useActiveConditionLabels(filterItems, state, resetState, browsePlace);
-	const conditions = decode(
-		[...(state.search.trim() ? [`“${state.search.trim()}”`] : []), ...conditionLabels].join(', ')
-	);
+	// The labels carry Woo's entity-encoded term names and are decoded; the search text is the
+	// cashier's own and is quoted as typed.
+	const conditions = [
+		...(state.search.trim() ? [`“${state.search.trim()}”`] : []),
+		...conditionLabels.map((label) => decode(label)),
+	].join(', ');
 	const placeTerm = browsePlace?.term;
 	const placeCount = placeTerm?.kind === 'term' ? placeTerm.count : census;
 	// Woo sends term names entity-encoded ("Flags &amp; Banners"); the crumb and tiles decode
