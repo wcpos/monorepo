@@ -13,9 +13,11 @@ const buttonVariants = cva('items-center justify-center rounded-lg', {
 			default: 'web:hover:bg-accent active:bg-accent',
 			outline: 'border-border web:hover:bg-accent active:bg-accent border',
 			primary: 'web:hover:bg-primary/15 active:bg-primary/15',
-			// The default's full tint: 15% of `muted`, already a pale grey, drew no hover at all (the
-			// table carets, Paul 2026-10-27). The glyph is muted either way.
-			muted: 'web:hover:bg-accent active:bg-accent',
+			// A fraction of the hover wash: a muted glyph that is not an action (the created-via icon, a
+			// tooltip trigger) barely answers a pointer. #2993 gave it the full tint for the table carets
+			// and then moved the carets to the default variant; this is the fraction, in the accent the
+			// 10-30 hover ruling chose.
+			muted: 'web:hover:bg-accent/15 active:bg-accent/15',
 			destructive: 'web:hover:bg-destructive/15 active:bg-destructive/15',
 			secondary: 'web:hover:bg-secondary/15 active:bg-secondary/15',
 			ok: 'web:hover:bg-ok/15 active:bg-ok/15',
