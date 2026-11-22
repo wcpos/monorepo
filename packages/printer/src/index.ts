@@ -77,7 +77,11 @@ export type { PrinterIdentity } from './discovery/identify';
 export { identifyModel } from './discovery/identify-models';
 export { columnsForPaperWidthMm, resolveNativePrinterColumns } from './discovery/paper-width';
 export { createIdentifyProbes } from './discovery/identify-probes';
-export { isPrinterConnectionError, PrinterConnectionError } from './utils/connection-error';
+export {
+	isPrinterConnectionError,
+	isPrinterConnectionMessage,
+	PrinterConnectionError,
+} from './utils/connection-error';
 export type { ConnectionDiagnostics } from './utils/connection-error';
 export type {
 	PrinterTransport,

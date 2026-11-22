@@ -26,6 +26,8 @@ jest.mock('@wcpos/printer', () => ({
 	createIdentifyProbes: () => ({}),
 	identifyPrinter: jest.fn(),
 	isPrinterConnectionError: () => false,
+	isPrinterConnectionMessage: jest.requireActual('@wcpos/printer/utils/connection-error')
+		.isPrinterConnectionMessage,
 	describeStatus: jest.requireActual('@wcpos/printer/transport/escpos-status').describeStatus,
 }));
 const epson: DiscoveredPrinter = {
@@ -383,6 +385,20 @@ describe('trouble reason', () => {
 		['Database unavailable', 'lane'],
 	])('reads %s as %s', (failure, reason) => {
 		expect(troubleReasonFor({ source: 'network', identity }, failure)).toBe(reason);
+	});
+
+	it('reads a web connection failure as the lane advice, not a permission', () => {
+		const { buildConnectionError } = jest.requireActual('@wcpos/printer/utils/connection-error');
+		const { message } = buildConnectionError({
+			vendorLabel: 'Epson',
+			protocolName: 'ePOS',
+			url: 'https://192.168.1.10:443/cgi-bin/epos/service.cgi',
+			enableHint: "ensure ePOS is enabled in the printer's network settings",
+			plainHttpPort: 8008,
+		});
+		expect(message).toMatch(/permission/);
+		expect(troubleReasonFor(undefined, message)).toBe('lane');
+		expect(troubleReasonFor(undefined, 'NotAllowedError: permission denied')).toBe('permission');
 	});
 
 	it('sends a printer the phone has not paired to the Bluetooth settings line', () => {

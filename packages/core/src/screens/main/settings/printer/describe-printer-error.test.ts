@@ -1,3 +1,5 @@
+import { buildConnectionError } from '@wcpos/printer/utils/connection-error';
+
 import { describePrinterError } from './describe-printer-error';
 import en from '../../../../contexts/translations/locales/en/core.json';
 
@@ -20,6 +22,25 @@ describe('describePrinterError', () => {
 		['Something nobody has seen before', 'settings.setup_err_generic'],
 	])('maps %s to %s', (message, key) => {
 		expect(describePrinterError(new Error(message)).key).toBe(key);
+	});
+
+	it.each([
+		['an HTTPS', 'https://192.168.1.10:443/cgi-bin/epos/service.cgi'],
+		['an HTTP', 'http://192.168.1.10:8008/cgi-bin/epos/service.cgi'],
+	])('reads %s connection failure as the printer not answering, not a permission', (_, url) => {
+		const error = buildConnectionError({
+			vendorLabel: 'Epson',
+			protocolName: 'ePOS',
+			url,
+			enableHint: "ensure ePOS is enabled in the printer's network settings",
+			plainHttpPort: 8008,
+		});
+		expect(error.message).toMatch(/permission/);
+		expect(describePrinterError(error)).toEqual({
+			key: 'settings.setup_err_timeout',
+			message: error.message,
+		});
+		expect(describePrinterError(error.message).key).toBe('settings.setup_err_timeout');
 	});
 
 	it('keeps the raw message so the support report still carries it', () => {

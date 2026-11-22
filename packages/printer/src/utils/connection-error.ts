@@ -49,6 +49,11 @@ export function isPrinterConnectionError(error: unknown): error is PrinterConnec
 	);
 }
 
+/** Matches the message `buildConnectionError` writes, for callers that only hold the text. */
+export function isPrinterConnectionMessage(text: string): boolean {
+	return /Could not connect to .+ printer at /.test(text);
+}
+
 function isLocalhost(host: string): boolean {
 	return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
 }

@@ -7,6 +7,7 @@ import {
 	identifyModel,
 	identifyPrinter,
 	isPrinterConnectionError,
+	isPrinterConnectionMessage,
 	queryUsbPrinterModel,
 	resolveNativePrinterColumns,
 } from '@wcpos/printer';
@@ -93,6 +94,8 @@ export function troubleReasonFor(
 	if (saysPaperTrouble(status)) return 'paper';
 	if (selected?.identity?.securePrinting) return 'secure';
 	if (selected?.identity?.ports?.some((port) => port.httpStatus === 503)) return 'held';
+	// A web connection failure's advice mentions a browser permission; the lane advice fits it better.
+	if (isPrinterConnectionMessage(failure)) return 'lane';
 	if (PERMISSION_RE.test(failure)) return 'permission';
 	if (UNPAIRED_RE.test(failure)) return 'unpaired';
 	if (selected?.source === 'bluetooth' && PAIRING_RE.test(failure)) return 'pairing';

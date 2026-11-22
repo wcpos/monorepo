@@ -101,7 +101,7 @@ describe('TestPrintError', () => {
 		render(<TestPrintError error={failureWithDiagnostics} />);
 
 		expect(screen.getByTestId('add-printer-test-error-title')).toHaveTextContent(
-			'The printer did not accept the job.'
+			'The printer did not answer. Check it is on and connected, then try again.'
 		);
 		expect(screen.queryByText('We tried')).not.toBeInTheDocument();
 		expect(screen.queryByText('Likely reason')).not.toBeInTheDocument();

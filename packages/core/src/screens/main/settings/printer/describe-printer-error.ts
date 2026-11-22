@@ -1,3 +1,8 @@
+// The module itself: the package root would pull p-queue into the jest suites that use this.
+import {
+	isPrinterConnectionError,
+	isPrinterConnectionMessage,
+} from '@wcpos/printer/utils/connection-error';
 import { getErrorMessage } from '@wcpos/utils/logger';
 
 /** The copy key the app shows, plus the raw message the support report still carries. */
@@ -9,7 +14,9 @@ export interface PrinterErrorDescription {
 /**
  * Every raw string a print path can throw, mapped to one line the cashier can act on
  * (roadmap#161 P1). Order matters: the first match wins, so the specific transport
- * failures sit above the generic permission/timeout catches.
+ * failures sit above the generic permission/timeout catches. A web connection failure
+ * is checked before any rule: its advice mentions a browser permission, but the printer
+ * simply did not answer.
  */
 const RULES: readonly (readonly [RegExp, string])[] = [
 	[/Error invoking remote method/i, 'err_bridge'],
@@ -43,6 +50,9 @@ export function printerErrorText(key: string, t: (key: string) => string): strin
 
 export function describePrinterError(error: unknown): PrinterErrorDescription {
 	const message = getErrorMessage(error);
+	if (isPrinterConnectionError(error) || isPrinterConnectionMessage(message)) {
+		return { key: 'settings.setup_err_timeout', message };
+	}
 	const matched = RULES.find(([pattern]) => pattern.test(message));
 	return { key: `settings.setup_${matched?.[1] ?? 'err_generic'}`, message };
 }
