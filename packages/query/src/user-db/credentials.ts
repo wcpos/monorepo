@@ -26,7 +26,12 @@ export async function saveLoginCredentials(
 		refresh_token: string;
 		expires_at: number;
 	}
-): Promise<{ created: boolean; linked: boolean; credentials: ReadonlyWpCredentialsRecord }> {
+): Promise<{
+	created: boolean;
+	linked: boolean;
+	credentials: ReadonlyWpCredentialsRecord;
+	site: ReadonlySiteRecord;
+}> {
 	if (!userDB) throw new UserDatabaseUnavailableError();
 	if (!siteUuid || !params.uuid)
 		throw new Error('Cannot save credentials without site and credential uuids');
@@ -80,6 +85,7 @@ export async function saveLoginCredentials(
 		created: !existingCredentials,
 		linked,
 		credentials: credentials as unknown as ReadonlyWpCredentialsRecord,
+		site: site as unknown as ReadonlySiteRecord,
 	};
 }
 

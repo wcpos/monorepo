@@ -279,6 +279,28 @@ export async function recordSiteInfo(
 }
 
 /**
+ * Keep the Pro version and licence the store returned to a signed-in cashier. Unlike
+ * `recordSiteInfo`, a field the response lacks keeps its saved value: plugins that serve them
+ * only on the public index (older Pro, Free) must not blank what discovery saved.
+ */
+export async function recordSignedInSiteInfo(
+	site: ReadonlySiteRecord | SiteDocument,
+	data: Record<string, unknown>
+): Promise<void> {
+	const patch: Record<string, unknown> = {};
+	if (typeof data.wcpos_pro_version === 'string' && data.wcpos_pro_version) {
+		patch.wcpos_pro_version = data.wcpos_pro_version;
+	}
+	if (data.license && typeof data.license === 'object' && !Array.isArray(data.license)) {
+		patch.license = data.license;
+	}
+	if (Object.keys(patch).length === 0) return;
+	const document = site as SiteDocument;
+	if (document.getLatest().deleted) throw new SiteRemovedError();
+	await document.incrementalPatch(patch);
+}
+
+/**
  * Forget the saved WCPOS free and Pro plugin versions, and nothing else on the site. The next
  * mount's `useSiteInfo`, or the next embedded boot payload, writes the store's real version
  * back. An empty version never shows the plugin gate.

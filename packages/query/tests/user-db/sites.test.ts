@@ -19,6 +19,7 @@ import {
 	clearSitePluginVersions,
 	connectionAddressOf,
 	linkCredentialsToSite,
+	recordSiteInfo,
 	SiteRemovedError,
 	stripLocalOnlySiteFields,
 	upsertSiteData,
@@ -265,6 +266,26 @@ describe('clearSitePluginVersions', () => {
 		await site!.getLatest().remove();
 
 		await expect(clearSitePluginVersions(site!)).rejects.toBeInstanceOf(SiteRemovedError);
+	});
+});
+
+describe('recordSiteInfo', () => {
+	it('keeps a saved Pro version when the public index carries none (absent = unknown)', async () => {
+		await upsertSiteData(
+			db,
+			parse(restResponse({ wcpos_version: '2.0.0', wcpos_pro_version: '2.0.3' }))
+		);
+		const site = await sites().findOne(SITE_UUID).exec();
+
+		await recordSiteInfo(site!, { wp_version: '6.9', wcpos_version: '2.0.1' });
+
+		const final = await sites().findOne(SITE_UUID).exec();
+		expect(final!.wcpos_pro_version).toBe('2.0.3');
+		expect(final!.wcpos_version).toBe('2.0.1');
+
+		// A store that says it has no Pro still clears it.
+		await recordSiteInfo(final!, { wcpos_version: '2.0.1', wcpos_pro_version: '' });
+		expect((await sites().findOne(SITE_UUID).exec())!.wcpos_pro_version).toBe('');
 	});
 });
 

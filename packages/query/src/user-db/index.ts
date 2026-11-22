@@ -16,6 +16,7 @@ export {
 export {
 	clearSitePluginVersions,
 	migrateSiteApiUrl,
+	recordSignedInSiteInfo,
 	recordSiteInfo,
 	removeSite,
 	saveConnectedSite,
