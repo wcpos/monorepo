@@ -57,6 +57,8 @@ jest.mock('uniwind', () => ({
 	useCSSVariable: () => '#000000',
 	useUniwind: () => ({ theme: 'light' }),
 }));
+// The real bridge module (kept for isUnderPin) imports uuid, whose ESM build Jest cannot load.
+jest.mock('uuid', () => ({ v4: () => 'generated-id' }));
 jest.mock('./bridge/use-bridge', () => ({
 	...jest.requireActual('./bridge/use-bridge'),
 	useBridge: () => ({

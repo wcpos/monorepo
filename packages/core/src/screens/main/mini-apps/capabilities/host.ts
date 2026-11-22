@@ -8,8 +8,18 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 const ALLOWED_REST_PREFIXES = ['/wcpos/v1/', '/wc/v3/', '/wp/v2/'];
 const MAX_RESPONSE_LENGTH = 1024 * 1024;
-// The host owns authentication; a page may never set or override these.
-const BLOCKED_REQUEST_HEADERS = ['authorization', 'cookie', 'x-wcpos', 'host', 'x-wcpos-instance'];
+// The host owns authentication and the request method; a page may never set or override these.
+// WordPress REST reads the method-override headers (and the `_method` query key, refused below)
+// as the real method, so a GET could otherwise run as a DELETE.
+const BLOCKED_REQUEST_HEADERS = [
+	'authorization',
+	'cookie',
+	'x-wcpos',
+	'host',
+	'x-wcpos-instance',
+	'x-http-method-override',
+	'x-http-method',
+];
 
 // Validated after percent-decoding, not by prefix alone: a page holding the proxy must not be
 // able to walk out of the allowed REST namespaces with dot segments or delimiters, encoded or not.
@@ -57,6 +67,14 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 					Object.keys(query).includes('rest_route')
 				) {
 					throw new BridgeError('bad_request', 'Query must not override rest_route');
+				}
+				if (
+					query &&
+					typeof query === 'object' &&
+					!Array.isArray(query) &&
+					Object.keys(query).includes('_method')
+				) {
+					throw new BridgeError('bad_request', 'Query must not override the method');
 				}
 				const search = new URLSearchParams();
 				if (query && typeof query === 'object' && !Array.isArray(query)) {

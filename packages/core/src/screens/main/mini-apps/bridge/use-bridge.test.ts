@@ -18,8 +18,9 @@ function setup(
 	const postMessage = jest.fn();
 	const ref = { current: { postMessage } } as unknown as React.RefObject<WebViewHandle>;
 	const hook = renderHook(() => useBridge(ref, pin, handlers));
-	const receive = (data: unknown, url: string | undefined = `${pin}/index.html`) =>
-		hook.result.current.onMessage({ nativeEvent: url === undefined ? { data } : { data, url } });
+	// null sends a message that carries no sender URL at all.
+	const receive = (data: unknown, url: string | null = `${pin}/index.html`) =>
+		hook.result.current.onMessage({ nativeEvent: url === null ? { data } : { data, url } });
 	const handshake = () =>
 		act(async () => receive({ wcpos: 1, id: 'ready-1', action: 'app.ready', payload: {} }));
 
@@ -55,7 +56,7 @@ describe('useBridge', () => {
 		const { postMessage, receive, result } = setup(READY_HANDLER);
 
 		await act(async () => {
-			await receive(envelope({ action: 'app.ready' }), undefined);
+			await receive(envelope({ action: 'app.ready' }), null);
 		});
 
 		expect(result.current.ready).toBe(false);
