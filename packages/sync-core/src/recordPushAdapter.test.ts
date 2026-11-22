@@ -251,6 +251,20 @@ describe('pushRecordMutation', () => {
 		expect(events[0].level).toBe('warn');
 	});
 
+	it('409: keeps the path names the server says differ, and drops anything that is not a string', async () => {
+		const result = await pushRecordMutation({
+			mutation: mut({ operation: 'update' }),
+			resolveEndpoint,
+			fetcher: async () =>
+				jsonResponse(409, {
+					current: { id: 9 },
+					currentRevision: 'rev-9',
+					differs: ['customer_note', 7, 'meta_data.gift_message'],
+				}),
+		});
+		expect(result.conflict?.differs).toEqual(['customer_note', 'meta_data.gift_message']);
+	});
+
 	it('treats a 409 in_progress (atomic-reserve contention) as a retryable error, not a conflict', async () => {
 		const events: SyncEvent[] = [];
 		await expect(
