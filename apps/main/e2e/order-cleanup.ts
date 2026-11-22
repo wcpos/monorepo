@@ -195,7 +195,7 @@ async function fetchOrderStatuses(
 
 export interface FinalizeResult {
 	cancelled: number;
-	/** Captured orders left untouched because they were already handled (not pos-open). */
+	/** Captured orders left untouched because they were already handled (not pos-open or pos-partial). */
 	leftHandled: number;
 	failed: number;
 	skippedFixtures: number;
@@ -203,7 +203,7 @@ export interface FinalizeResult {
 
 /**
  * Finalize the given test-created order ids: transition every one still in a
- * finalize-able status (pos-open) to `cancelled`. Orders already handled (completed /
+ * finalize-able status (pos-open or pos-partial) to `cancelled`. Orders already handled (completed /
  * processing / etc.) and retained fixtures are left as-is.
  *
  * Strictly best-effort — logs and swallows every failure, never throws.
@@ -242,7 +242,9 @@ export async function finalizeCreatedOrders(
 		const toCancel = selectOrdersToFinalize(statuses, retain);
 		result.leftHandled = statuses.length - toCancel.length;
 		if (toCancel.length === 0) {
-			console.log(`[order-cleanup] no pos-open orders to finalize (checked ${statuses.length})`);
+			console.log(
+				`[order-cleanup] no open or part-paid orders to finalize (checked ${statuses.length})`
+			);
 			return result;
 		}
 
