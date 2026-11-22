@@ -2,10 +2,11 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 
 import { PrinterDialogLayout } from './printer-dialog-layout';
+import { type PrinterDetection } from './printer-rows';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues, type VendorOption } from '../schema';
 
 type Field = { value?: unknown; onChange: (value: unknown) => void; testID?: string };
@@ -50,7 +51,19 @@ jest.mock('@wcpos/components/text', () => ({
 	),
 	TextClassContext: jest.requireActual('react').createContext(''),
 }));
-jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
+// The button renders so a row's verb (Change) can be found and pressed.
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		onPress,
+	}: React.PropsWithChildren<{ testID?: string; onPress?: () => void }>) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
+}));
 jest.mock('../../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
@@ -58,7 +71,11 @@ jest.mock('../../../../../contexts/translations', () => ({
 
 const VENDORS: VendorOption[] = [{ value: 'epson', label: 'Epson' }];
 
-function Layout(props: { values?: Partial<PrinterFormValues>; vendors?: boolean }) {
+function Layout(props: {
+	values?: Partial<PrinterFormValues>;
+	vendors?: boolean;
+	detected?: PrinterDetection;
+}) {
 	const form = useForm<PrinterFormValues>({
 		defaultValues: { ...DEFAULT_FORM_VALUES, ...props.values },
 	});
@@ -70,6 +87,7 @@ function Layout(props: { values?: Partial<PrinterFormValues>; vendors?: boolean 
 			connectionRow={<span data-testid="printer-row-connection" />}
 			connectionLane={<span data-testid="lane" />}
 			vendorOptions={props.vendors ? VENDORS : undefined}
+			detected={props.detected}
 			footer={{}}
 		/>
 	);
@@ -142,5 +160,51 @@ describe('Edit Printer rows', () => {
 		render(<Layout values={{ autoOpenDrawer: false }} />);
 		expect(rowIDs()).not.toContain('drawerConnector');
 		expect(screen.queryByTestId('add-printer-drawer-connector-field')).toBeNull();
+	});
+});
+
+describe('Edit Printer detected rows', () => {
+	const detected: PrinterDetection = { language: 'esc-pos', columns: 42 };
+	const languageRow = () => screen.getByTestId('printer-row-language');
+	const paperRow = () => screen.getByTestId('printer-row-columns');
+
+	it('reads the detected language and paper as values with "detected" and Change, no select', () => {
+		render(<Layout detected={detected} values={{ language: 'esc-pos', columns: 42 }} />);
+
+		expect(languageRow()).toHaveTextContent('ESC/POS');
+		expect(languageRow()).toHaveTextContent('detected');
+		expect(within(languageRow()).getByTestId('printer-language-change')).toHaveTextContent(
+			'Change'
+		);
+		expect(within(languageRow()).queryByTestId('select')).toBeNull();
+		expect(paperRow()).toHaveTextContent('42 — 80 mm, older printers');
+		expect(paperRow()).toHaveTextContent('detected');
+		expect(within(paperRow()).getByTestId('printer-columns-change')).toHaveTextContent('Change');
+		expect(within(paperRow()).queryByTestId('select')).toBeNull();
+	});
+
+	it('opens the select when Change is pressed', () => {
+		render(<Layout detected={detected} values={{ language: 'esc-pos', columns: 42 }} />);
+
+		fireEvent.click(screen.getByTestId('printer-language-change'));
+
+		expect(within(languageRow()).getByTestId('select')).toBeInTheDocument();
+		expect(within(languageRow()).queryByTestId('printer-language-change')).toBeNull();
+		expect(within(paperRow()).queryByTestId('select')).toBeNull();
+	});
+
+	it('renders both rows as selects when nothing was detected', () => {
+		render(<Layout values={{ language: 'esc-pos', columns: 42 }} />);
+
+		expect(within(languageRow()).getByTestId('select')).toBeInTheDocument();
+		expect(within(paperRow()).getByTestId('select')).toBeInTheDocument();
+		expect(languageRow()).not.toHaveTextContent('detected');
+	});
+
+	it('renders the select when the form no longer holds the detected language', () => {
+		render(<Layout detected={detected} values={{ language: 'star-prnt', columns: 42 }} />);
+
+		expect(within(languageRow()).getByTestId('select')).toBeInTheDocument();
+		expect(languageRow()).not.toHaveTextContent('detected');
 	});
 });

@@ -359,6 +359,26 @@ describe('usePrinterDialogForm detection and port rewrites', () => {
 		expect(latest().detectedVendor).toBeNull();
 	});
 
+	it('records the language and paper a confirmed probe wrote, and a manual vendor clears them', async () => {
+		jest.mocked(identifyPrinter).mockResolvedValue({
+			vendor: 'epson',
+			lane: { port: 8043, protocol: 'epos-print', encrypted: true },
+			ports: [],
+			columns: 48,
+		} as never);
+		const latest = mount();
+		await runProbe();
+
+		expect(latest().form.getValues('columns')).toBe(48);
+		expect(latest().detectedLanguage).toBe('esc-pos');
+		expect(latest().detectedColumns).toBe(48);
+
+		act(() => latest().setManualVendor());
+
+		expect(latest().detectedLanguage).toBeNull();
+		expect(latest().detectedColumns).toBeNull();
+	});
+
 	it('rewrites the port when the cashier picks the vendor (#18)', async () => {
 		jest
 			.mocked(identifyPrinter)

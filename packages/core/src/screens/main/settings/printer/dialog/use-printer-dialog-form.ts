@@ -105,6 +105,11 @@ export function usePrinterDialogForm({
 	const [testError, setTestError] = React.useState<TestPrintFailure | null>(null);
 	const [probing, setProbing] = React.useState(false);
 	const [detectedVendor, setDetectedVendor] = React.useState<string | null>(null);
+	// What the probe wrote, so the Language and Paper rows read "detected" while they still hold it.
+	const [detectedLanguage, setDetectedLanguage] = React.useState<
+		PrinterFormValues['language'] | null
+	>(null);
+	const [detectedColumns, setDetectedColumns] = React.useState<number | null>(null);
 
 	const manualVendorRef = React.useRef(false);
 	// #18: the vendor's default port may only overwrite a configured one when the vendor is known
@@ -210,6 +215,8 @@ export function usePrinterDialogForm({
 		probeRequestIdRef.current += 1;
 		setProbing(false);
 		setDetectedVendor(null);
+		setDetectedLanguage(null);
+		setDetectedColumns(null);
 		manualVendorRef.current = false;
 		vendorConfirmedRef.current = false;
 	}, [open, printer, prefill, form, printerCount, t, defaultValues, deriveVendorDefaults]);
@@ -250,12 +257,16 @@ export function usePrinterDialogForm({
 			// eslint-disable-next-line react-hooks/set-state-in-effect -- IP-probe effect clearing state when the connection type leaves 'network'; pre-existing, surfaced when form.watch's compiler bailout went away. The hook does not compile regardless (try/finally). Follow-up: clear from the connection-type onChange.
 			setProbing(false);
 			setDetectedVendor(null);
+			setDetectedLanguage(null);
+			setDetectedColumns(null);
 			return;
 		}
 		const trimmed = address?.trim() ?? '';
 		const requestId = ++probeRequestIdRef.current;
 		if (!trimmed || !/^\d{1,3}(\.\d{1,3}){3}$/.test(trimmed)) {
 			setDetectedVendor(null);
+			setDetectedLanguage(null);
+			setDetectedColumns(null);
 			setProbing(false);
 			return;
 		}
@@ -278,26 +289,35 @@ export function usePrinterDialogForm({
 						form.setValue('vendor', result as PrinterFormValues['vendor']);
 						const d = deriveVendorDefaults(result as PrinterFormValues['vendor']);
 						form.setValue('language', d.language);
+						setDetectedLanguage(d.language);
 						form.setValue('port', d.port);
 						if (canPrintLane(identity.lane.protocol, probes)) {
 							form.setValue('port', identity.lane.port);
 						}
+						setDetectedColumns(null);
 						if (
 							identity.columns !== undefined &&
 							form.getValues('columns') === defaultValues.columns
 						) {
 							form.setValue('columns', identity.columns);
+							setDetectedColumns(identity.columns);
 						}
 						prevVendorRef.current = result as PrinterFormValues['vendor'];
 					} else {
 						setDetectedVendor(null);
+						setDetectedLanguage(null);
+						setDetectedColumns(null);
 					}
 				})
 				.catch((error) => {
 					printerLogger.debug('Printer vendor probe failed', { context: { error: String(error) } });
 					// A probe that never answered leaves nothing detected: the label must not claim a
 					// printer the cashier has switched off.
-					if (probeRequestIdRef.current === requestId) setDetectedVendor(null);
+					if (probeRequestIdRef.current === requestId) {
+						setDetectedVendor(null);
+						setDetectedLanguage(null);
+						setDetectedColumns(null);
+					}
 				})
 				.finally(() => {
 					if (probeRequestIdRef.current === requestId) setProbing(false);
@@ -312,6 +332,8 @@ export function usePrinterDialogForm({
 		probeRequestIdRef.current += 1;
 		setProbing(false);
 		setDetectedVendor(null);
+		setDetectedLanguage(null);
+		setDetectedColumns(null);
 	}, []);
 
 	const buildProfile = React.useCallback(
@@ -433,6 +455,8 @@ export function usePrinterDialogForm({
 		testError,
 		probing,
 		detectedVendor,
+		detectedLanguage,
+		detectedColumns,
 		canOpenDrawer,
 		setManualVendor,
 		handleOpenDrawer,
