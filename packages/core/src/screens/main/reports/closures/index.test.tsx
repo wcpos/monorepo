@@ -61,11 +61,20 @@ jest.mock('./closure-list', () => ({
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({ blind: false }),
 }));
-jest.mock('./session-cards', () => ({ SessionCards: () => null }));
+const sessionCards = jest.fn();
+const sessionMount = jest.fn();
+jest.mock('./session-cards', () => ({
+	SessionCards: (props: unknown) => {
+		sessionCards(props);
+		React.useEffect(() => sessionMount(), []);
+		return null;
+	},
+}));
 const sessionCard = jest.fn();
 jest.mock('./session-card', () => ({
 	SessionCard: (props: unknown) => {
 		sessionCard(props);
+		React.useEffect(() => sessionMount(), []);
 		return null;
 	},
 }));
@@ -230,7 +239,37 @@ it.each(['sm', 'lg'])('consumes the deep link when the %s panel closes', (size) 
 // Revert: feed date/cashier-filtered rows to the current register's last-closure action.
 it('does not substitute scoped history for the register last closure', () => {
 	render(<Closures scope={scope} />);
-	expect(sessionCard).toHaveBeenLastCalledWith({ onSessions: expect.any(Function) });
+	expect(sessionCard).toHaveBeenLastCalledWith({
+		onSessions: expect.any(Function),
+		quietErrors: false,
+	});
+});
+
+// Revert: let each session row add its own failure line under the list's, or let the list's
+// one Retry re-read the list only.
+it.each([
+	['the bound till', scope, sessionCard],
+	['every register', { ...scope, registerId: '' }, sessionCards],
+])('says a failed read once for %s, and its one Retry re-reads the rows', (_, rowScope, row) => {
+	status = 'error';
+	loadMore.mockClear();
+	sessionMount.mockClear();
+	render(<Closures scope={rowScope} />);
+	expect(row).toHaveBeenLastCalledWith(expect.objectContaining({ quietErrors: true }));
+	expect(sessionMount).toHaveBeenCalledTimes(1);
+	fireEvent.click(screen.getByTestId('closures-retry'));
+	expect(loadMore).toHaveBeenCalledTimes(1);
+	expect(sessionMount).toHaveBeenCalledTimes(2);
+	status = 'ready';
+});
+
+// Revert: quiet the session rows when the list read did not fail.
+it('lets the session rows speak for themselves when the list is ready', () => {
+	sessionMount.mockClear();
+	render(<Closures scope={{ ...scope, registerId: '' }} />);
+	expect(sessionCards).toHaveBeenLastCalledWith(expect.objectContaining({ quietErrors: false }));
+	fireEvent.click(screen.getByTestId('closures-load-more'));
+	expect(sessionMount).toHaveBeenCalledTimes(1);
 });
 
 // Revert: count every open session toward a scope that names a cashier.

@@ -8,10 +8,16 @@ import { SessionCards } from './session-cards';
 // SessionCard is never told its register; the bound till is the only one it can be.
 let mockLocalId = '';
 jest.mock('./session-card', () => ({
-	SessionCard: () => <span data-testid={`local-${mockLocalId}`} />,
-	RemoteSessionCard: ({ register }: { register: { id: string } }) => (
-		<span data-testid={`remote-${register.id}`} />
+	SessionCard: ({ quietErrors }: { quietErrors?: boolean }) => (
+		<span data-testid={`local-${mockLocalId}`} data-quiet={String(quietErrors)} />
 	),
+	RemoteSessionCard: ({
+		register,
+		quietErrors,
+	}: {
+		register: { id: string };
+		quietErrors?: boolean;
+	}) => <span data-testid={`remote-${register.id}`} data-quiet={String(quietErrors)} />,
 }));
 let mockStatus = 'offline';
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -46,4 +52,13 @@ it('draws every register online with no bound till', () => {
 	mockStatus = 'online-website-available';
 	render(<SessionCards registers={registers} storeId={1} />);
 	expect(stubs()).toEqual(['remote-r1', 'remote-r2']);
+});
+
+// Revert: drop the quietErrors hand-down to either card component.
+it('hands quietErrors to the bound till and to every other register', () => {
+	mockStatus = 'online-website-available';
+	mockLocalId = 'r1';
+	render(<SessionCards registers={registers} storeId={1} localRegisterId="r1" quietErrors />);
+	const quiet = screen.queryAllByTestId(/^(local|remote)-/).map((n) => n.dataset.quiet);
+	expect(quiet).toEqual(['true', 'true']);
 });

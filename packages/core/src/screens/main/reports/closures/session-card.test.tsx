@@ -594,3 +594,23 @@ it('opens a summary-mode remote card preview only with the sheet and dispatches 
 	await act(async () => fireEvent.click(screen.getByTestId('print-sheet-print')));
 	expect(print).toHaveBeenCalledTimes(1);
 });
+
+// Revert: let a card under a failed list read add its own failure line and Retry.
+it('keeps a failed remote card quiet when the list above already says so', async () => {
+	get.mockImplementation(async () => {
+		throw new Error('network down');
+	});
+	render(
+		<>
+			<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} quietErrors />
+			<RemoteSessionCard register={{ id: 'side', name: 'Side' }} storeId={2} />
+		</>
+	);
+	await waitFor(() => expect(screen.getByTestId('session-retry-side')).toBeTruthy());
+	expect(screen.queryByTestId('session-retry-back')).toBeNull();
+	expect(screen.getAllByTestId('session-error')).toHaveLength(1);
+	expect(screen.getByTestId('remote-session-back').textContent).toBe('');
+	expect(screen.getByTestId('remote-session-side').textContent).toContain(
+		'Could not load closures'
+	);
+});

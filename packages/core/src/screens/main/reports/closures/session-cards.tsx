@@ -26,12 +26,14 @@ export function SessionCards({
 	localRegisterId,
 	onSessions,
 	cashier,
+	quietErrors,
 }: {
 	registers: { id: string; name: string }[];
 	storeId?: number;
 	localRegisterId?: string | null;
 	onSessions?: (sessions: SessionSummary[]) => void;
 	cashier?: number;
+	quietErrors?: boolean;
 }) {
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -114,6 +116,7 @@ export function SessionCards({
 						reload={retry}
 						onSessions={setLocalSessions}
 						cashier={cashier}
+						quietErrors={quietErrors}
 					/>
 				) : (
 					<RemoteSessionCard
@@ -123,6 +126,7 @@ export function SessionCards({
 						summary={cards[register.id] ?? loading}
 						reload={retry}
 						cashier={cashier}
+						quietErrors={quietErrors}
 					/>
 				)
 			)}

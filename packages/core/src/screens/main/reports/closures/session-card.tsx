@@ -31,6 +31,7 @@ type BatchProps = {
 	onSessions?: (sessions: SessionSummary[]) => void;
 	/** The scope's cashier; a session another cashier opened draws no row (Codex, #3048). */
 	cashier?: number;
+	quietErrors?: boolean;
 };
 
 export function SessionCard(batch: BatchProps) {
@@ -223,6 +224,7 @@ export function RemoteSessionCard({
 	reload,
 	onSessions,
 	cashier,
+	quietErrors = false,
 }: BatchProps & {
 	register: { id: string; name: string };
 	storeId?: number;
@@ -258,6 +260,8 @@ export function RemoteSessionCard({
 		autoPrintAllowed: false,
 		isReprint: !!data.closure,
 	});
+	// The list above already says the read failed, with its own Retry.
+	const quiet = quietErrors && data.status === 'error';
 	return (
 		<View testID={`remote-session-${register.id}`} className={!online ? 'opacity-50' : ''}>
 			{localCard && (!online || data.status !== 'ready') ? (
@@ -280,7 +284,7 @@ export function RemoteSessionCard({
 					}}
 				/>
 			) : null}
-			{data.status !== 'ready' && (online || !localCard) && (
+			{data.status !== 'ready' && (online || !localCard) && !quiet && (
 				<ListRow
 					size="sm"
 					trailing={

@@ -112,6 +112,9 @@ export function Closures({
 	};
 	// The CSV holds closures; with Open selected nothing shown is a closure, so there is nothing to export.
 	const [filter, setFilter] = React.useState<ClosureFilter>('all');
+	// One failed read is said once: the cards stay quiet and the list's Retry remounts them too.
+	const listFailed = status === 'error';
+	const [cardsAttempt, retryCards] = React.useReducer((n: number) => n + 1, 0);
 	const header = renderScopeRow?.({
 		actions: <ClosuresExportButton onPress={exportRows} disabled={filter === 'open'} />,
 	});
@@ -151,22 +154,29 @@ export function Closures({
 					sessionRows={
 						!scope.registerId ? (
 							<SessionCards
-								key={scope.storeId}
+								key={`${scope.storeId}:${cardsAttempt}`}
 								registers={directory.registers}
 								storeId={scope.storeId}
 								onSessions={setSessions}
 								cashier={scope.cashier}
 								localRegisterId={scope.storeId === store.id ? binding.registerId : undefined}
+								quietErrors={listFailed}
 							/>
 						) : scope.storeId === store.id && scope.registerId === binding.registerId ? (
-							<SessionCard onSessions={setSessions} cashier={scope.cashier} />
+							<SessionCard
+								key={cardsAttempt}
+								onSessions={setSessions}
+								cashier={scope.cashier}
+								quietErrors={listFailed}
+							/>
 						) : register ? (
 							<RemoteSessionCard
-								key={sessionKey}
+								key={`${sessionKey}:${cardsAttempt}`}
 								register={register}
 								storeId={scope.storeId}
 								onSessions={setSessions}
 								cashier={scope.cashier}
+								quietErrors={listFailed}
 							/>
 						) : null
 					}
@@ -193,7 +203,10 @@ export function Closures({
 									testID={status === 'error' ? 'closures-retry' : 'closures-load-more'}
 									variant="outline"
 									className="w-full"
-									onPress={loadMore}
+									onPress={() => {
+										if (status === 'error') retryCards();
+										void loadMore();
+									}}
 								>
 									{status === 'error' ? t('common.retry') : t('reports.load_more')}
 								</Button>
