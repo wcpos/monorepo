@@ -52,7 +52,7 @@ function UISettingsColumnsOnlyForm({
 	/** Settings drawn above the columns that belong to another doc, so outside this form. */
 	before?: React.ReactNode;
 }) {
-	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings(id);
+	const { uiSettings, getUILabel, getUIDisplayLabel, resetUI, patchUI } = useUISettings(id);
 	const formData = useDocField(uiSettings, (value) => value);
 	const dialog = React.useContext(DialogContext);
 
@@ -77,7 +77,7 @@ function UISettingsColumnsOnlyForm({
 		<Form {...form}>
 			<VStack>
 				{before}
-				<UISettingsColumnsForm getUILabel={getUILabel} />
+				<UISettingsColumnsForm getUILabel={getUILabel} getDisplayLabel={getUIDisplayLabel} />
 			</VStack>
 		</Form>
 	);
