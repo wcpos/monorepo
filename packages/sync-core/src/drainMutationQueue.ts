@@ -831,7 +831,14 @@ export async function drainMutationQueue(input: {
 	): Promise<Settled> => {
 		let sent = row;
 		try {
-			if (prepare) sent = await prepare(row);
+			if (prepare) {
+				sent = await prepare(row);
+				// POS-2PN: a re-push differs from the stored claim, so persist it first (see refreshAndRepush).
+				if (!(await input.queue.claim(sent, now()))) {
+					blockedRecords.add(recordKey(row));
+					return { kind: 'settled' };
+				}
+			}
 			return { kind: 'pushed', result: await input.push(sent), sent };
 		} catch (error) {
 			// An abort (scope switch) cancelled the push — NOT a real failure. Don't bump attempts,
@@ -869,6 +876,13 @@ export async function drainMutationQueue(input: {
 		}
 		const restamped = { ...row, baseRevision: revision };
 		try {
+			// POS-2PN: persisted before the push, so an abort or crash after the server applies it
+			// re-sends this envelope. A refusal means the row left the queue or another window holds
+			// it, and pushing would race that owner.
+			if (!(await input.queue.claim(restamped, now()))) {
+				blockedRecords.add(recordKey(row));
+				return { kind: 'settled' };
+			}
 			return { kind: 'pushed', result: await input.push(restamped), sent: restamped };
 		} catch (retryError) {
 			if (input.signal?.aborted) return { kind: 'aborted' };

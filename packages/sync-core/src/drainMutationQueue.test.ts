@@ -2035,6 +2035,55 @@ describe('POS-2PN: a pushed-before row is re-sent byte-identical', () => {
 		expect(sent.map((m) => m.mutationId)).toEqual(['mB', 'mA']);
 		expect(sent[1].payload).toEqual({ id: 'rec-A', grafted: true });
 	});
+
+	const lostAnswerDrains = async (firstPush: (m: RecordMutation) => PushResult) => {
+		const q = await queueWith(mut({ baseRevision: 'r1' }));
+		let clock = 100_000;
+		let controller = new AbortController();
+		const sent: RecordMutation[] = [];
+		const input = () => ({
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			signal: controller.signal,
+			currentRevision: async () => 'r1',
+			refreshRevision: async () => 'r2',
+			autoRecoverConflict: () => true,
+			push: async (m: RecordMutation): Promise<PushResult> => {
+				sent.push(m);
+				if (sent.length === 1) return firstPush(m);
+				if (sent.length === 2) {
+					controller.abort();
+					throw new TypeError('applied, answer lost');
+				}
+				return ok(m);
+			},
+		});
+		await drainMutationQueue(input());
+		controller = new AbortController();
+		clock += 600_000;
+		expect(await drainMutationQueue(input())).toMatchObject({ pushed: 1 });
+		expect(sent.map((m) => m.baseRevision)).toEqual(['r1', 'r2', 'r2']);
+		expect({ base: sent[2].baseRevision, payload: sent[2].payload }).toEqual({
+			base: sent[1].baseRevision,
+			payload: sent[1].payload,
+		});
+		expect(await q.all()).toEqual([]);
+	};
+
+	it('U5: a 428 re-push is persisted before it is sent', async () => {
+		await lostAnswerDrains(() => {
+			throw Object.assign(new Error('precondition required'), { status: 428 });
+		});
+	});
+
+	it('U6: a 409 auto-recover re-push is persisted before it is sent', async () => {
+		await lostAnswerDrains((m) => ({
+			...conflict(m),
+			currentRevision: 'r2',
+			conflict: { current: { id: 1 }, currentRevision: 'r2' },
+		}));
+	});
 });
 
 const iso = (ms: number): string => new Date(ms).toISOString();
