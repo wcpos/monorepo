@@ -17,7 +17,7 @@ const mockLoggerSuccess = jest.fn();
 const mockShowAddedToCartToast = jest.fn();
 
 const mockReadCounting = jest.fn(async () => false);
-const mockReadPriceCheck = jest.fn(async () => false);
+const mockReadPriceCheck = jest.fn(async (): Promise<false | 'closed' | 'unbound'> => false);
 const mockToastShow = jest.fn();
 
 jest.mock('@wcpos/components/toast', () => ({
@@ -207,7 +207,7 @@ describe('useAddVariation', () => {
 	});
 
 	it('adds nothing while the register is closed, with the price-check notice, then adds once it opens', async () => {
-		mockReadPriceCheck.mockResolvedValue(true);
+		mockReadPriceCheck.mockResolvedValue('closed');
 		mockFindByProductVariationID.mockReturnValue([]);
 		const { result } = renderHook(() => useAddVariation());
 
@@ -229,6 +229,21 @@ describe('useAddVariation', () => {
 			type: 'info',
 			title: 'pos_products.price_check_only_until_open',
 		});
+		// No register on this device: refused too, with a notice that says to choose one.
+		mockReadPriceCheck.mockResolvedValue('unbound');
+		await act(async () => {
+			added = await result.current.addVariation(
+				variationDocument as never,
+				parentDocument as never
+			);
+		});
+		expect(added).toBe(false);
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenLastCalledWith({
+			id: 'pos-price-check-refused',
+			type: 'info',
+			title: 'pos_products.no_register_choose_one',
+		});
 
 		mockReadPriceCheck.mockResolvedValue(false);
 		await act(async () => {
@@ -239,7 +254,7 @@ describe('useAddVariation', () => {
 		});
 		expect(added).toBe(true);
 		expect(mockAddItemToOrder).toHaveBeenCalledTimes(1);
-		expect(mockToastShow).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).toHaveBeenCalledTimes(2);
 	});
 
 	it('increments a duplicate variation in the current order when a retained callback runs', async () => {
