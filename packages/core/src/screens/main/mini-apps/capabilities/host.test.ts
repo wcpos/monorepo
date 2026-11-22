@@ -65,6 +65,40 @@ describe('useHostCapabilities', () => {
 		expect(mockRequest).not.toHaveBeenCalled();
 	});
 
+	it('http.proxy strips x-http-method-override', async () => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+
+		await act(async () => {
+			await result.current['http.proxy']({
+				method: 'GET',
+				path: '/wcpos/v1/settings',
+				headers: {
+					'X-HTTP-Method-Override': 'DELETE',
+					'x-http-method': 'DELETE',
+					'x-wp-nonce': 'kept',
+				},
+			});
+		});
+
+		expect(mockRequest).toHaveBeenCalledTimes(1);
+		expect(mockRequest.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ method: 'GET', headers: { 'x-wp-nonce': 'kept' } })
+		);
+	});
+
+	it('http.proxy refuses a _method query override', async () => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+
+		await expect(
+			result.current['http.proxy']({
+				method: 'GET',
+				path: '/wcpos/v1/settings',
+				query: { _method: 'DELETE' },
+			})
+		).rejects.toMatchObject({ code: 'bad_request' });
+		expect(mockRequest).not.toHaveBeenCalled();
+	});
+
 	it('opens only https external URLs', async () => {
 		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
 
