@@ -44,7 +44,7 @@ export function showPriceCheckNotice(
 		type: 'info',
 		title:
 			reason === 'unbound'
-				? t('pos_products.no_register_choose_one')
+				? t('pos_products.no_register_bound')
 				: t('pos_products.price_check_only_until_open'),
 	});
 }

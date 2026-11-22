@@ -244,7 +244,7 @@ describe('useAddProduct', () => {
 		expect(mockToastShow).toHaveBeenLastCalledWith({
 			id: 'pos-price-check-refused',
 			type: 'info',
-			title: 'pos_products.no_register_choose_one',
+			title: 'pos_products.no_register_bound',
 		});
 
 		mockReadPriceCheck.mockResolvedValue(false);
