@@ -12,7 +12,7 @@
  */
 export const receiptEmailQueueLiteral = {
 	title: 'Receipt Email Queue schema',
-	version: 0,
+	version: 1,
 	description: 'Per-device durable queue of receipt emails waiting to reach the server',
 	type: 'object',
 	primaryKey: 'localID',
@@ -36,6 +36,9 @@ export const receiptEmailQueueLiteral = {
 		email: {
 			type: 'string',
 			maxLength: 320,
+		},
+		templateId: {
+			type: 'string',
 		},
 		saveTo: {
 			description: "The endpoint's save_to argument: 'billing' or an empty string.",

@@ -313,6 +313,7 @@ export type ReceiptEmailQueueDocument = RxDocument<ReceiptEmailQueueDocumentType
 export type ReceiptEmailQueueCollection = RxCollection<ReceiptEmailQueueDocumentType>;
 const receipt_email_queue: RxCollectionCreator<ReceiptEmailQueueDocumentType> = {
 	schema: receiptEmailQueueSchema,
+	migrationStrategies: { 1: (oldDoc) => oldDoc },
 };
 
 export type ClosureRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof closuresLiteral>;

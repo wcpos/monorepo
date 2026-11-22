@@ -73,7 +73,11 @@ export function useReceiptActions(doc: ReceiptDocument, order: EngineRecord<'ord
 					<DialogHeader>
 						<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
 					</DialogHeader>
-					<EmailForm order={order} localOnly={doc.isOffline} />
+					<EmailForm
+						order={order}
+						localOnly={doc.isOffline}
+						templateId={doc.selectedTemplateId == null ? null : String(doc.selectedTemplateId)}
+					/>
 				</DialogContent>
 			</Dialog>
 		);

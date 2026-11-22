@@ -107,6 +107,7 @@ jest.mock('../hooks/use-rest-http-client', () => ({
 }));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
+		site: { url: 'https://store.example.invalid' },
 		storeDB: queueCollection
 			? { collections: { receipt_email_queue: queueCollection } }
 			: undefined,
@@ -143,7 +144,7 @@ beforeEach(() => {
 describe('EmailForm', () => {
 	it('queues the email and posts nothing when the till is offline', async () => {
 		onlineStatus = 'offline';
-		render(<EmailForm order={order} />);
+		render(<EmailForm templateId="gallery-large" order={order} />);
 
 		expect(screen.getByTestId('receipt-email-offline-notice')).toBeTruthy();
 		await send();
@@ -153,6 +154,7 @@ describe('EmailForm', () => {
 		expect(queueRows[0]).toMatchObject({
 			orderId: 42,
 			orderNumber: '1042',
+			templateId: 'gallery-large',
 			email: 'customer@example.com',
 			status: 'pending',
 			attempts: 0,
@@ -164,7 +166,7 @@ describe('EmailForm', () => {
 
 	it('queues when the store is unreachable even though the device has a network', async () => {
 		onlineStatus = 'online-website-unavailable';
-		render(<EmailForm order={order} />);
+		render(<EmailForm templateId="gallery-large" order={order} />);
 		await send();
 
 		expect(mockPost).not.toHaveBeenCalled();
@@ -174,7 +176,7 @@ describe('EmailForm', () => {
 
 	// ADR 0040 Decided 1 rule 1: the store has not heard the sale, so the email queues as offline.
 	it('queues while the sale awaits the store, though the till is online', async () => {
-		render(<EmailForm order={order} localOnly />);
+		render(<EmailForm templateId="gallery-large" order={order} localOnly />);
 		await send();
 
 		expect(mockPost).not.toHaveBeenCalled();
@@ -182,12 +184,22 @@ describe('EmailForm', () => {
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
+	it('keeps a local sale open when the queue write is unavailable', async () => {
+		queueCollection = null;
+		render(<EmailForm templateId="gallery-large" order={order} localOnly />);
+		await send();
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockCloseDialog).not.toHaveBeenCalled();
+		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+	});
+
 	it('posts straight away when online and reports success', async () => {
-		mockPost.mockResolvedValue({ data: { success: true } });
-		render(<EmailForm order={order} />);
+		mockPost.mockResolvedValue({ data: { success: true, template_id: 'gallery-large' } });
+		render(<EmailForm templateId="gallery-large" order={order} />);
 		await send();
 
-		expect(mockPost).toHaveBeenCalledWith('/orders/42/email', {
+		expect(mockPost).toHaveBeenCalledWith('/orders/42/receipt-email', {
+			template_id: 'gallery-large',
 			email: 'customer@example.com',
 			save_to: '',
 		});
@@ -202,11 +214,41 @@ describe('EmailForm', () => {
 		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
 	});
 
+	it('never asks a 2.0.0 server to send the invoice for a selected design', async () => {
+		const invoice = jest.fn().mockResolvedValue({ data: { success: true } });
+		mockPost.mockImplementation(async (path, body) => {
+			if (path === '/orders/42/email') return invoice(body);
+			throw Object.assign(new Error('No route'), {
+				wpServerCode: 'rest_no_route',
+				response: { status: 404 },
+			});
+		});
+		render(<EmailForm templateId="gallery-large" order={order} />);
+		await send();
+		expect(invoice).not.toHaveBeenCalled();
+		expect(mockLoggerSuccess).not.toHaveBeenCalled();
+		expect(mockCloseDialog).not.toHaveBeenCalled();
+		expect(screen.getByTestId('receipt-email-send').textContent).toContain(
+			'Send WooCommerce order details'
+		);
+		await send();
+		expect(invoice).toHaveBeenCalledTimes(1);
+		expect(mockCloseDialog).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the dialog open if a successful response does not acknowledge the selected template', async () => {
+		mockPost.mockResolvedValue({ data: { success: true } });
+		render(<EmailForm templateId="gallery-large" order={order} />);
+		await send();
+		expect(mockCloseDialog).not.toHaveBeenCalled();
+		expect(mockLoggerSuccess).not.toHaveBeenCalled();
+	});
+
 	it('queues an online send that failed on the connection', async () => {
 		mockPost.mockRejectedValue(
 			Object.assign(new Error('Network Error'), { isAxiosError: true, code: 'ERR_NETWORK' })
 		);
-		render(<EmailForm order={order} />);
+		render(<EmailForm templateId="gallery-large" order={order} />);
 		await send();
 
 		expect(queueRows).toHaveLength(1);
@@ -230,7 +272,7 @@ describe('EmailForm', () => {
 				wpMessage: 'Invalid email address.',
 			})
 		);
-		render(<EmailForm order={order} />);
+		render(<EmailForm templateId="gallery-large" order={order} />);
 		await send();
 
 		expect(queueRows).toHaveLength(0);
@@ -248,7 +290,7 @@ describe('EmailForm', () => {
 
 	it('surfaces a 200 that did not send, rather than promising to retry it', async () => {
 		mockPost.mockResolvedValue({ data: { success: false, message: 'No template configured.' } });
-		render(<EmailForm order={order} />);
+		render(<EmailForm templateId="gallery-large" order={order} />);
 		await send();
 
 		expect(queueRows).toHaveLength(0);
@@ -265,7 +307,7 @@ describe('EmailForm', () => {
 				blockCode: 'preflight-offline',
 			})
 		);
-		render(<EmailForm order={order} />);
+		render(<EmailForm templateId="gallery-large" order={order} />);
 		await send();
 
 		expect(mockLoggerError).not.toHaveBeenCalled();
