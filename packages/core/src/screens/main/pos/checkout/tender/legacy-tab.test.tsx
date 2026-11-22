@@ -26,6 +26,10 @@ let mockCheckoutSession = MOCK_CHECKOUT_SESSION;
 jest.mock('../hooks/use-checkout-session', () => ({
 	useCheckoutSession: () => mockCheckoutSession,
 }));
+// The store the pay links are checked against (example.com, as makeOrder's link).
+jest.mock('../../../../../contexts/app-state', () => ({
+	useAppState: () => ({ site: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/' } }),
+}));
 // Mounting the payment frame starts a sale; keep that boundary inert in this UI test. The
 // stand-in records its props and answers the tab's ref the way the real frame's WebView does.
 const mockPostMessage = jest.fn();
@@ -84,9 +88,9 @@ const flow = {
 	legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
 	saveState: null,
 } as never;
-const makeOrder = (hasURL = true) =>
+const makeOrder = (hasURL = true, href = 'https://example.com/pay') =>
 	({
-		payload: { links: { payment: hasURL ? [{ href: 'https://example.com/pay' }] : [] } },
+		payload: { links: { payment: hasURL ? [{ href }] : [] } },
 	}) as never;
 /** The props of the frame's latest render. */
 const frameProps = () => jest.mocked(PaymentWebview).mock.lastCall![0] as PaymentWebviewProps;
@@ -177,6 +181,16 @@ it('the frame slot holds the pane height before the pay page mounts, so Process 
 	const button = view.getByTestId('checkout-legacy-process-payment');
 	expect(slot.contains(button)).toBe(false);
 	expect(slot.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it('a pay link on another host is no usable link: the missing-link notice shows and no frame mounts', () => {
+	const view = render(
+		<LegacyTab order={makeOrder(true, 'https://pay.elsewhere.example/pay')} flow={flow} />
+	);
+	expect(PaymentWebview).not.toHaveBeenCalled();
+	expect(view.getByTestId('checkout-payment-form-unavailable').textContent).toContain(
+		en['pos_checkout.payment_form_unavailable']
+	);
 });
 
 it('forwards receiptHost to PaymentWebview', () => {

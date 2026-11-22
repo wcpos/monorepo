@@ -1,7 +1,7 @@
-// @ts-nocheck STAGE1-TEMP
 import { readPayPageMessage } from './pay-page-message';
 
 const UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
+const ORDER = { orderId: 42, uuid: UUID };
 const snapshot = {
 	id: 42,
 	status: 'completed',
@@ -75,7 +75,7 @@ describe('readPayPageMessage', () => {
 		['null', null, { kind: 'ignored' }],
 		['undefined', undefined, { kind: 'ignored' }],
 	])('%s', (_name, data, expected) => {
-		expect(readPayPageMessage(data)).toEqual(expected);
+		expect(readPayPageMessage(data, ORDER)).toEqual(expected);
 	});
 });
 
@@ -94,16 +94,15 @@ describe('readPayPageMessage: what counts as a readable order snapshot', () => {
 		],
 		['no meta_data', { id: 42, status: 'completed' }, false],
 	])('%s → received %s', (_name, payload, expected) => {
-		expect(readPayPageMessage({ action: 'wcpos-payment-received', payload }).kind).toBe(
+		expect(readPayPageMessage({ action: 'wcpos-payment-received', payload }, ORDER).kind).toBe(
 			expected ? 'received' : 'received-unreadable'
 		);
 	});
 });
 
 describe('readPayPageMessage: the received snapshot must name the order on screen', () => {
-	const expected = { orderId: 42, uuid: UUID };
 	const received = (payload: unknown) =>
-		readPayPageMessage({ action: 'wcpos-payment-received', payload }, expected);
+		readPayPageMessage({ action: 'wcpos-payment-received', payload }, ORDER);
 
 	it('a received snapshot for another order id is unreadable', () => {
 		expect(received({ ...snapshot, id: 43 })).toEqual({ kind: 'received-unreadable' });

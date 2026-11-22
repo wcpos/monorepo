@@ -122,7 +122,7 @@ const makeOrder = (
 	meta_data: { key: string; value: string }[] = []
 ) => {
 	const order = {
-		uuid: 'uuid-42',
+		uuid: ORDER_UUID,
 		payload: {
 			id: 42,
 			number: '42',
@@ -210,7 +210,7 @@ describe('PaymentWebview fallback order refresh', () => {
 			// Routed and un-spun immediately — the refresh is still pending.
 			expect(mockReplace).toHaveBeenCalledWith({
 				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-				params: { orderId: 'uuid-42' },
+				params: { orderId: ORDER_UUID },
 			});
 			expect(setLoading).toHaveBeenCalledWith(false);
 			expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
@@ -260,8 +260,8 @@ describe('PaymentWebview fallback order refresh', () => {
 			});
 			await Promise.resolve();
 		});
-		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
-		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+		expect(getCheckoutModeSnapshot().receiptOrders.has(ORDER_UUID)).toBe(true);
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(ORDER_UUID);
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockDismissTo).not.toHaveBeenCalled();
@@ -277,7 +277,7 @@ describe('PaymentWebview fallback order refresh', () => {
 
 	it('stage host without auto-show leaves checkout and clears the current order, without routing', async () => {
 		autoShowReceipt = false;
-		enterCheckout('uuid-42');
+		enterCheckout(ORDER_UUID);
 		const payload = {
 			id: 42,
 			number: '42',
@@ -300,8 +300,8 @@ describe('PaymentWebview fallback order refresh', () => {
 			});
 			await Promise.resolve();
 		});
-		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
-		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(false);
+		expect(getCheckoutModeSnapshot().checkoutOrders.has(ORDER_UUID)).toBe(false);
+		expect(getCheckoutModeSnapshot().receiptOrders.has(ORDER_UUID)).toBe(false);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockDismiss).not.toHaveBeenCalled();
@@ -1046,8 +1046,8 @@ describe('PaymentWebview settled order status', () => {
 		await postReceived(pendingPayload);
 
 		await waitFor(() => expect(mockStockAdjustment).toHaveBeenCalledTimes(1));
-		expect(getCheckoutModeSnapshot().receiptOrders.has('uuid-42')).toBe(true);
-		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+		expect(getCheckoutModeSnapshot().receiptOrders.has(ORDER_UUID)).toBe(true);
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe(ORDER_UUID);
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockDismiss).not.toHaveBeenCalled();
 		expect(mockGet).not.toHaveBeenCalled();
@@ -1116,7 +1116,7 @@ jest.mock('@wcpos/components/lib/device', () => ({
 jest.mock('../../contexts/current-order/context', () => ({
 	useCurrentOrderActions: () => ({
 		setCurrentOrderID: mockSetCurrentOrderID,
-		getCurrentOrderID: () => 'uuid-42',
+		getCurrentOrderID: () => '5b8e1a3c-2f4d-4a6b-9c8e-000000000042',
 	}),
 }));
 
@@ -1595,7 +1595,9 @@ describe('PaymentWebview pay link host', () => {
 	});
 
 	it('a pay link on another host gets no token and no frame', () => {
-		const { setFrameStatus } = renderFrame('https://pay.elsewhere.example/wcpos-checkout/order-pay/42');
+		const { setFrameStatus } = renderFrame(
+			'https://pay.elsewhere.example/wcpos-checkout/order-pay/42'
+		);
 		expect(webViewMounts).toBe(0);
 		expect(webViewProps.src).toBeUndefined();
 		expect(setFrameStatus).not.toHaveBeenCalledWith('ready');

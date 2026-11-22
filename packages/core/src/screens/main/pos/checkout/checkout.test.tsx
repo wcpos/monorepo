@@ -164,6 +164,11 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
+// The store the pay links are checked against (shop.example.com, as PAYMENT_URL).
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ site: { wcpos_api_url: 'https://shop.example.com/wp-json/wcpos/v2/' } }),
+}));
+
 describe('Checkout', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -371,6 +376,20 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(screen.getByText('pos_checkout.gateway_catalog_unavailable')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('checkout-gateway-catalog-retry'));
 		expect(refetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('treats a pay link on another host as no link: the notice shows and Process Payment stays off', () => {
+		const button = renderCheckout({
+			mode: 'webview',
+			paymentURL: 'https://pay.elsewhere.example/wcpos-checkout/order-pay/42',
+		});
+
+		expect(screen.getByText('pos_checkout.payment_form_unavailable')).toBeTruthy();
+		expect(button.disabled).toBe(true);
+		expect(jest.requireMock('@wcpos/utils/logger').default.error).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ code: 'CHECKOUT101' })
+		);
 	});
 
 	it('disables Process Payment while the payment frame is still loading, and enables it on the load signal', () => {
