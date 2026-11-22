@@ -17,8 +17,8 @@ import type { APIRequestContext, Page } from '@playwright/test';
  * catalog-wide (the store we test against). `cancelled` is the honest terminal state
  * and restores any stock the order reserved. A spec that genuinely completed a
  * checkout leaves its order in `completed`/`processing`/etc. — teardown re-checks the
- * LIVE status and only finalizes orders still in `pos-open`, so a real test sale is
- * never cancelled.
+ * LIVE status and only finalizes orders still in `pos-open` or part-paid `pos-partial`
+ * (still no completed sale, so no sale is fabricated), so a real test sale is never cancelled.
  *
  * Auth: teardown reuses the SAME credentials/transport the app itself sends, so it works
  * for both header-JWT and `use_jwt_as_param` stores without a second login. The caller
@@ -53,9 +53,10 @@ export const RETAINED_FIXTURE_ORDER_IDS: ReadonlySet<number> = new Set([70954]);
 
 /**
  * Order statuses that mark a lingering, unfinished cart safe to finalize in teardown.
- * Only `pos-open` — everything else is a genuine/handled order and is left as-is.
+ * `pos-open`, and `pos-partial` (part-paid by a failed or interrupted spec: still not a completed
+ * sale, so cancelling it fabricates none). Everything else is a genuine/handled order, left as-is.
  */
-export const FINALIZE_FROM_STATUSES: ReadonlySet<string> = new Set(['pos-open']);
+export const FINALIZE_FROM_STATUSES: ReadonlySet<string> = new Set(['pos-open', 'pos-partial']);
 
 /** The terminal status a finalized (abandoned) test cart is transitioned to. */
 export const TEARDOWN_TERMINAL_STATUS = 'cancelled';
@@ -274,7 +275,7 @@ export async function finalizeCreatedOrders(
 			}
 		}
 		console.log(
-			`[order-cleanup] finalized ${result.cancelled} pos-open order(s) -> ${TEARDOWN_TERMINAL_STATUS} ` +
+			`[order-cleanup] finalized ${result.cancelled} open or part-paid order(s) -> ${TEARDOWN_TERMINAL_STATUS} ` +
 				`(left handled: ${result.leftHandled}, failed: ${result.failed})`
 		);
 	} catch (error) {
