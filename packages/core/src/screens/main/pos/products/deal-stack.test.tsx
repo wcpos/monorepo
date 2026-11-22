@@ -234,6 +234,14 @@ function Relaid() {
 	const relaid = useLiftedLayout(true);
 	return <button data-testid="tile-relaid" onClick={() => relaid?.()} />;
 }
+// A tile at rest in the same stage: on the web it carries the handler too (armed at mount), and
+// its layout changes the copy nothing.
+function Unlifted() {
+	const relaid = useLiftedLayout(false);
+	return (
+		<button data-testid="tile-unlifted" data-kind={typeof relaid} onClick={() => relaid?.()} />
+	);
+}
 function Lifted() {
 	return <output data-testid="lifted">{String(React.useContext(DealStagedContext))}</output>;
 }
@@ -334,6 +342,7 @@ function Stage({
 		>
 			<Lifted />
 			<Relaid />
+			<Unlifted />
 		</DealStack>
 	);
 }
@@ -1152,6 +1161,34 @@ it('the copy follows the tapped tile when it reflows, and holds when the tile an
 	frame = { ...TILE, width: 0, height: 0 };
 	act(() => screen.getByTestId('tile-relaid').click());
 	expect(box().getAttribute('data-width')).toBe(String(140 + 8));
+});
+
+// react-native-web arms a node's ResizeObserver once, at mount, only if it has an onLayout then; a
+// handler that arrives on lift is stored and never observed. So on the web every tile in a stage
+// carries the handler from mount, and only the lifted one answers (#2967 fired on native alone).
+it('on the web a tile at rest carries the layout handler too, and only the lifted tile re-measures', () => {
+	const box = () => screen.getByTestId('cell-0').closest('[data-style]')!;
+	let frame = TILE;
+	const reflowing: Measurable = {
+		measureInWindow: (callback) => callback(frame.x, frame.y, frame.width, frame.height),
+	};
+	const { rerender } = render(<Stage detail={null} target={reflowing} />);
+	rerender(<Stage detail="Hoodie" target={reflowing} />);
+	layOut();
+	expect(screen.getByTestId('tile-unlifted').getAttribute('data-kind')).toBe('function');
+	frame = { ...TILE, width: 140, height: 198 };
+	act(() => screen.getByTestId('tile-unlifted').click());
+	expect(box().getAttribute('data-width')).toBe(String(TILE.width + 8));
+	act(() => screen.getByTestId('tile-relaid').click());
+	expect(box().getAttribute('data-width')).toBe(String(140 + 8));
+});
+
+it('on native a tile at rest has no layout handler; the lifted tile attaches on lift', () => {
+	mockOS = 'android';
+	const { rerender } = render(<Stage detail={null} />);
+	rerender(<Stage detail="Hoodie" />);
+	layOut();
+	expect(screen.getByTestId('tile-unlifted').getAttribute('data-kind')).toBe('undefined');
 });
 
 // The scroller clipped the copy of a tile from the products' first row where it overlapped the
