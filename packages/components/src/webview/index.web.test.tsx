@@ -223,6 +223,43 @@ describe('WebView web bridge for an untrusted srcDoc frame', () => {
 		await expect(copy).resolves.toBe('<p>Rendered</p>');
 	});
 
+	// Revert: let a re-render rewrite the sandbox of a frame that already holds a page.
+	it('a frame keeps the sandbox it was created with; a change of trust is a new frame', async () => {
+		const ref = React.createRef<WebViewHandle>();
+		const props = {
+			ref,
+			testID: 'page',
+			src: 'https://store.test/r',
+			onMessage: jest.fn(),
+			onContentSizeChange: jest.fn(),
+		};
+		const { rerender } = render(<WebView {...props} srcDoc="<p>One</p>" />);
+		const frame = screen.getByTestId('page') as HTMLIFrameElement;
+		const created = frame.getAttribute('sandbox');
+		expect(created).toBe('allow-scripts allow-forms allow-popups allow-modals');
+		const changes: MutationRecord[] = [];
+		const observer = new MutationObserver((records) => changes.push(...records));
+		observer.observe(frame, { attributes: true, attributeFilter: ['sandbox'] });
+		const token = tokenOf(frame);
+		jest.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
+
+		// Resize, print and a re-render with new HTML all reuse the frame as it was made.
+		act(() => post({ type: 'wcpos-frame', token, width: 300, height: 700 }, frame.contentWindow!));
+		const copy = ref.current!.requestRenderedHtml();
+		post({ type: 'wcpos-frame', token, html: '<p>One</p>' }, frame.contentWindow!);
+		await expect(copy).resolves.toBe('<p>One</p>');
+		rerender(<WebView {...props} srcDoc="<p>Two</p>" />);
+		expect(screen.getByTestId('page')).toBe(frame);
+
+		rerender(<WebView {...props} srcDoc="<p>Two</p>" trustedSrcDoc />);
+		changes.push(...observer.takeRecords());
+		observer.disconnect();
+		expect(changes).toEqual([]);
+		expect(frame.getAttribute('sandbox')).toBe(created);
+		expect(frame.isConnected).toBe(false);
+		expect(screen.getByTestId('page').getAttribute('sandbox')).toContain('allow-same-origin');
+	});
+
 	it('the frame script reports its size and copies a script-filled body, canvas as image', async () => {
 		const onContentSizeChange = jest.fn();
 		const { ref, frame, frameWindow } = renderPage('<p>Server receipt</p>', onContentSizeChange);
