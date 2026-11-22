@@ -105,6 +105,13 @@ export function usePrinterDialogForm({
 	const [testError, setTestError] = React.useState<TestPrintFailure | null>(null);
 	const [probing, setProbing] = React.useState(false);
 	const [detectedVendor, setDetectedVendor] = React.useState<string | null>(null);
+	// What the probe wrote, so the Language and Paper rows read "detected" while they still hold it.
+	const [detectedLanguage, setDetectedLanguage] = React.useState<
+		PrinterFormValues['language'] | null
+	>(null);
+	const [detectedColumns, setDetectedColumns] = React.useState<number | null>(null);
+	// Bumped on every detection, so a row the cashier changed links again on a new scan.
+	const [detectionId, setDetectionId] = React.useState(0);
 
 	const manualVendorRef = React.useRef(false);
 	// #18: the vendor's default port may only overwrite a configured one when the vendor is known
@@ -210,6 +217,8 @@ export function usePrinterDialogForm({
 		probeRequestIdRef.current += 1;
 		setProbing(false);
 		setDetectedVendor(null);
+		setDetectedLanguage(null);
+		setDetectedColumns(null);
 		manualVendorRef.current = false;
 		vendorConfirmedRef.current = false;
 	}, [open, printer, prefill, form, printerCount, t, defaultValues, deriveVendorDefaults]);
@@ -243,6 +252,10 @@ export function usePrinterDialogForm({
 		}
 	}, [vendor, form, deriveVendorDefaults]);
 
+	// A probe of the saved address re-reads the saved printer: its fields are the profile's, not a
+	// detection, so an edited printer never reads "detected" until another address answers.
+	const savedAddress = printer ? (printer.address ?? '').trim() : null;
+
 	// IP probe → auto-detect vendor (network only).
 	React.useEffect(() => {
 		if (connectionType !== 'network') {
@@ -250,15 +263,23 @@ export function usePrinterDialogForm({
 			// eslint-disable-next-line react-hooks/set-state-in-effect -- IP-probe effect clearing state when the connection type leaves 'network'; pre-existing, surfaced when form.watch's compiler bailout went away. The hook does not compile regardless (try/finally). Follow-up: clear from the connection-type onChange.
 			setProbing(false);
 			setDetectedVendor(null);
+			setDetectedLanguage(null);
+			setDetectedColumns(null);
 			return;
 		}
 		const trimmed = address?.trim() ?? '';
 		const requestId = ++probeRequestIdRef.current;
 		if (!trimmed || !/^\d{1,3}(\.\d{1,3}){3}$/.test(trimmed)) {
 			setDetectedVendor(null);
+			setDetectedLanguage(null);
+			setDetectedColumns(null);
 			setProbing(false);
 			return;
 		}
+		// A new address is a new printer: the last one's "detected" rows return to selects until this
+		// address answers (Codex, #3732).
+		setDetectedLanguage(null);
+		setDetectedColumns(null);
 		if (manualVendorRef.current) {
 			setProbing(false);
 			return;
@@ -282,29 +303,41 @@ export function usePrinterDialogForm({
 						if (canPrintLane(identity.lane.protocol, probes)) {
 							form.setValue('port', identity.lane.port);
 						}
+						let wroteColumns: number | null = null;
 						if (
 							identity.columns !== undefined &&
 							form.getValues('columns') === defaultValues.columns
 						) {
 							form.setValue('columns', identity.columns);
+							wroteColumns = identity.columns;
 						}
+						const detection = trimmed !== savedAddress;
+						setDetectedLanguage(detection ? d.language : null);
+						setDetectedColumns(detection ? wroteColumns : null);
+						if (detection) setDetectionId((id) => id + 1);
 						prevVendorRef.current = result as PrinterFormValues['vendor'];
 					} else {
 						setDetectedVendor(null);
+						setDetectedLanguage(null);
+						setDetectedColumns(null);
 					}
 				})
 				.catch((error) => {
 					printerLogger.debug('Printer vendor probe failed', { context: { error: String(error) } });
 					// A probe that never answered leaves nothing detected: the label must not claim a
 					// printer the cashier has switched off.
-					if (probeRequestIdRef.current === requestId) setDetectedVendor(null);
+					if (probeRequestIdRef.current === requestId) {
+						setDetectedVendor(null);
+						setDetectedLanguage(null);
+						setDetectedColumns(null);
+					}
 				})
 				.finally(() => {
 					if (probeRequestIdRef.current === requestId) setProbing(false);
 				});
 		}, 500);
 		return () => clearTimeout(timer);
-	}, [address, connectionType, form, deriveVendorDefaults, defaultValues.columns]);
+	}, [address, connectionType, form, deriveVendorDefaults, defaultValues.columns, savedAddress]);
 
 	const setManualVendor = React.useCallback(() => {
 		manualVendorRef.current = true;
@@ -312,6 +345,8 @@ export function usePrinterDialogForm({
 		probeRequestIdRef.current += 1;
 		setProbing(false);
 		setDetectedVendor(null);
+		setDetectedLanguage(null);
+		setDetectedColumns(null);
 	}, []);
 
 	const buildProfile = React.useCallback(
@@ -433,6 +468,9 @@ export function usePrinterDialogForm({
 		testError,
 		probing,
 		detectedVendor,
+		detectedLanguage,
+		detectedColumns,
+		detectionId,
 		canOpenDrawer,
 		setManualVendor,
 		handleOpenDrawer,
