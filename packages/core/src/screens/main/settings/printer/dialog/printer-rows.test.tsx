@@ -2,8 +2,8 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { useForm } from 'react-hook-form';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { useForm, type UseFormReturn } from 'react-hook-form';
 
 import { PrinterDialogLayout } from './printer-dialog-layout';
 import { type PrinterDetection } from './printer-rows';
@@ -75,10 +75,13 @@ function Layout(props: {
 	values?: Partial<PrinterFormValues>;
 	vendors?: boolean;
 	detected?: PrinterDetection;
+	/** The form, for a test that moves a value the way the vendor's derivation does. */
+	onForm?: (form: UseFormReturn<PrinterFormValues>) => void;
 }) {
 	const form = useForm<PrinterFormValues>({
 		defaultValues: { ...DEFAULT_FORM_VALUES, ...props.values },
 	});
+	props.onForm?.(form);
 	return (
 		<PrinterDialogLayout
 			form={form}
@@ -210,6 +213,25 @@ describe('Edit Printer detected rows', () => {
 
 		expect(within(languageRow()).getByTestId('select')).toBeInTheDocument();
 		expect(within(paperRow()).getByTestId('select')).toBeInTheDocument();
+		expect(languageRow()).not.toHaveTextContent('detected');
+	});
+
+	it('stays a select once the value moved off the detected one, even when it comes back', () => {
+		let form!: UseFormReturn<PrinterFormValues>;
+		render(
+			<Layout
+				detected={detected}
+				values={{ language: 'esc-pos', columns: 42 }}
+				onForm={(f) => (form = f)}
+			/>
+		);
+		expect(languageRow()).toHaveTextContent('detected');
+
+		act(() => form.setValue('language', 'star-prnt'));
+		expect(within(languageRow()).getByTestId('select')).toBeInTheDocument();
+
+		act(() => form.setValue('language', 'esc-pos'));
+		expect(within(languageRow()).getByTestId('select')).toBeInTheDocument();
 		expect(languageRow()).not.toHaveTextContent('detected');
 	});
 

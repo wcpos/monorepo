@@ -84,7 +84,8 @@ export type PrinterDetection = {
 /**
  * A select the scan filled in (rule 5, a copy is derived): while the form still holds the detected
  * value the row reads the value and "detected", and Change breaks the link for the dialog's life.
- * Only a new detection (a new `detectionId`) links it again; any other value is the plain select.
+ * Only a new detection (a new `detectionId`) links it again; a value that moved off the detected one,
+ * even back onto it, is the plain select.
  */
 function DetectedSelectRow(
 	props: SelectRowProps & { detected: string | number | null; detectionId: number }
@@ -94,10 +95,16 @@ function DetectedSelectRow(
 	const value = useWatch<PrinterFormValues>({ name: props.name });
 	const [changing, setChanging] = React.useState(false);
 	const [prevId, setPrevId] = React.useState(detectionId);
+	const [prevValue, setPrevValue] = React.useState(value);
 	if (detectionId !== prevId) {
 		setPrevId(detectionId);
 		setChanging(false);
+	} else if (!changing && detected != null && prevValue === detected && value !== detected) {
+		// A linked row whose value moved (Change, or the vendor's derivation) is unlinked for good:
+		// picking the detected value again is a choice, not a detection.
+		setChanging(true);
 	}
+	if (value !== prevValue) setPrevValue(value);
 	if (detected == null || value !== detected || changing) return <SelectRow {...props} />;
 	const label = props.options.find((option) => option.value === String(value))?.label;
 	return (
