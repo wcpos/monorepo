@@ -389,6 +389,37 @@ test('a rejected buffered candidate clears the peer and the next poll re-offers'
 	);
 });
 
+test('a poll started while one is in flight shares it instead of reading the mailbox again', async () => {
+	const { session, peers, signaling } = setup();
+	await session.poll();
+	// The mailbox answers by cursor, so two reads from the same cursor both hold the answer.
+	let release: () => void = () => undefined;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	jest
+		.mocked(signaling.readSignals)
+		.mockImplementation(async (_id, cursor) => (await gate, cursor < 2 ? [signal({ id: 2 })] : []));
+	// Like RTCPeerConnection, a second answer in the stable state is refused.
+	const acceptAnswer = jest
+		.spyOn(peers[0], 'acceptAnswer')
+		.mockResolvedValueOnce(undefined)
+		.mockRejectedValueOnce(new Error('Called in wrong state: stable'));
+	jest.mocked(signaling.readSignals).mockClear();
+
+	const polls = [session.poll(), session.poll()];
+	release();
+	const results = await Promise.allSettled(polls);
+
+	expect(results.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled']);
+	expect(signaling.readSignals).toHaveBeenCalledTimes(1);
+	expect(acceptAnswer).toHaveBeenCalledTimes(1);
+	expect(peers[0].channelState).not.toBe('closed');
+	expect(peers).toHaveLength(1);
+
+	await session.poll();
+	expect(signaling.readSignals).toHaveBeenCalledTimes(2);
+	expect(signaling.readSignals).toHaveBeenLastCalledWith('display-1', 2);
+});
+
 test('forget posts bye then closes the peer', async () => {
 	const { session, peers, signaling } = setup();
 	await session.poll();
