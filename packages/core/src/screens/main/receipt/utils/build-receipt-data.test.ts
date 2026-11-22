@@ -271,6 +271,33 @@ describe('buildReceiptData', () => {
 		}
 	);
 
+	it("carries the store's personal notes, policies and footer imprint", () => {
+		const result = buildReceiptData(mockOrder, {
+			...mockStore,
+			personal_notes: 'Thanks for shopping local!',
+			policies_and_conditions: 'Returns accepted within 30 days.',
+			footer_imprint: 'My POS Store Ltd · Reg. 12345',
+		});
+		expect(result.store.personal_notes).toBe('Thanks for shopping local!');
+		expect(result.store.policies_and_conditions).toBe('Returns accepted within 30 days.');
+		expect(result.store.footer_imprint).toBe('My POS Store Ltd · Reg. 12345');
+	});
+
+	it.each([undefined, null])(
+		'emits empty personal notes, policies and footer imprint when the store has %p',
+		(value) => {
+			const result = buildReceiptData(mockOrder, {
+				...mockStore,
+				personal_notes: value,
+				policies_and_conditions: value,
+				footer_imprint: value,
+			});
+			expect(result.store.personal_notes).toBe('');
+			expect(result.store.policies_and_conditions).toBe('');
+			expect(result.store.footer_imprint).toBe('');
+		}
+	);
+
 	it.each([0, 3, undefined])('carries server price decimals (%s) into receipt data', (decimals) => {
 		const result = buildReceiptData(mockOrder, {
 			...mockStore,
