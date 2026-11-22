@@ -827,7 +827,9 @@ export async function drainMutationQueue(input: {
 	// whichever push met it.
 	const attempt = async (
 		row: QueuedMutation,
-		prepare?: (row: QueuedMutation) => Promise<QueuedMutation>
+		prepare?: (row: QueuedMutation) => Promise<QueuedMutation>,
+		// The envelope as stored: a throw before the re-push's claim settles THIS, never a half-built row.
+		stored: QueuedMutation = row
 	): Promise<Settled> => {
 		let sent = row;
 		try {
@@ -838,6 +840,7 @@ export async function drainMutationQueue(input: {
 					blockedRecords.add(recordKey(row));
 					return { kind: 'settled' };
 				}
+				stored = sent;
 			}
 			return { kind: 'pushed', result: await input.push(sent), sent };
 		} catch (error) {
@@ -848,9 +851,9 @@ export async function drainMutationQueue(input: {
 			// next drain re-pushes it (the server dedupes on mutationId).
 			if (input.signal?.aborted) return { kind: 'aborted' };
 			if ((error as { status?: unknown } | null)?.status === 428) {
-				return refreshAndRepush(sent, error);
+				return refreshAndRepush(stored, error);
 			}
-			await settleThrown(sent, error);
+			await settleThrown(stored, error);
 			return { kind: 'settled' };
 		}
 	};
@@ -1114,10 +1117,14 @@ export async function drainMutationQueue(input: {
 				// A re-anchored push that throws settles exactly as a first attempt
 				// would (a 428 is owed one refresh per push it re-anchors), never
 				// parked 'conflicted' — that would hide the server's real verdict.
-				const retried = await attempt(reanchored, async (row) => {
-					if (serverDocument) await input.reconcileConflict?.(row, serverDocument);
-					return input.prepareOutbound ? input.prepareOutbound(row) : row;
-				});
+				const retried = await attempt(
+					reanchored,
+					async (row) => {
+						if (serverDocument) await input.reconcileConflict?.(row, serverDocument);
+						return input.prepareOutbound ? input.prepareOutbound(row) : row;
+					},
+					sent
+				);
 				if (retried.kind === 'aborted') break;
 				if (retried.kind === 'settled') continue;
 				const retry = retried.result;
@@ -1170,6 +1177,24 @@ export async function drainMutationQueue(input: {
 							fields: { ...fields, serverDocumentCompared },
 						});
 					}
+				}
+			} else if (
+				pushedBefore &&
+				draining.operation !== 'create' &&
+				serverRevision &&
+				serverRevision !== sent.baseRevision
+			) {
+				// POS-2PN: a 409 proves the frozen row was never applied, so re-stamp it ONCE from the
+				// resident, as a never-pushed row would be; a second 409 parks it below.
+				const revision = await input.currentRevision?.(draining);
+				if (revision && revision !== sent.baseRevision) {
+					const retried = await attempt({ ...sent, baseRevision: revision }, async (r) => r, sent);
+					if (retried.kind === 'aborted' || input.signal?.aborted) break;
+					if (retried.kind === 'settled') continue;
+					if (!(await stillOwnLease(mutation.mutationId))) continue;
+					result = retried.result;
+					sent = retried.sent;
+					recovered = result.outcome !== 'conflict';
 				}
 			}
 			if (!recovered) {
