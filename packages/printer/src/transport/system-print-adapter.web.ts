@@ -56,22 +56,23 @@ export class SystemPrintAdapter implements PrinterTransport {
 			iframe.style.left = '-10000px';
 			iframe.style.width = '0';
 			iframe.style.height = '0';
+			// The HTML arrives rendered (a store page's copy among it), so the frame runs none of its
+			// scripts. allow-same-origin lets this adapter wait for its images and call print(), which
+			// no other origin may; with scripts off, the document itself cannot use that origin.
+			// allow-modals lets print() open the dialog.
+			iframe.setAttribute('sandbox', 'allow-same-origin allow-modals');
+			const loaded = new Promise<void>((onLoad) => {
+				iframe.addEventListener('load', () => onLoad(), { once: true });
+			});
+			const waitForImages = async () => {
+				if (iframe.contentDocument) await waitForPrintDocumentImages(iframe.contentDocument);
+			};
+			iframe.srcdoc = html;
 			document.body.appendChild(iframe);
-
-			const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
-			if (!doc) {
-				document.body.removeChild(iframe);
-				reject(new Error('Cannot access iframe document'));
-				return;
-			}
-
-			doc.open();
-			doc.write(html);
-			doc.close();
 
 			// Wait for content to render before printing
 			setTimeout(() => {
-				void waitForPrintDocumentImages(doc).then(() => {
+				void loaded.then(waitForImages).then(() => {
 					const win = iframe.contentWindow;
 					if (!win) {
 						document.body.removeChild(iframe);

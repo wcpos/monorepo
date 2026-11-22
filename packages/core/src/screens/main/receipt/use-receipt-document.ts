@@ -42,6 +42,10 @@ const RECEIPT_PAGE_READ_TIMEOUT_MS = 20_000;
 const HEADLESS_PRINT_GRACE_MS = 5_000;
 const HEADLESS_PRINT_DEADLINE_MS =
 	Math.max(ORDER_REFRESH_TIMEOUT_MS, RECEIPT_PAGE_READ_TIMEOUT_MS) + HEADLESS_PRINT_GRACE_MS;
+// The web WebView handle's copy of the page it shows (null when it has none); native has none.
+type RenderedHtmlSource = HTMLIFrameElement & {
+	requestRenderedHtml?: () => Promise<string | null>;
+};
 
 export function useReceiptDocument({
 	order,
@@ -284,19 +288,16 @@ export function useReceiptDocument({
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
 			// The page the preview read, printed as the URL print always was: uncounted.
-			// The preview frame has run the page's scripts, so its DOM is the printable document,
-			// as the same-origin frame's DOM was before the page was read once (a receipt whose
-			// script fills the body prints empty from the source). Before the frame has a body,
-			// the source: the dialog adapter loads inline HTML from a data: URL, so the page's own
-			// URL travels with it as <base> for relative stylesheets and logos (the frame does the
-			// same via `src`). pageURL is set whenever pageHtml is.
+			// The preview frame has run the page's scripts, so its rendered copy is the printable
+			// document (a receipt whose script fills the body prints empty from the source). The
+			// frame has an origin of its own, so the copy arrives by message from the web WebView;
+			// without one, the source: the dialog adapter loads inline HTML from a data: URL, so the
+			// page's own URL travels with it as <base> for relative stylesheets and logos (the frame
+			// does the same via `src`). pageURL is set whenever pageHtml is.
 			if (pageHtml && pageURL && (!printerProfile || usesSystemPrintDialog(printerProfile))) {
-				const frameDocument = iframeRef.current?.contentDocument;
-				return {
-					html: frameDocument?.body?.childElementCount
-						? frameDocument.documentElement.outerHTML
-						: withBase(pageHtml, pageURL),
-				};
+				const frame = iframeRef.current as RenderedHtmlSource | null;
+				const rendered = await frame?.requestRenderedHtml?.();
+				return { html: rendered || withBase(pageHtml, pageURL) };
 			}
 			let commit: (() => Promise<void>) | undefined;
 			const prepared = await preparePrintContent(async () => {
