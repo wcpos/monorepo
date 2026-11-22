@@ -284,6 +284,17 @@ it.each([
 	expect(done).not.toHaveBeenCalled();
 });
 
+// Revert: read a 429 from the refresh after a saved recount as a lockout.
+it('keeps the recount-failed line when the refresh after a saved recount is rate limited', async () => {
+	done.mockRejectedValueOnce({ response: { status: 429, data: {} } });
+	mount();
+	fillCount();
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() =>
+		expect(screen.getByTestId('recount-error').textContent).toBe('Recount failed. Try again.')
+	);
+});
+
 // Revert: show the lockout line for an ordinary wrong password.
 it('keeps the recount-failed line for a wrong password', async () => {
 	manager = false;
