@@ -208,6 +208,20 @@ it("a variation's attribute is locked and the line's developer meta stays in the
 	expect(has('line-item-remove-meta-2')).toBe(true);
 });
 
+it("a line's own `_` key is a Hidden field, not dropped: only the till's keys stay out of the form", () => {
+	const meta_data = [
+		{ id: 1, key: '_woocommerce_pos_data', value: '{}' },
+		{ id: 2, key: '_gift_note', value: 'wrap it' },
+	];
+	render(<EditLineItemForm uuid="l1" item={line({ regular_price: '69', meta_data })} />);
+	expect(has('line-item-row-meta-0')).toBe(false);
+	expect(has('line-item-row-meta-1')).toBe(false);
+	expect(has('line-item-hidden-fields')).toBe(true);
+	fireEvent.click(screen.getByTestId('line-item-hidden-fields-toggle'));
+	expect(has('line-item-row-meta-1')).toBe(true);
+	expect(has('line-item-row-meta-0')).toBe(false);
+});
+
 it('the fee line is Fee name, Amount with its unit, Amount includes tax, Tax; it offers Custom field', () => {
 	render(<EditFeeLineForm uuid="f1" item={{ name: 'Fee', meta_data: [] } as never} />);
 	for (const row of ['name', 'amount', 'includes-tax', 'tax'])
