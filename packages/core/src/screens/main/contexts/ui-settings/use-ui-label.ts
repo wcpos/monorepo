@@ -175,7 +175,7 @@ export const useUILabel = () => {
 						meta_data: t('ui_settings.custom_fields_under_the_name'),
 					},
 					price: {
-						tax: t('ui_settings.tax_beside_the_price'),
+						tax: t('ui_settings.tax_under_the_price'),
 						on_sale: t('ui_settings.show_the_sale'),
 					},
 				},
@@ -195,9 +195,9 @@ export const useUILabel = () => {
 						barcode: t('ui_settings.barcode_under_the_name'),
 						attributes: t('ui_settings.attributes_under_the_name'),
 					},
-					price: { tax: t('ui_settings.tax_beside_the_price') },
-					regular_price: { tax: t('ui_settings.tax_beside_the_price') },
-					sale_price: { tax: t('ui_settings.tax_beside_the_price') },
+					price: { tax: t('ui_settings.tax_under_the_price') },
+					regular_price: { tax: t('ui_settings.tax_under_the_price') },
+					sale_price: { tax: t('ui_settings.tax_under_the_price') },
 				},
 				orders: {
 					customer_id: {

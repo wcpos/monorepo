@@ -1835,7 +1835,7 @@
 	"ui_settings.split_link": "Split link",
 	"ui_settings.stock_under_the_name": "Stock under the name",
 	"ui_settings.tags_under_the_name": "Tags under the name",
-	"ui_settings.tax_beside_the_price": "Tax beside the price",
+	"ui_settings.tax_under_the_price": "Tax under the price",
 	"ui_settings.tax_under_the_subtotal": "Tax under the subtotal",
 	"ui_settings.tax_under_the_total": "Tax under the total",
 	"upgrade.add_new_customers_and_edit_existing": "Add new customers and edit existing customers by upgrading to WCPOS Pro",
