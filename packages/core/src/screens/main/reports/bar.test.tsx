@@ -116,10 +116,12 @@ jest.mock('@wcpos/components/popover', () => {
 			children,
 			open,
 			onOpenChange,
+			className,
 		}: {
 			children: React.ReactNode;
 			open?: boolean;
 			onOpenChange?: (open: boolean) => void;
+			className?: string;
 		}) => {
 			const [local, setLocal] = React.useState(false);
 			return (
@@ -132,7 +134,8 @@ jest.mock('@wcpos/components/popover', () => {
 						},
 					}}
 				>
-					{children}
+					{/* The web Root is a View of its own around the trigger (a flex item in the bar). */}
+					<div className={className}>{children}</div>
 				</C.Provider>
 			);
 		},
@@ -448,6 +451,13 @@ it('gives the phone the page bar crumb back to Sales instead of an arrow', () =>
 	draw();
 	expect(screen.getAllByTestId('reports-back-sales')).toHaveLength(1);
 	expect(screen.getByTestId('reports-back-sales').getAttribute('data-crumb')).toBe('phone');
+});
+
+// Revert: drop the scope Popover root's `min-w-0 shrink` (a View's default flex-shrink is 0 on web).
+it('lets the scope root shrink so a long title truncates before the bar status (#3621)', () => {
+	draw();
+	const root = screen.getByTestId('reports-scope').parentElement as HTMLElement;
+	expect(root.className.split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'shrink']));
 });
 
 // Revert: restore the old room segments.

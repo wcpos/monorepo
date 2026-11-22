@@ -136,7 +136,9 @@ export function Bar({
 								onPress={back.onPress}
 							/>
 						)}
-						<Popover onOpenChange={() => setLocked('')}>
+						{/* The web Root is a View (flex-shrink 0) around the trigger: without `min-w-0 shrink` a long
+						    title on a phone runs under the Offline badge and the bell instead of truncating (#3621). */}
+						<Popover className="min-w-0 shrink" onOpenChange={() => setLocked('')}>
 							<PopoverTrigger ref={trigger} asChild>
 								<Button
 									testID="reports-scope"
