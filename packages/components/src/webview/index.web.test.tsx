@@ -282,7 +282,13 @@ describe('WebView web bridge for an untrusted srcDoc frame', () => {
 		Object.defineProperty(doc.body, 'scrollWidth', { configurable: true, value: 302 });
 		Object.defineProperty(doc.body, 'scrollHeight', { configurable: true, value: 640 });
 		const script = doc.createElement('script');
-		script.textContent = /<script>([\s\S]*)<\/script>$/.exec(frame.getAttribute('srcdoc')!)![1];
+		// The frame script is the last element of the srcdoc; run its text in the fake frame.
+		const srcdoc = frame.getAttribute('srcdoc')!;
+		const open = '<script>';
+		script.textContent = srcdoc.slice(
+			srcdoc.lastIndexOf(open) + open.length,
+			srcdoc.lastIndexOf('</script>')
+		);
 		doc.body.appendChild(script);
 
 		act(() => {
