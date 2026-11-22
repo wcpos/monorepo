@@ -270,7 +270,7 @@ function EditLineItemFormFields({ uuid, item }: Props) {
 								) : null}
 							</PropertyRow>
 						))}
-					<CustomFieldRows prefix="line-item" meta={item.meta_data}>
+					<CustomFieldRows prefix="line-item">
 						{presence.offered.map((name) => (
 							<PropertyAdd
 								key={name}
