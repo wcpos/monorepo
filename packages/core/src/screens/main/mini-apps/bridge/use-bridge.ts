@@ -47,9 +47,26 @@ function isEnvelope(value: unknown): value is BridgeEnvelope<Record<string, unkn
 	);
 }
 
+/**
+ * True when `url` is a page under the pinned base (`pin` is an origin plus an optional path, no
+ * trailing slash). The URL is parsed first so dot segments cannot climb out of the pinned path.
+ */
+export function isUnderPin(url: string, pin: string): boolean {
+	try {
+		return new URL(url).href.startsWith(`${pin}/`);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * `pin` is the mini-app base URL. Native reports the sending page's URL, which must sit under it;
+ * the web WebView reports only the frame's origin (it has already bound the message to the
+ * rendered frame), so the bare origin is accepted there. A message with no URL is refused.
+ */
 export function useBridge(
 	webViewRef: React.RefObject<WebViewHandle | null>,
-	origin: string,
+	pin: string,
 	handlers: BridgeHandlers
 ) {
 	const [ready, setReady] = React.useState(false);
@@ -70,8 +87,9 @@ export function useBridge(
 
 	const onMessage = React.useCallback(
 		async (event: MessageEvent) => {
-			if (event.nativeEvent.url && messageOrigin(event.nativeEvent.url) !== origin) {
-				bridgeLogger.debug('Dropped message from unexpected origin');
+			const sender = event.nativeEvent.url;
+			if (!sender || (sender !== messageOrigin(pin) && !isUnderPin(sender, pin))) {
+				bridgeLogger.debug('Dropped message from an unexpected sender');
 				return;
 			}
 			const parsed = parseMessage(event.nativeEvent.data);
@@ -144,7 +162,7 @@ export function useBridge(
 				if (timer) clearTimeout(timer);
 			}
 		},
-		[handlers, origin, post]
+		[handlers, pin, post]
 	);
 
 	return { onMessage, ready, reset, send };

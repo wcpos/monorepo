@@ -16,7 +16,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import type { WebViewHandle } from '@wcpos/components/webview';
 
-import { useBridge } from './bridge/use-bridge';
+import { isUnderPin, useBridge } from './bridge/use-bridge';
 import { type AppInitPayload, BridgeError, type BridgeHandlers } from './bridge/types';
 import { useHostCapabilities } from './capabilities/host';
 import { usePrinterCapabilities } from './capabilities/printers';
@@ -49,7 +49,8 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			item.url.startsWith(`${MINI_APP_ORIGIN}/`) &&
 			item.platforms.includes(appInfo.platform)
 	);
-	const origin = entry ? new URL(entry.url).origin : MINI_APP_ORIGIN;
+	// jsDelivr is one origin for every repo, so the bridge is pinned to the mini-app's own path.
+	const origin = new URL(MINI_APP_ORIGIN).origin;
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const sendRef = React.useRef<(action: string, payload: object) => void>(() => undefined);
 	const closingSentRef = React.useRef(false);
@@ -97,7 +98,7 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			return initPayload;
 		},
 	};
-	const { onMessage, ready, reset, send } = useBridge(webViewRef, origin, handlers);
+	const { onMessage, ready, reset, send } = useBridge(webViewRef, MINI_APP_ORIGIN, handlers);
 	const [attempt, setAttempt] = React.useState(0);
 	const [loadGeneration, setLoadGeneration] = React.useState(0);
 	const [failed, setFailed] = React.useState(false);
@@ -164,12 +165,22 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 						initialLoadSeenRef.current = true;
 						if (ready) return;
 					}
+					// On web the bridge sees only the frame's origin, which jsDelivr shares with every
+					// repo, so it cannot tell the mini-app's next page from a foreign one. A load after
+					// the handshake therefore closes the bridge (failure notice, Retry reloads the
+					// entry) instead of re-arming it as the bridge contract describes; native keeps
+					// re-arming because it checks the page path.
+					if (ready && RNPlatform.OS === 'web') {
+						reset();
+						setFailed(true);
+						return;
+					}
 					reset();
 					setLoadGeneration((value) => value + 1);
 				}}
-				// Only the catalog origin may load inside a bridged view; anything else is refused.
+				// Only the mini-app's own path may load inside a bridged view; anything else is refused.
 				onShouldStartLoadWithRequest={(request: { url: string }) =>
-					request.url.startsWith(`${origin}/`)
+					isUnderPin(request.url, MINI_APP_ORIGIN)
 				}
 				onError={() => setFailed(true)}
 			/>
