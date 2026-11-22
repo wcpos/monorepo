@@ -2,6 +2,7 @@ import * as React from 'react';
 import { type ScrollViewInstance, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
+import { decode } from 'html-entities';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
 import {
@@ -117,7 +118,12 @@ export function useActiveConditionLabels(
 		if (item.type === 'quick') return item.label;
 		if (item.id === 'stock_status') return stockLabel(String(state.filters.stock_status));
 		const field = TAXONOMY_FIELDS.find((name) => name === item.id);
-		if (field) return names[field].length ? names[field].join(', ') : getUILabel(item.id);
+		// Woo sends term names entity-encoded ("Flags &amp; Banners"); a quick filter's label is
+		// the owner's own text and stays as typed.
+		if (field)
+			return names[field].length
+				? names[field].map((name) => decode(name)).join(', ')
+				: getUILabel(item.id);
 		return getUILabel(item.id);
 	});
 }
