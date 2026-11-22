@@ -49,7 +49,13 @@ async function harness() {
 	});
 	const sync = async () =>
 		(await orders.findOne(acked().uuid).exec())?.toJSON().sync as Record<string, unknown>;
-	return { repo, orders, total, door, sync };
+	const orderTasks = async () =>
+		(
+			await scope.database.collections.schedulerTaskStates
+				.find({ selector: { collectionName: 'orders' } })
+				.exec()
+		).map((doc) => doc.toJSON().queryKey);
+	return { repo, orders, total, door, sync, orderTasks };
 }
 
 describe('a pull requested before the ack adopted the order', () => {
@@ -81,6 +87,24 @@ describe('a pull requested before the ack adopted the order', () => {
 		const stale = order('pending', '0.00', 'r1');
 		expect(await h.repo.upsertMany([stale], { source: 'pull', requestedAt: 50 })).toEqual([]);
 		expect(await h.total()).toBe('25.000000');
+	});
+
+	it('a pull answered after an ack but carrying a later server save is re-fetched, not dropped with the cursor advanced', async () => {
+		const h = await harness();
+		await h.orders.insert(withOrderColumns(acked()));
+		// Another till saved r3 after this till's ack adopted r2, before the server built the answer.
+		const later = order('completed', '30.000000', 'r3');
+		expect(await h.repo.upsertMany([later], { source: 'pull', requestedAt: 50 })).toEqual([]);
+		expect(await h.total()).toBe('25.000000');
+		expect(await h.orderTasks()).toEqual(['orders:ids:115547']);
+	});
+
+	it("a skipped pull carrying the resident's own revision is a plain skip, with no re-pull", async () => {
+		const h = await harness();
+		await h.orders.insert(withOrderColumns(acked()));
+		const same = order('processing', '25.000000', 'r2');
+		expect(await h.repo.upsertMany([same], { source: 'pull', requestedAt: 50 })).toEqual([]);
+		expect(await h.orderTasks()).toEqual([]);
 	});
 
 	it('leaves the ack unaffected', async () => {
