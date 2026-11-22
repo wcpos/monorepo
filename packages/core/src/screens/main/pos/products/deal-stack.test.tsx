@@ -234,10 +234,11 @@ function Relaid() {
 	const relaid = useLiftedLayout(true);
 	return <button data-testid="tile-relaid" onClick={() => relaid?.()} />;
 }
-// A tile at rest in the same stage: on the web it carries the handler too (armed at mount), and
-// its layout changes the copy nothing.
+// A second tile in the same stage, at rest unless a test lifts it: on the web it carries the
+// handler too (armed at mount), and its layout changes the copy nothing while it is at rest.
+let restTileLifted = false;
 function Unlifted() {
-	const relaid = useLiftedLayout(false);
+	const relaid = useLiftedLayout(restTileLifted);
 	return (
 		<button data-testid="tile-unlifted" data-kind={typeof relaid} onClick={() => relaid?.()} />
 	);
@@ -376,6 +377,7 @@ beforeEach(() => {
 	mockLayouts.length = 0;
 	mockReactions.clear();
 	mockOS = 'web';
+	restTileLifted = false;
 	mockSpacing = undefined;
 	mockBodyMounts = 0;
 	jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
@@ -1181,6 +1183,18 @@ it('on the web a tile at rest carries the layout handler too, and only the lifte
 	expect(box().getAttribute('data-width')).toBe(String(TILE.width + 8));
 	act(() => screen.getByTestId('tile-relaid').click());
 	expect(box().getAttribute('data-width')).toBe(String(140 + 8));
+	// The same mounted tile is lifted: its handler, armed at mount, now answers; put back at rest,
+	// it answers nothing again.
+	restTileLifted = true;
+	rerender(<Stage detail="Hoodie" target={reflowing} />);
+	frame = { ...TILE, width: 160, height: 210 };
+	act(() => screen.getByTestId('tile-unlifted').click());
+	expect(box().getAttribute('data-width')).toBe(String(160 + 8));
+	restTileLifted = false;
+	rerender(<Stage detail="Hoodie" target={reflowing} />);
+	frame = { ...TILE, width: 180, height: 220 };
+	act(() => screen.getByTestId('tile-unlifted').click());
+	expect(box().getAttribute('data-width')).toBe(String(160 + 8));
 });
 
 it('on native a tile at rest has no layout handler; the lifted tile attaches on lift', () => {
