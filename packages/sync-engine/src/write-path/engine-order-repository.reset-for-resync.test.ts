@@ -123,8 +123,7 @@ describe('resetForResync and the orders walks', () => {
 		expect(await h.states()).toEqual([inFlight]);
 		const renewed = { ...inFlight, claimedUntilMs: T + 120_000, updatedAtMs: T + 60_000 };
 		expect(await h.tasks.claim(inFlight, renewed)).toBe(true);
-		// Why the row must stay: a renewal against a missing row fails, so the walk would end
-		// renewal-lost with its range half downloaded.
+		// Why it must stay: renewing a missing row fails, so the walk would end renewal-lost.
 		expect(await h.tasks.remove(renewed)).toBe(true);
 		expect(await h.tasks.claim(renewed, { ...renewed, updatedAtMs: T + 90_000 })).toBe(false);
 	});
@@ -135,9 +134,11 @@ describe('resetForResync and the orders walks', () => {
 		const orders = h.collections.orders;
 		const removeOrders = orders.bulkRemove.bind(orders);
 		const late = lane('orders:late-walk');
+		let published = false; // a flag, not toHaveBeenCalled: mockRestore clears the recorded calls
 		const remove = vi.spyOn(orders, 'bulkRemove').mockImplementationOnce(async (ids) => {
 			// A walk that started inside the reset's scan publishes over orders about to go.
 			await h.collections.coverageLanes.upsert(late);
+			published = true;
 			return removeOrders(ids as string[]);
 		});
 		try {
@@ -145,7 +146,7 @@ describe('resetForResync and the orders walks', () => {
 		} finally {
 			remove.mockRestore();
 		}
-		expect(remove).toHaveBeenCalled();
+		expect(published).toBe(true);
 		expect(await orders.findOne(order(42).uuid).exec()).toBeNull();
 		expect(await h.collections.coverageLanes.findOne(late.laneKey).exec()).toBeNull();
 	});
