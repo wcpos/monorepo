@@ -276,6 +276,10 @@ export function usePrinterDialogForm({
 			setProbing(false);
 			return;
 		}
+		// A new address is a new printer: the last one's "detected" rows return to selects until this
+		// address answers (Codex, #3732).
+		setDetectedLanguage(null);
+		setDetectedColumns(null);
 		if (manualVendorRef.current) {
 			setProbing(false);
 			return;

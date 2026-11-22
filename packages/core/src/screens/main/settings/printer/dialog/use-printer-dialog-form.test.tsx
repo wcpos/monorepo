@@ -364,7 +364,8 @@ describe('usePrinterDialogForm detection and port rewrites', () => {
 		jest
 			.mocked(identifyPrinter)
 			.mockResolvedValueOnce({ vendor: 'epson', lane, ports: [] } as never)
-			.mockResolvedValueOnce({ vendor: 'epson', lane, ports: [], columns: 48 } as never);
+			.mockResolvedValueOnce({ vendor: 'epson', lane, ports: [], columns: 48 } as never)
+			.mockResolvedValueOnce({ vendor: 'epson', lane, ports: [] } as never);
 		const latest = mount();
 		await runProbe();
 
@@ -382,6 +383,17 @@ describe('usePrinterDialogForm detection and port rewrites', () => {
 		expect(latest().detectedLanguage).toBe('esc-pos');
 		expect(latest().detectedColumns).toBe(48);
 		expect(latest().detectionId).toBe(1);
+
+		// Another address, before it answers: the last printer's rows are not "detected" any more.
+		act(() => {
+			latest().form.setValue('address', '192.168.1.25');
+		});
+		expect(latest().detectedLanguage).toBeNull();
+		expect(latest().detectedColumns).toBeNull();
+		expect(latest().detectionId).toBe(1);
+		await runProbe();
+		expect(latest().detectedLanguage).toBe('esc-pos');
+		expect(latest().detectionId).toBe(2);
 
 		act(() => latest().setManualVendor());
 
