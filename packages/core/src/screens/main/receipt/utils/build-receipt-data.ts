@@ -47,6 +47,10 @@ interface ReceiptStore {
 	email: string;
 	tax_id?: string;
 	tax_ids?: { type: string; value: string; country?: string; label?: string }[];
+	// The store's receipt texts, as the server receipt data carries them.
+	personal_notes: string;
+	policies_and_conditions: string;
+	footer_imprint: string;
 }
 
 interface ReceiptCustomer {
@@ -915,6 +919,10 @@ export function buildReceiptData(
 			email: store.email || '',
 			tax_id: derivePrimaryTaxId(store.tax_ids),
 			tax_ids: store.tax_ids ?? [],
+			personal_notes: typeof store.personal_notes === 'string' ? store.personal_notes : '',
+			policies_and_conditions:
+				typeof store.policies_and_conditions === 'string' ? store.policies_and_conditions : '',
+			footer_imprint: typeof store.footer_imprint === 'string' ? store.footer_imprint : '',
 		},
 		customer: (() => {
 			const rawLegacyTaxId = (order as { tax_id?: unknown }).tax_id;
