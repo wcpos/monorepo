@@ -264,6 +264,40 @@ it('coalesces repeated submit taps and surfaces a refusal without retrying', asy
 	expect(done).not.toHaveBeenCalled();
 });
 
+// Revert: show the generic retry line to a manager the server has locked out.
+it.each([
+	{ status: 429, data: { code: 'wcpos_approval_locked' } },
+	{ status: 429, data: {} },
+])('says the approving account is locked on %j', async (response) => {
+	manager = false;
+	post.mockRejectedValue({ response });
+	mount();
+	fillCount();
+	fireEvent.change(screen.getByTestId('approve-username'), { target: { value: 'manager' } });
+	fireEvent.change(screen.getByTestId('approve-password'), { target: { value: 'wrong' } });
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() =>
+		expect(screen.getByTestId('recount-error').textContent).toBe(
+			'Too many wrong passwords. This account is locked for 15 minutes.'
+		)
+	);
+	expect(done).not.toHaveBeenCalled();
+});
+
+// Revert: show the lockout line for an ordinary wrong password.
+it('keeps the recount-failed line for a wrong password', async () => {
+	manager = false;
+	post.mockRejectedValue({ response: { status: 403, data: { code: 'wcpos_override_refused' } } });
+	mount();
+	fillCount();
+	fireEvent.change(screen.getByTestId('approve-username'), { target: { value: 'manager' } });
+	fireEvent.change(screen.getByTestId('approve-password'), { target: { value: 'wrong' } });
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() =>
+		expect(screen.getByTestId('recount-error').textContent).toBe('Recount failed. Try again.')
+	);
+});
+
 // Revert: use a captured count during a held denomination key and lose repeated increments.
 it('accumulates denomination presses and sends their cash total', async () => {
 	mount();

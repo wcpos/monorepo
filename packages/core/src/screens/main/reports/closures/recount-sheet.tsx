@@ -115,8 +115,11 @@ export function RecountSheet({
 			request.current = null;
 			setPassword('');
 			onOpenChange(false);
-		} catch {
-			setError(t('reports.recount_failed'));
+		} catch (e) {
+			const response = (e as { response?: { status?: number; data?: { code?: string } } }).response;
+			// The recount route locks the approving account after repeated wrong passwords.
+			const locked = response?.data?.code === 'wcpos_approval_locked' || response?.status === 429;
+			setError(locked ? t('register.approval_locked') : t('reports.recount_failed'));
 		}
 	};
 	const save = () => exclusive('save', runSave);
