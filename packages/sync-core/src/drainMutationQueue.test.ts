@@ -13,6 +13,7 @@ import { createFakeWriteServer } from './fakeWriteServer';
 import { POS_META_KEYS } from './pos-carrier/carrier';
 
 import type { RecordMutation } from './recordMutation';
+import type { QueuedMutation } from './recordMutationQueue';
 
 const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 	mutationId: 'm1',
@@ -1929,6 +1930,80 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 			const survivor = (await a.all()).find((m) => m.mutationId === 'm-slow');
 			expect(survivor?.claimedBy).toBe('window-B');
 		});
+	});
+});
+
+describe('POS-2PN: a pushed-before row is re-sent byte-identical', () => {
+	it('U1: a lost-ack retry is neither re-stamped nor re-prepared', async () => {
+		const q = await queueWith(mut({ baseRevision: 'r0', payload: { id: 'rec-A', note: 'a' } }));
+		let clock = 100_000;
+		let revision = 'r1';
+		let marker = 0;
+		const sent: RecordMutation[] = [];
+		const prepareOutbound = vi.fn(async (m: QueuedMutation) => ({
+			...m,
+			payload: { ...m.payload, marker: (marker += 1) },
+		}));
+		const input = {
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			currentRevision: async () => revision,
+			prepareOutbound,
+			push: async (m: RecordMutation) => {
+				sent.push(m);
+				if (sent.length === 1) throw new TypeError('network dropped after server applied');
+				return ok(m);
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ failed: 1 });
+		revision = 'r2';
+		clock += 120_000;
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1 });
+		expect(sent).toHaveLength(2);
+		expect(sent[0].baseRevision).toBe('r1');
+		expect(sent[1].baseRevision).toEqual(sent[0].baseRevision);
+		expect(sent[1].payload).toEqual(sent[0].payload);
+		expect(prepareOutbound).toHaveBeenCalledTimes(1);
+	});
+
+	it('U2: a failed ack after a 409 auto-recover backs off the re-push it acknowledged', async () => {
+		const q = await queueWith(mut({ baseRevision: 'r1' }));
+		let clock = 100_000;
+		let ackFailures = 1;
+		const sent: RecordMutation[] = [];
+		const input = {
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			currentRevision: async () => 'r1',
+			autoRecoverConflict: () => true,
+			push: async (m: RecordMutation): Promise<PushResult> => {
+				sent.push(m);
+				if (sent.length > 1) return ok(m);
+				return {
+					...conflict(m),
+					currentRevision: 'r2',
+					conflict: { current: { id: 1 }, currentRevision: 'r2' },
+				};
+			},
+			applyAck: async () => {
+				if (ackFailures > 0) {
+					ackFailures -= 1;
+					throw new Error('ack write failed');
+				}
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 0, failed: 1 });
+		clock += 120_000;
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, failed: 0 });
+		expect(sent).toHaveLength(3);
+		expect(sent[2].baseRevision).toBe('r2');
+		expect({ base: sent[2].baseRevision, payload: sent[2].payload }).toEqual({
+			base: sent[1].baseRevision,
+			payload: sent[1].payload,
+		});
+		expect(await q.all()).toEqual([]);
 	});
 });
 

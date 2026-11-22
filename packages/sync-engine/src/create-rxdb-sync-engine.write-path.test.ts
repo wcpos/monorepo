@@ -5206,8 +5206,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			}
 		});
 
-		// POS-2PN: fails on main (the retry re-stamps a moved base, so the server answers 422); the fix PR turns this into it().
-		it.fails('E1 (P3): a money-command revision stamp between attempts', async () => {
+		it('E1 (P3): a money-command revision stamp between attempts', async () => {
 			const { server, engine, clock, updates, rejectedRows } = await lostAck({
 				dropAt: 1,
 				serverRevision: 'sha256:pos-2pn-r1',
@@ -5224,8 +5223,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			}
 		});
 
-		// POS-2PN: fails on main (the retry re-stamps a moved base, so the server answers 422); the fix PR turns this into it().
-		it.fails('E2 (P2): a 409 auto-recover whose re-push is applied but unanswered', async () => {
+		it('E2 (P2): a 409 auto-recover whose re-push is applied but unanswered', async () => {
 			const { engine, clock, updates, rejectedRows } = await lostAck({
 				dropAt: 2,
 				serverRevision: 'sha256:pos-2pn-r2',

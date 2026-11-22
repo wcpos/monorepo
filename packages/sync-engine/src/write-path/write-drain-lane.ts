@@ -88,16 +88,12 @@ const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
  * stamped onto the outgoing payload. Its reconciled line_items also retire
  * stale ids in frozen snapshots; local removals retain ids as tombstones until acked.
  *
- * Doing this at PUSH time rather than rewriting the queue rows is deliberate.
- * The durable row stays the honest record of what the cashier intended; no
- * mutationId is re-minted (a swap would strand `awaitWriteOutcome` callers
- * holding a receipt that could then never settle) and no row is deferred a
- * tick. It also closes the race by construction: the graft reads the freshest
- * resident at the moment of the push, so no ack landing in between can outrun
- * it — including one that rewrote the queue row through coalescing.
+ * It runs once per push decision, just before the drain's claim persists the
+ * grafted payload. A row pushed before (claimed, or attempts > 0) is re-sent as
+ * persisted, never re-grafted: the server fingerprints its envelope (POS-2PN).
  *
  * @param database - The active scope database.
- * @param mutation - The claimed mutation the drain is about to push.
+ * @param mutation - The mutation the drain is about to claim and push.
  * @returns The mutation, payload grafted when the resident knows more.
  */
 async function withGraftedLineIdentity<T extends QueuedMutation>(
@@ -591,9 +587,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}));
 								return revision;
 							},
+							prepareOutbound: (mutation) => withGraftedLineIdentity(database, mutation),
 							push: async (mutation) => {
 								activateCollection(mutation.collectionName as SyncCollectionName);
-								const outbound = await withGraftedLineIdentity(database, mutation);
+								const outbound = mutation;
 								if (outbound.collectionName === 'orders' && outbound.operation !== 'delete') {
 									const resident = await database.collections.orders
 										?.findOne(outbound.recordId)
