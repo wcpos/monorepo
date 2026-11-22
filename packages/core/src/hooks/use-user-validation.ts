@@ -60,7 +60,8 @@ export function cashierRequest(site: ReadonlySiteRecord, userId: number, accessT
 			site: toPreambleSite(site),
 		},
 	};
-	return { endpoint: `${pathApiUrl}cashier/${userId}`, config };
+	// The REST client's v1 migration persists a base with no trailing slash (`…/wcpos/v2`).
+	return { endpoint: `${pathApiUrl.replace(/\/+$/, '')}/cashier/${userId}`, config };
 }
 
 /**
