@@ -45,6 +45,7 @@ test.describe('order-cleanup pure logic', () => {
 
 	test('shouldFinalizeStatus only accepts finalize-able statuses', () => {
 		expect(shouldFinalizeStatus('pos-open')).toBe(true);
+		expect(shouldFinalizeStatus('pos-partial')).toBe(true);
 		expect(shouldFinalizeStatus('completed')).toBe(false);
 		expect(shouldFinalizeStatus('processing')).toBe(false);
 		expect(shouldFinalizeStatus('cancelled')).toBe(false);
@@ -52,14 +53,14 @@ test.describe('order-cleanup pure logic', () => {
 		expect(shouldFinalizeStatus(123)).toBe(false);
 	});
 
-	test('finalize policy: pos-open is finalized, cancelled is the terminal target', () => {
-		expect([...FINALIZE_FROM_STATUSES]).toEqual(['pos-open']);
+	test('finalize policy: pos-open and pos-partial are finalized, cancelled is the terminal target', () => {
+		expect([...FINALIZE_FROM_STATUSES]).toEqual(['pos-open', 'pos-partial']);
 		expect(TEARDOWN_TERMINAL_STATUS).toBe('cancelled');
 		// A genuine completed sale must never be a finalize source.
 		expect(FINALIZE_FROM_STATUSES.has('completed')).toBe(false);
 	});
 
-	test('selectOrdersToFinalize keeps only pos-open, drops fixtures, dedupes', () => {
+	test('selectOrdersToFinalize keeps pos-open and pos-partial, drops fixtures, dedupes', () => {
 		const retainedId = [...RETAINED_FIXTURE_ORDER_IDS][0];
 		const orders = [
 			{ id: 1, status: 'pos-open' },
@@ -68,8 +69,9 @@ test.describe('order-cleanup pure logic', () => {
 			{ id: 3, status: 'pos-open' }, // duplicate
 			{ id: retainedId, status: 'pos-open' }, // retained fixture — skipped
 			{ id: 4, status: 'processing' },
+			{ id: 5, status: 'pos-partial' }, // part-paid test cart — finalized too
 		];
-		expect(selectOrdersToFinalize(orders)).toEqual([1, 3]);
+		expect(selectOrdersToFinalize(orders)).toEqual([1, 3, 5]);
 	});
 
 	test('selectOrdersToFinalize respects a custom retain set', () => {
