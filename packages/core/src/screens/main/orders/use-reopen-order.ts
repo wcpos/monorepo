@@ -188,6 +188,8 @@ export function useReopenOrder(order: EngineRecord<'orders'>) {
 				);
 		}
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
+		// Reopen may start in the order's modal; leaving it mounted keeps its dialog's page lock over the till.
+		if (router.canDismiss()) router.dismiss();
 		openTill(router, phone, order.uuid);
 	}, [
 		blockIfDegraded,
