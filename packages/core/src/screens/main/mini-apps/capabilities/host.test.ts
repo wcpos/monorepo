@@ -59,6 +59,30 @@ describe('useHostCapabilities', () => {
 		}
 	});
 
+	it('refuses control characters and spaces in a path, raw or encoded', async () => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
+		for (const path of [
+			'/wcpos/v1/settings/.\t./.\t./wc/v3/orders',
+			'/wcpos/v1/settings/.\n./wc/v3/orders',
+			'/wcpos/v1/settings/.\r./x',
+			'/wcpos/v1/settings/.%09./.%09./wc/v3/orders',
+			'/wcpos/v1/settings/a b',
+			'/wcpos/v1/settings/\u0000',
+		]) {
+			await expect(result.current['http.proxy']({ method: 'GET', path })).rejects.toMatchObject({
+				code: 'bad_request',
+			});
+			expect(mockRequest).not.toHaveBeenCalled();
+		}
+		await result.current['http.proxy']({
+			method: 'GET',
+			path: '/wcpos/v1/settings/general',
+		});
+		expect(mockRequest).toHaveBeenCalledWith(
+			expect.objectContaining({ url: '/wcpos/v1/settings/general' })
+		);
+	});
+
 	it('rejects a query that overrides the plain-permalink REST route', async () => {
 		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
 
@@ -175,7 +199,12 @@ describe('useHostCapabilities', () => {
 	});
 
 	it('refuses query keys that are not plain letters, digits, _ or -', async () => {
-		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
+		const { result } = renderHook(() =>
+			useHostCapabilities(jest.fn(), {
+				...WIDE,
+				queryKeys: [...WIDE.queryKeys, '.method', 'rest.route', 'rest route', 'a[b]', ''],
+			})
+		);
 		for (const query of [
 			{ '.method': 'DELETE' },
 			{ 'rest.route': '/other/v1' },
