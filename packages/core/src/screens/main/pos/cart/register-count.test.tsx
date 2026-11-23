@@ -88,6 +88,7 @@ let count_denominations: { value: string; pieces: number }[] | null = null;
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let mockRefusedClose = false;
+let mockSyncError: string | undefined;
 let mockCounted: Record<string, string> | null = null;
 let mockLastClosure: Record<string, unknown> | null = null;
 let figuresPending = false;
@@ -108,6 +109,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			id: 's',
 			register_id: 'r',
 			status: mockSessionStatus,
+			sync_error: mockSyncError,
 			approval_required,
 			approved_counted,
 			count_note,
@@ -189,6 +191,7 @@ beforeEach(() => {
 	count_denominations = null;
 	unsyncedCount = 3;
 	mockRefusedClose = false;
+	mockSyncError = undefined;
 	mockCounted = null;
 	mockLastClosure = null;
 	figuresPending = false;
@@ -744,6 +747,20 @@ describe('#2016: a refused close', () => {
 			);
 		}
 	);
+	it('names the missing cash permission when the store forbids the close', () => {
+		mockRefusedClose = true;
+		mockSyncError = 'rest_forbidden';
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.getByText(/can't open, count or close the register/)).toBeTruthy();
+		expect(screen.queryByText(/The store refused this close/)).toBeNull();
+	});
+	it('shows the generic refused-close notice for another error code', () => {
+		mockRefusedClose = true;
+		mockSyncError = 'woocommerce_rest_invalid_param';
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.getByText(/The store refused this close/)).toBeTruthy();
+		expect(screen.queryByText(/can't open, count or close the register/)).toBeNull();
+	});
 	it('asks for the manager before a retry over the threshold', async () => {
 		refused('counting');
 		varianceThreshold = '5';
