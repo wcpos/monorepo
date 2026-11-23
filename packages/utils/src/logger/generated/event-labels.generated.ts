@@ -141,6 +141,7 @@ export const SYNC_EVENT_TYPES = [
 	'register.session-opened',
 	'register.session-pruned',
 	'register.session-refresh-failed',
+	'register.session-set-aside',
 	'register.switched',
 	'register.unbound',
 	'register.upload-refused',
@@ -1282,6 +1283,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Could not refresh the register session',
 		descriptionKey: 'health.logs.event_description.register_session_refresh_failed',
 		description: 'The register session could not be brought up to date with your store.',
+		introducedIn: '2.0.0',
+	},
+	'register.session-set-aside': {
+		type: 'register.session-set-aside',
+		domain: 'REGISTER',
+		key: 'health.logs.event.register_session_set_aside',
+		label: 'Set aside a register session the store no longer has',
+		descriptionKey: 'health.logs.event_description.register_session_set_aside',
+		description:
+			'The store no longer had this register session, so it was kept on this device as history and the register cleared. Any cash movements it had not sent stay on this device and are not sent again.',
 		introducedIn: '2.0.0',
 	},
 	'register.switched': {
