@@ -18,7 +18,7 @@ const mockLoggerSuccess = jest.fn();
 const mockShowAddedToCartToast = jest.fn();
 
 const mockReadCounting = jest.fn(async () => false);
-const mockReadPriceCheck = jest.fn(async () => false);
+const mockReadPriceCheck = jest.fn(async (): Promise<false | 'closed' | 'unbound'> => false);
 const mockToastShow = jest.fn();
 
 jest.mock('@wcpos/components/toast', () => ({
@@ -211,7 +211,7 @@ describe('useAddProduct', () => {
 	});
 
 	it('adds nothing while the register is closed, with the price-check notice, then adds once it opens', async () => {
-		mockReadPriceCheck.mockResolvedValue(true);
+		mockReadPriceCheck.mockResolvedValue('closed');
 		const { result } = renderHook(() => useAddProduct());
 		const product = engineDocument({ id: 101, name: 'Plain product', type: 'simple' }, '101');
 
@@ -234,6 +234,18 @@ describe('useAddProduct', () => {
 			type: 'info',
 			title: 'pos_products.price_check_only_until_open',
 		});
+		// No register on this device: refused too, with a notice that says to choose one.
+		mockReadPriceCheck.mockResolvedValue('unbound');
+		await act(async () => {
+			added = await result.current.addProduct(product as never);
+		});
+		expect(added).toBe(false);
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenLastCalledWith({
+			id: 'pos-price-check-refused',
+			type: 'info',
+			title: 'pos_products.no_register_bound',
+		});
 
 		mockReadPriceCheck.mockResolvedValue(false);
 		await act(async () => {
@@ -241,7 +253,7 @@ describe('useAddProduct', () => {
 		});
 		expect(added).toBe(true);
 		expect(mockAddItemToOrder).toHaveBeenCalledTimes(1);
-		expect(mockToastShow).toHaveBeenCalledTimes(2);
+		expect(mockToastShow).toHaveBeenCalledTimes(3);
 	});
 
 	it('adds an ordinary product document to the order', async () => {

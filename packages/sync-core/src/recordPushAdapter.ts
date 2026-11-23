@@ -81,8 +81,12 @@ export type PushResult = {
 	 * delete or when the server omitted it.
 	 */
 	currentRevision: string | null;
-	/** Present only on a 409 conflict — the server's current state to drive resolution. */
-	conflict?: { current: ServerDocument | null; currentRevision: string | null };
+	/**
+	 * Present only on a 409 conflict — the server's current state to drive resolution.
+	 * `differs` is the server's own list of the paths that moved (names, never values);
+	 * only an order update on plugin 2.0.4+ sends it.
+	 */
+	conflict?: { current: ServerDocument | null; currentRevision: string | null; differs?: string[] };
 	/**
 	 * The top-level payload fields that were actually ON THE WIRE (absent for a delete
 	 * or a drain-synthesized result). The outbound sanitizers (`toOrderWirePayload`,
@@ -332,6 +336,9 @@ export async function pushRecordMutation(input: {
 			conflict: {
 				current: (body?.current as ServerDocument) ?? null,
 				currentRevision: typeof body?.currentRevision === 'string' ? body.currentRevision : null,
+				...(Array.isArray(body?.differs)
+					? { differs: body.differs.filter((path): path is string => typeof path === 'string') }
+					: {}),
 			},
 		};
 	}

@@ -105,7 +105,7 @@ export function useCustomerDisplayService(): void {
 			if (request.method === 'POST') {
 				return (await client.post(request.url, request.data)) as { data: T };
 			}
-			return (await client.delete(request.url)) as { data: T };
+			return (await client.delete(request.url, { params: request.params })) as { data: T };
 		};
 
 		let cancelled = false;

@@ -5,7 +5,7 @@ import 'whatwg-fetch';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { useUserValidation } from './use-user-validation';
+import { cashierRequest, useUserValidation } from './use-user-validation';
 
 const { useHttpClient: useSharedHttpClient } = jest.requireActual<
 	typeof import('@wcpos/hooks/use-http-client/use-http-client')
@@ -527,5 +527,21 @@ describe('useUserValidation when the cashier body is text, not JSON (POS-2KN)', 
 		expect((preview as string).length).toBeLessThanOrEqual(200);
 		expect(preview as string).not.toContain('admin:');
 		auth999Context();
+	});
+});
+
+describe('cashierRequest', () => {
+	it.each([
+		['a slash-terminated path base', 'https://example.com/wp-json/wcpos/v2/'],
+		[
+			"the REST client's migrated base, with no trailing slash",
+			'https://example.com/wp-json/wcpos/v2',
+		],
+		['a query-form base', 'https://example.com/?rest_route=/wcpos/v2'],
+	])('joins %s and the cashier path with one slash', (_, base) => {
+		const site = { wcpos_api_url: base } as Parameters<typeof cashierRequest>[0];
+		expect(cashierRequest(site, 7, 'token').endpoint).toBe(
+			'https://example.com/wp-json/wcpos/v2/cashier/7'
+		);
 	});
 });

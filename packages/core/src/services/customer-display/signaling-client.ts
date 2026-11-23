@@ -73,8 +73,12 @@ export function createSignalingClient(restRoot: string, http: HttpFunction) {
 			});
 			return typeof data?.id === 'number' ? data.id : null;
 		},
-		async forget(displayId: string): Promise<void> {
-			await http({ method: 'DELETE', url: `${root}/displays/${displayId}` });
+		async forget(displayId: string, deviceId: string): Promise<void> {
+			await http({
+				method: 'DELETE',
+				url: `${root}/displays/${displayId}`,
+				params: { device_id: deviceId },
+			});
 		},
 	};
 }

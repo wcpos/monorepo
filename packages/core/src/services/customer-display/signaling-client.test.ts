@@ -21,7 +21,7 @@ test('uses the display mailbox routes with the expected request shapes', async (
 		session: 'session-1',
 		body: { sdp: 'offer' },
 	});
-	await client.forget('display-1');
+	await client.forget('display-1', 'device-1');
 
 	expect(http.mock.calls.map(([request]) => request)).toEqual([
 		{
@@ -46,7 +46,11 @@ test('uses the display mailbox routes with the expected request shapes', async (
 				body: { sdp: 'offer' },
 			},
 		},
-		{ method: 'DELETE', url: '/wcpos/v2/display/displays/display-1' },
+		{
+			method: 'DELETE',
+			url: '/wcpos/v2/display/displays/display-1',
+			params: { device_id: 'device-1' },
+		},
 	]);
 });
 

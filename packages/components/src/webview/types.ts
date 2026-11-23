@@ -30,6 +30,11 @@ export interface WebViewProps<Handle> extends Omit<
 	ref?: React.Ref<Handle>;
 	src?: string;
 	srcDoc?: string;
+	/**
+	 * Web: `srcDoc` is HTML the app rendered and sanitised itself, so the frame may keep the app's
+	 * origin. Any other `srcDoc` (a page read from a store) gets an origin of its own.
+	 */
+	trustedSrcDoc?: boolean;
 	targetOrigin?: string;
 	onMessage: (event: { nativeEvent: { data: unknown } }) => void;
 	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
