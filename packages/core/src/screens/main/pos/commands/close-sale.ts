@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { isAsleepBlock, requestStateManager } from '@wcpos/hooks/use-http-client';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	type CommandProvenance,
@@ -21,6 +22,7 @@ import {
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
+import { awaitAwake, RECORD_ASLEEP_RESEND_LIMIT } from '../checkout/payments/record-manual-payment';
 import { commandProvenance } from '../checkout/provenance/command-provenance';
 import { mirrorAnswer, type NotMirrored } from './land-answer';
 
@@ -50,6 +52,8 @@ export async function closeSale(
 	order: ReadonlyEngineRecord<'orders'>,
 	deps: {
 		post: Post;
+		/** Resolves when the app is awake (a hidden tab's requests are refused before they leave). */
+		awaitWake?: () => Promise<void>;
 		/** Absent (the boundary's own decision): the order as it stands once its lines are written. */
 		approval?: OrderApproval;
 		provenance: (command: ProvenanceCommand) => Promise<CommandProvenance | null>;
@@ -64,8 +68,20 @@ export async function closeSale(
 	// A failed mirror pulls the store's copy; the provenance was stamped before the close, not here.
 	const mirrorOnce = mirrorAnswer({ ctx, order, poster: post });
 	const mirror = (order?: OrderPaymentSummary) => mirrorOnce({ order }, { accepted: false });
+	// The sleeping block is thrown before dispatch, so nothing left the till: once the app wakes,
+	// the journaled close is re-sent through the same poster (POS-34W, as #3719).
+	const send = async () => {
+		for (let asleepResends = 0; ; asleepResends++)
+			try {
+				return await post(`orders/${id}/close`, {});
+			} catch (error) {
+				if (!isAsleepBlock(error) || !deps.awaitWake || asleepResends >= RECORD_ASLEEP_RESEND_LIMIT)
+					throw error;
+				await deps.awaitWake();
+			}
+	};
 	try {
-		const { data } = await post(`orders/${id}/close`, {});
+		const { data } = await send();
 		// Only the store's own summary and completion say the sale closed (sync-core
 		// `isCloseAnswer`, the poster's rule too). A 2xx without them (a proxy page, a plugin
 		// filter) proves nothing: the entry stays journaled for a re-send.
@@ -118,6 +134,7 @@ export function useCloseSale() {
 		) =>
 			closeSale(ctx, order, {
 				post: (url, body) => http.post(url, body),
+				awaitWake: () => awaitAwake(requestStateManager),
 				approval: options.approval,
 				provenance: (command) => commandProvenance(ctx, order, options.sessionId, command),
 			}),
