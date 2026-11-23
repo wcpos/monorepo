@@ -353,6 +353,7 @@ export async function setAsideSession(
 		.exec();
 	await Promise.all(unsent.map((movement) => movement.incrementalPatch(marked)));
 	await recordLiveSession(live.userDB, live.siteUuid, row.register_id, null);
+	return { unsentMovements: unsent.length };
 }
 export function recordMovement(
 	storeDB: RegisterStoreDatabase,
