@@ -117,4 +117,29 @@ describe('SystemPrintAdapter (web) print frame', () => {
 		frameWindow.dispatchEvent(new Event('afterprint'));
 		await expect(printing).resolves.toBeUndefined();
 	});
+
+	// Revert: wait for the frame's load event with no bound before printing.
+	it('a frame whose load never fires still prints once the wait bound passes', async () => {
+		vi.useFakeTimers();
+		const addListener = HTMLIFrameElement.prototype.addEventListener;
+		vi.spyOn(HTMLIFrameElement.prototype, 'addEventListener').mockImplementation(function (
+			this: HTMLIFrameElement,
+			...args: Parameters<HTMLIFrameElement['addEventListener']>
+		) {
+			if (args[0] === 'load') return;
+			return addListener.apply(this, args);
+		});
+		const printing = new SystemPrintAdapter().printHtml('<p>Receipt</p>');
+		const frameWindow = printFrame()!.contentWindow!;
+		const print = vi.spyOn(frameWindow, 'print').mockImplementation(() => {});
+
+		await vi.advanceTimersByTimeAsync(500);
+		expect(print).not.toHaveBeenCalled();
+
+		await vi.advanceTimersByTimeAsync(5_001);
+		expect(print).toHaveBeenCalledTimes(1);
+
+		frameWindow.dispatchEvent(new Event('afterprint'));
+		await expect(printing).resolves.toBeUndefined();
+	});
 });

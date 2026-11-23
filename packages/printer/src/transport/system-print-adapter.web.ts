@@ -61,8 +61,17 @@ export class SystemPrintAdapter implements PrinterTransport {
 			// no other origin may; with scripts off, the document itself cannot use that origin.
 			// allow-modals lets print() open the dialog.
 			iframe.setAttribute('sandbox', 'allow-same-origin allow-modals');
+			// load waits for every subresource; one that stalls must not hold the print queue forever.
 			const loaded = new Promise<void>((onLoad) => {
-				iframe.addEventListener('load', () => onLoad(), { once: true });
+				const bound = setTimeout(onLoad, IMAGE_WAIT_TIMEOUT_MS);
+				iframe.addEventListener(
+					'load',
+					() => {
+						clearTimeout(bound);
+						onLoad();
+					},
+					{ once: true }
+				);
 			});
 			const waitForImages = async () => {
 				if (iframe.contentDocument) await waitForPrintDocumentImages(iframe.contentDocument);
