@@ -34,12 +34,18 @@ export function showCountingNotice(t: ReturnType<typeof useT>) {
 	});
 }
 
-/** A refused add while the register is closed: one notice, shared id so repeated taps update it in place. */
-export function showPriceCheckNotice(t: ReturnType<typeof useT>) {
+/** A refused add while the register is closed or none is bound here: one notice naming why, shared id so repeated taps update it in place. */
+export function showPriceCheckNotice(
+	t: ReturnType<typeof useT>,
+	reason: 'closed' | 'unbound' = 'closed'
+) {
 	Toast.show({
 		id: 'pos-price-check-refused',
 		type: 'info',
-		title: t('pos_products.price_check_only_until_open'),
+		title:
+			reason === 'unbound'
+				? t('pos_products.no_register_bound')
+				: t('pos_products.price_check_only_until_open'),
 	});
 }
 
@@ -79,8 +85,9 @@ export const useAddProduct = () => {
 				return false;
 			}
 			// The register is closed: browsing is a price check, nothing joins the cart.
-			if (await readPriceCheck()) {
-				showPriceCheckNotice(t);
+			const priceCheck = await readPriceCheck();
+			if (priceCheck) {
+				showPriceCheckNotice(t, priceCheck);
 				return false;
 			}
 			const timingStart = process.env.EXPO_PUBLIC_WCPOS_E2E === '1' ? performance.now() : 0;

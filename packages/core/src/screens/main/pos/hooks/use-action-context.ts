@@ -30,8 +30,8 @@ export function useActionContext(): {
 	cashier: Cashier | null;
 	/** Whether the bound register's session is being counted; an event-time read, never a subscription. */
 	readCounting: () => Promise<boolean>;
-	/** Whether the bound register has no current session (the products column's "Price check only"); an event-time read, never a subscription. */
-	readPriceCheck: () => Promise<boolean>;
+	/** Why an add is refused, sessions on: `'unbound'` (no register on this device) or `'closed'` (the products column's "Price check only"); `false` lets it through. An event-time read, never a subscription. */
+	readPriceCheck: () => Promise<false | 'closed' | 'unbound'>;
 } {
 	const runtime = useQueryRuntime();
 	const t = useT();
@@ -92,9 +92,10 @@ export function useActionContext(): {
 			readPriceCheck: async () => {
 				if (!sessionsOn) return false;
 				const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id;
-				if (!registerId) return false;
+				// No register here: checkout could never complete the sale, so refuse it now.
+				if (!registerId) return 'unbound';
 				// `undefined` (unreadable) never refuses an add.
-				return (await readCurrentSession(storeDB, registerId)) === null;
+				return (await readCurrentSession(storeDB, registerId)) === null ? 'closed' : false;
 			},
 		}),
 		[

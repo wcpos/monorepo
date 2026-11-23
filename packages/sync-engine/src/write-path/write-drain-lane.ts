@@ -75,6 +75,23 @@ const SESSION_PROBE_MAX_MS = 300_000;
 /** Below the 60 s claim lease, but allows a slow store's order create to finish. */
 const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
 
+/** The wire body of a grafting collection's create: the queue row keeps its line ids. */
+function withoutCreateLineIds<T extends QueuedMutation>(mutation: T): T {
+	if (!writeFacetFor(mutation.collectionName)?.graftAckIdentity) return mutation;
+	// WOOCOMMERCE-POS-2N3: WooCommerce POST rejects line ids; born-twice discards the payload.
+	const payload = { ...((mutation.payload ?? {}) as Record<string, unknown>) };
+	for (const field of ['line_items', 'fee_lines', 'shipping_lines', 'coupon_lines']) {
+		const lines = payload[field];
+		if (!Array.isArray(lines)) continue;
+		payload[field] = lines.map((line: unknown) => {
+			if (typeof line !== 'object' || line === null || Array.isArray(line)) return line;
+			const { id: _id, ...rest } = line as Record<string, unknown>;
+			return rest;
+		});
+	}
+	return { ...mutation, payload };
+}
+
 /**
  * The OUTGOING half of the #818 identity graft: re-stamp the record's known
  * server line ids onto the envelope about to be pushed.
@@ -88,16 +105,13 @@ const WRITE_DRAIN_REQUEST_TIMEOUT_MS = 30_000;
  * stamped onto the outgoing payload. Its reconciled line_items also retire
  * stale ids in frozen snapshots; local removals retain ids as tombstones until acked.
  *
- * Doing this at PUSH time rather than rewriting the queue rows is deliberate.
- * The durable row stays the honest record of what the cashier intended; no
- * mutationId is re-minted (a swap would strand `awaitWriteOutcome` callers
- * holding a receipt that could then never settle) and no row is deferred a
- * tick. It also closes the race by construction: the graft reads the freshest
- * resident at the moment of the push, so no ack landing in between can outrun
- * it — including one that rewrote the queue row through coalescing.
+ * It runs once per push decision, just before the drain's claim persists the
+ * grafted payload. A row pushed before (claimed, or attempts > 0) is re-sent as
+ * persisted, never re-grafted: the server fingerprints its envelope (POS-2PN).
+ * A create is returned unchanged; its line ids are stripped at push time, on the wire only.
  *
  * @param database - The active scope database.
- * @param mutation - The claimed mutation the drain is about to push.
+ * @param mutation - The mutation the drain is about to claim and push.
  * @returns The mutation, payload grafted when the resident knows more.
  */
 async function withGraftedLineIdentity<T extends QueuedMutation>(
@@ -105,21 +119,7 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 	mutation: T
 ): Promise<T> {
 	const facet = writeFacetFor(mutation.collectionName);
-	if (!facet?.graftAckIdentity || mutation.operation === 'delete') return mutation;
-	if (mutation.operation === 'create') {
-		// WOOCOMMERCE-POS-2N3: WooCommerce POST rejects line ids; born-twice discards the payload.
-		const payload = { ...((mutation.payload ?? {}) as Record<string, unknown>) };
-		for (const field of ['line_items', 'fee_lines', 'shipping_lines', 'coupon_lines']) {
-			const lines = payload[field];
-			if (!Array.isArray(lines)) continue;
-			payload[field] = lines.map((line: unknown) => {
-				if (typeof line !== 'object' || line === null || Array.isArray(line)) return line;
-				const { id: _id, ...rest } = line as Record<string, unknown>;
-				return rest;
-			});
-		}
-		return { ...mutation, payload };
-	}
+	if (!facet?.graftAckIdentity || mutation.operation !== 'update') return mutation;
 	const resident = await database.collections[mutation.collectionName]
 		?.findOne(mutation.recordId)
 		.exec();
@@ -591,9 +591,11 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}));
 								return revision;
 							},
+							prepareOutbound: (mutation) => withGraftedLineIdentity(database, mutation),
 							push: async (mutation) => {
 								activateCollection(mutation.collectionName as SyncCollectionName);
-								const outbound = await withGraftedLineIdentity(database, mutation);
+								const outbound =
+									mutation.operation === 'create' ? withoutCreateLineIds(mutation) : mutation;
 								if (outbound.collectionName === 'orders' && outbound.operation !== 'delete') {
 									const resident = await database.collections.orders
 										?.findOne(outbound.recordId)
