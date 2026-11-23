@@ -81,7 +81,6 @@ export {
 	ensureSystemPrinterProfile,
 	setDefaultPrinterProfile,
 	deletePrinterProfile,
-	PrinterProfileNotFoundError,
 	type PrinterStoreDatabase,
 } from './commands/printer-profiles';
 export { setTemplatePrinterOverride } from './commands/template-printer-overrides';

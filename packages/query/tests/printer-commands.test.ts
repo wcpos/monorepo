@@ -1,12 +1,15 @@
 import {
 	deletePrinterProfile,
 	ensureSystemPrinterProfile,
-	PrinterProfileNotFoundError,
 	savePrinterProfile,
 	setDefaultPrinterProfile,
 	setTemplatePrinterOverride,
 } from '../src';
-import { StoreDatabaseUnavailableError, SYSTEM_PRINTER_ID } from '../src/commands/printer-profiles';
+import {
+	PrinterProfileNotFoundError,
+	StoreDatabaseUnavailableError,
+	SYSTEM_PRINTER_ID,
+} from '../src/commands/printer-profiles';
 
 // These contracts catch duplicate rows, premature demotion, missing guards and leaked documents.
 type Row = Record<string, unknown> & { id?: string; template_id?: string };
