@@ -44,6 +44,21 @@ it('logs approval refused with the requesting cashier', () => {
 	});
 });
 
+it('logs a set-aside session at warn with the cashier and the unsent movement count (#3753)', () => {
+	recordRegisterFact({ kind: 'session-set-aside', ...input, unsentMovements: 2 });
+	expect(logger.warn).toHaveBeenCalledWith('Register session set aside', {
+		actor,
+		terminal: { operationId: 's' },
+		context: {
+			type: 'register.session-set-aside',
+			sessionId: 's',
+			registerId: 'r',
+			unsentMovements: 2,
+		},
+	});
+	expect(logger.info).not.toHaveBeenCalled();
+});
+
 it('logs the variance and threshold with the cashier', () => {
 	recordRegisterFact({
 		kind: 'variance-over-threshold',
@@ -148,6 +163,12 @@ const cases: {
 	{
 		fact: { kind: 'session-opened', ...human, amount: '100', variance: null },
 		type: 'register.session-opened',
+		identity: 'sessionid',
+		human: true,
+	},
+	{
+		fact: { kind: 'session-set-aside', ...human, unsentMovements: 2 },
+		type: 'register.session-set-aside',
 		identity: 'sessionid',
 		human: true,
 	},
