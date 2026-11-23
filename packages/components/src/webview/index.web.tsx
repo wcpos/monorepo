@@ -48,10 +48,14 @@ const clampSize = (n: unknown) =>
 
 /**
  * Inline HTML would inherit the app's origin; only the app's own rendered HTML may. A frame keeps
- * the sandbox it was created with: a change of trust mounts a new frame.
+ * the sandbox it was created with: a change of trust mounts a new frame. That trusted HTML is
+ * sanitised and read by the host, so it runs no script: scripts and same origin never meet there.
  */
 function WebView(props: WebViewProps<WebViewHandle>) {
-	const sandbox = `allow-scripts allow-forms allow-popups${props.srcDoc == null || props.trustedSrcDoc ? ' allow-same-origin' : ''} allow-modals`;
+	const trusted = props.srcDoc != null && !!props.trustedSrcDoc;
+	const scripts = trusted ? '' : 'allow-scripts ';
+	const sameOrigin = props.srcDoc == null || trusted ? ' allow-same-origin' : '';
+	const sandbox = `${scripts}allow-forms allow-popups${sameOrigin} allow-modals`;
 	return <WebViewFrame key={sandbox} {...props} sandbox={sandbox} />;
 }
 

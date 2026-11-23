@@ -150,16 +150,20 @@ describe('WebView web sandbox for inline HTML', () => {
 		expect(tokens(screen.getByTestId('url'))).toContain('allow-same-origin');
 	});
 
-	it('a trustedSrcDoc frame keeps allow-same-origin', () => {
+	// Revert: give a trustedSrcDoc frame allow-scripts next to allow-same-origin again.
+	it('a trustedSrcDoc frame keeps allow-same-origin without allow-scripts', () => {
 		render(<WebView testID="local" srcDoc="<p>Receipt</p>" trustedSrcDoc onMessage={jest.fn()} />);
-		expect(tokens(screen.getByTestId('local'))).toEqual(
-			expect.arrayContaining([
-				'allow-scripts',
-				'allow-forms',
-				'allow-popups',
-				'allow-same-origin',
-				'allow-modals',
-			])
+		const local = tokens(screen.getByTestId('local'));
+		expect(local).not.toContain('allow-scripts');
+		expect(local).toEqual(
+			expect.arrayContaining(['allow-forms', 'allow-popups', 'allow-same-origin', 'allow-modals'])
+		);
+	});
+
+	it('a URL frame keeps both allow-scripts and allow-same-origin', () => {
+		render(<WebView testID="url" src="https://store.test/pay" onMessage={jest.fn()} />);
+		expect(tokens(screen.getByTestId('url'))).toEqual(
+			expect.arrayContaining(['allow-scripts', 'allow-same-origin'])
 		);
 	});
 });
