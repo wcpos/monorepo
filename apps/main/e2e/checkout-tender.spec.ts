@@ -1385,7 +1385,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
 			const row = screen.getByTestId(`data-table-row-${uuid}`);
 			await expect(row).toBeVisible({ timeout: 30_000 });
-			await row.click();
+			await row.getByTestId('order-open-button').click();
 			await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
 			await expect(page.getByTestId('orders-send-again')).toBeVisible({ timeout: 15_000 });
 			await page.getByTestId('orders-send-again').click();
@@ -1416,7 +1416,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			await navigateToPage(page, 'orders');
 			await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
 			await expect(row).toBeVisible({ timeout: 30_000 });
-			await row.click();
+			await row.getByTestId('order-open-button').click();
 			await expect(page.getByTestId('orders-cancel-invoice')).toBeVisible({ timeout: 15_000 });
 			await page.getByTestId('orders-cancel-invoice').click();
 			server = await pollOrder(
