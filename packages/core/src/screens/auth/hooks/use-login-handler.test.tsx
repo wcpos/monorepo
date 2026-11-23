@@ -47,8 +47,7 @@ describe('useLoginHandler', () => {
 		const clash = new CashierIdentityClashError('Store A');
 		mockSaveLoginCredentials.mockRejectedValueOnce(clash);
 		const { result } = renderHook(() => useLoginHandler(site));
-		const message =
-			'This account is already saved under your store Store A. Remove that store from this device, then sign in again.';
+		const message = 'This account is already saved under your store Store A.';
 
 		await act(async () => {
 			await expect(result.current.handleLoginSuccess({ params })).rejects.toBe(clash);
@@ -59,7 +58,12 @@ describe('useLoginHandler', () => {
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith(
 			`Failed to save WordPress credentials: ${message}`,
-			expect.objectContaining({ code: 'AUTH342', showToast: true, context: { error: message } })
+			expect.objectContaining({
+				code: 'AUTH342',
+				showToast: true,
+				toast: { title: message },
+				context: { error: message },
+			})
 		);
 		expect(isErrorReported(clash)).toBe(true);
 	});

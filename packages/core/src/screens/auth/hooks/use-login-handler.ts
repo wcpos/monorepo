@@ -123,6 +123,8 @@ export const useLoginHandler = (
 							? ERROR_CODES.CASHIER_IDENTITY_CLASH
 							: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						showToast: true,
+						// The toast names the saved store; the code's summary alone cannot.
+						...(isIdentityClash ? { toast: { title: errorMessage } } : {}),
 						context: {
 							error: errorMessage,
 						},
