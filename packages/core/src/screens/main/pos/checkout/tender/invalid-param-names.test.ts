@@ -9,6 +9,18 @@ describe('invalidParamContext', () => {
 		expect(JSON.stringify(result)).not.toContain('Invalid email');
 	});
 
+	it('sorts field names', () => {
+		expect(invalidParamContext({ data: { params: { zeta: 'a', alpha: 'b' } } })).toEqual({
+			invalidParams: 'alpha, zeta',
+		});
+	});
+
+	it('cuts each field name at 64 characters', () => {
+		expect(invalidParamContext({ data: { params: { ['x'.repeat(80)]: 'bad' } } })).toEqual({
+			invalidParams: 'x'.repeat(64),
+		});
+	});
+
 	it('finds field names through an error cause', () => {
 		const error = Object.assign(new Error('preflight_failed'), {
 			cause: Object.assign(new Error('write-rejected'), {
