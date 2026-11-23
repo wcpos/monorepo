@@ -27,6 +27,7 @@ import { CheckoutTitle, useAmountToPay } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
 import { PayFrameNotice } from './pay-page/pay-frame-notice';
 import { usePayFrameGate } from './pay-page/use-pay-frame-gate';
+import { useStorePayLink } from './pay-page/use-store-pay-link';
 import { TenderCheckout } from './tender/tender-checkout';
 import { returnToTill } from './till-route';
 import { useT } from '../../../../contexts/translations';
@@ -114,10 +115,12 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	// before the cashier presses Process Payment.
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	// The legacy webview can only process a payment when the server has supplied a
-	// payment link; without it the modal body shows an error and processing must stay
-	// disabled (a click would otherwise post into a null webview ref and spin forever).
+	// payment link on the store's own host; without one the modal body shows an error and
+	// processing must stay disabled (a click would otherwise post into a null webview ref
+	// and spin forever).
 	const paymentURL = orderData.links?.payment?.[0]?.href;
-	const paymentLinkMissing = mode === 'webview' && !paymentURL;
+	const payLinkUsable = useStorePayLink(mode === 'webview' ? paymentURL : null);
+	const paymentLinkMissing = mode === 'webview' && !payLinkUsable;
 	// Scoped to the legacy webview path — contract checkout posts nothing into a
 	// frame, so it has nothing to wait for. When the link is missing no frame is
 	// rendered at all, and `paymentLinkMissing` is already the reason shown.

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
+import { sameStoreOrigin } from '@wcpos/components/webview/same-store-origin';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -84,7 +85,7 @@ export function PaymentWebview({
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
-	const { wpCredentials } = useAppState();
+	const { wpCredentials, site } = useAppState();
 	const jwt = useDocField(wpCredentials, (value) => value.access_token);
 	const refreshAccessToken = useAccessTokenRefresher();
 	const t = useT();
@@ -129,13 +130,15 @@ export function PaymentWebview({
 	});
 
 	const hasToken = isUsableToken(jwt);
+	// Token and frame only for a link on the store's own host (useStorePayLink); no site, none.
+	const payLinkForeign = !!paymentURL && !sameStoreOrigin(paymentURL, site?.wcpos_api_url);
 	const paymentURLWithToken = React.useMemo(() => {
-		if (!paymentURL || !hasToken) return '';
+		if (!paymentURL || !hasToken || payLinkForeign) return '';
 		// Append the JWT token as a query parameter to the payment URL
 		const url = new URL(paymentURL as string);
 		url.searchParams.append('token', jwt);
 		return url.toString();
-	}, [paymentURL, jwt, hasToken]);
+	}, [paymentURL, jwt, hasToken, payLinkForeign]);
 
 	React.useEffect(() => {
 		// A new token (this refresh or a background one) allows a refresh again.
@@ -178,7 +181,7 @@ export function PaymentWebview({
 	const missingTokenRefreshedFor = React.useRef<string | null>(null);
 	const { hold, release, expire } = frame;
 	React.useEffect(() => {
-		if (!paymentURL || hasToken || sessionRefreshInFlight.current) return;
+		if (!paymentURL || payLinkForeign || hasToken || sessionRefreshInFlight.current) return;
 		if (missingTokenRefreshedFor.current === paymentURL) return;
 		missingTokenRefreshedFor.current = paymentURL;
 		sessionRefreshInFlight.current = true;
@@ -194,7 +197,7 @@ export function PaymentWebview({
 				sessionRefreshInFlight.current = false;
 				release();
 			});
-	}, [paymentURL, hasToken, refreshAccessToken, hold, release, expire, warnReopen]);
+	}, [paymentURL, payLinkForeign, hasToken, refreshAccessToken, hold, release, expire, warnReopen]);
 
 	const handleSessionExpired = async (messageOrderId: number) => {
 		if (messageOrderId !== orderId) {
@@ -277,7 +280,7 @@ export function PaymentWebview({
 	};
 
 	const onMessage = (event: { nativeEvent: { data: unknown } }) => {
-		const message = readPayPageMessage(event?.nativeEvent?.data);
+		const message = readPayPageMessage(event?.nativeEvent?.data, { orderId, uuid: order.uuid });
 		switch (message.kind) {
 			case 'session-expired':
 				void handleSessionExpired(message.orderId);
@@ -329,7 +332,7 @@ export function PaymentWebview({
 	// a fallback mounts nothing. A retry has to reset both.
 	return (
 		<ErrorBoundary key={frame.key}>
-			{paymentURL ? (
+			{paymentURL && !payLinkForeign ? (
 				<WebView
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}

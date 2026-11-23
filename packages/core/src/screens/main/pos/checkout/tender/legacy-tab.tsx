@@ -15,6 +15,7 @@ import { PaymentWebview } from '../components/payment-webview';
 import { useAmountToPay } from '../components/title';
 import { useCheckoutSession } from '../hooks/use-checkout-session';
 import { PayFrameNotice } from '../pay-page/pay-frame-notice';
+import { useStorePayLink } from '../pay-page/use-store-pay-link';
 import { usePayFrameGate } from '../pay-page/use-pay-frame-gate';
 
 import type { TenderFlow } from './use-tender-flow';
@@ -35,6 +36,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	const t = useT();
 	const amountToPay = useAmountToPay(order);
 	const paymentURL = useRecordField(order, (record) => record.payload.links?.payment?.[0]?.href);
+	const payLinkUsable = useStorePayLink(paymentURL);
 	const { handleStockRejection, settledOrderStatuses, gatewayResolved, gatewayError, refetch } =
 		useCheckoutSession(order);
 	const frameGate = usePayFrameGate();
@@ -101,7 +103,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 			/>
 		);
 	}
-	if (!paymentURL) {
+	if (!payLinkUsable) {
 		return (
 			<PayFrameNotice
 				status="link-missing"

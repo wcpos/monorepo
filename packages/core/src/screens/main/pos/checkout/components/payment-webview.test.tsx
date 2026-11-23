@@ -28,6 +28,8 @@ const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockAdoptOrderSnapshot = jest.fn();
 const mockSite = { uuid: 'site', wcpos_api_url: 'https://shop.example.com/wp-json/wcpos/v2/' };
+/** App state with no site record yet: `useAppState().site` is null. */
+let mockNoSite = false;
 const mockRefreshFetch = jest.fn();
 const mockCredentials$ = new BehaviorSubject({
 	access_token: 'jwt-token',
@@ -105,7 +107,7 @@ jest.mock('../pay-page/use-pay-page-preparation', () => ({
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ site: mockSite, wpCredentials: mockCredentials }),
 	useAppState: () => ({
-		site: mockSite,
+		site: mockNoSite ? null : mockSite,
 		wpCredentials: mockCredentials,
 	}),
 }));
@@ -1592,6 +1594,14 @@ describe('PaymentWebview pay link host', () => {
 	});
 	afterEach(() => {
 		mockSite.wcpos_api_url = siteApiURL;
+		mockNoSite = false;
+	});
+
+	it('with no site there is no store origin: the pay link gets no token and no frame', () => {
+		mockNoSite = true;
+		renderFrame('https://shop.example.com/wcpos-checkout/order-pay/42');
+		expect(webViewMounts).toBe(0);
+		expect(webViewProps.src).toBeUndefined();
 	});
 
 	it('a pay link on another host gets no token and no frame', () => {

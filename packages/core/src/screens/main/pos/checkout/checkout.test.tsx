@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { Checkout } from './checkout';
 
 import type { PaymentFrameStatus } from './pay-page/use-pay-frame-gate';
@@ -386,7 +388,8 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 
 		expect(screen.getByText('pos_checkout.payment_form_unavailable')).toBeTruthy();
 		expect(button.disabled).toBe(true);
-		expect(jest.requireMock('@wcpos/utils/logger').default.error).toHaveBeenCalledWith(
+		// The mapped logger mock, as the hook imports it (requireMock would build a separate automock).
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).error).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({ code: 'CHECKOUT101' })
 		);

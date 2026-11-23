@@ -26,9 +26,13 @@ let mockCheckoutSession = MOCK_CHECKOUT_SESSION;
 jest.mock('../hooks/use-checkout-session', () => ({
 	useCheckoutSession: () => mockCheckoutSession,
 }));
-// The store the pay links are checked against (example.com, as makeOrder's link).
+// The store the pay links are checked against (example.com, as makeOrder's link); null is
+// app state with no site record yet.
+let mockStoreSite: { wcpos_api_url: string } | null = {
+	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+};
 jest.mock('../../../../../contexts/app-state', () => ({
-	useAppState: () => ({ site: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/' } }),
+	useAppState: () => ({ site: mockStoreSite }),
 }));
 // Mounting the payment frame starts a sale; keep that boundary inert in this UI test. The
 // stand-in records its props and answers the tab's ref the way the real frame's WebView does.
@@ -191,6 +195,18 @@ it('a pay link on another host is no usable link: the missing-link notice shows 
 	expect(view.getByTestId('checkout-payment-form-unavailable').textContent).toContain(
 		en['pos_checkout.payment_form_unavailable']
 	);
+});
+
+it('with no site there is no store origin: the missing-link notice shows and no frame mounts', () => {
+	const site = mockStoreSite;
+	mockStoreSite = null;
+	try {
+		const view = render(<LegacyTab order={makeOrder()} flow={flow} />);
+		expect(PaymentWebview).not.toHaveBeenCalled();
+		expect(view.getByTestId('checkout-payment-form-unavailable')).toBeTruthy();
+	} finally {
+		mockStoreSite = site;
+	}
 });
 
 it('forwards receiptHost to PaymentWebview', () => {
