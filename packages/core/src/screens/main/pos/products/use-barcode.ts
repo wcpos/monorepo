@@ -175,8 +175,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			showCountingNotice(t);
 			return;
 		}
-		if (await readPriceCheck()) {
-			showPriceCheckNotice(t);
+		const priceCheck = await readPriceCheck();
+		if (priceCheck) {
+			showPriceCheckNotice(t, priceCheck);
 			return;
 		}
 		let results = await barcodeSearch(barcodeStr, event.symbology);
