@@ -30,6 +30,7 @@ import {
 } from './register-document';
 import { failureFacts } from './failure-facts';
 import { recordRegisterFact } from './audit';
+import { SESSION_SET_ASIDE } from './drawer-rules';
 
 /**
  * A cash movement as the server serves it (`Cash_Movement_Store`: `SELECT *`, and the POST
@@ -334,11 +335,16 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 			const retry = !status || status >= 500 || status === 408 || status === 429;
 			const before = doc.getLatest();
 			const attempts = before.sync_attempts + 1;
-			await doc.incrementalPatch({
-				sync_status: retry ? 'pending' : 'failed',
-				sync_attempts: attempts,
-				sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
-				sync_error: errorCode ?? body?.message ?? message ?? String(status),
+			// A set aside made while this request was in flight wins over its reply (#3753).
+			await (doc as RegisterSessionDocument).incrementalModify((local) => {
+				if (local.sync_error === SESSION_SET_ASIDE) return local;
+				return {
+					...local,
+					sync_status: retry ? 'pending' : 'failed',
+					sync_attempts: attempts,
+					sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
+					sync_error: errorCode ?? body?.message ?? message ?? String(status),
+				};
 			});
 			const code = refusalCode(endpoint, before, { status, errorCode });
 			// Losing the race for a register is not a failed arc: the till adopts the winning
