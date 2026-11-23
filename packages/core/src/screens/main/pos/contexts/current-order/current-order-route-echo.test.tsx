@@ -57,7 +57,15 @@ function renderedUUID(): string | null {
 	return document.querySelector('[data-testid="rendered-uuid"]')?.textContent ?? null;
 }
 
-function App({ currentOrderUUID, handle }: { currentOrderUUID?: string; handle: QueryHandle }) {
+function App({
+	currentOrderUUID,
+	handle,
+	tillEntry,
+}: {
+	currentOrderUUID?: string;
+	handle: QueryHandle;
+	tillEntry?: number;
+}) {
 	return (
 		<React.Suspense fallback={null}>
 			<CurrentOrderProvider
@@ -65,6 +73,7 @@ function App({ currentOrderUUID, handle }: { currentOrderUUID?: string; handle: 
 				scope="7:2:r1"
 				defaultCustomerResource={{} as never}
 				currentOrderUUID={currentOrderUUID}
+				tillEntry={tillEntry}
 			>
 				<Probe />
 			</CurrentOrderProvider>
@@ -119,6 +128,24 @@ describe('CurrentOrderProvider route-param echo', () => {
 
 		expect(renderedUUID()).toBe('new-order');
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('new-order');
+	});
+
+	it('adopts the parked order when the cashier returns to the till on it', () => {
+		const handle = makeHandle();
+		const { rerender } = render(<App currentOrderUUID="order-a" handle={handle} tillEntry={0} />);
+		act(() => {
+			actions!.setCurrentOrderID('');
+		});
+		expect(renderedUUID()).toBe('new-order');
+
+		// Leaving the till keeps its route and entry count unchanged.
+		rerender(<App currentOrderUUID="order-a" handle={handle} tillEntry={0} />);
+		expect(renderedUUID()).toBe('new-order');
+
+		// Returning deliberately adopts A even though the route's order never changed.
+		rerender(<App currentOrderUUID="order-a" handle={handle} tillEntry={1} />);
+		expect(renderedUUID()).toBe('order-a');
+		expect(actions!.getCurrentOrderRecord().uuid).toBe('order-a');
 	});
 
 	it('still adopts a genuine navigation to a different order', () => {
