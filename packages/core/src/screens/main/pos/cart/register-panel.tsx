@@ -25,7 +25,7 @@ import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
-import { isLiveMovement, readCarriedFrom } from '@wcpos/query/register-session';
+import { isLiveMovement, readCarriedFrom, SESSION_SET_ASIDE } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -256,7 +256,9 @@ export function RegisterPanel({
 			.join(' · ');
 	const description = <Ticking>{describe}</Ticking>;
 	// Without the cash permission the store refuses every POST, so no action offers one.
-	const retryRefused = canManageCash
+	// A session the store no longer has (#3753) refuses every resend: the set-aside notice is the way.
+	const mayRetry = canManageCash && !sessionUnreachable;
+	const retryRefused = mayRetry
 		? ([
 				{
 					label: t('register.retry'),
@@ -342,7 +344,7 @@ export function RegisterPanel({
 						title={t('register.figures_after_sync')}
 					/>
 				)}
-				{refusedClose && session && (canManageCash || !closeForbidden) && (
+				{(refusedClose || sessionUnreachable) && session && (canManageCash || !closeForbidden) && (
 					<RefusedCloseNotice
 						className="mx-4"
 						forbidden={closeForbidden}
@@ -602,7 +604,9 @@ export function RegisterPanel({
 							)}
 							{lastClosure.sync_status === 'failed' && (
 								<Text testID="closure-sync-error" variant="key" className="text-bad px-2.5 py-1">
-									{lastClosure.sync_error}
+									{lastClosure.sync_error === SESSION_SET_ASIDE
+										? t('register.set_aside_history')
+										: lastClosure.sync_error}
 								</Text>
 							)}
 						</View>

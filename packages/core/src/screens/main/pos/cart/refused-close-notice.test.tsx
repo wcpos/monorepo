@@ -16,10 +16,10 @@ jest.mock('@wcpos/components/notice', () => ({
 		title?: string;
 		description?: string;
 		actions?: { label: string; testID: string; onPress: () => void }[];
-		docs?: { href: string };
+		docs?: { label: string; href: string };
 	}) => (
 		<>
-			<h2 data-testid="title" data-docs={docs?.href}>
+			<h2 data-testid="title" data-docs={docs?.href} data-docs-label={docs?.label}>
 				{title}
 			</h2>
 			{description && <p data-testid="description">{description}</p>}
@@ -60,6 +60,13 @@ it('#3753: a session the store no longer has offers only Set aside, never Retry'
 	fireEvent.click(screen.getByTestId('register-panel-set-aside'));
 	expect(screen.getByTestId('register-panel-set-aside').textContent).toBe('register.set_aside');
 	expect(onSetAside).toHaveBeenCalledTimes(1);
+});
+
+it('#3753: the set-aside notice keeps its Learn more link to REGISTER211', () => {
+	render(<RefusedCloseNotice onSetAside={jest.fn()} />);
+	const title = screen.getByTestId('title');
+	expect(title.getAttribute('data-docs-label')).toBe('common.learn_more');
+	expect(title.getAttribute('data-docs')).toMatch(/REGISTER211$/);
 });
 
 it('is the one line, with no description under it', () => {

@@ -38,6 +38,7 @@ export function RefusedCloseNotice({
 						onPress: onSetAside,
 					},
 				]}
+				docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL(code) }}
 			/>
 		);
 	return (

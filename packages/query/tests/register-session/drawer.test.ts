@@ -226,6 +226,20 @@ describe('the current session', () => {
 		expect(settled.closedElsewhere).toBeNull();
 	});
 
+	it.each([
+		['wcpos_session_not_found', true],
+		['rest_forbidden', false],
+	])(
+		'#3753: an open session whose movement failed with %s is unreachable: %s',
+		async (sync_error, unreachable) => {
+			await insert();
+			await storeDB.cash_movements.insert(movement({ sync_status: 'failed', sync_error }));
+			const snapshot = await drawer((value) => value.movements.length === 1);
+			expect(snapshot.refusedClose).toBe(false);
+			expect(snapshot.sessionUnreachable).toBe(unreachable);
+		}
+	);
+
 	it('the status read applies the same rule', async () => {
 		await insert({ status: 'closed', sync_status: 'pending', closure_id: 's1' });
 		const status = await firstValueFrom(

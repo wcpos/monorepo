@@ -918,6 +918,32 @@ it('shows the dead-lettered closure movement error', () => {
 	expect(screen.getByTestId('closure-sync-error').textContent).toBe('movement_refused');
 });
 
+it('#3753: a set-aside closure names set aside in words, not its code', () => {
+	syncStatus = 'failed';
+	mockClosureOverrides = { sync_error: 'set_aside:wcpos_session_not_found' };
+	try {
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		const line = screen.getByTestId('closure-sync-error').textContent;
+		expect(line).toBe('register.set_aside_history');
+		expect(line).not.toContain('set_aside:wcpos_session_not_found');
+	} finally {
+		mockClosureOverrides = {};
+	}
+});
+
+it('#3753: a movement refused for a vanished session offers Set aside, not Retry', async () => {
+	const vanished = { ...lost, sync_error: 'wcpos_session_not_found' };
+	movements = [vanished];
+	refusedMovements = [vanished];
+	mockUnreachable = true;
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-refused')).toBeTruthy();
+	expect(screen.queryByTestId('register-panel-retry-refused')).toBeNull();
+	await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+	expect(mockSetAside).toHaveBeenCalledTimes(1);
+	expect(retryMovement).not.toHaveBeenCalled();
+});
+
 // Revert: leave the disabled closure control unexplained for blind cashiers.
 it('explains the closure restriction only while blind counting is enabled', () => {
 	blind = true;
