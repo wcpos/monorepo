@@ -1,3 +1,10 @@
+/** @jest-environment jsdom */
+
+import { setImmediate } from 'node:timers';
+
+import { renderHook } from '@testing-library/react';
+
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import type { EngineRecord } from '@wcpos/query';
 
 import {
@@ -5,11 +12,13 @@ import {
 	getCheckoutModeSnapshot,
 	resetCheckoutMode,
 } from '../checkout/checkout-mode';
-import { closeSale } from './close-sale';
+import { RECORD_ASLEEP_RESEND_LIMIT } from '../checkout/payments/record-manual-payment';
+import { closeSale, useCloseSale } from './close-sale';
 
 // The hook's dependencies; closeSale itself takes everything it needs as arguments.
 jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: () => ({}) }));
-jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({}) }));
+const mockHttp = { post: jest.fn() };
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
 jest.mock('../checkout/hooks/use-sale-context', () => ({ useSaleContext: () => ({}) }));
 const mockPosterInput = jest.fn();
 const mockMirror = jest.fn(async (..._args: unknown[]) => undefined);
@@ -230,4 +239,80 @@ it('an order the store has never seen sends nothing (connectivity is the callerâ
 	});
 	expect(post).not.toHaveBeenCalled();
 	expect(mockPosterInput).not.toHaveBeenCalled();
+});
+
+describe('a hidden tab (POS-34W)', () => {
+	const asleep = () =>
+		Object.assign(new Error('App is in background'), {
+			blockCode: 'preflight-asleep',
+			isPreFlightBlocked: true,
+			isSleeping: true,
+		});
+	const answer = { data: { order: { status: 'completed' }, completion: { n: 2, id: 'c2' } } };
+
+	it('waits for wake and re-sends the same close once', async () => {
+		const post = jest.fn().mockRejectedValueOnce(asleep()).mockResolvedValueOnce(answer);
+		const awaitWake = jest.fn(async () => undefined);
+
+		expect(await closeSale(ctx, order, { ...deps(post), awaitWake })).toEqual({
+			kind: 'answered',
+			order: answer.data.order,
+			notMirrored: null,
+		});
+		expect(post).toHaveBeenCalledTimes(2);
+		expect(post).toHaveBeenNthCalledWith(1, 'orders/42/close', {});
+		expect(post).toHaveBeenNthCalledWith(2, 'orders/42/close', {});
+		expect(awaitWake).toHaveBeenCalledTimes(1);
+		expect(awaitWake.mock.invocationCallOrder[0]).toBeLessThan(post.mock.invocationCallOrder[1]);
+	});
+
+	it('never re-sends while the tab stays asleep', async () => {
+		const post = jest.fn().mockRejectedValue(asleep());
+		const awaitWake = jest.fn(() => new Promise<void>(() => {}));
+		const settled = jest.fn();
+		void closeSale(ctx, order, { ...deps(post), awaitWake }).then(settled, settled);
+		await new Promise((r) => setImmediate(r));
+		expect(post).toHaveBeenCalledTimes(1);
+		expect(settled).not.toHaveBeenCalled();
+	});
+
+	it('a wake that never clears the block stops at the backstop and rethrows', async () => {
+		const error = asleep();
+		const post = jest.fn().mockRejectedValue(error);
+		const awaitWake = jest.fn(async () => undefined);
+		await expect(closeSale(ctx, order, { ...deps(post), awaitWake })).rejects.toBe(error);
+		expect(post).toHaveBeenCalledTimes(RECORD_ASLEEP_RESEND_LIMIT + 1);
+	});
+
+	it('without awaitWake an asleep block is rethrown as before', async () => {
+		const error = asleep();
+		const post = jest.fn().mockRejectedValue(error);
+		await expect(closeSale(ctx, order, deps(post))).rejects.toBe(error);
+		expect(post).toHaveBeenCalledTimes(1);
+	});
+
+	it('an order_changed after a wake is still order_changed', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		const post = jest
+			.fn()
+			.mockRejectedValueOnce(asleep())
+			.mockRejectedValueOnce(new MoneyCommandError('order_changed'));
+		const awaitWake = jest.fn(async () => undefined);
+		expect(await closeSale(ctx, order, { ...deps(post), awaitWake })).toEqual({
+			kind: 'order_changed',
+		});
+		expect(post).toHaveBeenCalledTimes(2);
+	});
+
+	it("the till's close waits for wake", async () => {
+		expect(requestStateManager.isAppSleeping()).toBe(false);
+		mockHttp.post.mockRejectedValueOnce(asleep()).mockResolvedValueOnce(answer);
+		const { result } = renderHook(() => useCloseSale());
+		await expect(result.current.close(order, { sessionId: null, approval })).resolves.toEqual({
+			kind: 'answered',
+			order: answer.data.order,
+			notMirrored: null,
+		});
+		expect(mockHttp.post).toHaveBeenCalledTimes(2);
+	});
 });
