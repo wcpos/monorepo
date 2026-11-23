@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
+import { SESSION_SET_ASIDE } from '@wcpos/query/register-session';
 
 import { createTestT } from '../../../../../jest/translate';
 import { useStoreDay } from '../../../../hooks/use-store-day';
@@ -642,6 +643,20 @@ it('badges carried closures by destination, after Unsynced and before Corrected'
 	expect(screen.getByTestId('closure-badge-2').textContent).toBe('Carried to Market');
 	expect(screen.getByTestId('closure-badge-3').textContent).toBe('Carried');
 	expect(screen.queryByTestId('closure-badge-4')).toBeNull();
+});
+
+// #3753: a set-aside close stays in the till's history, with the reason, ahead of Unsynced.
+it('labels a close set aside on this device', () => {
+	render(
+		<ClosureList
+			rows={[
+				row('1', { sync_status: 'failed', sync_error: SESSION_SET_ASIDE, synced_rows_at: null }),
+			]}
+		/>
+	);
+	expect(screen.getByTestId('closure-badge-1').textContent).toBe(
+		'Set aside on this device: the session no longer exists on the store.'
+	);
 });
 
 // Revert: keep tablet columns on phones instead of labelling their figures in the row body.

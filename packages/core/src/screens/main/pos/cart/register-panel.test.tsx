@@ -65,6 +65,8 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 let mockOverdue = false;
 let mockCanManageCash = true;
 let mockRefusedClose = false;
+let mockUnreachable = false;
+const mockSetAside = jest.fn(async () => undefined);
 let mockHasClosure = true;
 let mockClosureOverrides: Record<string, unknown> = {};
 jest.mock('../../reports/closures/closure-panel', () => ({
@@ -118,6 +120,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		blind,
 		countingHere: mockCountingHere,
 		refusedClose: mockRefusedClose,
+		sessionUnreachable: mockUnreachable,
 		canManageCash: mockCanManageCash,
 		overdue: mockOverdue,
 		closeTime: '17:30',
@@ -157,6 +160,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			startCounting,
 			backToSelling: mockBackToSelling,
 			closeSession: mockCloseSession,
+			setAsideSession: mockSetAside,
 		},
 	}),
 }));
@@ -438,6 +442,7 @@ beforeEach(() => {
 	mockPhone = false;
 	currentLoaded = true;
 	mockRefusedClose = false;
+	mockUnreachable = false;
 	mockCanManageCash = true;
 	currentFiguresPending = false;
 	blind = false;
@@ -1603,6 +1608,25 @@ describe('#2016: a refused close', () => {
 		currentSession = { ...currentSession, status: 'open' };
 		view.rerender(<RegisterPanel open onOpenChange={onOpenChange} />);
 		expect(screen.getByTestId('count-back')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('panel-x'));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(mockBackToSelling).not.toHaveBeenCalled();
+	});
+	it('#3753: a session the store no longer has offers Set aside on the count, no Retry or back', async () => {
+		currentSession = { ...currentSession, status: 'closed', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		mockUnreachable = true;
+		const onOpenChange = jest.fn();
+		render(<RegisterPanel open onOpenChange={onOpenChange} />);
+		const notice = screen.getByTestId('register-panel-refused-close');
+		expect(notice.textContent).toContain('register.session_unreachable');
+		expect(within(notice).getAllByRole('button')).toHaveLength(1);
+		expect(screen.getByTestId('count-close').hasAttribute('disabled')).toBe(true);
+		// The count's back chevron returns to the register pane and abandons nothing.
+		await act(async () => fireEvent.click(screen.getByTestId('count-back')));
+		expect(mockBackToSelling).not.toHaveBeenCalled();
+		await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+		expect(mockSetAside).toHaveBeenCalledTimes(1);
 		fireEvent.click(screen.getByTestId('panel-x'));
 		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
 		expect(mockBackToSelling).not.toHaveBeenCalled();

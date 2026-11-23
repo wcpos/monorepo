@@ -77,6 +77,7 @@ export function RegisterPanel({
 		movements,
 		refusedMovements,
 		refusedClose,
+		sessionUnreachable,
 		lastClosure,
 		actions,
 		canManageCash,
@@ -145,7 +146,7 @@ export function RegisterPanel({
 			// ×, Escape and an outside tap wait for a close in flight: resuming selling under it
 			// would write `open` over the closed session.
 			if (!next && countBusy) return;
-			if (!next && pane === 'count' && mayAbandonCount(session, refusedClose))
+			if (!next && pane === 'count' && mayAbandonCount(session, refusedClose, sessionUnreachable))
 				await actions.backToSelling();
 			if (!next) {
 				setPane('register');
@@ -345,6 +346,9 @@ export function RegisterPanel({
 					<RefusedCloseNotice
 						className="mx-4"
 						forbidden={closeForbidden}
+						onSetAside={
+							sessionUnreachable ? () => void attempt(actions.setAsideSession) : undefined
+						}
 						onRetry={
 							canManageCash
 								? () =>

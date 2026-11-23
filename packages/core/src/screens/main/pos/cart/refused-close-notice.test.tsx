@@ -51,6 +51,17 @@ it('a forbidden close names the permission and links REGISTER231', () => {
 	expect(screen.getByTestId('title').getAttribute('data-docs')).toMatch(/REGISTER211$/);
 });
 
+it('#3753: a session the store no longer has offers only Set aside, never Retry', () => {
+	const onSetAside = jest.fn();
+	render(<RefusedCloseNotice onRetry={jest.fn()} onSetAside={onSetAside} />);
+	expect(screen.getByTestId('title').textContent).toBe('register.session_unreachable');
+	expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+	expect(screen.getAllByRole('button')).toHaveLength(1);
+	fireEvent.click(screen.getByTestId('register-panel-set-aside'));
+	expect(screen.getByTestId('register-panel-set-aside').textContent).toBe('register.set_aside');
+	expect(onSetAside).toHaveBeenCalledTimes(1);
+});
+
 it('is the one line, with no description under it', () => {
 	render(<RefusedCloseNotice onRetry={jest.fn()} />);
 	expect(screen.queryByTestId('description')).toBeNull();

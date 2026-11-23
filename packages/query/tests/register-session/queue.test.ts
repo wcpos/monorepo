@@ -14,13 +14,16 @@ import {
 	backToSelling,
 	closeSession,
 	openSession,
+	readCurrentSession,
 	recordMovement,
 	requeueClose,
 	retryMovement,
+	setAsideSession,
 	startCounting,
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
+import { SESSION_SET_ASIDE, sessionUnreachable } from '../../src/register-session/drawer-rules';
 import {
 	adoptCounters,
 	isoGmt,
@@ -2255,5 +2258,50 @@ describe('#2016: retry and abandon keep the closure row', () => {
 		expect(row.getLatest().toJSON()).toMatchObject(
 			rewritten(before, session.getLatest().closed_at_gmt)
 		);
+	});
+	// #3753: the store no longer has the session, so a retry gets the same 404 for ever.
+	it('a queued close the store answers 404 wcpos_session_not_found leaves the register usable', async () => {
+		const { session, row } = await closure();
+		const movement = await recordMovement(db, {
+			sessionId: session.id,
+			type: 'paid_in',
+			amount: '30',
+			reason: '',
+			actor: 7,
+		});
+		await movement.incrementalPatch({ sync_status: 'failed' });
+		http.post.mockRejectedValue({
+			response: { status: 404, data: { code: 'wcpos_session_not_found' } },
+		});
+		await drain();
+		expect(session.getLatest().toJSON()).toMatchObject({
+			sync_status: 'failed',
+			sync_next_at: null,
+		});
+		expect(sessionUnreachable(session.getLatest())).toBe(true);
+		http.post.mockClear();
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		const { counted, closed_at_gmt } = session.getLatest();
+		await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+		const marked = { sync_status: 'failed', sync_next_at: null, sync_error: SESSION_SET_ASIDE };
+		const kept = (await db.register_sessions.findOne(session.id).exec())!;
+		expect(kept.toJSON()).toMatchObject({ ...marked, status: 'closed', counted, closed_at_gmt });
+		expect(counted).toEqual({ cash: '100' });
+		expect(sessionUnreachable(kept)).toBe(false);
+		expect(row.getLatest().toJSON()).toMatchObject({ ...marked, counted: { cash: '100' } });
+		expect(movement.getLatest().toJSON()).toMatchObject({ ...marked, amount: '30' });
+		expect(await db.closures.count().exec()).toBe(1);
+		expect(await readCurrentSession(db, 'register')).toBeNull();
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		// A fresh session opens as on a register with no session, and its create leaves.
+		const next = await open();
+		expect((await readCurrentSession(db, 'register'))?.id).toBe(next.id);
+		http.post.mockResolvedValue({ status: 201, data: { ...next.toJSON(), status: 'open' } });
+		await drain();
+		expect(http.post).toHaveBeenCalledTimes(1);
+		expect(http.post).toHaveBeenCalledWith('sessions', expect.objectContaining({ id: next.id }));
+		expect(next.getLatest().sync_status).toBe('synced');
 	});
 });

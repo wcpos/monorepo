@@ -79,6 +79,7 @@ export function RegisterCount({
 		unsyncedCount,
 		figuresPending,
 		refusedClose,
+		sessionUnreachable,
 		lastClosure,
 		refusedCash: refusedRows,
 	} = useRegisterSession();
@@ -208,7 +209,19 @@ export function RegisterCount({
 			keyboardShouldPersistTaps="handled"
 		>
 			{/* The footer is this pane's Retry: it sends the count as edited here. */}
-			{refusedClose && <RefusedCloseNotice />}
+			{(refusedClose || sessionUnreachable) && (
+				<RefusedCloseNotice
+					onSetAside={
+						sessionUnreachable
+							? () =>
+									attempt(async () => {
+										await actions.setAsideSession();
+										onBack();
+									})
+							: undefined
+					}
+				/>
+			)}
 			{recorded && (
 				<Notice tone="info" testID="count-recorded" title={t('register.count_recorded')} />
 			)}
@@ -468,7 +481,9 @@ export function RegisterCount({
 					accessibilityLabel={t('register.back_to_selling')}
 					onPress={() =>
 						attempt(async () => {
-							if (mayAbandonCount(session, refusedClose)) await actions.backToSelling();
+							// A session the store no longer has is never abandoned, only set aside (#3753).
+							if (mayAbandonCount(session, refusedClose, sessionUnreachable))
+								await actions.backToSelling();
 							onBack();
 						})
 					}
@@ -492,7 +507,7 @@ export function RegisterCount({
 					}[decision.intent],
 					testID: 'count-close',
 					loading: busy,
-					disabled: !decision.closeAllowed,
+					disabled: !decision.closeAllowed || sessionUnreachable,
 					onPress: () => {
 						if (decision.overThreshold)
 							recordRegisterFact({

@@ -33,6 +33,7 @@ export {
 	requireOpenSession,
 	retryMovement,
 	readMovement,
+	setAsideSession,
 	voidMovement,
 	setClosureReceiptSnapshot,
 	refreshClosureRow,
@@ -50,7 +51,7 @@ export {
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
 export { observeRegisterDrawer, observeRegisterStatus } from './drawer';
-export { countRecorded, isLiveMovement } from './drawer-rules';
+export { countRecorded, isLiveMovement, SESSION_SET_ASIDE } from './drawer-rules';
 export { abandonCount, beginCount } from './count';
 export { type CloseResult, closeRegister, isCloseInFlight, type RegisterCount } from './close';
 

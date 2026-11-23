@@ -24,8 +24,10 @@ import {
 import {
 	currentSession,
 	isLiveMovement,
+	SESSION_SET_ASIDE,
 	unsyncedCount,
 } from '../../src/register-session/drawer-rules';
+import { setAsideSession } from '../../src/register-session/session-store';
 import {
 	markSeededIn,
 	recordLiveSession,
@@ -203,6 +205,25 @@ describe('the current session', () => {
 		});
 		const settled = await drawer((value) => value.session === null);
 		expect(settled.lastClosure?.id).toBe('s1');
+	});
+
+	it('#3753: flags an unreachable close; set aside, it is history and its refused cash is not offered', async () => {
+		await insert({
+			status: 'closed',
+			sync_status: 'failed',
+			sync_error: 'wcpos_session_not_found',
+			closure_id: 's1',
+		});
+		await storeDB.closures.insert(closure('s1', 'pending'));
+		await storeDB.cash_movements.insert(movement({ sync_status: 'failed' }));
+		const snapshot = await drawer((value) => value.session !== null);
+		expect(snapshot).toMatchObject({ refusedClose: true, sessionUnreachable: true });
+		await setAsideSession(storeDB, 's1', { userDB, siteUuid: 'site' });
+		const settled = await drawer((value) => value.session === null);
+		expect(settled).toMatchObject({ refusedClose: false, sessionUnreachable: false });
+		expect(settled.refusedMovements).toEqual([]);
+		expect(settled.lastClosure).toMatchObject({ id: 's1', sync_error: SESSION_SET_ASIDE });
+		expect(settled.closedElsewhere).toBeNull();
 	});
 
 	it('the status read applies the same rule', async () => {
