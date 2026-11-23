@@ -4,6 +4,7 @@ import { Toast } from '@wcpos/components/toast';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { BridgeError, type BridgeHandlers } from '../bridge/types';
+import { type MiniAppProxyScope } from '../catalog';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 const ALLOWED_REST_PREFIXES = ['/wcpos/v1/', '/wc/v3/', '/wp/v2/'];
@@ -50,7 +51,10 @@ function isHttpResponseError(
 	);
 }
 
-export function useHostCapabilities(onClose: (result: string) => void): BridgeHandlers {
+export function useHostCapabilities(
+	onClose: (result: string) => void,
+	scope: MiniAppProxyScope | undefined
+): BridgeHandlers {
 	const http = useRestHttpClient();
 
 	return React.useMemo(
@@ -59,6 +63,26 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				const { method, path, query, body, headers } = payload;
 				if (!isAllowedRestPath(path)) {
 					throw new BridgeError('bad_request', 'Path is not an allowed store REST endpoint');
+				}
+				if (!scope) {
+					throw new BridgeError('capability_denied', 'This mini-app has no store REST scope');
+				}
+				const verb = typeof method === 'string' ? method.toUpperCase() : 'GET';
+				if (!scope.methods.includes(verb)) {
+					throw new BridgeError('capability_denied', "Method is outside this mini-app's scope");
+				}
+				const decoded = decodeURIComponent(path);
+				if (
+					!scope.paths.some((p) => path === p.slice(0, -1) || path.startsWith(p)) ||
+					!scope.paths.some((p) => decoded === p.slice(0, -1) || decoded.startsWith(p))
+				) {
+					throw new BridgeError('capability_denied', "Path is outside this mini-app's scope");
+				}
+				// The store's PHP turns '.' and spaces in query keys into '_', so only plain keys are passed.
+				if (query && typeof query === 'object' && !Array.isArray(query)) {
+					if (Object.keys(query).some((key) => !/^[A-Za-z0-9_-]+$/.test(key))) {
+						throw new BridgeError('bad_request', 'Query key is not allowed');
+					}
 				}
 				if (
 					query &&
@@ -89,7 +113,7 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				let response: { status: number; headers?: Record<string, unknown>; data: unknown };
 				try {
 					response = (await http.request({
-						method: typeof method === 'string' ? method.toUpperCase() : 'GET',
+						method: verb,
 						url: `${path}${search.toString() ? `?${search}` : ''}`,
 						data: body,
 						headers: requestHeaders,
@@ -134,6 +158,6 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				return {};
 			},
 		}),
-		[http, onClose]
+		[http, onClose, scope]
 	);
 }

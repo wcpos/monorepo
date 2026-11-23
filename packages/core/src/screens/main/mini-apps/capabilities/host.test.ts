@@ -2,6 +2,12 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { useHostCapabilities } from './host';
+import { MINI_APP_PROXY_SCOPES, type MiniAppProxyScope } from '../catalog';
+
+const WIDE: MiniAppProxyScope = {
+	methods: ['GET', 'POST', 'PUT', 'DELETE'],
+	paths: ['/wcpos/v1/', '/wc/v3/', '/wp/v2/'],
+};
 
 const mockRequest = jest.fn(async (_config: unknown) => ({
 	status: 200,
@@ -22,7 +28,7 @@ describe('useHostCapabilities', () => {
 	beforeEach(() => jest.clearAllMocks());
 
 	it('allows only the three merchant REST path prefixes', async () => {
-		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
 
 		for (const path of ['/wcpos/v1/settings', '/wc/v3/orders', '/wp/v2/users']) {
 			await act(async () => {
@@ -53,7 +59,7 @@ describe('useHostCapabilities', () => {
 	});
 
 	it('rejects a query that overrides the plain-permalink REST route', async () => {
-		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
 
 		await expect(
 			result.current['http.proxy']({
@@ -66,7 +72,7 @@ describe('useHostCapabilities', () => {
 	});
 
 	it('http.proxy strips x-http-method-override', async () => {
-		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
 
 		await act(async () => {
 			await result.current['http.proxy']({
@@ -87,7 +93,7 @@ describe('useHostCapabilities', () => {
 	});
 
 	it('http.proxy refuses a _method query override', async () => {
-		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
 
 		await expect(
 			result.current['http.proxy']({
@@ -99,8 +105,81 @@ describe('useHostCapabilities', () => {
 		expect(mockRequest).not.toHaveBeenCalled();
 	});
 
+	it('refuses query keys that are not plain letters, digits, _ or -', async () => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
+		for (const query of [
+			{ '.method': 'DELETE' },
+			{ 'rest.route': '/other/v1' },
+			{ 'rest route': '/x' },
+			{ 'a[b]': '1' },
+			{ '': '1' },
+		]) {
+			await expect(
+				result.current['http.proxy']({ method: 'GET', path: '/wcpos/v1/settings', query })
+			).rejects.toMatchObject({ code: 'bad_request' });
+			expect(mockRequest).not.toHaveBeenCalled();
+		}
+		await result.current['http.proxy']({
+			method: 'GET',
+			path: '/wcpos/v1/settings',
+			query: { per_page: 10, 'order-by': 'id', page2: 1 },
+		});
+		expect(mockRequest).toHaveBeenCalledWith(
+			expect.objectContaining({ url: '/wcpos/v1/settings?per_page=10&order-by=id&page2=1' })
+		);
+	});
+
+	it('limits each mini-app to its declared methods and paths', async () => {
+		const { result } = renderHook(() =>
+			useHostCapabilities(jest.fn(), MINI_APP_PROXY_SCOPES['printer-wizard'])
+		);
+		for (const payload of [
+			{ method: 'GET', path: '/wcpos/v1/settings/general' },
+			{ method: 'GET', path: '/wcpos/v1/settings' },
+			{ path: '/wcpos/v1/settings/general' },
+			{ method: 'get', path: '/wcpos/v1/settings/general' },
+		]) {
+			mockRequest.mockClear();
+			await result.current['http.proxy'](payload);
+			expect(mockRequest).toHaveBeenCalledTimes(1);
+			expect(mockRequest).toHaveBeenCalledWith(
+				expect.objectContaining({ method: 'GET', url: payload.path })
+			);
+		}
+		for (const payload of [
+			{ method: 'POST', path: '/wcpos/v1/settings/general' },
+			{ method: 'DELETE', path: '/wcpos/v1/settings/general' },
+			{ method: 'GET', path: '/wcpos/v1/settingsx' },
+			{ method: 'GET', path: '/wcpos/v1/orders' },
+			{ method: 'GET', path: '/wc/v3/orders' },
+			{ method: 'GET', path: '/wp/v2/users' },
+			{ method: 'GET', path: '/wcpos/v1/settings%2fgeneral' },
+		]) {
+			mockRequest.mockClear();
+			await expect(result.current['http.proxy'](payload)).rejects.toMatchObject({
+				code: 'capability_denied',
+			});
+			expect(mockRequest).not.toHaveBeenCalled();
+		}
+	});
+
+	it('refuses every proxy request when the mini-app has no scope', async () => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), undefined));
+		await expect(
+			result.current['http.proxy']({ method: 'GET', path: '/wcpos/v1/settings/general' })
+		).rejects.toMatchObject({ code: 'capability_denied' });
+		expect(mockRequest).not.toHaveBeenCalled();
+	});
+
+	it('the printer wizard scope is GET-only under settings', () => {
+		expect(MINI_APP_PROXY_SCOPES['printer-wizard']).toEqual({
+			methods: ['GET'],
+			paths: ['/wcpos/v1/settings/'],
+		});
+	});
+
 	it('opens only https external URLs', async () => {
-		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
 
 		await act(async () => {
 			await result.current['ui.openExternal']({ url: 'https://example.com' });

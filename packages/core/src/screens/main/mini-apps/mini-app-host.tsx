@@ -20,7 +20,13 @@ import { isUnderPin, useBridge } from './bridge/use-bridge';
 import { type AppInitPayload, BridgeError, type BridgeHandlers } from './bridge/types';
 import { useHostCapabilities } from './capabilities/host';
 import { usePrinterCapabilities } from './capabilities/printers';
-import { meetsMinAppVersion, MINI_APP_ORIGIN, useMiniAppCatalog } from './catalog';
+import {
+	meetsMinAppVersion,
+	MINI_APP_ORIGIN,
+	MINI_APP_PROXY_SCOPES,
+	type MiniAppProxyScope,
+	useMiniAppCatalog,
+} from './catalog';
 import { detectWebEngine } from './detect-web-engine';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -63,7 +69,10 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 		[onClose]
 	);
 	const printerHandlers = usePrinterCapabilities();
-	const hostHandlers = useHostCapabilities(close);
+	const hostHandlers = useHostCapabilities(
+		close,
+		(MINI_APP_PROXY_SCOPES as Record<string, MiniAppProxyScope | undefined>)[id]
+	);
 	const availableHandlers = { ...printerHandlers, ...hostHandlers };
 	const granted = entry?.capabilities.filter((action) => action in availableHandlers) ?? [];
 	const initPayload: AppInitPayload = {

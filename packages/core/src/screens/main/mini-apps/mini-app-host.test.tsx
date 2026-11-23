@@ -71,6 +71,7 @@ jest.mock('./bridge/use-bridge', () => ({
 jest.mock('./capabilities/host', () => ({ useHostCapabilities: () => ({}) }));
 jest.mock('./capabilities/printers', () => ({ usePrinterCapabilities: () => ({}) }));
 jest.mock('./catalog', () => ({
+	MINI_APP_PROXY_SCOPES: jest.requireActual('./catalog').MINI_APP_PROXY_SCOPES,
 	MINI_APP_ORIGIN: 'https://cdn.example/gh/wcpos/mini-apps@1',
 	meetsMinAppVersion: () => true,
 	useMiniAppCatalog: () => [
