@@ -807,6 +807,29 @@
 		"introducedIn": "1.11.3"
 	},
 	{
+		"code": "PAYMENT312",
+		"symbol": "REFUND_RECORD_LOST",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Don't refund again — the money went back. Check the order notes, then ask a store admin to record the refund.",
+		"retryPolicy": "never",
+		"dataSafety": "money-moved",
+		"escalation": "store-admin",
+		"summary": "The refund was returned to the customer, but the store couldn't keep its record.",
+		"docsBody": "The payment provider returned the refund to the customer, but WooCommerce then failed to keep the refund record, so the order does not show it. The money has already gone back: refunding again would refund the customer twice.",
+		"troubleshooting": [
+			"Don't refund this order again from the till.",
+			"Open the order in WooCommerce and read its order notes: they record the refund the provider made.",
+			"Store admin: confirm the refund in the payment provider's dashboard, then record it on the order by hand (WooCommerce → Orders → Refund, with the refund via the gateway turned off) so the order's totals match."
+		],
+		"logSources": [
+			"wp-admin-pos-logs",
+			"payment-provider"
+		],
+		"evidence": "monorepo#3778 (WCPOS Pro #884: wcpos_refund_record_lost)",
+		"introducedIn": "2.0.4"
+	},
+	{
 		"code": "PAYMENT401",
 		"symbol": "TERMINAL_PAIRING_INCOMPLETE",
 		"domain": "PAYMENT",
