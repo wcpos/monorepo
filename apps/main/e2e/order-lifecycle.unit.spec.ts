@@ -4,8 +4,12 @@ import {
 	createPushOrdersResponseMatcher,
 	expectRateSetParity,
 	expectTaxParity,
+	isStaleRevisionConflict,
 	posAppliedRateIds,
+	trashOrder,
 } from './order-lifecycle';
+
+import type { APIRequestContext, TestInfo } from '@playwright/test';
 
 /**
  * Unit-style pins for the money-oracle helpers — no page, no store. These exist
@@ -158,5 +162,100 @@ test.describe('cartRecordUuidFromTabId', () => {
 		expect(cartRecordUuidFromTabId(`open-order-tab-${UUID}-amount`)).toBeNull();
 		expect(cartRecordUuidFromTabId('open-order-tab-')).toBeNull();
 		expect(cartRecordUuidFromTabId(null)).toBeNull();
+	});
+});
+
+/**
+ * #3657: on dev-pro a teardown cancel answered 409 "baseRevision is stale" and the
+ * order stayed pos-open. The teardown re-reads once, re-proves ownership, and retries.
+ */
+test.describe('isStaleRevisionConflict', () => {
+	test('is true for a 409 carrying either marker', () => {
+		expect(isStaleRevisionConflict(409, '{"code":"woo_rxdb_sync_conflict"}')).toBe(true);
+		expect(isStaleRevisionConflict(409, '{"message":"baseRevision is stale"}')).toBe(true);
+	});
+
+	test('is false for a 409 without them, a 422 and a 200', () => {
+		expect(isStaleRevisionConflict(409, '{"code":"something_else"}')).toBe(false);
+		expect(isStaleRevisionConflict(422, '{"code":"woo_rxdb_sync_conflict"}')).toBe(false);
+		expect(isStaleRevisionConflict(200, 'baseRevision is stale')).toBe(false);
+	});
+});
+
+test.describe('trashOrder stale-revision retry', () => {
+	const LABEL = 'e2e-run-label-3657';
+	const ORDER = { id: 77, uuid: '0b6f6c1e-2f4a-4c1d-9e3b-7a5d8c2f1e04', label: LABEL };
+	const STALE = '{"code":"woo_rxdb_sync_conflict","message":"baseRevision is stale"}';
+
+	function reply(status: number, body: unknown) {
+		const text = typeof body === 'string' ? body : JSON.stringify(body);
+		return {
+			status: () => status,
+			ok: () => status >= 200 && status < 300,
+			text: async () => text,
+			json: async () => JSON.parse(text),
+		};
+	}
+
+	/** Reads answer `reads` in order; posts answer `posts` in order and are recorded. */
+	function fakes(reads: Record<string, unknown>[], posts: ReturnType<typeof reply>[]) {
+		const posted: { status: string; baseRevision: unknown; mutationId: string }[] = [];
+		const request = {
+			get: async () => reply(200, [reads.shift()]),
+			post: async (_url: string, options: { data: Record<string, unknown> }) => {
+				const data = options.data as {
+					payload: { status: string };
+					baseRevision: unknown;
+					mutationId: string;
+				};
+				posted.push({
+					status: data.payload.status,
+					baseRevision: data.baseRevision,
+					mutationId: data.mutationId,
+				});
+				const next = posts.shift();
+				if (!next) throw new Error('unexpected extra post');
+				return next;
+			},
+		} as unknown as APIRequestContext;
+		const testInfo = {
+			project: { use: { storeUrl: 'https://store.test' } },
+			attach: async () => {},
+		} as unknown as TestInfo;
+		return { request, testInfo, posted };
+	}
+
+	const mine = (revision: string) => ({ id: 77, customer_note: LABEL, _rxdb_revision: revision });
+	const notTrashable = reply(422, '{"code":"wcpos_status_not_pushable"}');
+
+	test('retries a stale cancel once with the re-read revision and succeeds', async () => {
+		const { request, testInfo, posted } = fakes(
+			[mine('rev-1'), mine('rev-2')],
+			[notTrashable, reply(409, STALE), reply(200, { document: { status: 'cancelled' } })]
+		);
+		expect(await trashOrder(request, testInfo, null, ORDER)).toBe(true);
+		const cancels = posted.filter((post) => post.status === 'cancelled');
+		expect(cancels).toHaveLength(2);
+		expect(cancels[0].baseRevision).toBe('rev-1');
+		expect(cancels[1].baseRevision).toBe('rev-2');
+		expect(cancels[1].mutationId).not.toBe(cancels[0].mutationId);
+	});
+
+	test('does not retry when the re-read no longer carries this run label', async () => {
+		const { request, testInfo, posted } = fakes(
+			[mine('rev-1'), { ...mine('rev-2'), customer_note: 'someone else' }],
+			[notTrashable, reply(409, STALE)]
+		);
+		expect(await trashOrder(request, testInfo, null, ORDER)).toBe(false);
+		expect(posted.filter((post) => post.status === 'cancelled')).toHaveLength(1);
+	});
+
+	test('retries at most once when the retry is stale again', async () => {
+		const { request, testInfo, posted } = fakes(
+			[mine('rev-1'), mine('rev-2'), mine('rev-3')],
+			[notTrashable, reply(409, STALE), reply(409, STALE)]
+		);
+		expect(await trashOrder(request, testInfo, null, ORDER)).toBe(false);
+		expect(posted.filter((post) => post.status === 'cancelled')).toHaveLength(2);
 	});
 });
