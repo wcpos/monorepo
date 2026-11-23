@@ -445,6 +445,7 @@
 	"pos_checkout.invoice_not_cancelled": "The store did not cancel the invoice, so it still stands. Check the order before taking another payment.",
 	"pos_checkout.void_needs_connection": "Cancelling these payments needs the store. Nothing was cancelled; try again when you are online.",
 	"pos_checkout.payment_unanswered": "The store has not answered the last payment. Try again to confirm it; it will not be taken twice.",
+	"pos_checkout.payment_still_sending": "This payment is still being sent. Wait a moment, then try again if it does not finish.",
 	"pos_checkout.attempt_cleared_reopened": "Payment attempt cleared. The order is open for payment.",
 	"pos_checkout.attempt_cleared": "Payment attempt cleared. The order keeps its status.",
 	"pos_checkout.attempt_clear_unanswered": "The store has not answered the clear. The attempt stands until it does; Try again.",

@@ -725,6 +725,24 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it('Try again while the first send is still running says it is still sending, never unanswered (POS-34W)', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('in_flight'), { reason: 'in_flight' })
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.commands.retryCommand());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.payment_still_sending',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.anything()
+		);
+		expect(mockError).not.toHaveBeenCalled();
+	});
+
 	// A close replayed after a remote reopen answers its stored completion with the order as it
 	// now stands (`Payments_Controller.php:452-468`). It lands through the table: the completion
 	// judges it with the resident (sale-completion.test.ts), and a close it did not finish was

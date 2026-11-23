@@ -815,6 +815,13 @@ export function useTenderFlow(
 					showToast: true,
 					context: { ...orderContext, retry: 'order_changed' },
 				});
+			// The first send of this command still holds it (waiting for wake or re-sending): Try again
+			// found nothing unanswered yet, so it says so instead of PAYMENT201 (POS-34W).
+			else if (error instanceof MoneyCommandError && error.reason === 'in_flight')
+				logger.info(t('pos_checkout.payment_still_sending'), {
+					showToast: true,
+					context: { ...orderContext, retry: 'in_flight' },
+				});
 			else if (inMotion?.kind === 'attempt')
 				noteUnanswered(t, { ...orderContext, attemptId: inMotion.id });
 			// The store answered, and refused: its sentence is the toast title, over the code's summary.
