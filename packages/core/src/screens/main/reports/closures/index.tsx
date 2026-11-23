@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { useDocField } from '@wcpos/query';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Button } from '@wcpos/components/button';
 import { ListRow } from '@wcpos/components/list-row';
@@ -10,6 +9,7 @@ import { cn } from '@wcpos/components/lib/utils';
 import { useGround } from '@wcpos/components/lib/ground';
 
 import { useStoreSession } from '../../../../contexts/app-state';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useT } from '../../../../contexts/translations';
 import {
 	useRegisterBinding,
@@ -70,11 +70,11 @@ export function Closures({
 			(row.server_closure_id ?? row.id) === selectedId &&
 			!unavailableIds.has(row.server_closure_id ?? row.id)
 	);
-	const { store, wpCredentials } = useStoreSession();
+	const { store } = useStoreSession();
 	// The blind contract: capabilities still loading read as blind, so the strip never flashes
 	// figures before the capability arrives (CodeRabbit, #3048).
-	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
-	const blind = !capabilities?.includes('view_woocommerce_pos_reports');
+	const { caps } = useUserCapabilities();
+	const blind = !caps.canViewReports;
 	const sessionKey = `${scope.storeId}:${scope.registerId}`;
 	const [resolved, setResolved] = React.useState({
 		key: sessionKey,

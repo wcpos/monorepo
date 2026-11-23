@@ -14,6 +14,10 @@ const ALL_FALSE = {
 	canDeleteCustomers: false,
 	canAcceptReaderTerms: false,
 	canReassignSales: false,
+	canViewReports: false,
+	canManageCash: false,
+	canManageClosures: false,
+	canManagePos: false,
 };
 const ALL_TRUE = {
 	canEditProducts: true,
@@ -29,20 +33,65 @@ const ALL_TRUE = {
 	canDeleteCustomers: true,
 	canAcceptReaderTerms: true,
 	canReassignSales: true,
+	canViewReports: true,
+	canManageCash: true,
+	canManageClosures: true,
+	canManagePos: true,
 };
 
 describe('deriveUserCapabilities', () => {
-	it('fails open when capabilities are unknown, except accepting reader terms and reassigning sales', () => {
-		const result = deriveUserCapabilities(undefined);
+	it('denies every gate when capabilities are unknown', () => {
+		expect(deriveUserCapabilities(undefined)).toEqual({ known: false, caps: ALL_FALSE });
+	});
 
-		expect(result.known).toBe(false);
-		// Apple's Tap to Pay terms may only be accepted by a known administrator; the store
-		// ignores a reassignment it refuses, so an unknown user never sees the picker.
-		expect(result.caps).toEqual({
-			...ALL_TRUE,
-			canAcceptReaderTerms: false,
-			canReassignSales: false,
-		});
+	it.each(Object.keys(ALL_FALSE) as (keyof typeof ALL_FALSE)[])(
+		'denies %s for unknown and empty capabilities',
+		(flag) => {
+			expect(deriveUserCapabilities(undefined).caps[flag]).toBe(false);
+			expect(deriveUserCapabilities([]).caps[flag]).toBe(false);
+		}
+	);
+
+	it.each([
+		['canViewReports', 'view_woocommerce_pos_reports'],
+		['canManageCash', 'manage_woocommerce_pos_cash'],
+		['canManageClosures', 'manage_woocommerce_pos_closures'],
+		['canManagePos', 'manage_woocommerce_pos'],
+	] as const)('grants %s only with %s', (flag, capability) => {
+		expect(deriveUserCapabilities([capability]).caps[flag]).toBe(true);
+		expect(deriveUserCapabilities(['manage_woocommerce']).caps[flag]).toBe(false);
+	});
+
+	it('grants every gate with all required capabilities', () => {
+		expect(
+			deriveUserCapabilities([
+				'edit_products',
+				'edit_others_products',
+				'edit_published_products',
+				'edit_product',
+				'publish_products',
+				'delete_products',
+				'delete_others_products',
+				'delete_published_products',
+				'delete_product',
+				'edit_shop_coupons',
+				'edit_others_shop_coupons',
+				'edit_published_shop_coupons',
+				'publish_shop_coupons',
+				'delete_shop_coupons',
+				'delete_others_shop_coupons',
+				'delete_published_shop_coupons',
+				'edit_users',
+				'create_customers',
+				'delete_users',
+				'manage_woocommerce',
+				'reassign_woocommerce_pos_sales',
+				'view_woocommerce_pos_reports',
+				'manage_woocommerce_pos_cash',
+				'manage_woocommerce_pos_closures',
+				'manage_woocommerce_pos',
+			])
+		).toEqual({ known: true, caps: ALL_TRUE });
 	});
 
 	it('lets manage_woocommerce accept reader terms', () => {

@@ -7,12 +7,14 @@ import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { RegisterGateCard } from './register-gate-card';
 
-let mockCapabilities: string[] = [];
+let mockCapabilities: string[] | undefined = [];
 const mockRetry = jest.fn(async () => undefined);
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		site: { url: 'https://shop.example///' },
-		wpCredentials: { capabilities: mockCapabilities },
+	}),
+	useAppState: () => ({
+		wpCredentials: mockCapabilities === undefined ? {} : { capabilities: mockCapabilities },
 	}),
 }));
 jest.mock('@wcpos/query', () => ({
@@ -62,6 +64,13 @@ it('shows the no-register title and register guide for a cashier', () => {
 	expect(openExternalURL).toHaveBeenCalledWith(
 		'https://docs.wcpos.com/stores/registers-and-devices#choosing-a-store-and-a-register'
 	);
+});
+
+it('does not offer register administration when capabilities are unknown', () => {
+	mockCapabilities = undefined;
+	render(<RegisterGateCard failed={false} retry={mockRetry} />);
+	expect(screen.queryByTestId('register-gate-admin')).toBeNull();
+	expect(screen.getByTestId('register-gate-docs')).toBeTruthy();
 });
 
 it('opens Stores instead of the guide for a manager', () => {

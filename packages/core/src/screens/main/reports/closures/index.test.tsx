@@ -20,6 +20,7 @@ const localRows = [
 ];
 let rows = localRows;
 let screenSize = 'sm';
+let mockCapabilities: string[] | undefined;
 const share = jest.fn(async () => undefined);
 jest.mock('./save-or-share-csv', () => ({
 	saveOrShareCsv: (...args: unknown[]) => share(...(args as [])),
@@ -79,6 +80,12 @@ jest.mock('./closure-panel', () => ({
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ store: { id: 1, name: 'Café' } }),
+	useAppState: () => ({
+		wpCredentials: mockCapabilities === undefined ? {} : { capabilities: mockCapabilities },
+	}),
+}));
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
@@ -141,6 +148,19 @@ jest.mock('@wcpos/components/dropdown-menu', () => ({
 		</button>
 	),
 }));
+it('keeps closure figures blind when capabilities are unknown', () => {
+	mockCapabilities = undefined;
+	render(<Closures scope={scope} />);
+	expect(closureList).toHaveBeenLastCalledWith(expect.objectContaining({ blind: true }));
+});
+
+it('reveals closure figures with the reports capability', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<Closures scope={scope} />);
+	expect(closureList).toHaveBeenLastCalledWith(expect.objectContaining({ blind: false }));
+	mockCapabilities = undefined;
+});
+
 // Revert: export an unscoped collection instead of the exact rows shown.
 it('exports only visible rows from the export button', async () => {
 	render(

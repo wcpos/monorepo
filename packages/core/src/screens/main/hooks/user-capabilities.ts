@@ -12,14 +12,21 @@ export interface UserCapabilities {
 	canDeleteCustomers: boolean;
 	/**
 	 * Accept a card provider's Tap to Pay terms on behalf of the business. Apple requires an
-	 * administrator (`manage_woocommerce`) and this one FAILS CLOSED: unknown capabilities mean no.
+	 * administrator (`manage_woocommerce`).
 	 */
 	canAcceptReaderTerms: boolean;
 	/**
-	 * Change an order's cashier or store. FAILS CLOSED like reader terms: the store ignores a
-	 * change it refuses, so an unknown user never gets the picker.
+	 * Change an order's cashier or store with `reassign_woocommerce_pos_sales`.
 	 */
 	canReassignSales: boolean;
+	/** View reports with `view_woocommerce_pos_reports`. */
+	canViewReports: boolean;
+	/** Manage cash with `manage_woocommerce_pos_cash`. */
+	canManageCash: boolean;
+	/** Manage closures with `manage_woocommerce_pos_closures`. */
+	canManageClosures: boolean;
+	/** Manage POS with `manage_woocommerce_pos`. */
+	canManagePos: boolean;
 }
 
 export interface DerivedUserCapabilities {
@@ -27,12 +34,13 @@ export interface DerivedUserCapabilities {
 	known: boolean;
 }
 
+/** An unknown capability list denies every gate (cashier-permissions spec §4). */
 export function deriveUserCapabilities(
 	capabilities: readonly string[] | undefined
 ): DerivedUserCapabilities {
 	const known = capabilities !== undefined;
 	const granted = new Set(capabilities);
-	const has = (capability: string) => !known || granted.has(capability);
+	const has = (capability: string) => known && granted.has(capability);
 	const canEditProducts =
 		has('edit_products') && has('edit_others_products') && has('edit_published_products');
 	const canDeleteProducts =
@@ -58,8 +66,12 @@ export function deriveUserCapabilities(
 			canEditCustomers: has('edit_users'),
 			canCreateCustomers: has('create_customers') || has('promote_users'),
 			canDeleteCustomers: has('delete_users'),
-			canAcceptReaderTerms: known && granted.has('manage_woocommerce'),
-			canReassignSales: known && granted.has('reassign_woocommerce_pos_sales'),
+			canAcceptReaderTerms: has('manage_woocommerce'),
+			canReassignSales: has('reassign_woocommerce_pos_sales'),
+			canViewReports: has('view_woocommerce_pos_reports'),
+			canManageCash: has('manage_woocommerce_pos_cash'),
+			canManageClosures: has('manage_woocommerce_pos_closures'),
+			canManagePos: has('manage_woocommerce_pos'),
 		},
 	};
 }

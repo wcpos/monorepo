@@ -197,6 +197,23 @@ it('records cashier fields and clears omitted capabilities when merging stores',
 	expect(credentials.getLatest().capabilities).toEqual(['read']);
 });
 
+it.each([{ edit_products: true }, null, 'edit_products'])(
+	'clears stored capabilities when the cashier capability value is not an array: %p',
+	async (capabilities) => {
+		const credentials = await db.wp_credentials.insert({
+			uuid: 'cashier',
+			capabilities: ['edit_products'],
+		});
+		await recordCashierProfile(
+			db,
+			credentials,
+			{ capabilities },
+			{ userUuid: 'user', siteUuid: 'site' }
+		);
+		expect(credentials.getLatest().toJSON()).not.toHaveProperty('capabilities');
+	}
+);
+
 it('never copies the server last_access over the local till stamp', async () => {
 	const credentials = await db.wp_credentials.insert({
 		uuid: 'cashier',

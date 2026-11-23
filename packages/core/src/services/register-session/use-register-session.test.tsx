@@ -147,7 +147,14 @@ const mockRuntime = { engine: {}, locale: 'en' };
 let mockCloseTime: string | null | undefined = null;
 const mockStoreSession = {
 	store: { id: 1 },
-	wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
+	get wpCredentials() {
+		return {
+			id: 7,
+			display_name: 'Pat',
+			username: 'pat',
+			...(mockCapabilities === undefined ? {} : { capabilities: mockCapabilities }),
+		};
+	},
 	userDB: { getLocal$: () => of(null) } as Pick<UserDatabase, 'getLocal$'>,
 	storeDB: {},
 	site: {
@@ -174,12 +181,15 @@ jest.mock('../../contexts/app-state', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
-	useDocField: (_doc: unknown, select: (value: Record<string, unknown>) => unknown) =>
+	useDocField: (
+		doc: Record<string, unknown>,
+		select: (value: Record<string, unknown>) => unknown
+	) =>
 		select({
 			register_sessions: true,
 			variance_threshold: null,
 			expected_close_time: mockCloseTime,
-			capabilities: mockCapabilities,
+			...doc,
 		}),
 }));
 
@@ -244,12 +254,25 @@ it('reports not loaded until the combined query first emits, so an open register
 it.each([
 	[['manage_woocommerce_pos_cash'], true],
 	[['view_woocommerce_pos_reports'], false],
-	[undefined, true],
+	[undefined, false],
 	[[], false],
-])('canManageCash follows the cash capability and fails open when unknown', (caps, expected) => {
+])('canManageCash follows the cash capability and denies when unknown', (caps, expected) => {
 	mockCapabilities = caps;
 	const { result } = renderHook(() => useRegisterSession());
 	expect(result.current.canManageCash).toBe(expected);
+});
+
+it('denies cash management and keeps figures blind when capabilities are unknown', () => {
+	mockCapabilities = undefined;
+	const { result } = renderHook(() => useRegisterSession());
+	expect(result.current.canManageCash).toBe(false);
+	expect(result.current.blind).toBe(true);
+});
+
+it('reveals figures when the reports capability is granted', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	const { result } = renderHook(() => useRegisterSession());
+	expect(result.current.blind).toBe(false);
 });
 
 it('reports loaded with no session for a closed register', async () => {

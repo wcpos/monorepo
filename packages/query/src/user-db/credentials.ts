@@ -104,7 +104,7 @@ export async function upsertEmbeddedCredentials(
 		patch.uuid,
 		(current) => {
 			const next = { ...current, ...patch };
-			// Absent capabilities = unknown = fail open; drop stale ones (use-user-validation rule).
+			// Absent capabilities = unknown = every gate denied; drop stale ones.
 			if (!('capabilities' in patch)) delete (next as { capabilities?: string[] }).capabilities;
 			return next;
 		},
@@ -169,6 +169,20 @@ export function credentialsTokenOwner(
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
 
+export async function clearCashierCapabilities(
+	credentials: ReadonlyWpCredentialsRecord | WPCredentialsDocument
+): Promise<boolean> {
+	const wpUser = credentials as WPCredentialsDocument;
+	if (wpUser.getLatest().capabilities === undefined) return false;
+	// Never patch undefined: RxDB rejects it (422); incrementalModify removes the key.
+	await wpUser.getLatest().incrementalModify((docData) => {
+		delete (docData as { capabilities?: string[] }).capabilities;
+		return docData;
+	});
+	appLogger.debug('Cleared stale capabilities', { context: { userId: wpUser.id } });
+	return true;
+}
+
 export async function recordCashierProfile(
 	userDB: UserDatabase,
 	credentials: ReadonlyWpCredentialsRecord | WPCredentialsDocument,
@@ -207,16 +221,8 @@ export async function recordCashierProfile(
 			updateData.roles = [data.role];
 		}
 
-		// Server omits `capabilities` on plugin versions without the capability
-		// payload (absence = unknown = fail open). Never patch the key to
-		// `undefined` — RxDB schema validation rejects undefined values (422),
-		// which failed the whole login validation and left the user stuck on
-		// "Re-authenticate" with no stores. Stale stored caps are cleared via
-		// an incrementalModify below instead, which can actually remove a key.
-		let clearCapabilities = false;
-		if (data.capabilities === undefined) {
-			clearCapabilities = true;
-		} else if (Array.isArray(data.capabilities)) {
+		// The store sends capabilities from plugin 1.10.0 on; absence denies every gate.
+		if (Array.isArray(data.capabilities)) {
 			updateData.capabilities = [
 				...new Set(
 					data.capabilities.filter(
@@ -238,17 +244,8 @@ export async function recordCashierProfile(
 			});
 		}
 
-		if (
-			clearCapabilities &&
-			(wpUser.getLatest() as unknown as { capabilities?: string[] }).capabilities !== undefined
-		) {
-			await wpUser.getLatest().incrementalModify((docData) => {
-				delete (docData as { capabilities?: string[] }).capabilities;
-				return docData;
-			});
-			appLogger.debug('Cleared stale capabilities (server omitted the field)', {
-				context: { userId },
-			});
+		if (!Array.isArray(data.capabilities)) {
+			await clearCashierCapabilities(wpUser);
 		}
 
 		// Merge stores if present in response

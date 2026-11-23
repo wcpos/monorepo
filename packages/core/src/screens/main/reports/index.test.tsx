@@ -269,7 +269,11 @@ jest.mock('./reports', () => ({
 jest.mock('../../../contexts/app-state', () => ({
 	useStoreSession: () => mockSession,
 	useAppState: () => ({
-		wpCredentials: { id: 7, capabilities: mockCapabilities, populate$: () => mockViewedStores },
+		wpCredentials: {
+			id: 7,
+			...(mockCapabilities === undefined ? {} : { capabilities: mockCapabilities }),
+			populate$: () => mockViewedStores,
+		},
 		site: { timezone_string: 'UTC', gmt_offset: '0' },
 		store:
 			mockStoreID === undefined
@@ -723,13 +727,15 @@ it('gives a denied cashier the page bar above the denial without mounting report
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
 
-// Revert: treat an absent legacy capability payload as an explicit denial.
-it('keeps Sales and Closures accessible when capabilities are unknown', () => {
+// Revert: allow the reports shell to mount with an unknown capability list.
+it('denies reports when capabilities are unknown', () => {
 	mockCapabilities = undefined;
+	mockUseCollectionQueryHandle.mockClear();
+	mockClosureScope.mockClear();
 	render(<ReportsScreen />);
-	expect(screen.queryByTestId('reports-denied')).toBeNull();
-	fireEvent.click(screen.getByTestId('till-closures'));
-	expect(mockClosureScope).toHaveBeenCalled();
+	expect(screen.getByTestId('reports-denied')).toBeTruthy();
+	expect(mockUseCollectionQueryHandle).not.toHaveBeenCalled();
+	expect(mockClosureScope).not.toHaveBeenCalled();
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
 

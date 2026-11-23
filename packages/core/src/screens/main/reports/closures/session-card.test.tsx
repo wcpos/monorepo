@@ -67,7 +67,7 @@ const appState = () => ({
 		price_thousand_sep: ',',
 	},
 	wpCredentials: {
-		capabilities: blind ? [] : ['view_woocommerce_pos_reports'],
+		...(unknownCapabilities ? {} : { capabilities: blind ? [] : ['view_woocommerce_pos_reports'] }),
 		populate$: () => viewedStores,
 	},
 	site: { populate$: () => credentials },
@@ -78,6 +78,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 let session: { opened_at_gmt: string; opened_by: number; status: string } | null;
 let blind = false;
+let unknownCapabilities = false;
 let lastClosure: { id: string } | null = { id: 'c' };
 const mockDoc = {
 	printedTo: null,
@@ -117,6 +118,7 @@ jest.mock('../../../../services/register-session/use-session-report', () => ({
 beforeEach(() => {
 	jest.clearAllMocks();
 	blind = false;
+	unknownCapabilities = false;
 	lastClosure = { id: 'c' };
 	session = { opened_at_gmt: '2026-09-17T09:00:00Z', opened_by: 7, status: 'open' };
 });
@@ -235,6 +237,15 @@ it('does not expose remote expected figures to a blind cashier', async () => {
 	);
 	expect(screen.queryByTestId('session-expected')).toBeNull();
 });
+it('keeps remote session figures blind when capabilities are unknown', async () => {
+	unknownCapabilities = true;
+	render(<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} />);
+	await waitFor(() =>
+		expect(screen.getByTestId('reports-session-card').textContent).toContain('12')
+	);
+	expect(screen.queryByTestId('session-expected')).toBeNull();
+});
+
 // Revert: read the local last closure for a remote closed register.
 it.each([0, 2])(
 	'uses the remote last closure for a closed register in store %s',

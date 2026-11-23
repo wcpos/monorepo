@@ -12,6 +12,7 @@ import { readClosure, type RegisterSessionRow } from '@wcpos/query/register-sess
 import { usePageSheetHost } from '../../components/page-sheet-host';
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreSession } from '../../../../contexts/app-state';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useT } from '../../../../contexts/translations';
 import { useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -234,8 +235,8 @@ export function RemoteSessionCard({
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-pass-data-to-parent -- Publish the existing lookup without moving or duplicating its reads.
 		onSessions?.(data.session ? [data.session] : []);
 	}, [data.session, onSessions]);
-	const { wpCredentials, storeDB } = useStoreSession();
-	const capabilities = useDocField(wpCredentials, (row) => row.capabilities);
+	const { storeDB } = useStoreSession();
+	const { caps } = useUserCapabilities();
 	const t = useT();
 	const closureId = data.closure?.server_closure_id ?? data.closure?.id;
 	const getLocalClosure = React.useCallback(
@@ -273,7 +274,7 @@ export function RemoteSessionCard({
 					binding={{ registerName: register.name }}
 					expected={data.session?.expected ?? (summary ? undefined : {})}
 					salesCount={data.session?.sales_count ?? (summary ? undefined : 0)}
-					blind={!capabilities?.includes('view_woocommerce_pos_reports')}
+					blind={!caps.canViewReports}
 					unavailable={!online}
 					print={async () => {
 						if ((await report.print()) !== true) throw new Error(t('reports.reprint_failed'));

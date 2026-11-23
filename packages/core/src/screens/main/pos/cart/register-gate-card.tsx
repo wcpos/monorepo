@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import { EmptyState } from '@wcpos/components/empty-state';
-import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 const REGISTER_DOCS_URL =
 	'https://docs.wcpos.com/stores/registers-and-devices#choosing-a-store-and-a-register';
@@ -25,10 +25,9 @@ export function RegisterGateCard({
 	retry: () => Promise<void>;
 }) {
 	const t = useT();
-	const { site, wpCredentials } = useStoreSession();
-	const capabilities = useDocField(wpCredentials, (value) => value.capabilities) as
-		string[] | undefined;
-	const manager = !!capabilities?.includes('manage_woocommerce_pos');
+	const { site } = useStoreSession();
+	const { caps } = useUserCapabilities();
+	const manager = caps.canManagePos;
 	// wp-admin lives under the WordPress install URL (`site.url`), which differs from `site.home`
 	// when WordPress sits in a subdirectory, as the settings' WooCommerce links already do.
 	const adminStores = `${String(site.url ?? '').replace(/\/+$/, '')}/wp-admin/edit.php?post_type=wcpos_store`;
