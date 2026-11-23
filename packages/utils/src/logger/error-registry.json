@@ -1685,6 +1685,24 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "AUTH342",
+		"symbol": "CASHIER_IDENTITY_CLASH",
+		"domain": "AUTH",
+		"severity": "error",
+		"actionHint": "Remove the other saved store from this device, then sign in again.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "site-admin",
+		"summary": "This account is already saved on this device under another store.",
+		"docsBody": "Two stores share this account's identity because one store is a copy of the other, such as a staging clone or a second shop started from a backup. The app keeps one saved account per identity, so signing in to both would mix their data. Nothing was saved by this sign-in.",
+		"troubleshooting": [
+			"Remove the other saved store from this device, then sign in to this store again."
+		],
+		"logSources": [],
+		"evidence": "wcpos/monorepo#3767: two copied stores give one user the same uuid",
+		"introducedIn": "2.0.4"
+	},
+	{
 		"code": "AUTH411",
 		"symbol": "STORE_URL_INVALID",
 		"domain": "AUTH",

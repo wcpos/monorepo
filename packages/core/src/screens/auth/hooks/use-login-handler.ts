@@ -4,9 +4,14 @@ import { router } from 'expo-router';
 
 import { getLogger, isErrorReported, markErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { type ReadonlySiteRecord, saveLoginCredentials } from '@wcpos/query/user-db';
+import {
+	CashierIdentityClashError,
+	type ReadonlySiteRecord,
+	saveLoginCredentials,
+} from '@wcpos/query/user-db';
 
 import { useAppState } from '../../../contexts/app-state';
+import { useT } from '../../../contexts/translations';
 
 const authLogger = getLogger(['wcpos', 'auth', 'login']);
 
@@ -35,6 +40,7 @@ export const useLoginHandler = (
 	site: Pick<ReadonlySiteRecord, 'uuid' | 'name'> | null
 ): UseLoginHandlerReturn => {
 	const { userDB } = useAppState();
+	const t = useT();
 	const [isProcessing, setIsProcessing] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
 
@@ -103,14 +109,19 @@ export const useLoginHandler = (
 					router.back();
 				}
 			} catch (err: unknown) {
-				const errorMessage =
-					(err instanceof Error ? err.message : '') || 'Failed to save WordPress credentials';
+				const isIdentityClash = err instanceof CashierIdentityClashError;
+				const errorMessage = isIdentityClash
+					? t('auth.cashier_identity_clash', { name: err.existingName })
+					: (err instanceof Error ? err.message : '') || 'Failed to save WordPress credentials';
 
 				// One failure, one row and one toast. An invalid login response already
-				// wrote its AUTH999 row above; anything else is the local credential write.
+				// wrote its AUTH999 row above; an identity clash is AUTH342; anything else is
+				// the local credential write.
 				if (!isErrorReported(err)) {
 					authLogger.error(`Failed to save WordPress credentials: ${errorMessage}`, {
-						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+						code: isIdentityClash
+							? ERROR_CODES.CASHIER_IDENTITY_CLASH
+							: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						showToast: true,
 						context: {
 							error: errorMessage,
@@ -127,7 +138,7 @@ export const useLoginHandler = (
 				setIsProcessing(false);
 			}
 		},
-		[userDB, site]
+		[userDB, site, t]
 	);
 
 	return {

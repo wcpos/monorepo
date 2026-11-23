@@ -76,6 +76,7 @@ export type ErrorCode =
 	| 'AUTH321'
 	| 'AUTH331'
 	| 'AUTH341'
+	| 'AUTH342'
 	| 'AUTH411'
 	| 'AUTH421'
 	| 'AUTH431'
@@ -861,6 +862,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: 'This store reports the same identity as a store already saved on this device.',
 	},
+	AUTH342: {
+		code: 'AUTH342',
+		symbol: 'CASHIER_IDENTITY_CLASH',
+		domain: 'AUTH',
+		severity: 'error',
+		actionHint: 'Remove the other saved store from this device, then sign in again.',
+		dataSafety: 'no-impact',
+		summary: 'This account is already saved on this device under another store.',
+	},
 	AUTH411: {
 		code: 'AUTH411',
 		symbol: 'STORE_URL_INVALID',
@@ -1336,6 +1346,7 @@ export const ERROR_CODES = {
 	WOOCOMMERCE_MISSING: 'AUTH321',
 	WCPOS_PLUGIN_OUTDATED: 'AUTH331',
 	SITE_IDENTITY_CLASH: 'AUTH341',
+	CASHIER_IDENTITY_CLASH: 'AUTH342',
 	STORE_URL_INVALID: 'AUTH411',
 	AUTH_TOKEN_BLOCKED_BY_HOST: 'AUTH421',
 	REST_TRANSPORT_BLOCKED: 'AUTH431',

@@ -4,15 +4,20 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { getLogger, isErrorReported } from '@wcpos/utils/logger';
+import { CashierIdentityClashError } from '@wcpos/query/user-db';
 
+import { createTestT } from '../../../../jest/translate';
 import { useLoginHandler } from './use-login-handler';
 
+const mockT = jest.fn(createTestT());
 const mockSaveLoginCredentials = jest.fn();
 
 jest.mock('expo-router', () => ({ router: { canGoBack: () => false, back: jest.fn() } }));
 jest.mock('@wcpos/query/user-db', () => ({
+	...jest.requireActual('@wcpos/query/user-db'),
 	saveLoginCredentials: (...args: unknown[]) => mockSaveLoginCredentials(...args),
 }));
+jest.mock('../../../contexts/translations', () => ({ useT: () => mockT }));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({ userDB: {} }),
 }));
@@ -36,6 +41,27 @@ describe('useLoginHandler', () => {
 			linked: true,
 			credentials: { stores: [] },
 		});
+	});
+
+	it('translates a cashier identity clash, reports AUTH342 once and rethrows it marked', async () => {
+		const clash = new CashierIdentityClashError('Store A');
+		mockSaveLoginCredentials.mockRejectedValueOnce(clash);
+		const { result } = renderHook(() => useLoginHandler(site));
+		const message =
+			'This account is already saved under your store Store A. Remove that store from this device, then sign in again.';
+
+		await act(async () => {
+			await expect(result.current.handleLoginSuccess({ params })).rejects.toBe(clash);
+		});
+
+		expect(mockT).toHaveBeenCalledWith('auth.cashier_identity_clash', { name: 'Store A' });
+		expect(result.current.error).toBe(message);
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		expect(logger.error).toHaveBeenCalledWith(
+			`Failed to save WordPress credentials: ${message}`,
+			expect.objectContaining({ code: 'AUTH342', showToast: true, context: { error: message } })
+		);
+		expect(isErrorReported(clash)).toBe(true);
 	});
 
 	it('reports an invalid login response once and rethrows it, so no caller says "Session renewed"', async () => {

@@ -15,6 +15,13 @@ import { linkCredentialsToSite } from './sites';
 
 import type { ReadonlySiteRecord, ReadonlyWpCredentialsRecord } from './records';
 
+export class CashierIdentityClashError extends Error {
+	constructor(public readonly existingName: string | undefined) {
+		super('Cashier identity already belongs to another site');
+		this.name = 'CashierIdentityClashError';
+	}
+}
+
 export async function saveLoginCredentials(
 	userDB: UserDatabase | null | undefined,
 	siteUuid: string | undefined,
@@ -30,6 +37,13 @@ export async function saveLoginCredentials(
 	if (!userDB) throw new UserDatabaseUnavailableError();
 	if (!siteUuid || !params.uuid)
 		throw new Error('Cannot save credentials without site and credential uuids');
+	// Copied stores give one user the same uuid; one cashier row cannot serve two sites (#3767).
+	// Filtered here, not in the selector: a device saves a handful of sites.
+	const otherSite = (await userDB.sites.find().exec()).find(
+		(saved) => saved.uuid !== siteUuid && (saved.wp_credentials ?? []).includes(params.uuid)
+	);
+	if (otherSite) throw new CashierIdentityClashError(otherSite.name);
+
 	// Extract credentials from the response
 	const credentialsData = {
 		uuid: params.uuid,
