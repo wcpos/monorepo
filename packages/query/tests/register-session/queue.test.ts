@@ -2304,4 +2304,33 @@ describe('#2016: retry and abandon keep the closure row', () => {
 		expect(http.post).toHaveBeenCalledWith('sessions', expect.objectContaining({ id: next.id }));
 		expect(next.getLatest().sync_status).toBe('synced');
 	});
+	it.each([
+		[404, { response: { status: 404, data: { code: 'wcpos_session_not_found' } } }],
+		[503, { response: { status: 503, data: {} } }],
+	])(
+		'#3753: a set aside made while a request is in flight keeps its marker when the reply is %s',
+		async (_status, reply) => {
+			const { session, row } = await closure();
+			const movement = await recordMovement(db, {
+				sessionId: session.id,
+				type: 'paid_in',
+				amount: '30',
+				reason: '',
+				actor: 7,
+			});
+			http.post.mockImplementation(async () => {
+				await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+				throw reply;
+			});
+			await drain();
+			expect(http.post.mock.calls).toHaveLength(1);
+			const marked = { sync_status: 'failed', sync_next_at: null, sync_error: SESSION_SET_ASIDE };
+			expect(session.getLatest().toJSON()).toMatchObject(marked);
+			expect(row.getLatest().toJSON()).toMatchObject(marked);
+			expect(movement.getLatest().toJSON()).toMatchObject(marked);
+			http.post.mockClear();
+			await drain();
+			expect(http.post).not.toHaveBeenCalled();
+		}
+	);
 });
