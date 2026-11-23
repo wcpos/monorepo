@@ -300,7 +300,9 @@ jest.mock('../../../services/register/use-register-binding', () => ({
 		],
 	}),
 }));
-jest.mock('@wcpos/query', () => ({ useDocField: () => undefined }));
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
 const get = jest.fn();
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => ({ get }) }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
