@@ -12,7 +12,7 @@ import {
 	getCheckoutModeSnapshot,
 	resetCheckoutMode,
 } from '../checkout/checkout-mode';
-import { RECORD_ASLEEP_RESEND_LIMIT } from '../checkout/payments/record-manual-payment';
+import { RECORD_ASLEEP_RESEND_LIMIT } from '../checkout/payments/await-awake';
 import { closeSale, useCloseSale } from './close-sale';
 
 // The hook's dependencies; closeSale itself takes everything it needs as arguments.

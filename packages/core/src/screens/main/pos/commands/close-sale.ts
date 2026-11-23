@@ -22,7 +22,7 @@ import {
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
-import { awaitAwake, RECORD_ASLEEP_RESEND_LIMIT } from '../checkout/payments/record-manual-payment';
+import { awaitAwake, RECORD_ASLEEP_RESEND_LIMIT } from '../checkout/payments/await-awake';
 import { commandProvenance } from '../checkout/provenance/command-provenance';
 import { mirrorAnswer, type NotMirrored } from './land-answer';
 
