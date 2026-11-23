@@ -48,6 +48,12 @@ export default function POSLayout() {
 	useRejectedOrderSavesSync(storeID);
 	useStoreDeletedOrdersSettler(storeID);
 	const location = useTillLocation();
+	const [prevInPos, setPrevInPos] = React.useState(location.inPos);
+	const [tillEntry, setTillEntry] = React.useState(0);
+	if (location.inPos !== prevInPos) {
+		setPrevInPos(location.inPos);
+		if (location.inPos) setTillEntry(tillEntry + 1);
+	}
 	useCheckoutUrlSeed(location.seed);
 	// The provider follows the till, never a sheet's order (#3150).
 	const tillOrderId = useTillOrderId(location);
@@ -104,6 +110,7 @@ export default function POSLayout() {
 							scope={`${cashierID}:${storeID}:${registerId}`}
 							defaultCustomerResource={defaultCustomerResource}
 							currentOrderUUID={tillOrderId}
+							tillEntry={tillEntry}
 						>
 							<ErrorBoundary FallbackComponent={FallbackScreen}>
 								{/* Spans both register layouts (tabs, columns): the products screen's query and
