@@ -8,7 +8,6 @@ import { renderHook } from '@testing-library/react';
 import { clearUpdateRequired, currentUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { extractValidJSON, useRestHttpClient } from './index';
-import { useHostCapabilities } from '../../mini-apps/capabilities/host';
 
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
@@ -135,17 +134,6 @@ describe('useRestHttpClient methods', () => {
 		expect(latestRequest().headers).toEqual(
 			installId && flag ? { 'X-WCPOS-Instance': installId } : {}
 		);
-	});
-
-	it('keeps the host identity on mini-app proxy calls', async () => {
-		mockSite.use_instance_header = true;
-		jest.requireMock('@wcpos/utils/get-instance-id').getInstanceId.mockResolvedValue('host');
-		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
-		await result.current['http.proxy']({
-			path: '/wcpos/v1/orders',
-			headers: { 'x-Wcpos-Instance': 'forged' },
-		});
-		expect(latestRequest().headers).toEqual({ 'X-WCPOS-Instance': 'host' });
 	});
 
 	it('wires Axios update-required refusals to the current site gate', () => {

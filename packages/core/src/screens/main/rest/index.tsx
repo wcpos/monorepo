@@ -26,7 +26,6 @@ export { OrderScreen } from '../orders/edit';
 export { EditProductScreen } from '../products/edit/product';
 export { EditVariationScreen } from '../products/edit/variation';
 export { LogsScreen } from '../logs';
-export { MiniAppHost } from '../mini-apps';
 export { OrdersScreen } from '../orders';
 export { ProductsScreen } from '../products';
 export { RefundOrderScreen } from '../orders/refund';

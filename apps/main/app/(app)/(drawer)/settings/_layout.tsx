@@ -17,14 +17,6 @@ export default function SettingsStack() {
 				}}
 			>
 				<Stack.Screen name="(pages)" />
-				<Stack.Screen
-					name="(modals)/mini-app/[id]"
-					options={{
-						presentation: 'containedTransparentModal',
-						animation: 'fade',
-						contentStyle: { backgroundColor: 'transparent' },
-					}}
-				/>
 			</Stack>
 		</View>
 	);
