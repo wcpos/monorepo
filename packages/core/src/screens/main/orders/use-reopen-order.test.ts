@@ -14,8 +14,15 @@ const mockPush = jest.fn();
 // Re-open goes through openTill(): a navigate, never a push (a push from the Orders page
 // stacked a second POS screen). The refused-reopen toast still pushes the standalone checkout.
 const mockNavigate = jest.fn();
+const mockCanDismiss = jest.fn(() => false);
+const mockDismiss = jest.fn();
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
+	useRouter: () => ({
+		push: mockPush,
+		navigate: mockNavigate,
+		canDismiss: mockCanDismiss,
+		dismiss: mockDismiss,
+	}),
 }));
 const mockListeners = new Set<(event: EngineEvent) => void>();
 let mockConnectivity: 'online' | 'offline' = 'online';
@@ -91,6 +98,7 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	// A once-value a test queued but never consumed must not leak into the next test.
 	jest.mocked(applyLocalPatch).mockReset();
+	mockCanDismiss.mockReset().mockReturnValue(false);
 	mockListeners.clear();
 	mockConnectivity = 'online';
 	mockOnDrain = () => {};
@@ -277,6 +285,41 @@ it('navigates to the order cart after a successful local write', async () => {
 		pathname: '/cart/[...orderId]',
 		params: { orderId: ['order-1'] },
 	});
+});
+
+it('dismisses the order modal before navigating after a successful reopen', async () => {
+	mockCanDismiss.mockReturnValue(true);
+	jest.mocked(applyLocalPatch).mockResolvedValueOnce({ document: order } as never);
+	const { result } = renderHook(() => useReopenOrder(order));
+	await act(async () => result.current.reopen());
+	expect(mockDismiss).toHaveBeenCalledTimes(1);
+	expect(mockDismiss.mock.invocationCallOrder[0]).toBeLessThan(
+		mockNavigate.mock.invocationCallOrder[0]
+	);
+	expect(mockNavigate).toHaveBeenCalledWith({
+		pathname: '/cart/[...orderId]',
+		params: { orderId: ['order-1'] },
+	});
+});
+
+it('navigates without dismissing after a successful reopen from the list', async () => {
+	jest.mocked(applyLocalPatch).mockResolvedValueOnce({ document: order } as never);
+	const { result } = renderHook(() => useReopenOrder(order));
+	await act(async () => result.current.reopen());
+	expect(mockDismiss).not.toHaveBeenCalled();
+	expect(mockNavigate).toHaveBeenCalledWith({
+		pathname: '/cart/[...orderId]',
+		params: { orderId: ['order-1'] },
+	});
+});
+
+it('does not dismiss or navigate when the local write resolves undefined inside the modal', async () => {
+	mockCanDismiss.mockReturnValue(true);
+	jest.mocked(applyLocalPatch).mockResolvedValueOnce(undefined as never);
+	const { result } = renderHook(() => useReopenOrder(order));
+	await act(async () => result.current.reopen());
+	expect(mockDismiss).not.toHaveBeenCalled();
+	expect(mockNavigate).not.toHaveBeenCalled();
 });
 
 it("on a phone, navigates to the order cart in the phone's tabs", async () => {
