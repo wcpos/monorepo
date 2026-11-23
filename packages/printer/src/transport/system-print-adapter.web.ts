@@ -88,6 +88,7 @@ export class SystemPrintAdapter implements PrinterTransport {
 					const cleanup = () => {
 						if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
 						win.removeEventListener('afterprint', settle);
+						window.removeEventListener('afterprint', settle);
 						// Defer iframe removal so the browser finishes spooling.
 						// Use the captured iframe ref — not getElementById — to avoid
 						// removing a newer iframe created by a subsequent print job.
@@ -108,6 +109,9 @@ export class SystemPrintAdapter implements PrinterTransport {
 					try {
 						fallbackTimer = setTimeout(settle, FALLBACK_TIMEOUT);
 						win.addEventListener('afterprint', settle, { once: true });
+						// Safari fires afterprint on the top-level window, not the print frame;
+						// settle on whichever fires first.
+						window.addEventListener('afterprint', settle, { once: true });
 
 						win.focus();
 						win.print();
