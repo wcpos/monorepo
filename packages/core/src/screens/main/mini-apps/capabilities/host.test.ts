@@ -5,8 +5,9 @@ import { useHostCapabilities } from './host';
 import { MINI_APP_PROXY_SCOPES, type MiniAppProxyScope } from '../catalog';
 
 const WIDE: MiniAppProxyScope = {
-	methods: ['GET', 'POST', 'PUT', 'DELETE'],
+	methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
 	paths: ['/wcpos/v1/', '/wc/v3/', '/wp/v2/'],
+	queryKeys: ['per_page', 'order-by', 'page2', 'rest_route', '_method'],
 };
 
 const mockRequest = jest.fn(async (_config: unknown) => ({
@@ -81,15 +82,83 @@ describe('useHostCapabilities', () => {
 				headers: {
 					'X-HTTP-Method-Override': 'DELETE',
 					'x-http-method': 'DELETE',
-					'x-wp-nonce': 'kept',
+					'x-wp-nonce': 'forged',
+					'content-type': 'application/json',
 				},
 			});
 		});
 
 		expect(mockRequest).toHaveBeenCalledTimes(1);
 		expect(mockRequest.mock.calls[0][0]).toEqual(
-			expect.objectContaining({ method: 'GET', headers: { 'x-wp-nonce': 'kept' } })
+			expect.objectContaining({ method: 'GET', headers: { 'content-type': 'application/json' } })
 		);
+	});
+
+	it('http.proxy drops headers outside the content allowlist', async () => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
+		const allowed = {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			'If-Match': 'etag',
+			'If-None-Match': 'other-etag',
+		};
+		await result.current['http.proxy']({
+			method: 'GET',
+			path: '/wcpos/v1/settings',
+			headers: {
+				...allowed,
+				x_http_method_override: 'DELETE',
+				'X-WCPOS-Store': '2',
+				'x-wp-nonce': 'forged',
+			},
+		});
+		expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({ headers: allowed }));
+	});
+
+	it.each(['store_id', 'authorization'])('refuses the unlisted query key %s', async (key) => {
+		const { result } = renderHook(() =>
+			useHostCapabilities(jest.fn(), { ...WIDE, queryKeys: ['per_page'] })
+		);
+		await expect(
+			result.current['http.proxy']({
+				method: 'GET',
+				path: '/wcpos/v1/settings',
+				query: { [key]: '2' },
+			})
+		).rejects.toMatchObject({
+			code: 'bad_request',
+			message: "Query key is outside this mini-app's scope",
+		});
+		expect(mockRequest).not.toHaveBeenCalled();
+	});
+
+	it('passes a query key listed in this mini-app scope', async () => {
+		const { result } = renderHook(() =>
+			useHostCapabilities(jest.fn(), { ...WIDE, queryKeys: ['per_page'] })
+		);
+		await result.current['http.proxy']({
+			path: '/wcpos/v1/settings',
+			query: { per_page: 10 },
+		});
+		expect(mockRequest).toHaveBeenCalledWith(
+			expect.objectContaining({ url: '/wcpos/v1/settings?per_page=10' })
+		);
+	});
+
+	it.each(['GET', 'HEAD'])('refuses a body on %s', async (method) => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn(), WIDE));
+		await expect(
+			result.current['http.proxy']({
+				method,
+				path: '/wcpos/v1/settings',
+				body: { store_id: 2 },
+			})
+		).rejects.toMatchObject({ code: 'bad_request', message: 'GET and HEAD requests take no body' });
+		expect(mockRequest).not.toHaveBeenCalled();
+		for (const body of [undefined, null]) {
+			await result.current['http.proxy']({ method, path: '/wcpos/v1/settings', body });
+		}
+		expect(mockRequest).toHaveBeenCalledTimes(2);
 	});
 
 	it('http.proxy refuses a _method query override', async () => {
@@ -175,6 +244,7 @@ describe('useHostCapabilities', () => {
 		expect(MINI_APP_PROXY_SCOPES['printer-wizard']).toEqual({
 			methods: ['GET'],
 			paths: ['/wcpos/v1/settings/'],
+			queryKeys: [],
 		});
 	});
 

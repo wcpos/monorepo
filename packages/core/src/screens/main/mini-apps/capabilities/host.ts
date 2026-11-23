@@ -9,18 +9,8 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 const ALLOWED_REST_PREFIXES = ['/wcpos/v1/', '/wc/v3/', '/wp/v2/'];
 const MAX_RESPONSE_LENGTH = 1024 * 1024;
-// The host owns authentication and the request method; a page may never set or override these.
-// WordPress REST reads the method-override headers (and the `_method` query key, refused below)
-// as the real method, so a GET could otherwise run as a DELETE.
-const BLOCKED_REQUEST_HEADERS = [
-	'authorization',
-	'cookie',
-	'x-wcpos',
-	'host',
-	'x-wcpos-instance',
-	'x-http-method-override',
-	'x-http-method',
-];
+// The host owns authentication, the store and the method, so only these content headers pass.
+const ALLOWED_REQUEST_HEADERS = ['accept', 'content-type', 'if-match', 'if-none-match'];
 
 // Validated after percent-decoding, not by prefix alone: a page holding the proxy must not be
 // able to walk out of the allowed REST namespaces with dot segments or delimiters, encoded or not.
@@ -71,6 +61,9 @@ export function useHostCapabilities(
 				if (!scope.methods.includes(verb)) {
 					throw new BridgeError('capability_denied', "Method is outside this mini-app's scope");
 				}
+				if ((verb === 'GET' || verb === 'HEAD') && body !== undefined && body !== null) {
+					throw new BridgeError('bad_request', 'GET and HEAD requests take no body');
+				}
 				const decoded = decodeURIComponent(path);
 				if (
 					!scope.paths.some((p) => path === p.slice(0, -1) || path.startsWith(p)) ||
@@ -82,6 +75,9 @@ export function useHostCapabilities(
 				if (query && typeof query === 'object' && !Array.isArray(query)) {
 					if (Object.keys(query).some((key) => !/^[A-Za-z0-9_-]+$/.test(key))) {
 						throw new BridgeError('bad_request', 'Query key is not allowed');
+					}
+					if (Object.keys(query).some((key) => !scope.queryKeys.includes(key))) {
+						throw new BridgeError('bad_request', "Query key is outside this mini-app's scope");
 					}
 				}
 				if (
@@ -107,7 +103,7 @@ export function useHostCapabilities(
 				const requestHeaders = Object.fromEntries(
 					Object.entries(headers && typeof headers === 'object' ? headers : {}).filter(
 						([key, value]) =>
-							typeof value === 'string' && !BLOCKED_REQUEST_HEADERS.includes(key.toLowerCase())
+							typeof value === 'string' && ALLOWED_REQUEST_HEADERS.includes(key.toLowerCase())
 					)
 				);
 				let response: { status: number; headers?: Record<string, unknown>; data: unknown };

@@ -3,6 +3,9 @@ import * as React from 'react';
 
 import { act, cleanup, render, screen } from '@testing-library/react';
 
+import { useBridge } from './bridge/use-bridge';
+import { useHostCapabilities } from './capabilities/host';
+import { MINI_APP_ORIGIN, MINI_APP_PROXY_SCOPES } from './catalog';
 import { MiniAppHost } from './mini-app-host';
 
 interface MockWebViewProps {
@@ -61,14 +64,14 @@ jest.mock('uniwind', () => ({
 jest.mock('uuid', () => ({ v4: () => 'generated-id' }));
 jest.mock('./bridge/use-bridge', () => ({
 	...jest.requireActual('./bridge/use-bridge'),
-	useBridge: () => ({
+	useBridge: jest.fn(() => ({
 		onMessage: mockOnMessage,
 		ready: mockReady,
 		reset: mockReset,
 		send: mockSend,
-	}),
+	})),
 }));
-jest.mock('./capabilities/host', () => ({ useHostCapabilities: () => ({}) }));
+jest.mock('./capabilities/host', () => ({ useHostCapabilities: jest.fn(() => ({})) }));
 jest.mock('./capabilities/printers', () => ({ usePrinterCapabilities: () => ({}) }));
 jest.mock('./catalog', () => ({
 	MINI_APP_PROXY_SCOPES: jest.requireActual('./catalog').MINI_APP_PROXY_SCOPES,
@@ -103,6 +106,25 @@ describe('MiniAppHost readiness deadline', () => {
 		jest.clearAllMocks();
 		mockWebViewProps = {};
 		mockReady = false;
+	});
+
+	it.each(['printer-wizard', 'constructor'])('passes only an own scope for %s', (id) => {
+		render(<MiniAppHost id={id} onClose={jest.fn()} />);
+		expect(jest.mocked(useHostCapabilities).mock.calls[0][1]).toBe(
+			id === 'printer-wizard' ? MINI_APP_PROXY_SCOPES['printer-wizard'] : undefined
+		);
+	});
+
+	it('pins the bridge to the app directory', () => {
+		render(<MiniAppHost id="printer-wizard" onClose={jest.fn()} />);
+		expect(jest.mocked(useBridge).mock.calls[0][1]).toBe(`${MINI_APP_ORIGIN}/printer-wizard`);
+	});
+
+	it('refuses navigation to another app directory in the same repo', () => {
+		render(<MiniAppHost id="printer-wizard" onClose={jest.fn()} />);
+		const shouldStart = mockWebViewProps.onShouldStartLoadWithRequest;
+		expect(shouldStart?.({ url: `${MINI_APP_ORIGIN}/printer-wizard/step.html` })).toBe(true);
+		expect(shouldStart?.({ url: `${MINI_APP_ORIGIN}/other-app/index.html` })).toBe(false);
 	});
 
 	afterEach(() => {

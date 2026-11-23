@@ -24,7 +24,6 @@ import {
 	meetsMinAppVersion,
 	MINI_APP_ORIGIN,
 	MINI_APP_PROXY_SCOPES,
-	type MiniAppProxyScope,
 	useMiniAppCatalog,
 } from './catalog';
 import { detectWebEngine } from './detect-web-engine';
@@ -55,7 +54,8 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			item.url.startsWith(`${MINI_APP_ORIGIN}/`) &&
 			item.platforms.includes(appInfo.platform)
 	);
-	// jsDelivr is one origin for every repo, so the bridge is pinned to the mini-app's own path.
+	// jsDelivr shares an origin across repos and apps; pin the bridge to this app's own directory.
+	const appBase = entry ? entry.url.slice(0, entry.url.lastIndexOf('/')) : MINI_APP_ORIGIN;
 	const origin = new URL(MINI_APP_ORIGIN).origin;
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const sendRef = React.useRef<(action: string, payload: object) => void>(() => undefined);
@@ -71,7 +71,9 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 	const printerHandlers = usePrinterCapabilities();
 	const hostHandlers = useHostCapabilities(
 		close,
-		(MINI_APP_PROXY_SCOPES as Record<string, MiniAppProxyScope | undefined>)[id]
+		Object.prototype.hasOwnProperty.call(MINI_APP_PROXY_SCOPES, id)
+			? MINI_APP_PROXY_SCOPES[id as keyof typeof MINI_APP_PROXY_SCOPES]
+			: undefined
 	);
 	const availableHandlers = { ...printerHandlers, ...hostHandlers };
 	const granted = entry?.capabilities.filter((action) => action in availableHandlers) ?? [];
@@ -107,7 +109,7 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			return initPayload;
 		},
 	};
-	const { onMessage, ready, reset, send } = useBridge(webViewRef, MINI_APP_ORIGIN, handlers);
+	const { onMessage, ready, reset, send } = useBridge(webViewRef, appBase, handlers);
 	const [attempt, setAttempt] = React.useState(0);
 	const [loadGeneration, setLoadGeneration] = React.useState(0);
 	const [failed, setFailed] = React.useState(false);
@@ -189,7 +191,7 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				}}
 				// Only the mini-app's own path may load inside a bridged view; anything else is refused.
 				onShouldStartLoadWithRequest={(request: { url: string }) =>
-					isUnderPin(request.url, MINI_APP_ORIGIN)
+					isUnderPin(request.url, appBase)
 				}
 				onError={() => setFailed(true)}
 			/>
