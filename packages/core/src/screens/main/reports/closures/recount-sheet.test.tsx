@@ -50,7 +50,9 @@ const viewedStores = of([
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		wpCredentials: {
-			capabilities: manager ? ['manage_woocommerce_pos_closures'] : [],
+			...(unknownCapabilities
+				? {}
+				: { capabilities: manager ? ['manage_woocommerce_pos_closures'] : [] }),
 			populate$: () => viewedStores,
 		},
 		store: {
@@ -63,7 +65,12 @@ jest.mock('../../../../contexts/app-state', () => ({
 		},
 	}),
 	useStoreSession: () => ({
-		wpCredentials: { id: 7, capabilities: manager ? ['manage_woocommerce_pos_closures'] : [] },
+		wpCredentials: {
+			id: 7,
+			...(unknownCapabilities
+				? {}
+				: { capabilities: manager ? ['manage_woocommerce_pos_closures'] : [] }),
+		},
 		store: {
 			id: 1,
 			currency: currentCurrency,
@@ -181,6 +188,7 @@ jest.mock('../../../../services/register-session/use-session-report', () => ({
 }));
 const mockMint = jest.fn(() => 'client-uuid');
 let manager = true;
+let unknownCapabilities = false;
 let currentCurrency = 'USD';
 const row = {
 	id: 'closure',
@@ -206,6 +214,7 @@ const fillCount = () => {
 beforeEach(() => {
 	jest.clearAllMocks();
 	manager = true;
+	unknownCapabilities = false;
 	currentCurrency = 'USD';
 	online = 'online-website-available';
 	post.mockResolvedValue({ data: {} });
@@ -241,6 +250,17 @@ it('requires and submits manager credentials without the closure capability', as
 	);
 	expect(closeSession).not.toHaveBeenCalled();
 });
+it('requires manager approval when capabilities are unknown', () => {
+	unknownCapabilities = true;
+	mount();
+	fillCount();
+	expect(screen.getByTestId('approve-username')).toBeTruthy();
+	expect(screen.getByTestId('approve-password')).toBeTruthy();
+	expect((screen.getByTestId('recount-save') as HTMLButtonElement).disabled).toBe(true);
+	fireEvent.click(screen.getByTestId('recount-save'));
+	expect(post).not.toHaveBeenCalled();
+});
+
 // Revert: permit offline writes or hide the reason for the disabled button.
 it('disables offline recount with an explanation and no requests', () => {
 	online = 'offline';

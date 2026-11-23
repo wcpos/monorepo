@@ -28,6 +28,7 @@ import { useStoreDay } from '../../hooks/use-store-day';
 import { convertUTCStringToLocalDate } from '../../hooks/use-local-date';
 import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
+import { useUserCapabilities } from '../../screens/main/hooks/use-user-capabilities';
 import { useRegisterBinding } from '../register/use-register-binding';
 
 /**
@@ -96,7 +97,7 @@ export function useRegisterSession() {
 	const binding = useRegisterBinding();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const varianceThreshold = useDocField(store, (value) => value.variance_threshold);
-	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
+	const { caps } = useUserCapabilities();
 	const source = React.useMemo(
 		() =>
 			!binding.registerId || !sessionsOn
@@ -157,8 +158,8 @@ export function useRegisterSession() {
 		/** The store's HH:MM close time; what `overdue` is measured against. */
 		closeTime,
 		binding,
-		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
-		canManageCash: !capabilities || capabilities.includes('manage_woocommerce_pos_cash'),
+		blind: !caps.canViewReports,
+		canManageCash: caps.canManageCash,
 		figuresPending,
 		/** This device owns the cached count mark, not another till. */
 		countingHere: !!data?.countingHere,

@@ -1,4 +1,5 @@
 export {
+	clearCashierCapabilities,
 	clearTillAccess,
 	credentialsTokenOwner,
 	recordCashierProfile,

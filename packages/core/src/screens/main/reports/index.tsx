@@ -6,7 +6,6 @@ import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
 
 import { Text } from '@wcpos/components/text';
-import { useDocField } from '@wcpos/query';
 import type { ClosureRow } from '@wcpos/query/register-session';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
@@ -46,6 +45,7 @@ import { HeroShell, SalesScope } from './hero';
 import { Reports } from './reports';
 import { NoStoreProvider } from './no-store';
 import { useAppState } from '../../../contexts/app-state';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import { useUISettings } from '../contexts/ui-settings';
 import {
 	QueryStateProvider,
@@ -501,11 +501,10 @@ export function ReportsScreen() {
 			registerId: closure.register_id,
 		});
 	};
-	const { wpCredentials } = useAppState();
-	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
+	const { caps } = useUserCapabilities();
 	const t = useT();
 	const ground = useGround();
-	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
+	return caps.canViewReports ? (
 		<ReportsDirectoriesProvider>
 			<ReportsShell key={link.key} pressed={pressed} onOpenClosure={openClosure} />
 		</ReportsDirectoriesProvider>

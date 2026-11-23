@@ -23,6 +23,7 @@ import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
 import {
+	clearCashierCapabilities,
 	credentialsTokenOwner,
 	type ReadonlySiteRecord,
 	type ReadonlyWpCredentialsRecord,
@@ -346,6 +347,18 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				});
 				setIsValid(true);
 			} catch (error) {
+				if (!isAsleepBlock(error)) {
+					const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
+					if (typeof status === 'number' && status !== 401) {
+						try {
+							await clearCashierCapabilities(wpUser);
+						} catch (clearError) {
+							appLogger.warn('Failed to clear cashier capabilities', {
+								context: { error: getErrorMessage(clearError), userId, siteUrl },
+							});
+						}
+					}
+				}
 				if (isAsleepBlock(error)) {
 					// Defer, don't fail: clear the key so the wake tick re-runs this
 					// validation, and leave isValid untouched — nothing was proven wrong.

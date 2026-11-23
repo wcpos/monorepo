@@ -269,7 +269,11 @@ const cashiers = of([
 ]);
 const session = {
 	store: { id: 1, name: 'Shop', timezone: 'America/Los_Angeles' },
-	wpCredentials: { id: 7, populate$: () => stores },
+	wpCredentials: {
+		id: 7,
+		capabilities: ['view_woocommerce_pos_reports'],
+		populate$: () => stores,
+	},
 	site: { populate$: () => cashiers },
 };
 jest.mock('../../../contexts/app-state', () => ({

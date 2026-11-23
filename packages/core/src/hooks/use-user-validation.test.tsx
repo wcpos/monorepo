@@ -150,6 +150,55 @@ describe('useUserValidation capabilities', () => {
 		expect(Object.keys(result)).not.toContain('capabilities');
 	});
 
+	it.each([403, 500])('clears stored capabilities when the store answers %s', async (status) => {
+		mockGet.mockRejectedValue({ response: { status } });
+		const wpUser = makeWpUser({ stores: [], capabilities: ['edit_products'] });
+		const { result } = renderHook(() =>
+			useUserValidation({ site: site as never, wpUser: wpUser as never })
+		);
+		await waitFor(() => expect(result.current.isValid).toBe(false));
+		expect(mockIncrementalModify).toHaveBeenCalledTimes(1);
+		const modify = mockIncrementalModify.mock.calls[0][0] as (
+			doc: Record<string, unknown>
+		) => Record<string, unknown>;
+		expect(modify({ uuid: 'cashier-1', capabilities: ['edit_products'] })).toEqual({
+			uuid: 'cashier-1',
+		});
+	});
+
+	it.each([
+		['network failure', new Error('Network Error')],
+		['expired session', { response: { status: 401 } }],
+	])('keeps stored capabilities on %s', async (_label, error) => {
+		mockGet.mockRejectedValue(error);
+		const wpUser = makeWpUser({ stores: [], capabilities: ['edit_products'] });
+		const { result } = renderHook(() =>
+			useUserValidation({ site: site as never, wpUser: wpUser as never })
+		);
+		await waitFor(() => expect(result.current.isValid).toBe(false));
+		expect(mockIncrementalModify).not.toHaveBeenCalled();
+	});
+
+	it('clears stored capabilities when a successful response provides a non-array', async () => {
+		mockGet.mockResolvedValue({
+			status: 200,
+			data: { id: 7, capabilities: { edit_products: true } },
+		});
+		const wpUser = makeWpUser({ stores: [], capabilities: ['edit_products'] });
+		const { result } = renderHook(() =>
+			useUserValidation({ site: site as never, wpUser: wpUser as never })
+		);
+		await waitFor(() => expect(mockIncrementalModify).toHaveBeenCalledTimes(1));
+		expect(result.current.isValid).toBe(true);
+		const modify = mockIncrementalModify.mock.calls[0][0] as (
+			doc: Record<string, unknown>
+		) => Record<string, unknown>;
+		expect(modify({ uuid: 'cashier-1', capabilities: ['edit_products'] })).toEqual({
+			uuid: 'cashier-1',
+		});
+		expect(mockIncrementalPatch).not.toHaveBeenCalled();
+	});
+
 	it('patches sanitized capabilities when the response provides them', async () => {
 		mockGet.mockResolvedValue({
 			status: 200,

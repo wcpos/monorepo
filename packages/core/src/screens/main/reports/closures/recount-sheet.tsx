@@ -20,7 +20,7 @@ import { fromMinor } from '@wcpos/order-math';
 import { type ClosureRow, mintUuid } from '@wcpos/query/register-session';
 
 import { usePageSheetHost } from '../../components/page-sheet-host';
-import { useAppState } from '../../../../contexts/app-state';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useViewedStore } from '../../../../hooks/use-store-day';
 import { useT } from '../../../../contexts/translations';
 import { useExclusive } from '../../hooks/use-exclusive';
@@ -54,9 +54,8 @@ export function RecountSheet({
 	const host = usePageSheetHost();
 	const t = useT();
 	const http = useRestHttpClient();
-	const { wpCredentials } = useAppState();
+	const { caps } = useUserCapabilities();
 	const store = useViewedStore(row.store_id ?? 0);
-	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const settings = useDocField(store, (value) => value);
 	const currency = settings?.currency;
 	const decimals = countDecimals(settings?.price_num_decimals);
@@ -67,7 +66,7 @@ export function RecountSheet({
 		decimalSeparator: settings?.price_decimal_sep,
 		thousandSeparator: settings?.price_thousand_sep,
 	};
-	const manager = capabilities?.includes('manage_woocommerce_pos_closures');
+	const manager = caps.canManageClosures;
 	const online = useOnlineStatus().status === 'online-website-available';
 	const phone = useIsPhone();
 	const [counted, setCounted] = React.useState<Record<string, string>>(() => {
