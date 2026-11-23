@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
+import { Platform as RNPlatform } from 'react-native';
 
 import { act, cleanup, render, screen } from '@testing-library/react';
 
@@ -19,6 +20,7 @@ let mockDialogClose: (() => void) | undefined;
 const mockReset = jest.fn();
 const mockSend = jest.fn();
 const mockOnMessage = jest.fn();
+const originalOS = RNPlatform.OS;
 
 jest.mock('@wcpos/components/webview', () => {
 	const mockReact = jest.requireActual<typeof import('react')>('react');
@@ -131,6 +133,7 @@ describe('MiniAppHost readiness deadline', () => {
 		cleanup();
 		jest.clearAllTimers();
 		jest.useRealTimers();
+		RNPlatform.OS = originalOS;
 	});
 
 	it('notifies the mini-app once before dismissing with the cancelled result', () => {
@@ -145,6 +148,7 @@ describe('MiniAppHost readiness deadline', () => {
 	});
 
 	it('restarts the 10 second handshake deadline on every document load', () => {
+		RNPlatform.OS = 'ios';
 		render(<MiniAppHost id="printer-wizard" onClose={jest.fn()} />);
 
 		act(() => mockWebViewProps.onLoad?.());
@@ -189,16 +193,47 @@ describe('MiniAppHost readiness deadline', () => {
 		);
 	});
 
-	it('on web a second frame load closes the bridge', () => {
+	it.each(['web', 'android'] as const)(
+		'on %s a second frame load after the handshake closes the bridge',
+		(os) => {
+			RNPlatform.OS = os;
+			mockReady = true;
+			render(<MiniAppHost id="printer-wizard" onClose={jest.fn()} />);
+
+			act(() => mockWebViewProps.onLoad?.());
+			expect(screen.getByTestId('mock-webview')).toBeTruthy();
+			act(() => mockWebViewProps.onLoad?.());
+
+			expect(mockReset).toHaveBeenCalledTimes(1);
+			expect(screen.queryByTestId('mock-webview')).toBeNull();
+			expect(screen.getByTestId('mock-fallback')).toBeTruthy();
+		}
+	);
+
+	it.each(['web', 'android'] as const)(
+		'on %s a second frame load before the handshake closes the bridge',
+		(os) => {
+			RNPlatform.OS = os;
+			mockReady = false;
+			render(<MiniAppHost id="printer-wizard" onClose={jest.fn()} />);
+			act(() => mockWebViewProps.onLoad?.());
+			act(() => mockWebViewProps.onLoad?.());
+			expect(mockReset).toHaveBeenCalledTimes(2);
+			expect(screen.queryByTestId('mock-webview')).toBeNull();
+			expect(screen.getByTestId('mock-fallback')).toBeTruthy();
+		}
+	);
+
+	it('on ios a second frame load after the handshake re-arms the bridge', () => {
+		RNPlatform.OS = 'ios';
 		mockReady = true;
 		render(<MiniAppHost id="printer-wizard" onClose={jest.fn()} />);
 
 		act(() => mockWebViewProps.onLoad?.());
-		expect(screen.getByTestId('mock-webview')).toBeTruthy();
 		act(() => mockWebViewProps.onLoad?.());
 
 		expect(mockReset).toHaveBeenCalledTimes(1);
-		expect(screen.queryByTestId('mock-webview')).toBeNull();
-		expect(screen.getByTestId('mock-fallback')).toBeTruthy();
+		expect(screen.getByTestId('mock-webview')).toBeTruthy();
+		expect(screen.queryByTestId('mock-fallback')).toBeNull();
 	});
 });

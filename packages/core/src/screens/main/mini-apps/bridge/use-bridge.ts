@@ -60,9 +60,9 @@ export function isUnderPin(url: string, pin: string): boolean {
 }
 
 /**
- * `pin` is the mini-app base URL. Native reports the sending page's URL, which must sit under it;
- * the web WebView reports only the frame's origin (it has already bound the message to the
- * rendered frame), so the bare origin is accepted there. A message with no URL is refused.
+ * `pin` is the mini-app base URL. iOS reports the sending page's URL, which must sit under it.
+ * Web and Android report only the origin, so the bare origin is accepted there, and the host
+ * closes the bridge on any later load. A message with no URL is refused.
  */
 export function useBridge(
 	webViewRef: React.RefObject<WebViewHandle | null>,

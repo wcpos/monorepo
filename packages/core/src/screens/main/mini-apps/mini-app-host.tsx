@@ -175,13 +175,14 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 					if (!initialLoadSeenRef.current) {
 						initialLoadSeenRef.current = true;
 						if (ready) return;
+						reset();
+						setLoadGeneration((value) => value + 1);
+						return;
 					}
-					// On web the bridge sees only the frame's origin, which jsDelivr shares with every
-					// repo, so it cannot tell the mini-app's next page from a foreign one. A load after
-					// the handshake therefore closes the bridge (failure notice, Retry reloads the
-					// entry) instead of re-arming it as the bridge contract describes; native keeps
-					// re-arming because it checks the page path.
-					if (ready && RNPlatform.OS === 'web') {
+					// Web and Android report only the sender's origin, which the CDN shares across
+					// repos, so any load after the first closes the bridge (failure notice, Retry
+					// reloads the entry). iOS reports the page URL and checks its path, so it re-arms.
+					if (RNPlatform.OS !== 'ios') {
 						reset();
 						setFailed(true);
 						return;
