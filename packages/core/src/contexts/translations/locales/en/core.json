@@ -2881,6 +2881,7 @@
 	"register.done": "Done",
 	"register.approve_offline": "Approval needs a connection",
 	"register.approval_failed": "Approval failed — try again",
+	"register.approval_locked": "Too many wrong passwords. This account is locked for 15 minutes.",
 	"register.count_failed": "Could not save the count — try again",
 	"register.movement_needs_amount": "Enter an amount",
 	"register.movement_needs_reason": "Add a reason",
