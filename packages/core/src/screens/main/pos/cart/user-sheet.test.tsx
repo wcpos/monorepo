@@ -36,6 +36,13 @@ jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeSiteCredentials: () => of(mockCredentials),
 	observeCredentialStores: () => of(PENDING_USER_DB_READ, mockOtherStores),
+	recordCashierProfile: (...args: unknown[]) => mockRecordCashierProfile(...args),
+}));
+const mockRecordCashierProfile = jest.fn();
+const mockCashierHttp = { get: jest.fn() };
+jest.mock('@wcpos/hooks/use-http-client', () => ({
+	...jest.requireActual('@wcpos/hooks/use-http-client'),
+	useHttpClient: () => mockCashierHttp,
 }));
 
 const mockCarry = jest.fn();
@@ -223,7 +230,11 @@ jest.mock('@wcpos/query', () => ({
 	),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ login: mockLogin, store: { timezone: mockStoreTimezone } }),
+	useAppState: () => ({
+		login: mockLogin,
+		user: { uuid: 'user' },
+		store: { timezone: mockStoreTimezone },
+	}),
 	useStoreSession: () => ({
 		userDB: mockUserDB,
 		storeDB: mockStoreDB,
@@ -236,7 +247,13 @@ jest.mock('../../../../contexts/app-state', () => ({
 		},
 		switchStore: mockSwitch,
 		store: { localID: 'store-a', id: mockStoreId, name: 'UK Store', price_num_decimals: 2 },
-		site: { uuid: 'site', url: 'https://shop.example', populateResource: () => ({}) },
+		site: {
+			uuid: 'site',
+			url: 'https://shop.example',
+			wcpos_api_url: 'https://shop.example/wp-json/wcpos/v2/',
+			wp_api_url: 'https://shop.example/wp-json/',
+			populateResource: () => ({}),
+		},
 		logout: mockLogout,
 	}),
 }));
@@ -367,19 +384,121 @@ it('switches credentials without retaining the previous cashier authentication o
 		})
 	);
 	expect(requestStateManager.getRefreshedToken()).toBeNull();
-});
-it('signs out to connect when the other cashier has no stores', async () => {
-	mockOtherStores = [];
-	mockLogin.mockClear();
-	render(<UserSheet open onOpenChange={jest.fn()} />);
-	fireEvent.click(screen.getByTestId('user-sheet-user-other'));
-	fireEvent.click(screen.getByTestId('switch-confirm-confirm'));
-	await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/connect'));
-	expect(mockLogout).toHaveBeenCalledTimes(1);
-	expect(mockLogin).not.toHaveBeenCalled();
-	mockOtherStores = [{ id: 2, localID: 'other-store' }];
+	// A login with this store already linked hands over without asking the store.
+	expect(mockCashierHttp.get).not.toHaveBeenCalled();
 });
 afterEach(() => requestStateManager.reset());
+
+// "Another account…" saves a login with no stores linked; only the connect screen read its
+// cashier profile, so the hand-over signed the outgoing cashier out of WordPress (2026-11-22).
+describe('handing the till to a login this device has not validated', () => {
+	const other = mockCredentials[1] as Record<string, unknown>;
+	beforeEach(() => {
+		mockT = createTestT();
+		mockOtherStores = [];
+		Object.assign(other, { id: 9, access_token: 'other-token' });
+		mockCashierHttp.get.mockReset();
+		mockRecordCashierProfile.mockReset();
+		mockLogin.mockClear();
+		mockLogout.mockClear();
+		mockReplace.mockClear();
+		mockLogError.mockClear();
+		jest.mocked(Toast.show).mockClear();
+	});
+	afterEach(() => {
+		mockT = (key) => key;
+		mockOnline = true;
+		mockOtherStores = [{ id: 2, localID: 'other-store' }];
+		delete other.id;
+		delete other.access_token;
+	});
+	const handOver = async () => {
+		render(<UserSheet open onOpenChange={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('user-sheet-user-other'));
+		await act(async () => fireEvent.click(screen.getByTestId('switch-confirm-confirm')));
+	};
+	const expectRefusedInPlace = () => {
+		expect(mockLogout).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockLogin).not.toHaveBeenCalled();
+	};
+
+	const profile = { id: 9, stores: [{ id: 2 }] };
+	it.each([
+		['a JSON body', profile],
+		["another plugin's text before the JSON", `<br />Notice: x<br />${JSON.stringify(profile)}`],
+	])(
+		'reads its cashier profile with its own token (%s), links the stores, then hands over',
+		async (_, body) => {
+			// The outgoing session's auth hold does not stop the incoming login's own read.
+			requestStateManager.setAuthFailed(true);
+			mockCashierHttp.get.mockResolvedValue({ status: 200, data: body });
+			mockRecordCashierProfile.mockImplementation(async () => {
+				mockOtherStores = [{ id: 2, localID: 'other-store' }];
+			});
+			await handOver();
+			const [endpoint, config] = mockCashierHttp.get.mock.calls[0];
+			expect(endpoint).toBe('https://shop.example/wp-json/wcpos/v2/cashier/9');
+			expect(config.wcposPreamble).toMatchObject({
+				purpose: 'cashier',
+				accessToken: 'other-token',
+			});
+			expect(config.unauthenticated).toBe(true);
+			expect(mockRecordCashierProfile).toHaveBeenCalledWith(mockUserDB, other, profile, {
+				userUuid: 'user',
+				siteUuid: 'site',
+			});
+			expect(mockLogin).toHaveBeenCalledWith({
+				siteID: 'site',
+				wpCredentialsID: 'other',
+				storeID: 'other-store',
+			});
+			expect(mockLogout).not.toHaveBeenCalled();
+		}
+	);
+
+	it('refuses in place, the outgoing cashier still signed in, when this store is not theirs', async () => {
+		requestStateManager.setRefreshedToken('outgoing-token');
+		requestStateManager.setAuthFailed(true);
+		mockCashierHttp.get.mockResolvedValue({ status: 200, data: { id: 9, stores: [{ id: 5 }] } });
+		mockRecordCashierProfile.mockImplementation(async () => {
+			mockOtherStores = [{ id: 5, localID: 'their-store' }];
+		});
+		await handOver();
+		expect(mockRecordCashierProfile).toHaveBeenCalledTimes(1);
+		expectRefusedInPlace();
+		// The outgoing session is left exactly as it was.
+		expect(requestStateManager.getRefreshedToken()).toBe('outgoing-token');
+		expect(requestStateManager.isAuthFailed()).toBe(true);
+		expect(Toast.show).toHaveBeenCalledWith({ text1: 'No stores for this user', type: 'warning' });
+	});
+
+	it('refuses in place when the store will not answer for the login', async () => {
+		mockCashierHttp.get.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 403'), {
+				isAxiosError: true,
+				response: { status: 403 },
+			})
+		);
+		await handOver();
+		expect(mockRecordCashierProfile).not.toHaveBeenCalled();
+		expectRefusedInPlace();
+		expect(mockLogError).toHaveBeenCalledTimes(1);
+		// What the store answered, not an unexpected error.
+		expect(mockLogError.mock.calls[0][1]).toMatchObject({ code: 'AUTH201', showToast: true });
+	});
+
+	it('offline: refuses in place without asking the store', async () => {
+		mockOnline = false;
+		await handOver();
+		expect(mockCashierHttp.get).not.toHaveBeenCalled();
+		expectRefusedInPlace();
+		expect(Toast.show).toHaveBeenCalledWith({
+			text1: 'Needs the store to switch',
+			type: 'warning',
+		});
+	});
+});
 
 it.each([
 	[2, '2'],
