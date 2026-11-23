@@ -16,6 +16,8 @@ const ALLOWED_REQUEST_HEADERS = ['accept', 'content-type', 'if-match', 'if-none-
 // able to walk out of the allowed REST namespaces with dot segments or delimiters, encoded or not.
 // '&' is a delimiter too: on plain-permalink sites the path rides inside `?rest_route=`, and a
 // second `rest_route=` after an '&' would win.
+// The client's URL parser strips tab and newline before resolving dot segments, so a `.<tab>.`
+// segment would otherwise become `..`.
 function isAllowedRestPath(path: unknown): path is string {
 	if (typeof path !== 'string' || !path.startsWith('/')) return false;
 	let decoded: string;
@@ -25,6 +27,7 @@ function isAllowedRestPath(path: unknown): path is string {
 		return false;
 	}
 	const clean = (value: string) =>
+		!/[\u0000- \u007f]/.test(value) &&
 		!/[\\?#&]/.test(value) &&
 		!value.includes('//') &&
 		!value.split('/').some((segment) => segment === '.' || segment === '..');
