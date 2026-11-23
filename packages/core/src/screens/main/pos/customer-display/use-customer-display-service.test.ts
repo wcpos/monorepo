@@ -154,7 +154,18 @@ test('adapts the REST client to the service HttpFunction contract', async () => 
 
 	expect(mockGet).toHaveBeenCalledWith('displays', { params: { device_id: 'device-1' } });
 	expect(mockPost).toHaveBeenCalledWith('pairings', { store_id: 7 });
-	expect(mockDelete).toHaveBeenCalledWith('displays/1');
+	expect(mockDelete).toHaveBeenCalledWith('displays/1', { params: undefined });
+});
+
+test('forwards DELETE params so a display forget carries device_id', async () => {
+	// Revert: drop the params argument from client.delete in use-customer-display-service.ts
+	renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+	const { http } = mockStart.mock.calls[0][0] as { http: (request: any) => Promise<unknown> };
+
+	await http({ method: 'DELETE', url: 'displays/1', params: { device_id: 'dev-1' } });
+
+	expect(mockDelete).toHaveBeenCalledWith('displays/1', { params: { device_id: 'dev-1' } });
 });
 
 test('keeps the service running and uses the latest REST client instance', async () => {
