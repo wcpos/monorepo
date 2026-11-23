@@ -156,7 +156,7 @@ export class CustomerDisplayService {
 		const session = this.sessions.get(displayId);
 		try {
 			await session?.forget();
-			await this.signaling.forget(displayId);
+			await this.signaling.forget(displayId, this.options.deviceId);
 		} catch (error) {
 			this.sessions.delete(displayId);
 			this.schedule();

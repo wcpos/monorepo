@@ -1230,18 +1230,54 @@ describe('print intent through checkout and reprint receipt documents', () => {
 			await waitFor(() =>
 				expect(result.current.previewProps.renderedHtml).toBe('<p>Server receipt</p>')
 			);
-			// A script in the page filled the body after load; the source still reads empty.
+			// A script in the page filled the body after load and drew a barcode on a canvas; the
+			// source still reads empty. The frame has its own origin, so its copy comes by message
+			// (the web WebView's requestRenderedHtml), the canvas already turned into an image.
+			const requestRenderedHtml = jest.fn(
+				async () =>
+					'<html><body><p>Scripted total</p><img src="data:image/png;base64,QkFSQ09ERQ=="></body></html>'
+			);
 			(result.current.previewProps.iframeRef as React.MutableRefObject<unknown>).current = {
-				contentDocument: {
-					body: { childElementCount: 1 },
-					documentElement: { outerHTML: '<html><body><p>Scripted total</p></body></html>' },
-				},
+				requestRenderedHtml,
 			};
 			await act(async () => {
 				await result.current.print();
 			});
+			expect(requestRenderedHtml).toHaveBeenCalledTimes(1);
 			expect(mockHtmlPrint.mock.calls[0][0]).toContain('<p>Scripted total</p>');
+			expect(mockHtmlPrint.mock.calls[0][0]).toContain('data:image/png;base64,QkFSQ09ERQ==');
 			expect(mockHtmlPrint.mock.calls[0][0]).not.toContain('Server receipt');
+			expect(pageReads().map(([url]) => url)).toEqual([templated]);
+		});
+
+		// Revert: print a fetched page from the frame's document, which only an app-origin frame exposes.
+		it('printing a fetched page does not read the frame document', async () => {
+			jest
+				.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+				.mockReturnValue([{ id: 7, offline_capable: false, engine: 'legacy-php' }]);
+			const { result } = renderHook(() =>
+				useReceiptDocument({ order: pageOrder, autoPrintAllowed: false })
+			);
+			await waitFor(() =>
+				expect(result.current.previewProps.renderedHtml).toBe('<p>Server receipt</p>')
+			);
+			const frameDocumentRead = jest.fn(() => ({
+				body: { childElementCount: 1 },
+				documentElement: { outerHTML: '<html><body><p>Frame DOM</p></body></html>' },
+			}));
+			// No rendered copy came back (too large or too late): the page source, never the frame.
+			(result.current.previewProps.iframeRef as React.MutableRefObject<unknown>).current =
+				Object.defineProperty({ requestRenderedHtml: async () => null }, 'contentDocument', {
+					get: frameDocumentRead,
+				});
+			await act(async () => {
+				await result.current.print();
+			});
+			expect(frameDocumentRead).not.toHaveBeenCalled();
+			expect(mockHtmlPrint.mock.calls[0][0]).toContain(
+				'<base href="https://shop.test/r?key=k&amp;mode=live&amp;template=7"><p>Server receipt</p>'
+			);
+			expect(mockHtmlPrint.mock.calls[0][0]).not.toContain('Frame DOM');
 			expect(pageReads().map(([url]) => url)).toEqual([templated]);
 		});
 

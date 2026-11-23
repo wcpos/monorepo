@@ -35,7 +35,7 @@ launching, read the Forge window's tail for that line. Tell Paul the two SHAs th
 
 ### 1. Fetch latest from the target lane in BOTH repos
 
-Lane: `main` = 2.0, the default (`next` was deleted in both repos on 2026-11-03 and returns at the GA re-cut); `1.11.x` = stable patches. If unsure which lane the task is, ask the user first, then use it as `<lane>` below. The electron clone lives at `~/Projects/electron`; if it is missing, `git clone https://github.com/wcpos/electron.git ~/Projects/electron` first.
+Lane: `main` = 2.0, the default (`next` is live again in the monorepo since 2026-11-23 for permissions and fiscal work; the electron repo has no `next`, so for that work pair the monorepo `next` checkout with electron `main`); `1.11.x` = stable patches. If unsure which lane the task is, ask the user first, then use it as `<lane>` below. The electron clone lives at `~/Projects/electron`; if it is missing, `git clone https://github.com/wcpos/electron.git ~/Projects/electron` first.
 
 Fetch only — do NOT pull or merge into the current branch:
 

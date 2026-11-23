@@ -12,6 +12,7 @@ const mockFindOpenSession = jest.fn();
 const mockIncrementalPatch = jest.fn();
 const mockFindSession = jest.fn();
 const mockReadCurrentSession = jest.fn();
+let mockSessionsOn = true;
 
 jest.mock('@wcpos/query', () => {
 	const runtime = { engine: { active: () => undefined } };
@@ -19,7 +20,7 @@ jest.mock('@wcpos/query', () => {
 		readStockPayload: jest.fn(),
 		useQueryRuntime: () => runtime,
 		useDocField: (_doc: unknown, pick: (value: Record<string, unknown>) => unknown) =>
-			pick({ register_sessions: true, prevent_overselling: false }),
+			pick({ register_sessions: mockSessionsOn, prevent_overselling: false }),
 	};
 });
 jest.mock('@wcpos/utils/logger', () => ({
@@ -71,6 +72,7 @@ jest.mock('../../hooks/use-payment-methods', () => {
 
 beforeEach(() => {
 	jest.clearAllMocks();
+	mockSessionsOn = true;
 	mockReadBoundRegister.mockResolvedValue({ id: 'register-1' });
 	mockFindOpenSession.mockResolvedValue({
 		id: 'session-1',
@@ -137,7 +139,7 @@ it('reads at event time whether the bound register is closed (price check)', asy
 	const { result } = renderHook(() => useActionContext());
 	expect(mockReadCurrentSession).not.toHaveBeenCalled();
 	mockReadCurrentSession.mockResolvedValueOnce(null);
-	await expect(result.current.readPriceCheck()).resolves.toBe(true);
+	await expect(result.current.readPriceCheck()).resolves.toBe('closed');
 	const { storeDB } = jest.requireMock('../../../../contexts/app-state').useStoreSession();
 	expect(mockReadCurrentSession).toHaveBeenCalledWith(storeDB, 'register-1');
 	mockReadCurrentSession.mockResolvedValueOnce({ id: 'session-1', status: 'open' });
@@ -145,8 +147,18 @@ it('reads at event time whether the bound register is closed (price check)', asy
 	// Unreadable collections fail open: the add goes through.
 	mockReadCurrentSession.mockResolvedValueOnce(undefined);
 	await expect(result.current.readPriceCheck()).resolves.toBe(false);
-	// No bound register: nothing to refuse.
+	// No bound register: no sale can complete on this device, so the add is refused for that reason.
 	mockReadBoundRegister.mockResolvedValueOnce(null);
-	await expect(result.current.readPriceCheck()).resolves.toBe(false);
+	await expect(result.current.readPriceCheck()).resolves.toBe('unbound');
 	expect(mockReadCurrentSession).toHaveBeenCalledTimes(3);
+});
+
+it('never refuses an add with register sessions off, bound or not', async () => {
+	mockSessionsOn = false;
+	mockReadCurrentSession.mockResolvedValue(null);
+	const { result } = renderHook(() => useActionContext());
+	await expect(result.current.readPriceCheck()).resolves.toBe(false);
+	mockReadBoundRegister.mockResolvedValue(null);
+	await expect(result.current.readPriceCheck()).resolves.toBe(false);
+	expect(mockReadCurrentSession).not.toHaveBeenCalled();
 });

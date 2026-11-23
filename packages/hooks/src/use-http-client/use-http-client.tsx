@@ -51,9 +51,10 @@ export type WcposRequestConfig = AxiosRequestConfig & {
 	quietErrors?: boolean;
 	failureCode?: ErrorCode;
 	/**
-	 * Marks a request that carries no credentials, so the process-wide `authFailed`
-	 * latch does not block it. Set it only when the request genuinely sends no token —
-	 * site discovery on the Connect screen is the canonical case.
+	 * Marks a request that carries no credentials of the signed-in session, so the process-wide
+	 * `authFailed` latch does not block it. Set it only when the request sends no token — site
+	 * discovery on the Connect screen is the canonical case — or another login's own token,
+	 * which re-authenticating the session cannot fix or break (the user sheet's hand-over read).
 	 */
 	unauthenticated?: boolean;
 };

@@ -61,8 +61,9 @@ export const useAddVariation = () => {
 				return false;
 			}
 			// The register is closed: browsing is a price check, nothing joins the cart.
-			if (await readPriceCheck()) {
-				showPriceCheckNotice(t);
+			const priceCheck = await readPriceCheck();
+			if (priceCheck) {
+				showPriceCheckNotice(t, priceCheck);
 				return false;
 			}
 			let success;

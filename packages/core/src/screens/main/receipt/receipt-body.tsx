@@ -67,8 +67,9 @@ export function ReceiptBody({
 		<WebView
 			testID="receipt-preview-frame"
 			ref={iframeRef as never}
+			// pageBase is set only for a page read from the store; a template rendered here is trusted.
 			{...(renderedHtml != null
-				? { srcDoc: renderedHtml, src: pageBase }
+				? { srcDoc: renderedHtml, src: pageBase, trustedSrcDoc: !pageBase }
 				: { src: receiptUrl || baseReceiptURL || '' })}
 			onLoad={handleLoad}
 			onError={handleError}
