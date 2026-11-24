@@ -158,7 +158,8 @@ export const wooMetaCarrier: PosCarrier = {
 			)
 				return null;
 			return {
-				atGmt: parsed.at_gmt,
+				// One form for every comparison: the server's, with its trailing Z.
+				atGmt: parsed.at_gmt.endsWith('Z') ? parsed.at_gmt : `${parsed.at_gmt}Z`,
 				reason: parsed.reason,
 				by: typeof parsed.by === 'number' ? parsed.by : null,
 				changedAtGmt: typeof parsed.changed_at_gmt === 'string' ? parsed.changed_at_gmt : null,

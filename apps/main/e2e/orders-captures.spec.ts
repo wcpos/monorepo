@@ -644,7 +644,13 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 									.sort()
 									.pop();
 							let shown = await pickable();
-							const current = shown.find((cell) => cell.current)?.day ?? '9999-12-31';
+							// The latest such day: the grid's previous-month days are unavailable too, and earlier.
+							const current =
+								shown
+									.filter((cell) => cell.current)
+									.map((cell) => cell.day)
+									.sort()
+									.at(-1) ?? '9999-12-31';
 							let day = earlier(shown, current);
 							if (!day) {
 								await page.locator('[data-testid$=".leftArrow"]').first().click();

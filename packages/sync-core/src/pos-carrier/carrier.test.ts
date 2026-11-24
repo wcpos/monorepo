@@ -35,13 +35,13 @@ const carrierFactories: [string, CarrierFactory][] = [
 describe.each(carrierFactories)('%s PosCarrier contract', (_name, createCarrier) => {
 	describe('sale-day correction', () => {
 		it.each(['2026-11-23T09:12:00', '2026-11-23T09:12:00Z'])(
-			'accepts the server date form: %s',
+			'accepts the server date form and returns it with its Z: %s',
 			(at_gmt) => {
 				expect(
 					createCarrier().readSaleDay([
 						{ key: '_wcpos_sale_day', value: { at_gmt, reason: 'Late entry' } },
 					])?.atGmt
-				).toBe(at_gmt);
+				).toBe('2026-11-23T09:12:00Z');
 			}
 		);
 		it.each(['2026-11-23T09:12:00+00:00', '2026-11-23', '2026-99-23T09:12:00Z'])(
