@@ -1,6 +1,7 @@
 import { createTestT } from '../../../../../jest/translate';
 import { salesFigures } from '../report/sales-figures';
 import { panelSpec } from './specs';
+import { panelCsv } from './export-csv';
 
 import type { RefundRow, ReportOrder } from '../context';
 
@@ -344,4 +345,25 @@ it('stores spec names stores and remainders with averages and a total', () => {
 	]);
 	expect(spec.totalRaw).toEqual(['Total', 5, 4, 20]);
 	expect(specOf('stores', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
+});
+
+it('marks order rows through the view without adding cells or CSV columns', () => {
+	const data = inputs([
+		{
+			uuid: 'a',
+			number: '42',
+			total: '10',
+			payment_method: 'cash',
+			meta_data: [{ key: '_pos_user', value: '7' }],
+		},
+	] as ReportOrder[]);
+	data.view.orderTime = () => '09:12';
+	const unmarked = specOf('orders', data);
+	Object.assign(data.view, { orderLate: () => true });
+	const marked = specOf('orders', data);
+	expect(marked.rows[0]).toMatchObject({ late: true });
+	expect(marked.rows[0].cells).toEqual(['#42', '09:12', 'Sam', 'Cash', '£10.00', 'Yes']);
+	expect(marked.rows[0].cells).toEqual(unmarked.rows[0].cells);
+	expect(marked.rows[0].raw).toEqual(unmarked.rows[0].raw);
+	expect(panelCsv(marked)).toBe(panelCsv(unmarked));
 });

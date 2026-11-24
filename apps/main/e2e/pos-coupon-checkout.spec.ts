@@ -45,6 +45,7 @@ import {
 	mintSearchProbeToken,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
+	renewProductWriterIfExpiring,
 	searchAndWaitForServer,
 	type SearchProbe,
 } from './search-probe';
@@ -112,11 +113,28 @@ const couponTest = liveTest.extend<object, { probeCoupon: CouponProbe | null }>(
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API.
 				await use(created);
 			} finally {
-				if (created?.id && writerAuth) {
-					await couponRequest(request, 'delete', storeUrl, created.id, {
-						...writerAuth,
-						params: { ...writerAuth.params, force: 'true' },
-					}).catch(() => {});
+				if (created?.id && writer) {
+					try {
+						await renewProductWriterIfExpiring(request, storeUrl, writer);
+					} catch {
+						// Best-effort renewal; still try deleting with the current writer.
+					}
+					const auth = storeRequestOptions(writer);
+					try {
+						const response = await couponRequest(request, 'post', storeUrl, 'batch', {
+							...auth,
+							data: { delete: [created.id] },
+						});
+						if (!response.ok()) {
+							console.log(
+								`[coupon-probe] teardown could not delete probe coupon ${created.id}: HTTP ${response.status()}`
+							);
+						}
+					} catch {
+						console.log(
+							`[coupon-probe] teardown could not delete probe coupon ${created.id}: threw`
+						);
+					}
 				}
 				if (product && writer) {
 					await deleteSearchProbe({

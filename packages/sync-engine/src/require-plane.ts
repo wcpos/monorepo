@@ -382,7 +382,7 @@ type RequirementSubscriber = {
  */
 type RequirementDrainOverrides = Pick<
 	Parameters<typeof runEngineSchedulerDrain>[0],
-	'taskId' | 'maxRequestsPerTask' | 'refreshBrowseWindowKey' | 'nowMs'
+	'taskId' | 'referenceLanes' | 'maxRequestsPerTask' | 'refreshBrowseWindowKey' | 'nowMs'
 >;
 
 /**
@@ -556,15 +556,24 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// first drain, not at construction: a read-only engine may open on a host without Web Crypto.
 	let schedulerOwnerId: string | null = null;
 	let seq = 0;
-	// Two lanes, each one execution at a time. A typed search must not queue behind the
+	// Three lanes, each one execution at a time. A typed search must not queue behind the
 	// boot window or a refresh (live runs: >10 s with no search request on a slow host).
 	// Searches stay serial among themselves, so a newer search still supersedes the older
 	// one through release → abandonIfUnclaimed → abort (#1221). Running a search beside a
 	// durable execution is allowed: the demand plane is uncapped by ruling (#1134 item 2).
-	type Lane = 'search' | 'durable';
-	const running: Record<Lane, boolean> = { search: false, durable: false };
-	const laneOf = (entry: QueuedRequirement): Lane =>
-		entry.requirement.kind === 'search' ? 'search' : 'durable';
+	// Reference refreshes get their own lane so a full walk cannot hold a browse window (#3782).
+	type Lane = 'search' | 'durable' | 'reference';
+	const running: Record<Lane, boolean> = { search: false, durable: false, reference: false };
+	const laneOf = (entry: QueuedRequirement): Lane => {
+		if (entry.requirement.kind === 'search') return 'search';
+		if (
+			entry.requirement.kind === 'refresh' &&
+			descriptorFor(entry.requirement.collection)?.shape === 'greedy-prunable'
+		) {
+			return 'reference';
+		}
+		return 'durable';
+	};
 	// Requirement stalls with no requirement completing in between, stamped on
 	// coverage.require.stalled: the screen re-declares a stalled requirement, so
 	// one stall is an attempt; repeated ones (storage that never settles, a walk
@@ -576,6 +585,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const stallStreaks = {
 		search: scopeBoundFailureStreak(deps.manager),
 		durable: scopeBoundFailureStreak(deps.manager),
+		reference: scopeBoundFailureStreak(deps.manager),
 	};
 	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
@@ -926,6 +936,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					...(deps.now !== undefined ? { nowMs: deps.now(), now: deps.now } : {}),
 					signal: item.abortController.signal,
 					onProgress: progressObserver(item.requirement, onProgressActivity),
+					referenceLanes: 'exclude',
 					...overrides,
 				});
 
@@ -1221,7 +1232,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								database: database,
 								...(nowMs !== undefined ? { nowMs } : {}),
 							}),
-							...(nowMs !== undefined ? { drain: { nowMs } } : {}),
+							drain: {
+								referenceLanes: 'only',
+								...(nowMs !== undefined ? { nowMs } : {}),
+							},
 						};
 					},
 					droppedMessage: 'require: scope moved mid-refresh (writes dropped)',
@@ -1773,7 +1787,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	}
 
 	return {
-		hasPendingWork: () => running.search || running.durable || queue.length > 0,
+		hasPendingWork: () =>
+			running.search || running.durable || running.reference || queue.length > 0,
 		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
 		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
 		liveOrderBrowseQueryKeys: () => {
