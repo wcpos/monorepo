@@ -3194,6 +3194,23 @@ describe('device tender', () => {
 		);
 		expect(mockError).not.toHaveBeenCalled();
 	});
+	it('journals no sale attempt for a press refused on an order the store has not created', async () => {
+		delete mockPayload.id;
+		const driver = createSimulatedDriver();
+		registerDriver(driver);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod(deviceMethod.id));
+		await act(async () => {
+			await driver.connect!((await driver.discoverReaders!('bluetooth'))[0], null);
+		});
+		jest.mocked(recordCompletionAttempt).mockClear();
+		await act(async () => result.current.commands.takeTender());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.order_not_on_store_yet',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+	});
 	it('requires connection and stamps the session on device tender', async () => {
 		mockSessionsOn = true;
 		const driver = createSimulatedDriver();
