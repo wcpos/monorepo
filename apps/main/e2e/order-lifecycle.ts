@@ -822,7 +822,8 @@ export async function trashOrder(
 	request: APIRequestContext,
 	testInfo: TestInfo,
 	authorization: StoreAuthorization | null,
-	order: TrackedOrder
+	order: TrackedOrder,
+	trashAsWriter: typeof trashOrdersAsWriter = trashOrdersAsWriter
 ): Promise<boolean> {
 	console.log(`[e2e-cleanup] created order ${order.id} (${order.label ?? 'unlabelled'})`);
 	await testInfo
@@ -922,7 +923,7 @@ export async function trashOrder(
 		}
 		if (applied === true) {
 			console.log(`[e2e-cleanup] order ${order.id} -> ${status}`);
-			if (status === 'cancelled') await trashOrdersAsWriter(request, storeUrl, [order.id]);
+			if (status === 'cancelled') await trashAsWriter(request, storeUrl, [order.id]);
 			return true;
 		}
 	}

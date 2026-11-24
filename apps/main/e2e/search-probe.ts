@@ -1392,7 +1392,7 @@ export async function trashOrdersAsWriter(
 	}
 	if (writer === null) {
 		result.skipped = ids.length;
-		console.log(`[order-trash] no writer credential; ${ids.length} order(s) left cancelled`);
+		log.info(`[order-trash] no writer credential; ${ids.length} order(s) left cancelled`);
 		return result;
 	}
 	for (const id of ids) {
@@ -1420,9 +1420,9 @@ export async function trashOrdersAsWriter(
 			// Request errors may contain query-auth tokens.
 		}
 		result.failed += 1;
-		console.warn(`[order-trash] order ${id} not trashed: ${failure}`);
+		log.warn(`[order-trash] order ${id} not trashed: ${failure}`);
 	}
-	console.log(
+	log.info(
 		`[order-trash] trashed=${result.trashed} failed=${result.failed} skipped=${result.skipped}`
 	);
 	return result;
