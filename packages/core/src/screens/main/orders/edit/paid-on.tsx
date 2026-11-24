@@ -126,9 +126,10 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const verb = (
 		<PropertyVerb
 			testID="order-edit-change-day"
-			disabled={busy || sending || pending}
+			// An answered request (refused) no longer blocks a new one, even while its row lingers.
+			disabled={busy || sending || waiting}
 			onPress={() => {
-				if (pending) return;
+				if (waiting) return;
 				form.reset({ day: '', reason: '' });
 				setRefused(false);
 				setEditing(true);

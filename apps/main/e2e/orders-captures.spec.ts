@@ -628,9 +628,13 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 											''
 										),
 										enabled: element.getAttribute('aria-disabled') !== 'true',
-										current: (element.getAttribute('aria-label') ?? '').endsWith(
-											'The sale is on this day now'
-										),
+										// The one unavailable day that is not in the future is the sale's own.
+										current:
+											element.getAttribute('aria-disabled') === 'true' &&
+											(element.getAttribute('data-testid') ?? '').replace(
+												'order-paid-on-day-',
+												''
+											) <= new Date().toLocaleDateString('en-CA'),
 									}))
 								);
 							const earlier = (list: Awaited<ReturnType<typeof pickable>>, before: string) =>
