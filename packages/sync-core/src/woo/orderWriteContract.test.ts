@@ -139,6 +139,7 @@ describe('the order wire (ADR 0040)', () => {
 				'_wcpos_payment_method',
 				'_wcpos_completed_at',
 				'_wcpos_completions',
+				'_wcpos_sale_day_at',
 				'_paid_date',
 			])
 		);
