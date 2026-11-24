@@ -24,9 +24,11 @@ const emit = async (signal: PermissionsSignal) => {
 	});
 };
 
+// Gates are shared per cashier for the module's life, so each test has its own cashier.
+let cashier = 0;
 beforeEach(() => {
 	read.mockReset().mockResolvedValue({ kind: 'unchanged' });
-	session.wpCredentials = { uuid: 'cashier-1' };
+	session.wpCredentials = { uuid: `bridge-cashier-${++cashier}` };
 	jest.spyOn(Date, 'now').mockReturnValue(0);
 });
 afterEach(() => {
@@ -89,7 +91,7 @@ it('keeps an in-flight read single and allows the next signal after it settles',
 it('starts a fresh gate when the cashier uuid changes', async () => {
 	const { rerender } = render(<PermissionsRefreshBridge />);
 	await emit(first);
-	session.wpCredentials = { uuid: 'cashier-2' };
+	session.wpCredentials = { uuid: `bridge-cashier-${cashier}-next` };
 	rerender(<PermissionsRefreshBridge />);
 	await emit(first);
 	expect(read).toHaveBeenCalledTimes(2);

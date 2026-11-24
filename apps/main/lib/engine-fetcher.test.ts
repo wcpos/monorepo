@@ -127,6 +127,19 @@ describe('createEngineFetcher', () => {
 		expect(onPermissionsSignal).toHaveBeenCalledWith({ kind: 'stamp', stamp: '0123456789abcdef' });
 	});
 
+	it('emits a permissions stamp from a 304 response header', async () => {
+		const onPermissionsSignal = jest.fn();
+		const fetch = jest.fn().mockResolvedValue(
+			new Response(null, {
+				status: 304,
+				headers: { 'X-WCPOS-Permissions': '0123456789abcdef' },
+			})
+		);
+		const { fetcher } = createFetcherHarness({ fetch, onPermissionsSignal });
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/changes');
+		expect(onPermissionsSignal).toHaveBeenCalledWith({ kind: 'stamp', stamp: '0123456789abcdef' });
+	});
+
 	it('emits a permissions stamp restored from a header-stripped envelope', async () => {
 		const onPermissionsSignal = jest.fn();
 		const fetch = jest.fn().mockResolvedValue(

@@ -384,6 +384,9 @@ export function createEngineFetcher(input: {
 							context: { responseHeadersReadable: envelopeTransport.responseHeadersReadable },
 						}),
 				});
+			}
+			// The store stamps every response below 400; a quiet change feed answers only 304s.
+			if (response.ok || response.status === 304) {
 				try {
 					const stamp = response.headers.get('X-WCPOS-Permissions');
 					if (stamp && /^[0-9a-f]{16}$/.test(stamp))

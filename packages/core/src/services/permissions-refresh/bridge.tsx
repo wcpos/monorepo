@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 
 import { useAppState, useStoreSession } from '../../contexts/app-state';
-import { createPermissionsRefreshGate } from './gate';
+import { permissionsRefreshGateFor } from './gate';
 import { readCashierPermissions } from './read-cashier-permissions';
 import { permissionsSignal$ } from './signal';
 
@@ -12,10 +12,10 @@ export function PermissionsRefreshBridge(): null {
 	const { userDB, user } = useAppState();
 	const http = useHttpClient();
 	const uuid = wpCredentials.uuid;
-	const gate = React.useMemo(() => createPermissionsRefreshGate(), [uuid]);
 	// Sync signals are external events; the subscription belongs to the active cashier.
 	React.useEffect(() => {
 		if (!uuid) return;
+		const gate = permissionsRefreshGateFor(uuid);
 		const subscription = permissionsSignal$.subscribe((signal) => {
 			if (!gate.shouldRead(signal)) return;
 			const stamp = signal.kind === 'stamp' ? signal.stamp : undefined;
@@ -26,6 +26,6 @@ export function PermissionsRefreshBridge(): null {
 		return () => {
 			subscription.unsubscribe();
 		};
-	}, [gate, uuid, http, site, wpCredentials, userDB, user]);
+	}, [uuid, http, site, wpCredentials, userDB, user]);
 	return null;
 }

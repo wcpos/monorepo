@@ -1,4 +1,4 @@
-import { createPermissionsRefreshGate, REFUSED_RETRY_MS } from './gate';
+import { createPermissionsRefreshGate, permissionsRefreshGateFor, REFUSED_RETRY_MS } from './gate';
 
 const first = { kind: 'stamp', stamp: '0123456789abcdef' } as const;
 const second = { kind: 'stamp', stamp: 'fedcba9876543210' } as const;
@@ -82,4 +82,53 @@ it('(f) resets the held stamp and refusal window without releasing an active rea
 	expect(gate.shouldRead(refused)).toBe(false);
 	gate.reset();
 	expect(gate.shouldRead(refused)).toBe(true);
+});
+
+const manual = { kind: 'manual' } as const;
+
+it('(g) keeps a manual read and an automatic read from running together', () => {
+	const gate = makeGate();
+	expect(gate.shouldRead(first)).toBe(true);
+	expect(gate.shouldRead(manual)).toBe(false);
+	gate.settled({ ok: true });
+	expect(gate.shouldRead(manual)).toBe(true);
+	time = REFUSED_RETRY_MS;
+	expect(gate.shouldRead(second)).toBe(false);
+	expect(gate.shouldRead(refused)).toBe(false);
+	expect(gate.shouldRead(manual)).toBe(false);
+});
+
+it('(h) allows a manual read with a held stamp and inside the refusal window', () => {
+	const gate = makeGate();
+	gate.shouldRead(first);
+	gate.settled({ ok: true });
+	expect(gate.shouldRead(refused)).toBe(false);
+	expect(gate.shouldRead(manual)).toBe(true);
+});
+
+it('(i) leaves the held stamp unchanged after a manual read', () => {
+	const gate = makeGate();
+	gate.shouldRead(first);
+	gate.settled({ ok: true });
+	gate.shouldRead(manual);
+	gate.settled({ ok: true });
+	expect(gate.shouldRead(first)).toBe(false);
+	expect(gate.shouldRead(second)).toBe(true);
+});
+
+it('(j) reports reading$ from a read start until it settles', () => {
+	const gate = makeGate();
+	const seen: boolean[] = [];
+	const subscription = gate.reading$.subscribe((reading) => seen.push(reading));
+	gate.shouldRead(first);
+	gate.shouldRead(second);
+	gate.settled({ ok: true });
+	subscription.unsubscribe();
+	expect(seen).toEqual([false, true, false]);
+});
+
+it('(k) shares one gate per cashier uuid', () => {
+	const a = permissionsRefreshGateFor('gate-test-a');
+	expect(permissionsRefreshGateFor('gate-test-a')).toBe(a);
+	expect(permissionsRefreshGateFor('gate-test-b')).not.toBe(a);
 });

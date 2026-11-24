@@ -4,6 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { PermissionsPanel } from './permissions-panel';
+import { permissionsRefreshGateFor } from '../../../services/permissions-refresh/gate';
 import {
 	type PermissionsReadResult,
 	readCashierPermissions,
@@ -61,10 +62,15 @@ jest.mock('../../../services/permissions-refresh/read-cashier-permissions', () =
 }));
 const read = jest.mocked(readCashierPermissions);
 
+const stamp = { kind: 'stamp', stamp: '0123456789abcdef' } as const;
+// Gates are shared per cashier for the module's life, so each test has its own cashier.
+let cashier = 0;
+
 beforeEach(() => {
 	jest.clearAllMocks();
 	read.mockReset();
 	status = 'online-website-available';
+	session.wpCredentials = { uuid: `panel-cashier-${++cashier}` };
 });
 
 it.each<[PermissionsReadResult, string]>([
@@ -113,4 +119,28 @@ it('disables the action until the read completes', async () => {
 		finish({ kind: 'unchanged' });
 	});
 	expect(button.disabled).toBe(false);
+});
+
+it('disables the action while an automatic read for this cashier runs', () => {
+	expect(permissionsRefreshGateFor(session.wpCredentials.uuid).shouldRead(stamp)).toBe(true);
+	render(<PermissionsPanel />);
+	const button = screen.getByTestId('health-permissions-refresh') as HTMLButtonElement;
+	expect(button.disabled).toBe(true);
+	fireEvent.click(button);
+	expect(read).not.toHaveBeenCalled();
+});
+
+it('holds automatic reads for this cashier while a manual read runs', async () => {
+	let finish!: (result: PermissionsReadResult) => void;
+	read.mockReturnValue(
+		new Promise((resolve) => {
+			finish = resolve;
+		})
+	);
+	render(<PermissionsPanel />);
+	fireEvent.click(screen.getByTestId('health-permissions-refresh'));
+	expect(permissionsRefreshGateFor(session.wpCredentials.uuid).shouldRead(stamp)).toBe(false);
+	await act(async () => {
+		finish({ kind: 'unchanged' });
+	});
 });
