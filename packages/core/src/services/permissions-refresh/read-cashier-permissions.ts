@@ -3,8 +3,11 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { useHttpClient } from '@wcpos/hooks/use-http-client';
 
 import { cashierRequest, recoverCashierBody } from '../../hooks/use-user-validation';
+import { storeAnsweredWithStatus } from './store-answered-with-status';
 
 import type { StoreSessionState } from '../../contexts/app-state';
+
+export { storeAnsweredWithStatus } from './store-answered-with-status';
 
 const logger = getLogger(['wcpos', 'permissions']);
 
@@ -15,11 +18,6 @@ export type PermissionsReadResult =
 	| { kind: 'expired' }
 	| { kind: 'offline' }
 	| { kind: 'failed' };
-
-export function storeAnsweredWithStatus(error: unknown): number | null {
-	const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
-	return typeof status === 'number' ? status : null;
-}
 
 export async function readCashierPermissions({
 	http,

@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
 
-import { PermissionsRefreshBridge, resetPermissionsRefreshGate } from './bridge';
+import { PermissionsRefreshBridge } from './bridge';
 import { type PermissionsReadResult, readCashierPermissions } from './read-cashier-permissions';
 import { type PermissionsSignal, reportPermissionsSignal } from './signal';
 
@@ -94,15 +94,4 @@ it('starts a fresh gate when the cashier uuid changes', async () => {
 	await emit(first);
 	expect(read).toHaveBeenCalledTimes(2);
 	expect(read).toHaveBeenLastCalledWith({ ...session, http });
-});
-
-it('allows a manual refresh to reset this cashier gate', async () => {
-	render(<PermissionsRefreshBridge />);
-	await emit(first);
-	resetPermissionsRefreshGate('other-cashier');
-	await emit(first);
-	expect(read).toHaveBeenCalledTimes(1);
-	resetPermissionsRefreshGate(session.wpCredentials.uuid);
-	await emit(first);
-	expect(read).toHaveBeenCalledTimes(2);
 });

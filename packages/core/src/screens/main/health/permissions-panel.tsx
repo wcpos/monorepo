@@ -8,7 +8,6 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { useAppState, useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { resetPermissionsRefreshGate } from '../../../services/permissions-refresh/bridge';
 import {
 	type PermissionsReadResult,
 	readCashierPermissions,
@@ -25,7 +24,6 @@ export function PermissionsPanel() {
 	const refresh = async () => {
 		setReading(true);
 		setResult(await readCashierPermissions({ http, site, wpCredentials, userDB, user }));
-		resetPermissionsRefreshGate(wpCredentials.uuid);
 		setReading(false);
 	};
 	let message = '';

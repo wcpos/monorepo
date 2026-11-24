@@ -4,7 +4,6 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { PermissionsPanel } from './permissions-panel';
-import { resetPermissionsRefreshGate } from '../../../services/permissions-refresh/bridge';
 import {
 	type PermissionsReadResult,
 	readCashierPermissions,
@@ -60,9 +59,6 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: () => ({ s
 jest.mock('../../../services/permissions-refresh/read-cashier-permissions', () => ({
 	readCashierPermissions: jest.fn(),
 }));
-jest.mock('../../../services/permissions-refresh/bridge', () => ({
-	resetPermissionsRefreshGate: jest.fn(),
-}));
 const read = jest.mocked(readCashierPermissions);
 
 beforeEach(() => {
@@ -89,7 +85,6 @@ it.each<[PermissionsReadResult, string]>([
 	});
 	expect(screen.getByTestId('health-permissions-result').textContent).toBe(message);
 	expect(read).toHaveBeenCalledWith({ ...session, http });
-	expect(resetPermissionsRefreshGate).toHaveBeenCalledWith('cashier-1');
 });
 
 it('disables the action offline', () => {

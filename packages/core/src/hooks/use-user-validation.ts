@@ -34,7 +34,7 @@ import { useAppState } from '../contexts/app-state';
 import { extractValidJSON } from '../screens/main/hooks/use-rest-http-client/extract-valid-json';
 import { useReportUpdateRequired } from './use-update-required';
 import { storeRequestFailureCode } from '../utils/store-request-failure-code';
-import { storeAnsweredWithStatus } from '../services/permissions-refresh/read-cashier-permissions';
+import { storeAnsweredWithStatus } from '../services/permissions-refresh/store-answered-with-status';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
 
