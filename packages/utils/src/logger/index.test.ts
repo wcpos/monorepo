@@ -559,6 +559,30 @@ describe('logger/index', () => {
 			expect(context.fold).not.toContain('must not be copied');
 		});
 
+		it('keeps the app error code and makes the server code searchable', async () => {
+			const insert = jest.fn().mockResolvedValue(undefined);
+			setDatabase({
+				insert,
+				find: jest
+					.fn()
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
+					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
+				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
+			});
+
+			getLogger(['wcpos', 'register']).warn('Register session outbox request permanently refused', {
+				code: 'REGISTER101',
+				context: { serverCode: 'rest_forbidden', status: 403 },
+			});
+			await Promise.resolve();
+
+			const [{ context }] = insert.mock.calls[0];
+			expect(context.errorCode).toBe('REGISTER101');
+			expect(context.serverCode).toBe('rest_forbidden');
+			expect(context.search).toContain('rest_forbidden');
+		});
+
 		it('folds accents, case and normal form into context.fold at write time', async () => {
 			const insert = jest.fn().mockResolvedValue(undefined);
 			setDatabase({

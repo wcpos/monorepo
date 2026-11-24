@@ -76,3 +76,27 @@ export function useTillOrderId({ inPos, sheet, atCart, seed }: TillLocation): st
 	if (resolved.tillOrderId !== routeTillOrderId) setRouteTillOrderId(resolved.tillOrderId);
 	return resolved.orderId;
 }
+
+/**
+ * Counts the cashier's entries into the till, for the current-order provider's `tillEntry`: a
+ * change means a deliberate arrival, so the route's order is adopted even if it was parked (#3773).
+ *
+ * An absence counts only if it showed a page (a location with no `(modals)` sheet). An app-level
+ * modal over the till (settings, tax rates) also leaves `(pos)`, but closing it is no arrival:
+ * counting it would re-adopt a parked order and the next product would land on it. A page, then
+ * its modal, then straight into the till (an order's "send again" from Orders) still counts.
+ */
+export function useTillEntry({ inPos, sheet }: TillLocation): number {
+	const [prevInPos, setPrevInPos] = React.useState(inPos);
+	const [sawPage, setSawPage] = React.useState(false);
+	const [tillEntry, setTillEntry] = React.useState(0);
+	if (!inPos && sheet === null && !sawPage) setSawPage(true);
+	if (inPos !== prevInPos) {
+		setPrevInPos(inPos);
+		if (inPos) {
+			if (sawPage) setTillEntry(tillEntry + 1);
+			setSawPage(false);
+		}
+	}
+	return tillEntry;
+}

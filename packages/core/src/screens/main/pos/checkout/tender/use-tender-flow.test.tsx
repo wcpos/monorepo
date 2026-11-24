@@ -759,6 +759,21 @@ describe('useTenderFlow', () => {
 		expect(mockError).toHaveBeenCalledWith('pos_checkout.payment_unanswered', expect.anything());
 	});
 
+	it('Try again refused with invalid fields names them on the unanswered log, never their values (POS-357)', async () => {
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new Error('write-rejected'), {
+				data: { params: { billing: 'Invalid email' } },
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.commands.retryCommand());
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.objectContaining({ context: expect.objectContaining({ invalidParams: 'billing' }) })
+		);
+		expect(JSON.stringify(mockError.mock.calls)).not.toContain('Invalid email');
+	});
+
 	// A close replayed after a remote reopen answers its stored completion with the order as it
 	// now stands (`Payments_Controller.php:452-468`). It lands through the table: the completion
 	// judges it with the resident (sale-completion.test.ts), and a close it did not finish was
@@ -1301,6 +1316,27 @@ describe('useTenderFlow', () => {
 			expect(mockError).not.toHaveBeenCalledWith(
 				'pos_checkout.payment_not_recorded',
 				expect.anything()
+			);
+		});
+
+		it('a lost take with invalid fields names them on the PAYMENT201 log (POS-357)', async () => {
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockRejectedValueOnce(
+				Object.assign(new Error('Network Error'), {
+					data: { params: { customer_id: 'bad' } },
+				})
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			act(() => result.current.commands.pickMethod('pos_cash'));
+
+			await act(async () => result.current.commands.takeTender());
+
+			expect(mockError).toHaveBeenCalledWith(
+				'pos_checkout.payment_unanswered',
+				expect.objectContaining({
+					code: 'PAYMENT201',
+					context: expect.objectContaining({ invalidParams: 'customer_id' }),
+				})
 			);
 		});
 
@@ -3227,6 +3263,23 @@ describe('device tender', () => {
 			expect.objectContaining({ showToast: true })
 		);
 		expect(mockError).not.toHaveBeenCalled();
+	});
+	it('journals no sale attempt for a press refused on an order the store has not created', async () => {
+		delete mockPayload.id;
+		const driver = createSimulatedDriver();
+		registerDriver(driver);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod(deviceMethod.id));
+		await act(async () => {
+			await driver.connect!((await driver.discoverReaders!('bluetooth'))[0], null);
+		});
+		jest.mocked(recordCompletionAttempt).mockClear();
+		await act(async () => result.current.commands.takeTender());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.order_not_on_store_yet',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
 	});
 	it('requires connection and stamps the session on device tender', async () => {
 		mockSessionsOn = true;
