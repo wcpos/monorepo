@@ -70,6 +70,7 @@ import {
 } from './database-logic';
 import { QueuedEmailsPanel } from './queued-emails';
 import { RegistersPanel } from './registers-panel';
+import { PermissionsPanel } from './permissions-panel';
 import { RejectedMutationsPanel } from './rejected-mutations';
 import { useCollectionSizes } from './use-collection-sizes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
@@ -864,6 +865,7 @@ export function DatabaseScreen() {
 					</Button>
 				</HStack>
 
+				<PermissionsPanel />
 				<RegistersPanel />
 			</VStack>
 		</AreaPage>

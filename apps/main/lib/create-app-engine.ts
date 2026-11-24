@@ -16,6 +16,7 @@
  */
 
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
+import { reportPermissionsSignal } from '@wcpos/core/services/permissions-refresh/signal';
 import {
 	refreshAccessToken,
 	type RefreshAccessTokenConfig,
@@ -809,6 +810,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	};
 
 	const fetcher = createEngineFetcher({
+		onPermissionsSignal: reportPermissionsSignal,
 		auth: fetcherOptions,
 		clockSkew,
 		scope: fetcherScope,

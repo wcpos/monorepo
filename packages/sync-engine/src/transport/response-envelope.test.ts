@@ -9,6 +9,30 @@ const enveloped = (wcpos: Record<string, unknown>, data: unknown = [{ id: 7 }]) 
 	});
 
 describe('hydrateResponse', () => {
+	it.each([null, 'invalid'])('restores a permissions stamp over a %s header', async (header) => {
+		const response = enveloped({ permissions: '0123456789abcdef' });
+		if (header !== null) response.headers.set('X-WCPOS-Permissions', header);
+		const hydrated = await hydrateResponse(response, { envelopeRequested: true });
+		expect(hydrated.headers.get('X-WCPOS-Permissions')).toBe('0123456789abcdef');
+	});
+
+	it('keeps a valid permissions header over the envelope stamp', async () => {
+		const response = enveloped({ permissions: '0123456789abcdef' });
+		response.headers.set('X-WCPOS-Permissions', 'fedcba9876543210');
+		const hydrated = await hydrateResponse(response, { envelopeRequested: true });
+		expect(hydrated.headers.get('X-WCPOS-Permissions')).toBe('fedcba9876543210');
+	});
+
+	it.each(['', '0123456789abcde', '0123456789ABCDEF', '0123456789abcdef0', 123])(
+		'ignores invalid permissions metadata %s',
+		async (permissions) => {
+			const hydrated = await hydrateResponse(enveloped({ permissions }), {
+				envelopeRequested: true,
+			});
+			expect(hydrated.headers.get('X-WCPOS-Permissions')).toBeNull();
+		}
+	);
+
 	it('keeps a readable, well-formed header', async () => {
 		const response = enveloped({ total: 12 });
 		response.headers.set('X-WP-Total', '9');

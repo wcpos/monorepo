@@ -7,6 +7,7 @@ export type ResponseEnvelopeMetadata = {
 	server_load?: [number, number, number];
 	memory_peak_bytes?: number;
 	validator?: string;
+	permissions?: string;
 };
 export type ResponseEnvelopeTransportState = {
 	responseHeadersReadable: boolean;
@@ -131,6 +132,7 @@ export async function hydrateResponse(
 		serverLoad: safeHeaderGet(response.headers, 'X-Server-Load'),
 		memoryPeak: safeHeaderGet(response.headers, 'X-WCPOS-Memory-Peak'),
 		validator: safeHeaderGet(response.headers, 'ETag'),
+		permissions: safeHeaderGet(response.headers, 'X-WCPOS-Permissions'),
 	};
 	const metadata = parsed._wcpos;
 	const divergent =
@@ -171,6 +173,12 @@ export async function hydrateResponse(
 		metadata.validator.trim() !== ''
 	)
 		safeHeaderSet(headers, 'ETag', metadata.validator);
+	if (
+		!/^[0-9a-f]{16}$/.test(reads.permissions ?? '') &&
+		typeof metadata.permissions === 'string' &&
+		/^[0-9a-f]{16}$/.test(metadata.permissions)
+	)
+		safeHeaderSet(headers, 'X-WCPOS-Permissions', metadata.permissions);
 	if (Object.values(reads).every((value) => value === null)) {
 		const state = options.transportState;
 		if (state?.responseHeadersReadable !== false) {

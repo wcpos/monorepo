@@ -50,6 +50,7 @@ function createFetcherHarness(
 		fetch?: typeof globalThis.fetch;
 		useRestRouteParam?: boolean;
 		wpJsonRoot?: string;
+		onPermissionsSignal?: (signal: { kind: 'stamp'; stamp: string } | { kind: 'refused' }) => void;
 	} = {}
 ) {
 	const { createEngineFetcher, fetchWooQueryTotal } = loadEngineFetcher();
@@ -86,6 +87,7 @@ function createFetcherHarness(
 		scope,
 		emitTransport,
 		fetch: input.fetch,
+		onPermissionsSignal: input.onPermissionsSignal,
 		wpJsonRoot: input.wpJsonRoot ?? 'https://store.example.test/wp-json/',
 	});
 	return {
@@ -112,6 +114,87 @@ beforeEach(() => {
 });
 
 describe('createEngineFetcher', () => {
+	it('emits a permissions stamp from a successful response header', async () => {
+		const onPermissionsSignal = jest.fn();
+		const fetch = jest.fn().mockResolvedValue(
+			new Response(null, {
+				headers: { 'X-WCPOS-Permissions': '0123456789abcdef' },
+			})
+		);
+		const { fetcher } = createFetcherHarness({ fetch, onPermissionsSignal });
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		expect(onPermissionsSignal).toHaveBeenCalledTimes(1);
+		expect(onPermissionsSignal).toHaveBeenCalledWith({ kind: 'stamp', stamp: '0123456789abcdef' });
+	});
+
+	it('emits a permissions stamp from a 304 response header', async () => {
+		const onPermissionsSignal = jest.fn();
+		const fetch = jest.fn().mockResolvedValue(
+			new Response(null, {
+				status: 304,
+				headers: { 'X-WCPOS-Permissions': '0123456789abcdef' },
+			})
+		);
+		const { fetcher } = createFetcherHarness({ fetch, onPermissionsSignal });
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/changes');
+		expect(onPermissionsSignal).toHaveBeenCalledWith({ kind: 'stamp', stamp: '0123456789abcdef' });
+	});
+
+	it('emits a permissions stamp restored from a header-stripped envelope', async () => {
+		const onPermissionsSignal = jest.fn();
+		const fetch = jest.fn().mockResolvedValue(
+			Response.json({
+				data: [],
+				_wcpos: { v: 1, permissions: '0123456789abcdef' },
+			})
+		);
+		const { fetcher } = createFetcherHarness({ fetch, onPermissionsSignal });
+		const response = await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		expect(await response?.json()).toEqual([]);
+		expect(onPermissionsSignal).toHaveBeenCalledWith({ kind: 'stamp', stamp: '0123456789abcdef' });
+	});
+
+	it('does not emit a malformed permissions header', async () => {
+		const onPermissionsSignal = jest.fn();
+		const fetch = jest.fn().mockResolvedValue(
+			new Response(null, {
+				headers: { 'X-WCPOS-Permissions': '0123456789ABCDEF' },
+			})
+		);
+		const { fetcher } = createFetcherHarness({ fetch, onPermissionsSignal });
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		expect(onPermissionsSignal).not.toHaveBeenCalled();
+	});
+
+	it.each(['products', 'push'])('emits refused on every 403 for %s', async (route) => {
+		const onPermissionsSignal = jest.fn();
+		const fetch = jest.fn().mockImplementation(async () => new Response(null, { status: 403 }));
+		const { fetcher } = createFetcherHarness({ fetch, onPermissionsSignal });
+		const url = `https://store.example.test/wp-json/wcpos/v2/${route}`;
+		await fetcher(url);
+		await fetcher(url);
+		expect(onPermissionsSignal.mock.calls).toEqual([[{ kind: 'refused' }], [{ kind: 'refused' }]]);
+	});
+
+	it.each([200, 403])(
+		'preserves the %s response when the permissions observer throws',
+		async (status) => {
+			const original = new Response(null, {
+				status,
+				headers: { 'X-WCPOS-Permissions': '0123456789abcdef' },
+			});
+			const fetch = jest.fn().mockResolvedValue(original);
+			const onPermissionsSignal = jest.fn(() => {
+				throw new Error('Observer failed');
+			});
+			const { fetcher } = createFetcherHarness({ fetch, onPermissionsSignal });
+			await expect(fetcher('https://store.example.test/wp-json/wcpos/v2/products')).resolves.toBe(
+				original
+			);
+			expect(onPermissionsSignal).toHaveBeenCalledTimes(1);
+		}
+	);
+
 	it('logs one coded warning when six consecutive responses are rate-limited', async () => {
 		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 		const { fetcher, networkWarn } = createFetcherHarness({ fetch });

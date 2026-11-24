@@ -645,6 +645,41 @@ well. Audited by "rung up by" and an order note. A reassignment **never reopens 
 closure**: the closure reads as at close; live reports read the current cashier on the sale.
 _Avoid_: transfer, change server, edit cashier
 
+## Language — Permissions
+
+**Permission**:
+Something an owner switches per role on the Access screen, always a WordPress capability on the role.
+
+**Action permission**:
+The store refuses the write.
+
+**Data permission**:
+The store withholds a field from every response.
+
+**Page permission**:
+The page is gone, and its data is refused where the till does not need it.
+
+**Own-sales scope**:
+The store narrows every list to the cashier's own.
+
+**Store setting**:
+A till preference the owner sets once for the store; not a permission, not per role.
+
+**Locked store setting**:
+One a cashier may not change for themselves.
+
+**Enforced by your store** / **Hidden at the till**:
+The owner-facing words for the two tiers.
+
+**Cashier PIN**:
+A 4 to 6 digit code that lets a person take over or unlock a shared till as themselves.
+
+**Permissions stamp**:
+The 16-character value on every signed-in sync response that changes when the cashier's effective
+permissions or their stores' settings change. When it differs from the one held, the till re-reads
+the cashier record.
+_Avoid_: permissions hash, version.
+
 ## Language — Products browse
 
 **Tile grid**:

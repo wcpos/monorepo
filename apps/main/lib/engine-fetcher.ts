@@ -108,6 +108,8 @@ export type EngineFetcherAuth = {
 
 export type ClockSkewGate = { generation: number; evaluated: boolean };
 
+type PermissionsSignal = { kind: 'stamp'; stamp: string } | { kind: 'refused' };
+
 /**
  * The engine's store scope, read FRESH at request time (never captured) so a
  * store switch retargets in-flight lanes the same way a token refresh does.
@@ -137,6 +139,7 @@ export function createEngineFetcher(input: {
 	fetch?: typeof globalThis.fetch;
 	now?: () => number;
 	wpJsonRoot: string;
+	onPermissionsSignal?: (signal: PermissionsSignal) => void;
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
 	const observeResponseStatus = createRateLimitObserver();
@@ -382,6 +385,16 @@ export function createEngineFetcher(input: {
 						}),
 				});
 			}
+			// The store stamps every response below 400; a quiet change feed answers only 304s.
+			if (response.ok || response.status === 304) {
+				try {
+					const stamp = response.headers.get('X-WCPOS-Permissions');
+					if (stamp && /^[0-9a-f]{16}$/.test(stamp))
+						input.onPermissionsSignal?.({ kind: 'stamp', stamp });
+				} catch {
+					// An observer must never affect the sync request.
+				}
+			}
 
 			const serverLoad = response.headers.get('X-Server-Load');
 			if (serverLoad !== null) {
@@ -464,6 +477,13 @@ export function createEngineFetcher(input: {
 		 */
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
 			const status = attempt.response.status;
+			if (status === 403) {
+				try {
+					input.onPermissionsSignal?.({ kind: 'refused' });
+				} catch {
+					// An observer must never affect the sync request.
+				}
+			}
 			const healthy = attempt.response.ok || status === 304 || (status === 404 && isTickProbe);
 			const streak = requestStreak(operationKey, !healthy);
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
