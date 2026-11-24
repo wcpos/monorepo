@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { useEngineRecord } from '@wcpos/query/record-readers';
 import { useIsPhone } from '@wcpos/components/lib/device';
 
+import { useFirstAnswer } from '../../hooks/use-first-answer';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { enterCheckout } from './checkout-mode';
 import { Checkout } from './checkout';
@@ -27,11 +27,12 @@ export function CheckoutScreen() {
 	}>();
 	const { orderId } = params;
 	const resource = useEngineRecord('orders', orderId);
-	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; same exception as use-first-answer.ts (2026-10-01).
-	const answered = useObservableEagerState(resource.valueRef$$) !== undefined;
+	const answered = useFirstAnswer(resource);
 	// Decided once, at the first answer (null until then): Pay clears its save state as it settles.
 	const bounce = React.useMemo(() => {
 		if (!answered) return null;
+		// Failed or completed empty: the reader mounts, and its `read()` rethrows into its boundary.
+		if (resource.valueRef$$.value === undefined) return false;
 		return bouncesToCart(resource.valueRef$$.value?.current?.payload.id, orderId);
 	}, [answered, resource, orderId]);
 

@@ -32,11 +32,23 @@ jest.mock('expo-router', () => ({
 jest.mock('./checkout', () => ({ Checkout: () => <div data-testid="modal" /> }));
 // The order's record as `useEngineRecord` answers it: undefined until it resolves. By default an
 // order the store has created, so the lanes above the bounce behave as before.
-const resourceOf = (serverId?: number | 'unresolved') => ({
-	valueRef$$: new BehaviorSubject(
-		serverId === 'unresolved' ? undefined : { current: { payload: { id: serverId } } }
-	),
-});
+// `read()` is what `useFirstAnswer` asks while there is no value: a pending thenable while
+// unresolved, the failure itself once the record has failed before its first answer.
+const resourceOf = (serverId?: number | 'unresolved' | 'failed') => {
+	const value =
+		serverId === 'unresolved' || serverId === 'failed'
+			? undefined
+			: { current: { payload: { id: serverId } } };
+	const pending = new Promise<never>(() => {});
+	return {
+		valueRef$$: new BehaviorSubject(value),
+		read: () => {
+			if (serverId === 'unresolved') throw pending;
+			if (serverId === 'failed') throw new Error('the order record failed');
+			return value;
+		},
+	};
+};
 let mockResource = resourceOf(42);
 jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecord: () => mockResource }));
 jest.mock('../../hooks/use-payment-methods', () => ({
@@ -171,4 +183,33 @@ it('decides nothing while the order record is unresolved', () => {
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 	expect(mockReplace).not.toHaveBeenCalled();
 	expect(mockDismiss).not.toHaveBeenCalled();
+});
+// The record failed (or completed empty) before its first answer: the screen hands it on as
+// main did, never holding a blank sheet; the reader's `read()` rethrows into its boundary.
+describe('a record that fails before its first answer', () => {
+	beforeEach(() => {
+		mockResource = resourceOf('failed');
+		mockCanDismiss = false;
+		mockBeneath = 'index';
+	});
+	it.each(['wide legacy', 'phone'])(
+		'%s: mounts the checkout, never bounced to its cart',
+		(lane) => {
+			if (lane === 'phone') mockSize = 'sm';
+			if (lane === 'wide legacy') mockLoaded = false;
+			render(<CheckoutScreen />);
+			expect(screen.getByTestId('modal')).not.toBeNull();
+			expect(mockReplace).not.toHaveBeenCalled();
+			expect(mockDismiss).not.toHaveBeenCalled();
+		}
+	);
+	it('wide: enters the columns checkout, whose reader rethrows, never its cart', () => {
+		render(<CheckoutScreen />);
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledWith({
+			pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
+			params: { orderId: ['a', 'checkout'] },
+		});
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(true);
+	});
 });
