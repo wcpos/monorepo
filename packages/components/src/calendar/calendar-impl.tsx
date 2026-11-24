@@ -127,7 +127,9 @@ function useCalendarTheme(locale?: string) {
 		} as Record<string, unknown>),
 	};
 	return {
-		loadedLocale,
+		// The library reads its locale and builds its stylesheet once, at mount: a loaded locale or a
+		// changed theme remounts it, or the card keeps the previous theme's colours under the new inks.
+		mountKey: `${loadedLocale ?? 'default'}:${cardColor}:${foregroundColor}`,
 		sharedTheme,
 		primary: primaryColor,
 		primaryForeground: primaryForegroundColor,
@@ -138,7 +140,7 @@ function useCalendarTheme(locale?: string) {
 }
 
 export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props }: Props) {
-	const { loadedLocale, sharedTheme, primary: primaryColor } = useCalendarTheme(locale);
+	const { mountKey, sharedTheme, primary: primaryColor } = useCalendarTheme(locale);
 
 	// Derive current month directly from dateRange (no state sync needed)
 	const currentMonth = React.useMemo(() => {
@@ -216,7 +218,7 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 
 	return (
 		<RNCalendar
-			key={loadedLocale ?? 'default'}
+			key={mountKey}
 			firstDay={1}
 			onDayPress={handleDayPress}
 			markedDates={markedDates}
@@ -298,7 +300,7 @@ export function DayCalendar({
 	locale,
 	testID,
 }: DayCalendarProps) {
-	const { loadedLocale, sharedTheme, border } = useCalendarTheme(locale);
+	const { mountKey, sharedTheme, border } = useCalendarTheme(locale);
 	const [shownMonth, setShownMonth] = React.useState(() =>
 		format(parseISO(value ?? currentDay ?? maxDate), 'yyyy-MM')
 	);
@@ -310,7 +312,7 @@ export function DayCalendar({
 			value={{ value, currentDay, maxDate, onValueChange, testID, shownMonth }}
 		>
 			<RNCalendar
-				key={loadedLocale ?? 'default'}
+				key={mountKey}
 				firstDay={1}
 				testID={testID}
 				initialDate={shownMonth}

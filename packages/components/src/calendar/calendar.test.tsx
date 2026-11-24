@@ -6,6 +6,7 @@ import { Calendar } from './index';
 import { updateLocaleConfig } from './locales';
 
 let header = '13px';
+let card = 'card';
 let calendar: Record<string, unknown>;
 let mockMounts = 0;
 jest.mock('react-native-calendars', () => ({
@@ -22,7 +23,7 @@ jest.mock('uniwind', () => ({
 	useCSSVariable: () => [
 		'primary',
 		'primary-foreground',
-		'card',
+		card,
 		'foreground',
 		'muted',
 		'border',
@@ -68,6 +69,16 @@ it('remounts the calendar after the locale loads', async () => {
 		render(<Calendar locale="de" />);
 	});
 	expect(mockMounts).toBe(2);
+});
+
+it('remounts the calendar when the theme changes, so the library rebuilds its colours', async () => {
+	const { rerender } = await act(async () => render(<Calendar />));
+	expect(mockMounts).toBe(1);
+	card = 'dark-card';
+	rerender(<Calendar />);
+	expect(mockMounts).toBe(2);
+	expect(calendar.theme).toMatchObject({ calendarBackground: 'dark-card' });
+	card = 'card';
 });
 
 it('does not remount when the locale load was superseded', async () => {
