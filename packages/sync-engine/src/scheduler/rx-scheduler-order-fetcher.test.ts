@@ -2321,6 +2321,44 @@ describe('createOrdersSchedulerFetcher', () => {
 
 	const SALE_DAY_QUERY_KEY = PAID_RANGE_QUERY_KEY.replace(':search=', ':sale_day=1:search=');
 
+	it('reads every corrected sale-day page before the creation walk, however many there are', async () => {
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const corrected = Array.from({ length: 251 }, (_, i) => rangedOrder(1000 + i, 1784200000));
+		const repository = { upsertMany: vi.fn(async (_docs: OrderDocument[]) => undefined) };
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (!params.has('pos_sale_day_after')) return server.fetcher(url);
+			const offset = (Number(params.get('page')) - 1) * 25;
+			return rangedResponse(corrected.slice(offset, offset + 25));
+		});
+		await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore(), repository })(
+			orderTask({ queryKey: SALE_DAY_QUERY_KEY })
+		);
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).searchParams.has('pos_sale_day_after'))
+		).toHaveLength(11);
+		const stored = new Set(
+			repository.upsertMany.mock.calls.flatMap(([docs]) => docs).map((doc) => doc.uuid)
+		);
+		expect(corrected.every((order) => stored.has(uuidFor(order.id)))).toBe(true);
+	});
+
+	it('fails the pass, and writes no cursor, when corrected sale-day pages never end', async () => {
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const coverageRepository = rangedLaneStore();
+		const page = Array.from({ length: 25 }, (_, i) => rangedOrder(1000 + i, 1784200000));
+		const fetcher = vi.fn(async (url: string) =>
+			new URL(url).searchParams.has('pos_sale_day_after')
+				? rangedResponse(page)
+				: server.fetcher(url)
+		);
+		await expect(
+			rangedFetcherFor({ fetcher, coverageRepository })(orderTask({ queryKey: SALE_DAY_QUERY_KEY }))
+		).rejects.toThrow('page bound');
+		expect(server.fetcher).not.toHaveBeenCalled();
+		expect(coverageRepository.publishRangedResume).not.toHaveBeenCalled();
+	});
+
 	it('stops the corrected sale-day step at the advertised last page, even when that page is full', async () => {
 		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
 		const corrected = Array.from({ length: 25 }, (_, i) => rangedOrder(100 + i, 1784200000));
@@ -2480,22 +2518,6 @@ describe('createOrdersSchedulerFetcher', () => {
 				'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=2026-07-14T23%3A59%3A59&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc',
 			],
 		]);
-	});
-
-	it('bounds the leading step to ten full pages before the creation walk', async () => {
-		const fetcher = vi.fn(async (url: string) =>
-			rangedResponse(
-				new URL(url).searchParams.has('pos_sale_day_after')
-					? Array.from({ length: 25 }, (_, i) => rangedOrder(100 + i, 1784200000))
-					: []
-			)
-		);
-		await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore() })(
-			orderTask({ queryKey: SALE_DAY_QUERY_KEY })
-		);
-		expect(fetcher).toHaveBeenCalledTimes(12);
-		expect(new URL(fetcher.mock.calls[9][0]).searchParams.get('page')).toBe('10');
-		expect(new URL(fetcher.mock.calls[10][0]).searchParams.has('after')).toBe(true);
 	});
 
 	it('switches to a modified_after request after the created-in-range phase is short', async () => {

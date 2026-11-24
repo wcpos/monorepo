@@ -51,8 +51,9 @@ type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Respons
 
 const SUPPORTED_ORDER_QUERY_KEY = 'orders:custom-pull';
 const MAX_STALLED_BATCHES = 3;
-// Corrected sales in one range are a handful; bound this in-memory prelude without a new cursor.
-const SALE_DAY_MAX_PAGES = 10;
+// Corrected sales in one range are a handful. Past this many pages the store is not paging (or the
+// range is not one a report asks for): the pass fails, never a lane that calls itself complete without them.
+const SALE_DAY_MAX_PAGES = 100;
 const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
 /**
  * The per-PASS record budget for a ranged fetch-to-completion walk — a work bound, not a wall
@@ -1004,12 +1005,12 @@ async function fetchBrowserOrderQuery(
 			// Share ingestion, but not coverage/progress or the creation cursor. A failure above
 			// leaves no cursor, so the next pass repeats this step from page one.
 			// A full last page is the last page too: the store refuses a page past the one it advertised.
+			if (saleDayPage >= SALE_DAY_MAX_PAGES && rawPayloads.length >= descriptor.perPage) {
+				throw new Error('Corrected sale-day orders did not end within the page bound');
+			}
 			saleDayPage =
 				rawPayloads.length < descriptor.perPage ||
-				(totalPagesHeader !== null &&
-					Number.isSafeInteger(totalPages) &&
-					saleDayPage >= totalPages) ||
-				saleDayPage >= SALE_DAY_MAX_PAGES
+				(totalPagesHeader !== null && Number.isSafeInteger(totalPages) && saleDayPage >= totalPages)
 					? 0
 					: saleDayPage + 1;
 			continue;
