@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 
 import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
@@ -6,6 +7,9 @@ import { type CalendarProps, Calendar as RNCalendar } from 'react-native-calenda
 import { useCSSVariable } from 'uniwind';
 
 import { Icon } from '../icon';
+import { cn } from '../lib/utils';
+import { PressableSurface } from '../pressable-surface';
+import { Text } from '../text';
 import { updateLocaleConfig } from './locales';
 
 export interface DateRange {
@@ -19,7 +23,7 @@ interface Props extends CalendarProps {
 	locale?: string;
 }
 
-export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props }: Props) {
+function useCalendarTheme(locale?: string) {
 	// Theme colors via CSS variables
 	const [
 		primaryColor,
@@ -73,6 +77,68 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 			live = false;
 		};
 	}, [locale]);
+
+	const sharedTheme: CalendarProps['theme'] = {
+		backgroundColor: cardColor,
+		calendarBackground: cardColor,
+		textSectionTitleColor: mutedForegroundColor,
+		textSectionTitleDisabledColor: borderColor,
+		selectedDayBackgroundColor: primaryColor,
+		selectedDayTextColor: primaryForegroundColor,
+		todayTextColor: primaryColor,
+		dayTextColor: foregroundColor,
+		textDisabledColor: borderColor,
+		dotColor: primaryColor,
+		selectedDotColor: primaryForegroundColor,
+		arrowColor: primaryColor,
+		disabledArrowColor: borderColor,
+		monthTextColor: foregroundColor,
+		indicatorColor: primaryColor,
+		textDayFontFamily:
+			'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
+		textMonthFontFamily:
+			'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
+		textDayHeaderFontFamily:
+			'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
+		textDayFontWeight: '400',
+		textMonthFontWeight: '500',
+		textDayHeaderFontWeight: '500',
+		textDayFontSize: baseSize,
+		textMonthFontSize: baseSize,
+		textDayHeaderFontSize: headerSize,
+		weekVerticalMargin: unit / 2,
+		// react-native-calendars supports stylesheet overrides but they're not in the Theme type
+		...({
+			'stylesheet.calendar.header': {
+				header: {
+					flexDirection: 'row',
+					justifyContent: 'space-between',
+					paddingLeft: unit * 2.5,
+					paddingRight: unit * 2.5,
+					marginTop: 0,
+					alignItems: 'center',
+				},
+				week: {
+					marginTop: 0,
+					flexDirection: 'row',
+					justifyContent: 'space-between',
+				},
+			},
+		} as Record<string, unknown>),
+	};
+	return {
+		loadedLocale,
+		sharedTheme,
+		primary: primaryColor,
+		primaryForeground: primaryForegroundColor,
+		foreground: foregroundColor,
+		mutedForeground: mutedForegroundColor,
+		border: borderColor,
+	};
+}
+
+export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props }: Props) {
+	const { loadedLocale, sharedTheme, primary: primaryColor } = useCalendarTheme(locale);
 
 	// Derive current month directly from dateRange (no state sync needed)
 	const currentMonth = React.useMemo(() => {
@@ -158,56 +224,100 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 			renderArrow={(direction) => {
 				return <Icon name={direction === 'left' ? 'chevronLeft' : 'chevronRight'} />;
 			}}
-			theme={{
-				backgroundColor: cardColor,
-				calendarBackground: cardColor,
-				textSectionTitleColor: mutedForegroundColor,
-				textSectionTitleDisabledColor: borderColor,
-				selectedDayBackgroundColor: primaryColor,
-				selectedDayTextColor: primaryForegroundColor,
-				todayTextColor: primaryColor,
-				dayTextColor: foregroundColor,
-				textDisabledColor: borderColor,
-				dotColor: primaryColor,
-				selectedDotColor: primaryForegroundColor,
-				arrowColor: primaryColor,
-				disabledArrowColor: borderColor,
-				monthTextColor: foregroundColor,
-				indicatorColor: primaryColor,
-				textDayFontFamily:
-					'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
-				textMonthFontFamily:
-					'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
-				textDayHeaderFontFamily:
-					'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
-				textDayFontWeight: '400',
-				textMonthFontWeight: '500',
-				textDayHeaderFontWeight: '500',
-				textDayFontSize: baseSize,
-				textMonthFontSize: baseSize,
-				textDayHeaderFontSize: headerSize,
-				weekVerticalMargin: unit / 2,
-				// react-native-calendars supports stylesheet overrides but they're not in the Theme type
-				...({
-					'stylesheet.calendar.header': {
-						header: {
-							flexDirection: 'row',
-							justifyContent: 'space-between',
-							paddingLeft: unit * 2.5,
-							paddingRight: unit * 2.5,
-							marginTop: 0,
-							alignItems: 'center',
-						},
-						week: {
-							marginTop: 0,
-							flexDirection: 'row',
-							justifyContent: 'space-between',
-						},
-					},
-				} as Record<string, unknown>),
-				...theme,
-			}}
+			theme={{ ...sharedTheme, ...theme }}
 			{...props}
 		/>
+	);
+}
+
+interface DayCalendarProps {
+	value?: string;
+	onValueChange: (day: string) => void;
+	maxDate: string;
+	currentDay?: string;
+	locale?: string;
+	testID?: string;
+}
+
+// Context updates reach cells through the library's memoized Day wrapper without remounting.
+const DayCalendarContext = React.createContext<Omit<DayCalendarProps, 'locale'> | null>(null);
+
+function DayCell({
+	date,
+	state,
+	accessibilityLabel,
+	children,
+}: React.ComponentProps<NonNullable<CalendarProps['dayComponent']>>) {
+	const { value, currentDay, maxDate, onValueChange, testID } =
+		React.useContext(DayCalendarContext)!;
+	if (!date) return null;
+	const current = date.dateString === currentDay;
+	const unavailable = state === 'disabled' || parseISO(date.dateString) > parseISO(maxDate);
+	const disabled = current || unavailable;
+	const selected = date.dateString === value && !disabled;
+	const ink = unavailable
+		? 'text-border'
+		: current
+			? 'text-muted-foreground'
+			: selected
+				? 'text-primary-foreground'
+				: 'text-foreground';
+	return (
+		<PressableSurface
+			testID={testID ? `${testID}-day-${date.dateString}` : undefined}
+			role="radio"
+			selected={selected}
+			accessibilityLabel={accessibilityLabel}
+			disabled={disabled}
+			onPress={() => onValueChange(date.dateString)}
+			className="min-h-ctl items-center justify-center self-stretch"
+		>
+			<View
+				className={cn('size-8 items-center justify-center rounded-full', selected && 'bg-primary')}
+			>
+				<Text allowFontScaling={false} className={ink}>
+					{children}
+				</Text>
+			</View>
+			{current && <View className="bg-primary absolute bottom-0.5 size-1 rounded-full" />}
+		</PressableSurface>
+	);
+}
+
+export function DayCalendar({
+	value,
+	onValueChange,
+	maxDate,
+	currentDay,
+	locale,
+	testID,
+}: DayCalendarProps) {
+	const { loadedLocale, sharedTheme, border } = useCalendarTheme(locale);
+	const [shownMonth, setShownMonth] = React.useState(() =>
+		format(parseISO(value ?? currentDay ?? maxDate), 'yyyy-MM')
+	);
+	const lastDay = parseISO(maxDate);
+	const disableArrowRight = shownMonth >= format(lastDay, 'yyyy-MM');
+
+	return (
+		<DayCalendarContext.Provider value={{ value, currentDay, maxDate, onValueChange, testID }}>
+			<RNCalendar
+				key={loadedLocale ?? 'default'}
+				firstDay={1}
+				testID={testID}
+				initialDate={shownMonth}
+				maxDate={maxDate}
+				theme={sharedTheme}
+				onMonthChange={({ dateString }) => setShownMonth(format(parseISO(dateString), 'yyyy-MM'))}
+				disableArrowRight={disableArrowRight}
+				renderArrow={(direction) => (
+					<Icon
+						name={direction === 'left' ? 'chevronLeft' : 'chevronRight'}
+						fill={direction === 'right' && disableArrowRight ? border : undefined}
+					/>
+				)}
+				dayComponent={DayCell}
+			/>
+		</DayCalendarContext.Provider>
 	);
 }
