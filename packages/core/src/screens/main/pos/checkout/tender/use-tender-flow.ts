@@ -108,6 +108,7 @@ import { rowsSince, splitView, useSplitStore } from './split-view';
 import { restoredPlan, splitCommands } from './split-module';
 import { type RememberedReader, useRememberedReader } from './remembered-readers';
 import { disabledReasonText, failureReasonLabel, providerErrorMessage } from './labels';
+import { invalidParamContext } from './invalid-param-names';
 import {
 	activePlan,
 	initTenderState,
@@ -832,6 +833,7 @@ export function useTenderFlow(
 					context: {
 						...orderContext,
 						error: error instanceof Error ? error.message : String(error),
+						...invalidParamContext(error),
 					},
 				});
 		} finally {
@@ -1345,6 +1347,7 @@ export function useTenderFlow(
 					...orderContext,
 					method: method?.id ?? null,
 					error: error instanceof Error ? error.message : String(error),
+					...invalidParamContext(error),
 				},
 			});
 		} finally {
