@@ -28,7 +28,9 @@ jest.mock('react-native-calendars', () => {
 				date={date(dateString) as string & DateData}
 				state={state}
 				marking={marking}
-				accessibilityLabel="Monday 8 June 2026"
+				accessibilityLabel={
+					dateString === '2026-06-10' ? 'Wednesday 10 June 2026' : 'Monday 8 June 2026'
+				}
 			>
 				{date(dateString).day}
 			</Cell>
@@ -130,6 +132,20 @@ it('does not report future days or the current day', async () => {
 	fireEvent.click(getDay('2026-06-10'));
 	expect(defaults.onValueChange).not.toHaveBeenCalled();
 	expect(screen.getByTestId('paid-on-day-2026-06-25')).toHaveAttribute('aria-disabled', 'true');
+});
+
+it('appends currentDayLabel only to the current day full-date label', async () => {
+	await mount({ currentDayLabel: 'The sale is on this day now' });
+	expect(getDay('2026-06-10')).toHaveAttribute(
+		'aria-label',
+		'Wednesday 10 June 2026, The sale is on this day now'
+	);
+	expect(getDay('2026-06-08')).toHaveAttribute('aria-label', 'Monday 8 June 2026');
+});
+
+it('keeps the current day date label alone without currentDayLabel', async () => {
+	await mount();
+	expect(getDay('2026-06-10')).toHaveAttribute('aria-label', 'Wednesday 10 June 2026');
 });
 
 it('makes outside-month days unavailable with border ink', async () => {

@@ -150,6 +150,18 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 		return format(new Date(), 'yyyy-MM');
 	}, [dateRange]);
 
+	const [month, setMonth] = React.useState({
+		currentMonth,
+		mountKey,
+		initialDate: currentMonth,
+		shownMonth: currentMonth,
+	});
+	// Keep initialDate stable while browsing: the library re-seats whenever it changes.
+	if (month.currentMonth !== currentMonth || month.mountKey !== mountKey) {
+		const initialDate = month.currentMonth !== currentMonth ? currentMonth : month.shownMonth;
+		setMonth({ currentMonth, mountKey, initialDate, shownMonth: initialDate });
+	}
+
 	// Convert DateRange to markedDates format for react-native-calendars
 	const markedDates = React.useMemo(() => {
 		if (!dateRange) return {};
@@ -222,12 +234,16 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 			firstDay={1}
 			onDayPress={handleDayPress}
 			markedDates={markedDates}
-			initialDate={currentMonth}
+			initialDate={month.initialDate}
 			renderArrow={(direction) => {
 				return <Icon name={direction === 'left' ? 'chevronLeft' : 'chevronRight'} />;
 			}}
 			theme={{ ...sharedTheme, ...theme }}
 			{...props}
+			onMonthChange={(day) => {
+				setMonth((previous) => ({ ...previous, shownMonth: day.dateString.slice(0, 7) }));
+				props.onMonthChange?.(day);
+			}}
 		/>
 	);
 }
@@ -237,6 +253,7 @@ interface DayCalendarProps {
 	onValueChange: (day: string) => void;
 	maxDate: string;
 	currentDay?: string;
+	currentDayLabel?: string;
 	locale?: string;
 	testID?: string;
 }
@@ -252,7 +269,7 @@ function DayCell({
 	accessibilityLabel,
 	children,
 }: React.ComponentProps<NonNullable<CalendarProps['dayComponent']>>) {
-	const { value, currentDay, maxDate, onValueChange, testID, shownMonth } =
+	const { value, currentDay, currentDayLabel, maxDate, onValueChange, testID, shownMonth } =
 		React.useContext(DayCalendarContext)!;
 	if (!date) return null;
 	const current = date.dateString === currentDay;
@@ -275,7 +292,11 @@ function DayCell({
 			testID={`${testID ?? 'day-calendar'}-day-${date.dateString}`}
 			role="radio"
 			selected={selected}
-			accessibilityLabel={accessibilityLabel}
+			accessibilityLabel={
+				current && currentDayLabel
+					? `${accessibilityLabel}, ${currentDayLabel}`
+					: accessibilityLabel
+			}
 			disabled={disabled}
 			onPress={() => onValueChange(date.dateString)}
 			className="min-h-ctl items-center justify-center self-stretch"
@@ -297,6 +318,7 @@ export function DayCalendar({
 	onValueChange,
 	maxDate,
 	currentDay,
+	currentDayLabel,
 	locale,
 	testID,
 }: DayCalendarProps) {
@@ -309,7 +331,7 @@ export function DayCalendar({
 
 	return (
 		<DayCalendarContext.Provider
-			value={{ value, currentDay, maxDate, onValueChange, testID, shownMonth }}
+			value={{ value, currentDay, currentDayLabel, maxDate, onValueChange, testID, shownMonth }}
 		>
 			<RNCalendar
 				key={mountKey}

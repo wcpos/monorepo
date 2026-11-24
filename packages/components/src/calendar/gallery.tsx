@@ -21,6 +21,7 @@ export const stories = [
 			<DayCalendar
 				value="2026-06-08"
 				currentDay="2026-06-10"
+				currentDayLabel="Current day"
 				maxDate="2026-06-24"
 				onValueChange={() => {}}
 			/>
