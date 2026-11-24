@@ -1037,6 +1037,26 @@ describe('query handles over the engine', () => {
 		expect(engine.requireCalls.at(-1)).not.toHaveProperty('store');
 	});
 
+	it('replaces a sales handle when the server advertises sale-day correction and forwards the flag', async () => {
+		const { result, rerender } = renderHook(
+			({ saleDayCorrection }: { saleDayCorrection: boolean }) =>
+				useCollectionQueryHandle('orders', salesState, { storeScope: 'sales', saleDayCorrection }),
+			{ wrapper: Provider, initialProps: { saleDayCorrection: false } }
+		);
+		await firstValueFrom(field$(result.current, 'total'));
+		const previous = result.current;
+		expect(engine.requireCalls.at(-1)).not.toHaveProperty('saleDayCorrection');
+		rerender({ saleDayCorrection: true });
+		await firstValueFrom(field$(result.current, 'total'));
+		expect(result.current).not.toBe(previous);
+		expect(engine.requireCalls.at(-1)).toMatchObject({ saleDayCorrection: true });
+		expect(engine.coverageSubscribeCalls).toContainEqual({
+			collection: 'orders',
+			queryKey:
+				'orders:browser:status=all:after=1782864000:before=1783987200:modified_after=1782864000:sale_day=1:search=:limit=all',
+		});
+	});
+
 	// Dropping the target hides progress; borrowing either server count overstates the subset.
 	it("a superset lane still reports laneProgress and a complete verdict yields the local count as total, never the lane's total", async () => {
 		engine.setCensusTotal('orders', 203);

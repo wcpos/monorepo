@@ -457,6 +457,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	options: {
 		id: string;
 		storeScope?: 'pos' | 'sales';
+		saleDayCorrection?: boolean;
 		targeted?: readonly unknown[];
 		searchFields?: string[];
 		/** A read-side predicate intentionally left outside QueryState. */
@@ -699,8 +700,10 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			dimensions.limit === 'all' &&
 			dimensions.afterSeconds !== undefined &&
 			dimensions.beforeSeconds !== undefined
-		)
+		) {
 			dimensions.modifiedAfterSeconds = dimensions.afterSeconds;
+			if (options.saleDayCorrection) dimensions.saleDayCorrection = true;
+		}
 		demand.push({
 			id: requirementId(options.id, 'orders-browse'),
 			collection: 'orders',
