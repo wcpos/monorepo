@@ -433,6 +433,37 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
+	it('reports permissions stamps and refused responses as permissions signals', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(
+				new Response('[]', {
+					status: 200,
+					headers: {
+						'content-type': 'application/json',
+						'X-WCPOS-Permissions': '0123456789abcdef',
+					},
+				})
+			)
+			.mockResolvedValueOnce(new Response(null, { status: 403 }));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		const { permissionsSignal$ } = jest.requireActual<
+			typeof import('@wcpos/core/services/permissions-refresh/signal')
+		>('@wcpos/core/services/permissions-refresh/signal');
+		const receivedSignal = jest.fn();
+		const subscription = permissionsSignal$.subscribe(receivedSignal);
+		createAppSyncEngine(BASE_OPTIONS);
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(receivedSignal).toHaveBeenCalledWith({ kind: 'stamp', stamp: '0123456789abcdef' });
+		expect(receivedSignal).toHaveBeenCalledWith({ kind: 'refused' });
+		subscription.unsubscribe();
+		fetch.mockRestore();
+	});
+
 	it('preserves the response timestamp when a 401 event is emitted after a failed retry', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValue(100);
 		const fetch = jest
