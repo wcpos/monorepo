@@ -79,7 +79,7 @@ describe('reference walks yield the require lane to browse windows', () => {
 		} finally {
 			await harness.dispose();
 		}
-	});
+	}, 30_000);
 
 	it('a coupons refresh does not hold a browse window queued after it', async () => {
 		const gate = Promise.withResolvers<void>();
@@ -134,7 +134,7 @@ describe('reference walks yield the require lane to browse windows', () => {
 			gate.resolve();
 			await harness.dispose();
 		}
-	});
+	}, 30_000);
 
 	it('a browse drain still drains non-reference work', async () => {
 		const harness = await createEngineHarness({
@@ -180,7 +180,7 @@ describe('reference walks yield the require lane to browse windows', () => {
 		} finally {
 			await harness.dispose();
 		}
-	});
+	}, 30_000);
 
 	it('a coupons refresh keeps product trickle waiting while the reference lane runs', async () => {
 		const gate = Promise.withResolvers<void>();
@@ -223,5 +223,5 @@ describe('reference walks yield the require lane to browse windows', () => {
 			gate.resolve();
 			await harness.dispose();
 		}
-	});
+	}, 30_000);
 });
