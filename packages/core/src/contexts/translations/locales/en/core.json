@@ -80,6 +80,7 @@
 	"reports.counted": "Counted",
 	"reports.difference": "Difference",
 	"reports.order_time_cashier": "{time} · {cashier}",
+	"reports.rung_up_later": "Rung up later",
 	"pro.strip_title": "You're on the free version of WCPOS.",
 	"pro.strip_title_phone": "You're on WCPOS Free.",
 	"pro.strip_body_overview": "Pro adds refunds, card readers, stock and price editing, and order history.",

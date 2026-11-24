@@ -15,6 +15,8 @@ import {
 	noStoreFilter,
 	noStoreFilterIds,
 	requirementsForCompiledQuery,
+	rungUpMomentOf,
+	saleMomentOf,
 	translateLogsQueryState,
 } from '../../src/query-state/query-state-translator';
 
@@ -1528,5 +1530,41 @@ it('an invalid gateway id stays local-only', () => {
 	expect(compiled.demand.every((requirement) => !('paymentMethod' in requirement))).toBe(true);
 	expect(compiled.read.residual({ uuid: 'local', payload: { payment_method: 'pos:cash' } })).toBe(
 		true
+	);
+});
+
+// A corrected sale belongs to its sale day, never changing Orders' creation-date read.
+it('reads a corrected sale on November 23 only, while Orders keeps November 24', () => {
+	const payload = {
+		uuid: 'corrected',
+		date_created_gmt: '2026-11-24T09:00:00',
+		date_paid_gmt: '2026-11-24T10:00:00',
+		meta_data: [
+			{
+				key: '_wcpos_sale_day',
+				value: JSON.stringify({ at_gmt: '2026-11-23T09:12:00Z', reason: 'Late entry' }),
+			},
+		],
+	};
+	const doc = engineOrder(payload) as EngineDocument;
+	for (const [day, salesMatch, ordersMatch] of [
+		['23', true, false],
+		['24', false, true],
+	] as const) {
+		const state = {
+			search: '',
+			filters: { dateRange: { from: `2026-11-${day}T00:00:00`, to: `2026-11-${day}T23:59:59` } },
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		} as const;
+		const sales = compileQuery('orders', state, { id: 'sales', storeScope: 'sales' }).read;
+		const orders = compileQuery('orders', state, { id: 'orders' }).read;
+		expect(new Query(sales.prefilter).test(doc) && sales.residual(doc)).toBe(salesMatch);
+		expect(new Query(orders.prefilter).test(doc) && orders.residual(doc)).toBe(ordersMatch);
+	}
+	expect(saleMomentOf(payload)).toBe('2026-11-23T09:12:00Z');
+	expect(rungUpMomentOf(payload)).toBe('2026-11-24T10:00:00');
+	expect(saleMomentOf({ ...payload, meta_data: [{ key: '_wcpos_sale_day', value: '{' }] })).toBe(
+		'2026-11-24T10:00:00'
 	);
 });
