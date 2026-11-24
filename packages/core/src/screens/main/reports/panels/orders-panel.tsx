@@ -74,9 +74,11 @@ export function OrdersPanel({
 					/>
 					<View className="min-w-0 flex-1">
 						<View className="flex-row items-center gap-2">
-							<Text className="font-semibold">{row.cells[0]}</Text>
+							<Text className="shrink font-semibold" numberOfLines={1}>
+								{row.cells[0]}
+							</Text>
 							{row.late && (
-								<Badge tinted variant="info" className="shrink">
+								<Badge tinted variant="info" className="shrink-0">
 									{t('reports.rung_up_later')}
 								</Badge>
 							)}

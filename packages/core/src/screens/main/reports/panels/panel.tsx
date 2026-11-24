@@ -121,8 +121,8 @@ function DetailPanelContent() {
 			const sale = saleMomentOf(order),
 				rungUp = rungUpMomentOf(order);
 			const day = (moment: string) =>
-				format(inZone(timezone, convertUTCStringToLocalDate(moment)), 'yyyy-MM-dd');
-			return !!sale && !!rungUp && day(sale) !== day(rungUp);
+				format(convertUTCStringToLocalDate(moment), 'yyyy-MM-dd', zoneOptions(timezone));
+			return !!sale && !!rungUp && day(sale) < day(rungUp);
 		},
 		orderTime: (order) => {
 			const moment = saleMomentOf(order);

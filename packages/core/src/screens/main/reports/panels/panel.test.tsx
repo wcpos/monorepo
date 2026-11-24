@@ -455,7 +455,7 @@ it('waits for the category tree before exporting or printing Products', async ()
 	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 });
 
-it('marks different store days, not different UTC days, without changing export or print cells', async () => {
+it('marks only earlier store days, not different UTC days, without changing export or print cells', async () => {
 	const context = jest.requireMock<typeof Context>('../context');
 	const period = context.useReportsPeriod();
 	jest
@@ -483,11 +483,21 @@ it('marks different store days, not different UTC days, without changing export 
 			date_paid_gmt: '2026-07-15T01:30:00',
 			meta_data: correction('2026-07-14T23:30:00Z'),
 		},
+		{
+			uuid: 'later',
+			number: '44',
+			total: '30',
+			payment_method: 'cash',
+			status: 'completed',
+			date_paid_gmt: '2026-07-15T03:30:00',
+			meta_data: correction('2026-07-15T05:30:00Z'),
+		},
 	] as Context.ReportOrder[]);
 	room();
 	fireEvent.click(screen.getByTestId('card-orders-open'));
 	expect(screen.getByTestId('orders-panel-row-late').textContent).toContain('Rung up later');
 	expect(screen.getByTestId('orders-panel-row-same').textContent).not.toContain('Rung up later');
+	expect(screen.getByTestId('orders-panel-row-later').textContent).not.toContain('Rung up later');
 	fireEvent.click(screen.getByTestId('detail-panel-export'));
 	await waitFor(() => expect(saveOrShareCsv).toHaveBeenCalled());
 	const csv = jest.mocked(saveOrShareCsv).mock.calls[0][0];
@@ -504,4 +514,41 @@ it('marks different store days, not different UTC days, without changing export 
 		'Yes',
 	]);
 	expect(JSON.stringify(printed)).not.toContain('Rung up later');
+});
+
+it('keeps a long order number on one shrinking line beside a non-shrinking badge on a phone', () => {
+	mockState.screenSize = 'sm';
+	const text = jest.requireMock<typeof import('@wcpos/components/text')>('@wcpos/components/text');
+	const OriginalText = text.Text;
+	const renderText = jest.fn((props: React.ComponentProps<typeof OriginalText>) => (
+		<OriginalText {...props} />
+	));
+	jest.replaceProperty(text, 'Text', renderText);
+	const badge = jest.spyOn(
+		jest.requireActual<typeof import('@wcpos/components/badge')>('@wcpos/components/badge'),
+		'Badge'
+	);
+	setOrders([
+		{
+			uuid: 'long',
+			number: 'WCPOS-2026-000123',
+			total: '10',
+			status: 'completed',
+			date_paid_gmt: '2026-07-15T10:00:00',
+			meta_data: [
+				{ key: '_wcpos_sale_day', value: { at_gmt: '2026-07-14T10:00:00Z', reason: 'Late' } },
+			],
+		},
+	] as Context.ReportOrder[]);
+	room();
+	fireEvent.click(screen.getByTestId('card-orders-open'));
+	expect(
+		renderText.mock.calls.find(([props]) => props.children === '#WCPOS-2026-000123')?.[0]
+	).toMatchObject({ numberOfLines: 1, className: expect.stringContaining('shrink') });
+	const row = screen.getByTestId('orders-panel-row-long');
+	const number = within(row).getByText('#WCPOS-2026-000123');
+	expect(number.nextElementSibling?.textContent).toBe('Rung up later');
+	expect(badge.mock.calls.find(([props]) => props.children === 'Rung up later')?.[0]).toMatchObject(
+		{ className: 'shrink-0' }
+	);
 });

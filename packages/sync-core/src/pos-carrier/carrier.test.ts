@@ -34,6 +34,26 @@ const carrierFactories: [string, CarrierFactory][] = [
 
 describe.each(carrierFactories)('%s PosCarrier contract', (_name, createCarrier) => {
 	describe('sale-day correction', () => {
+		it.each(['2026-11-23T09:12:00', '2026-11-23T09:12:00Z'])(
+			'accepts the server date form: %s',
+			(at_gmt) => {
+				expect(
+					createCarrier().readSaleDay([
+						{ key: '_wcpos_sale_day', value: { at_gmt, reason: 'Late entry' } },
+					])?.atGmt
+				).toBe(at_gmt);
+			}
+		);
+		it.each(['2026-11-23T09:12:00+00:00', '2026-11-23', '2026-99-23T09:12:00Z'])(
+			'rejects dates the screens cannot parse: %s',
+			(at_gmt) => {
+				expect(
+					createCarrier().readSaleDay([
+						{ key: '_wcpos_sale_day', value: { at_gmt, reason: 'Late entry' } },
+					])
+				).toBeNull();
+			}
+		);
 		it('reads the correction and protects its key', () => {
 			const value = JSON.stringify({
 				at_gmt: '2026-11-23T09:12:00Z',

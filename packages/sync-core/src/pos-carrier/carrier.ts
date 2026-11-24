@@ -144,6 +144,7 @@ export const wooMetaCarrier: PosCarrier = {
 				!parsed ||
 				typeof parsed !== 'object' ||
 				typeof parsed.at_gmt !== 'string' ||
+				!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z?$/.test(parsed.at_gmt) ||
 				Number.isNaN(Date.parse(parsed.at_gmt)) ||
 				typeof parsed.reason !== 'string'
 			)
