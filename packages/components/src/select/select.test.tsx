@@ -199,7 +199,7 @@ it.each([
 			const [lastStyle, className] = seen.mock.calls.at(-1)!;
 			expect(lastStyle).toEqual(style);
 			expect(className.includes('min-w-(--radix-select-trigger-width)')).toBe(cssFloor);
-			expect(className.includes('min-w-32')).toBe(!cssFloor);
+			expect(className.includes('min-w-32')).toBe(OS === 'ios' && !matchWidth);
 		} finally {
 			primitive.Content = Keep;
 			trigger.Trigger = KeepTrigger;

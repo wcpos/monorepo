@@ -175,6 +175,8 @@ function SelectSingleContent({
 				// made trigger-width rows inside a trigger-width box, overflowing its padding and border.
 				// Web only: native has no such variable, and the class still displaced `min-w-32`.
 				position === 'popper' && !native && 'min-w-(--radix-select-trigger-width)',
+				// Native, pinned to a trigger narrower than `min-w-32`: the pin wins, not the fallback.
+				native && matchWidth && triggerWidth && 'min-w-0',
 				position === 'popper' &&
 					'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1'
 			)}
