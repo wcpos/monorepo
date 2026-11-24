@@ -499,7 +499,7 @@ type ProbeRequestOptions = {
  * actually has products instead of hard-coding one (see the E2E store-agnostic
  * policy in CLAUDE.md).
  */
-type ProbeRoute = WcRestCollection | 'products/categories';
+type ProbeRoute = WcRestCollection | 'products/categories' | `orders/${number}/refunds`;
 
 /**
  * Issue a wc/v3 request tolerating both permalink styles: try the pretty
@@ -1424,6 +1424,60 @@ export async function trashOrdersAsWriter(
 	}
 	log.info(
 		`[order-trash] trashed=${result.trashed} failed=${result.failed} skipped=${result.skipped}`
+	);
+	return result;
+}
+
+export interface DeleteRefundsResult {
+	deleted: number;
+	failed: number;
+	skipped: number;
+}
+
+export async function deleteOrderRefundsAsWriter(
+	request: APIRequestContext,
+	storeUrl: string,
+	orderId: number,
+	refundIds: readonly number[],
+	writer?: StoreAuthorization | null
+): Promise<DeleteRefundsResult> {
+	const result: DeleteRefundsResult = { deleted: 0, failed: 0, skipped: 0 };
+	if (refundIds.length === 0) return result;
+	if (writer === undefined) {
+		writer = await productWriterAuthorization(request, storeUrl).catch(() => null);
+	}
+	if (writer === null) {
+		result.skipped = refundIds.length;
+		log.info(
+			`[refund-delete] no writer credential; ${refundIds.length} refund(s) left on order ${orderId}`
+		);
+		return result;
+	}
+	const auth = storeRequestOptions(writer);
+	const options = { ...auth, params: { ...auth.params, force: 'true' } };
+	const route = `orders/${orderId}/refunds` as const;
+	for (const id of refundIds) {
+		let failure = 'threw';
+		try {
+			const response = await probeRequest(request, 'delete', storeUrl, route, id, options);
+			if (response.ok()) {
+				const body = asRecord(await response.json());
+				if (body?.id === id || asRecord(body?.previous)?.id === id) {
+					result.deleted += 1;
+					continue;
+				}
+				failure = 'id mismatch';
+			} else {
+				failure = `HTTP ${response.status()}`;
+			}
+		} catch {
+			// Request errors may contain query-auth tokens.
+		}
+		result.failed += 1;
+		log.warn(`[refund-delete] refund ${id} of order ${orderId} not deleted: ${failure}`);
+	}
+	log.info(
+		`[refund-delete] deleted=${result.deleted} failed=${result.failed} skipped=${result.skipped}`
 	);
 	return result;
 }

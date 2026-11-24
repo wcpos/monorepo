@@ -4,11 +4,15 @@ import {
 	createPushOrdersResponseMatcher,
 	expectRateSetParity,
 	expectTaxParity,
+	isRunLabel,
 	isStaleRevisionConflict,
+	newRunLabel,
 	posAppliedRateIds,
+	RUN_LABEL_PATTERN,
 	trashOrder,
 } from './order-lifecycle';
 
+import type { DeleteRefundsResult } from './search-probe';
 import type { APIRequestContext, TestInfo } from '@playwright/test';
 
 /**
@@ -263,5 +267,132 @@ test.describe('trashOrder stale-revision retry', () => {
 		);
 		expect(await trashOrder(request, testInfo, null, ORDER)).toBe(false);
 		expect(posted.filter((post) => post.status === 'cancelled')).toHaveLength(2);
+	});
+});
+
+test.describe('run label marker', () => {
+	test('pins the pattern text', () => {
+		// The dev-pro refund residue clean-up PHP (#3806) uses this exact text.
+		expect(RUN_LABEL_PATTERN.source).toBe(
+			'^wcpos-e2e \\S+ [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+		);
+	});
+
+	test('accepts every label newRunLabel mints', () => {
+		for (let i = 0; i < 10; i += 1) expect(isRunLabel(newRunLabel())).toBe(true);
+	});
+
+	test('rejects notes that are not exactly a run label', () => {
+		const notes: unknown[] = [
+			'wcpos-e2e',
+			'wcpos-e2e coupon probe (safe to delete)',
+			'e2e-run-label-3657',
+			`${newRunLabel()} extra`,
+			`note: ${newRunLabel()}`,
+			'',
+			undefined,
+			42,
+		];
+		for (const note of notes) expect(isRunLabel(note), String(note)).toBe(false);
+	});
+});
+
+test.describe('trashOrder refunds', () => {
+	const LABEL = newRunLabel();
+	const ORDER = { id: 77, uuid: '0b6f6c1e-2f4a-4c1d-9e3b-7a5d8c2f1e04', label: LABEL };
+
+	function reply(status: number, body: unknown) {
+		const text = typeof body === 'string' ? body : JSON.stringify(body);
+		return {
+			status: () => status,
+			ok: () => status >= 200 && status < 300,
+			text: async () => text,
+			json: async () => JSON.parse(text),
+		};
+	}
+
+	/** Reads answer `reads` in order; posts answer `posts` in order and are recorded. */
+	function fakes(reads: Record<string, unknown>[], posts: ReturnType<typeof reply>[]) {
+		const posted: { status: string; baseRevision: unknown }[] = [];
+		const request = {
+			get: async () => reply(200, [reads.shift()]),
+			post: async (_url: string, options: { data: Record<string, unknown> }) => {
+				const data = options.data as { payload: { status: string }; baseRevision: unknown };
+				posted.push({ status: data.payload.status, baseRevision: data.baseRevision });
+				const next = posts.shift();
+				if (!next) throw new Error('unexpected extra post');
+				return next;
+			},
+		} as unknown as APIRequestContext;
+		const testInfo = {
+			project: { use: { storeUrl: 'https://store.test' } },
+			attach: async () => {},
+		} as unknown as TestInfo;
+		return { request, testInfo, posted };
+	}
+
+	/** A deleter that records each call and how many posts were made before it. */
+	function deleter(posted: unknown[], answer: DeleteRefundsResult) {
+		const calls: { orderId: number; ids: readonly number[]; postsBefore: number }[] = [];
+		const deleteRefunds = async (
+			_r: APIRequestContext,
+			_s: string,
+			orderId: number,
+			ids: readonly number[]
+		) => {
+			calls.push({ orderId, ids, postsBefore: posted.length });
+			return answer;
+		};
+		return { calls, deleteRefunds };
+	}
+
+	const refunded = (revision: string, refunds: { id: number }[]) => ({
+		id: 77,
+		customer_note: LABEL,
+		_rxdb_revision: revision,
+		refunds,
+	});
+	const notTrashable = reply(422, '{"code":"wcpos_status_not_pushable"}');
+	const cancelled = reply(200, { document: { status: 'cancelled' } });
+	const trashAsWriter = async () => ({ trashed: 1, failed: 0, skipped: 0 });
+
+	test("deletes a labelled order's refunds before it trashes the order", async () => {
+		const { request, testInfo, posted } = fakes(
+			[refunded('rev-1', [{ id: 501 }, { id: 502 }]), refunded('rev-2', [])],
+			[notTrashable, cancelled]
+		);
+		const { calls, deleteRefunds } = deleter(posted, { deleted: 2, failed: 0, skipped: 0 });
+		expect(await trashOrder(request, testInfo, null, ORDER, trashAsWriter, deleteRefunds)).toBe(
+			true
+		);
+		expect(calls).toEqual([{ orderId: 77, ids: [501, 502], postsBefore: 0 }]);
+		const cancels = posted.filter((post) => post.status === 'cancelled');
+		expect(cancels).toHaveLength(1);
+		expect(cancels[0].baseRevision).toBe('rev-2');
+	});
+
+	test('leaves refunds alone on an order without a run label', async () => {
+		const unlabelled = { ...ORDER, label: 'e2e-run-label-3657' };
+		const { request, testInfo, posted } = fakes(
+			[{ ...refunded('rev-1', [{ id: 501 }]), customer_note: 'e2e-run-label-3657' }],
+			[notTrashable, cancelled]
+		);
+		const { calls, deleteRefunds } = deleter(posted, { deleted: 1, failed: 0, skipped: 0 });
+		expect(
+			await trashOrder(request, testInfo, null, unlabelled, trashAsWriter, deleteRefunds)
+		).toBe(true);
+		expect(calls).toEqual([]);
+	});
+
+	test('still trashes the order when the refunds cannot be deleted', async () => {
+		const { request, testInfo, posted } = fakes(
+			[refunded('rev-1', [{ id: 501 }, { id: 502 }]), refunded('rev-2', [])],
+			[notTrashable, cancelled]
+		);
+		const { deleteRefunds } = deleter(posted, { deleted: 0, failed: 0, skipped: 1 });
+		expect(await trashOrder(request, testInfo, null, ORDER, trashAsWriter, deleteRefunds)).toBe(
+			true
+		);
+		expect(posted.filter((post) => post.status === 'cancelled')).toHaveLength(1);
 	});
 });

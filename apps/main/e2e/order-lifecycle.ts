@@ -37,7 +37,7 @@ import {
 	storeRequestOptions,
 } from './fixtures';
 import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './probe-credential';
-import { trashOrdersAsWriter } from './search-probe';
+import { deleteOrderRefundsAsWriter, trashOrdersAsWriter } from './search-probe';
 
 /** POST target the app uses to persist an order. */
 export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
@@ -280,6 +280,15 @@ const RUN_SCOPE = [
 	process.env.GITHUB_RUN_ATTEMPT ?? '0',
 	process.env.GITHUB_JOB ?? process.env.USER ?? 'dev',
 ].join('-');
+
+// The exact marker of an E2E-made order on a shared store. The dev-pro refund residue
+// clean-up (#3806) matches the same pattern text, so the two must change together.
+export const RUN_LABEL_PATTERN =
+	/^wcpos-e2e \S+ [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export function isRunLabel(note: unknown): boolean {
+	return typeof note === 'string' && RUN_LABEL_PATTERN.test(note);
+}
 
 /**
  * A unique label for ONE order. Call it per order, never per file: two shards
@@ -823,7 +832,8 @@ export async function trashOrder(
 	testInfo: TestInfo,
 	authorization: StoreAuthorization | null,
 	order: TrackedOrder,
-	trashAsWriter: typeof trashOrdersAsWriter = trashOrdersAsWriter
+	trashAsWriter: typeof trashOrdersAsWriter = trashOrdersAsWriter,
+	deleteRefunds: typeof deleteOrderRefundsAsWriter = deleteOrderRefundsAsWriter
 ): Promise<boolean> {
 	console.log(`[e2e-cleanup] created order ${order.id} (${order.label ?? 'unlabelled'})`);
 	await testInfo
@@ -840,7 +850,7 @@ export async function trashOrder(
 	// single bare read here would turn one 502 into either a guaranteed leak (the
 	// update serialises without `baseRevision` and the push contract rejects it) or
 	// an unverified write.
-	const current = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
+	let current = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
 
 	// Ownership must be PROVEN, not merely "not disproven". If the read failed
 	// after its retries, we do not know whose order this is, and on a shared live
@@ -857,6 +867,17 @@ export async function trashOrder(
 		return false;
 	};
 	if (!ownershipProven(current)) return false;
+
+	// An order's refunds outlive its trash on HPOS and every pro boot syncs them (#3806). REST
+	// cannot trash a refund, so they are deleted, and only for an order whose run label this read proved.
+	const refundIds = (current?.refunds ?? [])
+		.map((refund) => Number(refund.id))
+		.filter((id) => Number.isInteger(id) && id > 0);
+	if (refundIds.length > 0 && isRunLabel(order.label)) {
+		await deleteRefunds(request, storeUrl, order.id, refundIds).catch(() => null);
+		current = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
+		if (!ownershipProven(current)) return false;
+	}
 
 	const attempts: string[] = [];
 	const postStatus = (status: string, current: ServerOrder | null): Promise<boolean | 'stale'> => {
