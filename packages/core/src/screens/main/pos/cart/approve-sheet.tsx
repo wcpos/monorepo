@@ -74,9 +74,10 @@ export function ApproveSheet({
 			onClosed(await actions.closeSession({ counted, note, denominations }));
 			onOpenChange(false);
 		} catch (e) {
-			const refused =
-				(e as { response?: { data?: { code?: string } } }).response?.data?.code ===
-				'wcpos_override_refused';
+			const response = (e as { response?: { status?: number; data?: { code?: string } } }).response;
+			const refused = response?.data?.code === 'wcpos_override_refused';
+			// The approve route locks the approving account after repeated wrong passwords.
+			const locked = response?.data?.code === 'wcpos_approval_locked' || response?.status === 429;
 			if (refused)
 				recordRegisterFact({
 					kind: 'approval-refused',
@@ -84,7 +85,11 @@ export function ApproveSheet({
 					sessionId: session.id,
 					registerId: session.register_id,
 				});
-			const message = refused ? t('register.cannot_approve') : t('register.approval_failed');
+			const message = locked
+				? t('register.approval_locked')
+				: refused
+					? t('register.cannot_approve')
+					: t('register.approval_failed');
 			setError(message);
 			Toast.show({ type: 'error', title: message });
 		} finally {

@@ -1001,7 +1001,7 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 				sessionId: session.id,
 				endpoint: 'movements',
 				status: 400,
-				errorCode: 'rest_invalid_param',
+				serverCode: 'rest_invalid_param',
 				field: 'reason',
 				documentId: movement.id,
 			}),
@@ -1265,7 +1265,7 @@ it('records a refused manager approval, which today leaves no trace at all', asy
 				sessionId: row.id,
 				registerId: 'register',
 				status: 403,
-				errorCode: 'wcpos_override_refused',
+				serverCode: 'wcpos_override_refused',
 			}),
 		})
 	);
@@ -2303,6 +2303,51 @@ describe('#2016: retry and abandon keep the closure row', () => {
 		expect(http.post).toHaveBeenCalledTimes(1);
 		expect(http.post).toHaveBeenCalledWith('sessions', expect.objectContaining({ id: next.id }));
 		expect(next.getLatest().sync_status).toBe('synced');
+	});
+	it('an interrupted set aside is finished by setting it aside again', async () => {
+		const { session, row } = await closure();
+		const movement = await recordMovement(db, {
+			sessionId: session.id,
+			type: 'paid_in',
+			amount: '30',
+			reason: '',
+			actor: 7,
+		});
+		await movement.incrementalPatch({
+			sync_status: 'failed',
+			sync_error: 'wcpos_session_not_found',
+		});
+		http.post.mockRejectedValue({
+			response: { status: 404, data: { code: 'wcpos_session_not_found' } },
+		});
+		await drain();
+		expect(sessionUnreachable(session.getLatest())).toBe(true);
+		expect((await readCurrentSession(db, 'register'))?.id).toBe(session.id);
+		// The write to the session row fails once, after the movements and closure are marked.
+		const failing = {
+			register_id: session.register_id,
+			incrementalPatch: jest.fn().mockRejectedValue(new Error('disk')),
+		};
+		const findOne = jest
+			.spyOn(db.register_sessions, 'findOne')
+			.mockReturnValueOnce({ exec: async () => failing } as never);
+		await expect(setAsideSession(db, session.id, { userDB, siteUuid: 'site' })).rejects.toThrow(
+			'disk'
+		);
+		expect(failing.incrementalPatch).toHaveBeenCalledTimes(1);
+		findOne.mockRestore();
+		const marked = { sync_status: 'failed', sync_next_at: null, sync_error: SESSION_SET_ASIDE };
+		expect(session.getLatest().sync_error).toBe('wcpos_session_not_found');
+		expect((await readCurrentSession(db, 'register'))?.id).toBe(session.id);
+		expect(movement.getLatest().toJSON()).toMatchObject(marked);
+		await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+		expect(session.getLatest().toJSON()).toMatchObject({ ...marked, counted: { cash: '100' } });
+		expect(row.getLatest().toJSON()).toMatchObject(marked);
+		expect(movement.getLatest().toJSON()).toMatchObject({ ...marked, amount: '30' });
+		expect(await readCurrentSession(db, 'register')).toBeNull();
+		http.post.mockClear();
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
 	});
 	it.each([
 		[404, { response: { status: 404, data: { code: 'wcpos_session_not_found' } } }],

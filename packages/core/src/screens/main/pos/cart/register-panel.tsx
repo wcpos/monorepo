@@ -199,6 +199,8 @@ export function RegisterPanel({
 	// the banner survives the close that would otherwise hide the last record of the cash.
 	const refused = refusedMovements;
 	const closeForbidden = session?.sync_error === 'rest_forbidden';
+	// An unreachable session's only action writes on the device, so it is offered to every cashier (#3753, option A).
+	const mayShowRefusedClose = canManageCash || !closeForbidden || sessionUnreachable;
 	// Refused cash alone can open the panel (no session, no closure): then there is no stamp.
 	const stamp = session?.opened_at_gmt ?? lastClosure?.closed_at;
 	const openedDate = stamp ? convertUTCStringToLocalDate(stamp) : undefined;
@@ -344,7 +346,7 @@ export function RegisterPanel({
 						title={t('register.figures_after_sync')}
 					/>
 				)}
-				{(refusedClose || sessionUnreachable) && session && (canManageCash || !closeForbidden) && (
+				{(refusedClose || sessionUnreachable) && session && mayShowRefusedClose && (
 					<RefusedCloseNotice
 						className="mx-4"
 						forbidden={closeForbidden}

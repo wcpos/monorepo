@@ -31,6 +31,7 @@ import { type RefundChildrenCollection, removeRefundChildren } from './refund-ch
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).
 import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seeder';
+import { RxSchedulerTaskStateRepository } from '../scheduler/rx-scheduler-task-state-repository';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { LocalRefundDocument } from '../collections/refund-schema';
@@ -91,6 +92,8 @@ export type OrderRepositoryDatabase = {
 	recordMutations?: unknown;
 	// The scope database always has it; only structural test fakes omit it.
 	coverageLanes?: Parameters<typeof removeCollectionCoverageLanes>[0];
+	// Likewise: read through RxSchedulerTaskStateRepository, resolved when the reset runs.
+	schedulerTaskStates?: unknown;
 	orders: OrdersCollection;
 	refunds: RefundChildrenCollection;
 	existenceManifestOrders: ManifestCollection;
@@ -639,6 +642,18 @@ export class EngineOrderRepository {
 			}
 			if (Object.keys(removedCounts).length > 0) {
 				await stashPrintCounts(this.db.orders, removedCounts);
+			}
+		}
+		// A walk that started during the scan above published a lane over orders just removed.
+		if (this.db.coverageLanes) await removeCollectionCoverageLanes(this.db.coverageLanes, 'orders');
+		// Forget the completed orders walks, or the seeder's completed-dedupe skips the re-walk of
+		// a range this reset emptied (#3605). Completed only: an in-flight row is a running walk
+		// (this reset runs inside one) whose lease renews by compare-and-replace on that row.
+		if (this.db.schedulerTaskStates) {
+			const tasks = new RxSchedulerTaskStateRepository(this.db);
+			for (const state of await tasks.readForCollections(['orders'])) {
+				// Compare-and-remove: a row re-claimed since the read is left as it is.
+				if (state.status === 'completed') await tasks.remove(state);
 			}
 		}
 		// A retry may find the parents already gone. Sweep against current residency,

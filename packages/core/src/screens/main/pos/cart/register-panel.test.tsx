@@ -1705,6 +1705,25 @@ describe('without the cash permission', () => {
 		expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
 		expect(screen.getAllByTestId('register-panel-no-cash-permission')).toHaveLength(1);
 	});
+	it('#3753: a cashier without the cash right sees Set aside for an unreachable session whose close was forbidden', async () => {
+		const vanished = { ...lost, sync_error: 'wcpos_session_not_found' };
+		currentSession = { ...currentSession, sync_error: 'rest_forbidden' };
+		mockRefusedClose = true;
+		movements = [vanished];
+		refusedMovements = [vanished];
+		mockUnreachable = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+		await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+		expect(mockSetAside).toHaveBeenCalledTimes(1);
+	});
+	it('a forbidden close of a reachable session shows no refused-close notice without the cash right', () => {
+		currentSession = { ...currentSession, sync_error: 'rest_forbidden' };
+		mockRefusedClose = true;
+		mockUnreachable = false;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
+	});
 	it('a manager still gets Retry on a forbidden close', () => {
 		mockCanManageCash = true;
 		currentSession = { ...currentSession, sync_error: 'rest_forbidden' };

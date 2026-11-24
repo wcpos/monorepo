@@ -518,7 +518,11 @@ describe('CustomerDisplayService', () => {
 		expect(requests).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ method: 'POST', url: expect.stringMatching(/one\/signal$/) }),
-				expect.objectContaining({ method: 'DELETE', url: expect.stringMatching(/displays\/one$/) }),
+				expect.objectContaining({
+					method: 'DELETE',
+					url: expect.stringMatching(/displays\/one$/),
+					params: { device_id: 'device-1' },
+				}),
 			])
 		);
 		expect(service.getState().displays).toEqual([]);

@@ -21,6 +21,9 @@ function resolver(flag) {
 			if (name === 'uniwind/metro') return { withUniwindConfig: (config) => config };
 			if (name === './metro/bundle-serializer-cache')
 				return { withBundleSerializerCache: (config) => config };
+			// The real file: the one theme list Metro hands Uniwind and the gallery shoot reads.
+			if (name === './extra-themes.json')
+				return JSON.parse(readFileSync(path.join(main, 'extra-themes.json'), 'utf8'));
 			throw new Error(`Unexpected require: ${name}`);
 		},
 		{ resolve: (name) => `/node_modules/${name}` }

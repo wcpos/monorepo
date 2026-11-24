@@ -211,6 +211,7 @@ export function RegisterCount({
 			{/* The footer is this pane's Retry: it sends the count as edited here. */}
 			{(refusedClose || sessionUnreachable) && (
 				<RefusedCloseNotice
+					forbidden={session?.sync_error === 'rest_forbidden'}
 					onSetAside={
 						sessionUnreachable
 							? () =>

@@ -9,7 +9,7 @@ const mockAddProduct = jest.fn();
 const mockAddVariation = jest.fn();
 const mockReadCounting = jest.fn(async () => false);
 const mockShowCountingNotice = jest.fn();
-const mockReadPriceCheck = jest.fn(async () => false);
+const mockReadPriceCheck = jest.fn(async (): Promise<false | 'closed' | 'unbound'> => false);
 const mockShowPriceCheckNotice = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockEngineActive = jest.fn();
@@ -377,23 +377,29 @@ describe('useBarcode online escalation', () => {
 
 	it('refuses a scan while the register is closed, with the price-check notice and no lookup', async () => {
 		engineProducts.push(productDocument());
-		mockReadPriceCheck.mockResolvedValue(true);
+		mockReadPriceCheck.mockResolvedValue('closed');
 		renderBarcodeHook();
 
 		await act(async () => scan());
 		expect(mockAddProduct).not.toHaveBeenCalled();
 		expect(mockShowPriceCheckNotice).toHaveBeenCalledTimes(1);
+		expect(mockShowPriceCheckNotice).toHaveBeenCalledWith(expect.any(Function), 'closed');
 		expect(mockToastShow).not.toHaveBeenCalled();
 		expect(mockSetSearch).not.toHaveBeenCalled();
 		// An unknown code while closed is refused the same way, not looked up.
 		await act(async () => scan('UNKNOWN'));
 		expect(mockFetcher).not.toHaveBeenCalled();
 		expect(mockToastShow).not.toHaveBeenCalled();
+		// No register on this device: refused before the lookup too, naming that cause.
+		mockReadPriceCheck.mockResolvedValue('unbound');
+		await act(async () => scan('UNKNOWN'));
+		expect(mockFetcher).not.toHaveBeenCalled();
+		expect(mockShowPriceCheckNotice).toHaveBeenLastCalledWith(expect.any(Function), 'unbound');
 
 		mockReadPriceCheck.mockResolvedValue(false);
 		await act(async () => scan());
 		expect(mockAddProduct).toHaveBeenCalledTimes(1);
-		expect(mockShowPriceCheckNotice).toHaveBeenCalledTimes(2);
+		expect(mockShowPriceCheckNotice).toHaveBeenCalledTimes(3);
 	});
 
 	it.each([

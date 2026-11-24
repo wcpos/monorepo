@@ -36,6 +36,7 @@ jest.mock('../contexts/current-order', () => {
 	};
 });
 let mockSplitOn = false;
+let mockView: Record<string, unknown> = {};
 const mockPickUnits = jest.fn();
 jest.mock('../checkout/checkout-mode', () => ({
 	pickUnits: (...args: unknown[]) => mockPickUnits(...args),
@@ -56,6 +57,7 @@ jest.mock('../checkout/tender/use-ledger-view', () => ({
 			splitOn: mockSplitOn,
 		},
 		format: (minor: number) => `$${(minor / 100).toFixed(2)}`,
+		...mockView,
 	}),
 }));
 jest.mock('./totals', () => ({
@@ -128,6 +130,7 @@ beforeEach(() => {
 		date_created_gmt: '2026-10-23T21:28:00',
 	};
 	mockCurrentOrder = { uuid: 'order-1' };
+	mockView = {};
 	mockCartTable.mockClear();
 });
 
@@ -204,5 +207,61 @@ describe('StilledCart', () => {
 		picker.pick('line-1', 2);
 		expect(mockPickUnits).toHaveBeenCalledWith('order-9', 'line-1', 2);
 		mockSplitOn = false;
+	});
+
+	// #3755: paid on the store's pay page, which writes no till payment record.
+	const paidOnStore = (payload: Record<string, unknown> = {}) =>
+		({
+			uuid: 'order-9',
+			payload: {
+				number: '42',
+				total: '45.00',
+				status: 'processing',
+				date_paid_gmt: '2026-11-23T03:30:00',
+				payment_method: 'cod',
+				payment_method_title: 'Cash on delivery',
+				meta_data: [],
+				...payload,
+			},
+		}) as unknown as EngineRecord<'orders'>;
+	const closingOf = () => within(screen.getByTestId('checkout-ledger-totals'));
+
+	// Revert: drop the storeTender prop from StilledCart's LedgerLegs.
+	it('a paid order the store took with no record shows its one row, Paid the total, nothing left', () => {
+		mockView = { dp: 2, totalMinor: 4500, paidMinor: 0, balanceMinor: 4500, rows: [] };
+		render(<StilledCart order={paidOnStore()} />);
+		expect(closingOf().getByTestId('checkout-ledger-remaining').textContent).toBe('$0.00');
+		expect(screen.getByTestId('cart-table').textContent).not.toContain(
+			'pos_checkout.no_payments_yet'
+		);
+		expect(screen.getByTestId('checkout-ledger').textContent).toContain('Cash on delivery');
+		expect(screen.getByTestId('checkout-ledger').textContent).toContain('$45.00');
+	});
+
+	// Revert: drop the rowCount check in storeSettledTender.
+	it('records win: a part-paid order shows its record, Paid and Remaining, and no store row', () => {
+		const record = { id: 'cash-1', method_id: 'pos_cash', amount: '20.00', status: 'captured' };
+		mockView = {
+			dp: 2,
+			tiles: [],
+			totalMinor: 4500,
+			paidMinor: 2000,
+			balanceMinor: 2500,
+			rows: [record],
+		};
+		render(<StilledCart order={paidOnStore()} />);
+		expect(screen.getByTestId('checkout-leg-cash-1').textContent).toContain('$20.00');
+		expect(closingOf().getByTestId('checkout-ledger-remaining').textContent).toBe('$25.00');
+		expect(screen.getByTestId('checkout-ledger-totals').textContent).toContain('$20.00');
+		expect(screen.getByTestId('cart-table').textContent).not.toContain('Cash on delivery');
+	});
+
+	// Revert: drop the paid-status check in storeSettledTender.
+	it('a pending order with no records still shows No payments yet and the total remaining', () => {
+		mockView = { dp: 2, totalMinor: 4500, paidMinor: 0, balanceMinor: 4500, rows: [] };
+		render(<StilledCart order={paidOnStore({ status: 'pending', date_paid_gmt: null })} />);
+		expect(screen.getByTestId('cart-table').textContent).toContain('pos_checkout.no_payments_yet');
+		expect(closingOf().getByTestId('checkout-ledger-remaining').textContent).toBe('$45.00');
+		expect(screen.getByTestId('cart-table').textContent).not.toContain('Cash on delivery');
 	});
 });

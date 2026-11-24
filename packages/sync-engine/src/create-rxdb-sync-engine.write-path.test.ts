@@ -5206,8 +5206,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			}
 		});
 
-		// POS-2PN: fails on main (the retry re-stamps a moved base, so the server answers 422); the fix PR turns this into it().
-		it.fails('E1 (P3): a money-command revision stamp between attempts', async () => {
+		it('E1 (P3): a money-command revision stamp between attempts', async () => {
 			const { server, engine, clock, updates, rejectedRows } = await lostAck({
 				dropAt: 1,
 				serverRevision: 'sha256:pos-2pn-r1',
@@ -5224,8 +5223,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			}
 		});
 
-		// POS-2PN: fails on main (the retry re-stamps a moved base, so the server answers 422); the fix PR turns this into it().
-		it.fails('E2 (P2): a 409 auto-recover whose re-push is applied but unanswered', async () => {
+		it('E2 (P2): a 409 auto-recover whose re-push is applied but unanswered', async () => {
 			const { engine, clock, updates, rejectedRows } = await lostAck({
 				dropAt: 2,
 				serverRevision: 'sha256:pos-2pn-r2',
@@ -5240,6 +5238,48 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				expect(await engine.sync('write-drain')).toMatchObject({ rejected: 0 });
 				expect(updates().at(-1)).toEqual(updates()[1]);
 				expect(await rejectedRows()).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		});
+
+		it('E3: a lost-ack create retry is byte-identical, and its queue row keeps its line ids', async () => {
+			const server = createFakeWriteServer({ firstId: 900_120_000 });
+			let dropResponses = 1;
+			const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+				const response = await server.fetch(url, init as never);
+				if (url.includes('/push/') && dropResponses-- > 0) {
+					throw new TypeError('network dropped after server applied');
+				}
+				return response;
+			};
+			const clock = { nowMs: 1_752_105_600_000 };
+			const engine = engineWith({ fetch, now: () => clock.nowMs });
+			const line = { product_id: 123, quantity: 1, total: '52.00', id: 7001 };
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				await queueFor(engine.active()!.database).enqueue({
+					mutationId: 'pos-2pn-create',
+					collectionName: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					origin: 'minted',
+					payload: { status: 'pos-open', line_items: [line] },
+					baseRevision: null,
+					queuedAt: '2026-01-05T00:00:00.000Z',
+				});
+				const creates = () => server.received.filter((env) => env.operation === 'create');
+				expect((await engine.sync('write-drain')).failed).toBe(1);
+				expect((creates()[0].payload as { line_items: object[] }).line_items).toEqual([
+					{ product_id: 123, quantity: 1, total: '52.00' },
+				]);
+				const row = (await queueRows(engine)).find((r) => r.mutationId === 'pos-2pn-create');
+				expect((row?.payload as { line_items: object[] }).line_items).toEqual([line]);
+				clock.nowMs += 120_000;
+				expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+				expect(creates()).toHaveLength(2);
+				expect(creates()[1]).toEqual(creates()[0]);
 			} finally {
 				await engine.dispose();
 			}

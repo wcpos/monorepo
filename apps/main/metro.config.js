@@ -107,9 +107,11 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 	config = withExpoAtlas(config);
 }
 
+// The themes beyond light and dark, from the one list the gallery shoot reads too; a unit test
+// (__tests__/gallery/themes.test.ts) pins that list to the components package's THEME_RULES.
 config = withUniwindConfig(config, {
 	cssEntryFile: './global.css',
-	extraThemes: ['ocean', 'sunset', 'monochrome', 'paper', 'warm', 'bold', 'market'],
+	extraThemes: require('./extra-themes.json'),
 });
 
 // Outermost on purpose: every serializer wrapper above (Expo, Atlas, uniwind)

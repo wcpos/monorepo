@@ -346,12 +346,13 @@ export async function setAsideSession(
 		sync_next_at: null,
 		sync_error: SESSION_SET_ASIDE,
 	} as const;
-	await row.incrementalPatch(marked);
-	await (await closures.findOne(sessionId).exec())?.incrementalPatch(marked);
 	const unsent = await cash_movements
 		.find({ selector: { session_id: sessionId, sync_status: { $in: ['pending', 'failed'] } } })
 		.exec();
 	await Promise.all(unsent.map((movement) => movement.incrementalPatch(marked)));
+	await (await closures.findOne(sessionId).exec())?.incrementalPatch(marked);
+	// The session row is marked last: an interrupted set aside stays current, to be set aside again.
+	await row.incrementalPatch(marked);
 	await recordLiveSession(live.userDB, live.siteUuid, row.register_id, null);
 	return { unsentMovements: unsent.length };
 }

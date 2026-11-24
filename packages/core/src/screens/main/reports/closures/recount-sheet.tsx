@@ -104,6 +104,7 @@ export function RecountSheet({
 		setError('');
 		const key = JSON.stringify([row.id, amounts, reason.trim(), username.trim(), password]);
 		if (request.current?.key !== key) request.current = { key, id: mintUuid() };
+		let recorded = false;
 		try {
 			await http.post(`closures/${row.server_closure_id ?? row.id}/recount`, {
 				id: request.current.id,
@@ -111,12 +112,18 @@ export function RecountSheet({
 				reason: reason.trim(),
 				...(!manager ? { approval: { username: username.trim(), password } } : {}),
 			});
+			recorded = true;
 			await onSaved();
 			request.current = null;
 			setPassword('');
 			onOpenChange(false);
-		} catch {
-			setError(t('reports.recount_failed'));
+		} catch (e) {
+			const response = (e as { response?: { status?: number; data?: { code?: string } } }).response;
+			// The recount route locks the approving account after repeated wrong passwords; a
+			// failure from the refresh after a recorded recount is not that route's answer.
+			const locked =
+				!recorded && (response?.data?.code === 'wcpos_approval_locked' || response?.status === 429);
+			setError(locked ? t('register.approval_locked') : t('reports.recount_failed'));
 		}
 	};
 	const save = () => exclusive('save', runSave);

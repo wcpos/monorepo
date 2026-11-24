@@ -6,6 +6,7 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
+import { showCountingNotice, showPriceCheckNotice } from './use-add-product';
 import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderActions } from '../contexts/current-order';
@@ -33,7 +34,7 @@ interface ShippingData {
  *
  */
 export const useAddShipping = () => {
-	const { addItemToOrder } = useAddItemToOrder();
+	const { addItemToOrder, readCounting, readPriceCheck } = useAddItemToOrder();
 	const t = useT();
 	const cartConfig = useCartConfig();
 	// Resolved at the press, not subscribed in render (current-order ledger 1).
@@ -45,6 +46,15 @@ export const useAddShipping = () => {
 	 */
 	const addShipping = React.useCallback(
 		async (data: ShippingData) => {
+			if (await readCounting()) {
+				showCountingNotice(t);
+				return;
+			}
+			const priceCheck = await readPriceCheck();
+			if (priceCheck) {
+				showPriceCheckNotice(t, priceCheck);
+				return;
+			}
 			const currentOrderRecord = getCurrentOrderRecord();
 			const orderLogger = cartLogger.with({
 				orderUUID: currentOrderRecord.uuid,
@@ -106,7 +116,15 @@ export const useAddShipping = () => {
 				});
 			}
 		},
-		[addItemToOrder, cartConfig, getCurrentOrderRecord, reportEngineWarnings, t]
+		[
+			addItemToOrder,
+			cartConfig,
+			getCurrentOrderRecord,
+			readCounting,
+			readPriceCheck,
+			reportEngineWarnings,
+			t,
+		]
 	);
 
 	return { addShipping };

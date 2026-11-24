@@ -400,7 +400,7 @@ export class TerminalPaymentsService {
 					...context,
 					type: 'payment.declined',
 					status: row.status,
-					errorCode: state.error?.code ?? null,
+					serverCode: state.error?.code ?? null,
 					reason: row.failure_reason ?? null,
 				},
 			});

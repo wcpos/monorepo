@@ -242,6 +242,20 @@ describe('the current session', () => {
 		}
 	);
 
+	it.each([
+		[SESSION_SET_ASIDE, true],
+		['rest_forbidden', false],
+	])(
+		'#3753: a movement already set aside on a session that is not keeps it unreachable (%s: %s)',
+		async (sync_error, unreachable) => {
+			await insert();
+			await storeDB.cash_movements.insert(movement({ sync_status: 'failed', sync_error }));
+			const snapshot = await drawer((value) => value.movements.length === 1);
+			expect(snapshot.session?.id).toBe('s1');
+			expect(snapshot.sessionUnreachable).toBe(unreachable);
+		}
+	);
+
 	it('the status read applies the same rule', async () => {
 		await insert({ status: 'closed', sync_status: 'pending', closure_id: 's1' });
 		const status = await firstValueFrom(
