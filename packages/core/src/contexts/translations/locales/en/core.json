@@ -2955,6 +2955,7 @@
 	"reports.comparison_downloading_unknown_total": "Comparison: {downloaded} orders downloaded so far",
 	"reports.by_hour": "By hour",
 	"reports.by_day": "By day",
+	"reports.rung_up_later": "Rung up later",
 	"reports.running_total": "Running total",
 	"reports.amount_now": "{amount} now",
 	"reports.chart_orders_one": "{count} order",

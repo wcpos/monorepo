@@ -454,3 +454,54 @@ it('waits for the category tree before exporting or printing Products', async ()
 	expect(screen.getByTestId('detail-panel-export')).toBeTruthy();
 	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 });
+
+it('marks different store days, not different UTC days, without changing export or print cells', async () => {
+	const context = jest.requireMock<typeof Context>('../context');
+	const period = context.useReportsPeriod();
+	jest
+		.spyOn(context, 'useReportsPeriod')
+		.mockReturnValue({ ...period, timezone: 'America/New_York' });
+	const correction = (at: string) => [
+		{ key: '_wcpos_sale_day', value: JSON.stringify({ at_gmt: at, reason: 'Late entry' }) },
+	];
+	setOrders([
+		{
+			uuid: 'late',
+			number: '42',
+			total: '10',
+			payment_method: 'cash',
+			status: 'completed',
+			date_paid_gmt: '2026-07-15T05:30:00',
+			meta_data: correction('2026-07-15T03:30:00Z'),
+		},
+		{
+			uuid: 'same',
+			number: '43',
+			total: '20',
+			payment_method: 'cash',
+			status: 'completed',
+			date_paid_gmt: '2026-07-15T01:30:00',
+			meta_data: correction('2026-07-14T23:30:00Z'),
+		},
+	] as Context.ReportOrder[]);
+	room();
+	fireEvent.click(screen.getByTestId('card-orders-open'));
+	expect(screen.getByTestId('orders-panel-row-late').textContent).toContain('Rung up later');
+	expect(screen.getByTestId('orders-panel-row-same').textContent).not.toContain('Rung up later');
+	fireEvent.click(screen.getByTestId('detail-panel-export'));
+	await waitFor(() => expect(saveOrShareCsv).toHaveBeenCalled());
+	const csv = jest.mocked(saveOrShareCsv).mock.calls[0][0];
+	expect(csv).toContain('"#42","23:30","Unknown","Cash","£10.00","Yes"');
+	expect(csv).not.toContain('Rung up later');
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	const printed = reportDocument().rows.find((row) => row.label === '#42')!;
+	expect(printed.cells.map((cell) => cell.formatted)).toEqual([
+		'#42',
+		'23:30',
+		'Unknown',
+		'Cash',
+		'£10.00',
+		'Yes',
+	]);
+	expect(JSON.stringify(printed)).not.toContain('Rung up later');
+});

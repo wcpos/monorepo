@@ -11,6 +11,7 @@ import { isSameDay } from 'date-fns/isSameDay';
 import { subMonths } from 'date-fns/subMonths';
 
 import { saleMomentOf } from '@wcpos/query/query-state';
+import { POS_META_KEYS } from '@wcpos/sync-core';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, zoneOptions } from '../../../../hooks/use-store-day';
@@ -256,9 +257,15 @@ export const aggregateData = (
 	const shifted = (comparison?.orders ?? []).flatMap((order) => {
 		const date = saleDate(order);
 		const time = date && +date + offset;
-		// date_paid_gmt wins in saleMomentOf, so the shifted copy's moment is the shifted instant.
+		// Drop the correction so the shifted paid instant wins in saleMomentOf.
 		return typeof time === 'number' && time >= +dateRange.start && time <= +dateRange.end
-			? [{ ...order, date_paid_gmt: new Date(time).toISOString() }]
+			? [
+					{
+						...order,
+						date_paid_gmt: new Date(time).toISOString(),
+						meta_data: order.meta_data?.filter((entry) => entry.key !== POS_META_KEYS.saleDay),
+					},
+				]
 			: [];
 	});
 	const daily = isSameDay(dateRange.start, dateRange.end, zoneOptions(zone));

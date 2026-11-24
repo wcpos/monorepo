@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { format } from 'date-fns/format';
 
-import { saleMomentOf } from '@wcpos/query/query-state';
+import { rungUpMomentOf, saleMomentOf } from '@wcpos/query/query-state';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { DialogFooter, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
@@ -117,6 +117,13 @@ function DetailPanelContent() {
 		categoryTree: tree,
 		productLines: { orders: filteredOrders, refunds: filteredRefunds },
 		unselectedRowIds,
+		orderLate: (order) => {
+			const sale = saleMomentOf(order),
+				rungUp = rungUpMomentOf(order);
+			const day = (moment: string) =>
+				format(inZone(timezone, convertUTCStringToLocalDate(moment)), 'yyyy-MM-dd');
+			return !!sale && !!rungUp && day(sale) !== day(rungUp);
+		},
 		orderTime: (order) => {
 			const moment = saleMomentOf(order);
 			return moment
