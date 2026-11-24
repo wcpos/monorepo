@@ -2343,6 +2343,23 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(corrected.every((order) => stored.has(uuidFor(order.id)))).toBe(true);
 	});
 
+	it('accepts a full last page that is exactly the page bound', async () => {
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const page = Array.from({ length: 25 }, (_, i) => rangedOrder(1000 + i, 1784200000));
+		const fetcher = vi.fn(async (url: string) =>
+			new URL(url).searchParams.has('pos_sale_day_after')
+				? rangedResponse(page, { 'X-WP-Total': '2500', 'X-WP-TotalPages': '100' })
+				: server.fetcher(url)
+		);
+		await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore() })(
+			orderTask({ queryKey: SALE_DAY_QUERY_KEY })
+		);
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).searchParams.has('pos_sale_day_after'))
+		).toHaveLength(100);
+		expect(server.fetcher).toHaveBeenCalled();
+	});
+
 	it('fails the pass, and writes no cursor, when corrected sale-day pages never end', async () => {
 		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
 		const coverageRepository = rangedLaneStore();

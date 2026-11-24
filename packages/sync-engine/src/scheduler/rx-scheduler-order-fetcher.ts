@@ -1005,14 +1005,16 @@ async function fetchBrowserOrderQuery(
 			// Share ingestion, but not coverage/progress or the creation cursor. A failure above
 			// leaves no cursor, so the next pass repeats this step from page one.
 			// A full last page is the last page too: the store refuses a page past the one it advertised.
-			if (saleDayPage >= SALE_DAY_MAX_PAGES && rawPayloads.length >= descriptor.perPage) {
+			const exhausted =
+				rawPayloads.length < descriptor.perPage ||
+				(totalPagesHeader !== null &&
+					Number.isSafeInteger(totalPages) &&
+					saleDayPage >= totalPages);
+			// The bound refuses only a page it would still have to ask for.
+			if (!exhausted && saleDayPage >= SALE_DAY_MAX_PAGES) {
 				throw new Error('Corrected sale-day orders did not end within the page bound');
 			}
-			saleDayPage =
-				rawPayloads.length < descriptor.perPage ||
-				(totalPagesHeader !== null && Number.isSafeInteger(totalPages) && saleDayPage >= totalPages)
-					? 0
-					: saleDayPage + 1;
+			saleDayPage = exhausted ? 0 : saleDayPage + 1;
 			continue;
 		}
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
