@@ -74,3 +74,26 @@ it('retains VAT exemption when a mutation omits it', () => {
 	const row = { id: 42, key: 'is_vat_exempt', value: 'yes' };
 	expect(mergeProtectedOrderMeta([row], [], 'mutation')).toEqual([row]);
 });
+
+it.each(['server', 'read'] as const)(
+	'adopts and removes the server sale-day correction on %s',
+	(source) => {
+		const local = {
+			id: 42,
+			key: '_wcpos_sale_day',
+			value: JSON.stringify({ at_gmt: '2026-11-23T09:12:00Z', reason: 'Local' }),
+		};
+		const remote = {
+			...local,
+			value: JSON.stringify({ at_gmt: '2026-11-22T09:12:00Z', reason: 'Server' }),
+		};
+		expect(mergeProtectedOrderMeta([local], [remote], source)).toEqual([remote]);
+		expect(mergeProtectedOrderMeta([local], [], source)).toEqual([]);
+	}
+);
+it('keeps the editor sale-day correction on mutation, retaining it when omitted', () => {
+	const local = { id: 42, key: '_wcpos_sale_day', value: 'resident' };
+	const edited = { key: '_wcpos_sale_day', value: 'edited' };
+	expect(mergeProtectedOrderMeta([local], [edited], 'mutation')).toEqual([{ ...edited, id: 42 }]);
+	expect(mergeProtectedOrderMeta([local], [], 'mutation')).toEqual([local]);
+});

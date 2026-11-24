@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
+
 import { type ReadonlySiteRecord, type ReadonlyUserRecord, removeSite } from '@wcpos/query/user-db';
 import {
 	AlertDialog,
@@ -47,17 +49,18 @@ function getUrlWithoutProtocol(url: string) {
  * Site header — avatar, name, URL
  */
 export function SiteHeader({ site }: { site: Pick<ReadonlySiteRecord, 'name' | 'url'> }) {
+	const name = decode(site.name ?? '');
 	return (
 		<HStack space="md" className="flex-1 items-center">
 			<Avatar
 				source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url ?? '')}`}
-				fallback={getInitials(site.name ?? site.url ?? '')}
+				fallback={getInitials(name || site.url || '')}
 				size="md"
 				shape="rounded"
 				variant="muted"
 			/>
 			<VStack className="flex-1 gap-0.5">
-				<Text className="text-base font-semibold">{site.name}</Text>
+				<Text className="text-base font-semibold">{name}</Text>
 				<Text variant="key">{site.url}</Text>
 			</VStack>
 		</HStack>

@@ -1,4 +1,5 @@
 export {
+	CashierIdentityClashError,
 	clearTillAccess,
 	credentialsTokenOwner,
 	recordCashierProfile,

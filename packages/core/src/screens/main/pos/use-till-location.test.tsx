@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
-import { useTillLocation, useTillOrderId } from './use-till-location';
+import { useTillEntry, useTillLocation, useTillOrderId } from './use-till-location';
 
 let mockSegments: string[] = [];
 let mockParams: { orderId?: string | string[] } = {};
@@ -99,4 +99,55 @@ it('reads the catch-all param as a checkout seed', () => {
 	});
 	expect(go(routes.columnsCart, ['A']).seed).toEqual({ orderId: 'A', checkout: false });
 	expect(go(routes.checkout, 'B').seed).toEqual({ orderId: 'B', checkout: false });
+});
+
+const pages = {
+	orders: ['(app)', '(drawer)', 'orders'],
+	orderModal: ['(app)', '(drawer)', 'orders', '(modals)', 'view', '[orderId]'],
+};
+
+/** Mounts the entry count on the till at order A and walks it, as the mounted (pos) layout does. */
+function walkEntries() {
+	mockSegments = routes.columnsCart;
+	mockParams = { orderId: ['A'] };
+	const view = renderHook(() => useTillEntry(useTillLocation()));
+	return (segments: string[], orderId?: string | string[]) => {
+		mockSegments = segments;
+		mockParams = orderId === undefined ? {} : { orderId };
+		view.rerender();
+		return view.result.current;
+	};
+}
+
+describe('useTillEntry (#3773)', () => {
+	it('does not count a modal round trip over the till', () => {
+		const go = walkEntries();
+		const start = go(routes.columnsCart, ['A']);
+		go(routes.settingsModal);
+		expect(go(routes.columnsCart, ['A'])).toBe(start);
+	});
+
+	it('counts leaving for a page and returning', () => {
+		const go = walkEntries();
+		const start = go(routes.columnsCart, ['A']);
+		go(routes.settings);
+		expect(go(routes.columnsCart, ['A'])).toBe(start + 1);
+	});
+
+	it('counts a page, then its modal, then straight back into the till (send again)', () => {
+		const go = walkEntries();
+		const start = go(routes.columnsCart, ['A']);
+		go(pages.orders);
+		go(pages.orderModal, 'A');
+		expect(go(routes.columnsCart, ['A'])).toBe(start + 1);
+	});
+
+	it('never counts two modal round trips in a row', () => {
+		const go = walkEntries();
+		const start = go(routes.columnsCart, ['A']);
+		go(routes.settingsModal);
+		expect(go(routes.columnsCart, ['A'])).toBe(start);
+		go(routes.settingsModal);
+		expect(go(routes.columnsCart, ['A'])).toBe(start);
+	});
 });
