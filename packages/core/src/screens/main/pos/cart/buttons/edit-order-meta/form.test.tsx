@@ -264,6 +264,11 @@ jest.mock('../../../../hooks/use-cashier-label', () => ({
 	// Cashier 10 is still resolving.
 	useCashierLabel: (id: string) => ({ label: id === '10' ? '' : 'Cashier' }),
 }));
+// The cashier picker is a reassigning user's (Paul, 2026-11-20); the existing walks drive it.
+let mockCanReassign = true;
+jest.mock('../../../../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ known: true, caps: { canReassignSales: mockCanReassign } }),
+}));
 jest.mock('../../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockPatch }),
 }));
@@ -323,6 +328,7 @@ async function confirm() {
 }
 beforeEach(() => {
 	jest.clearAllMocks();
+	mockCanReassign = true;
 	order.payload = payload;
 	mockPricesIncludeTax = false;
 	mockOnlineStatus = 'online-website-available';
@@ -796,6 +802,93 @@ describe('the hand-over box', () => {
 		expect(stamped('_pos_user')).toBe('7');
 		expect(mockPatch.mock.calls[0][0].data).not.toHaveProperty('status');
 		expect(mockMove).toHaveBeenCalledWith('');
+	});
+
+	it('without the reassign capability draws no Cashier row; Status, Store and Register stay', () => {
+		mockCanReassign = false;
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		renderBox();
+		expect(screen.queryByTestId('order-meta-row-cashier')).toBeNull();
+		expect(screen.queryByTestId('order-meta-cashier')).toBeNull();
+		for (const id of ['status', 'store', 'register'])
+			expect(screen.getByTestId(`order-meta-row-${id}`)).toBeTruthy();
+	});
+
+	it('without the reassign capability a store-only send keeps the order cashier and names none', async () => {
+		mockCanReassign = false;
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		mockDirectories = { ...mockDirectories, '6': [{ id: 'r6', name: 'Kiosk till' }] };
+		// The order is cashier 9's and the signed-in user is 7: the send keeps 9.
+		const meta_data = meta.map((row) => (row.key === '_pos_user' ? { ...row, value: '9' } : row));
+		order.payload = { ...payload, meta_data };
+		render(
+			<EditOrderMetaForm
+				order={order as never}
+				{...formProps({ ...payload, cashier_id: '9', meta_data })}
+			/>
+		);
+		await choose('order-meta-store-select', '6');
+		await act(async () => fireEvent.click(send()));
+		expect(screen.getByTestId('order-meta-send-title').textContent).toBe(
+			'pos_cart.send_order_to_question'
+		);
+		expect(screen.getByTestId('order-meta-send-changes').textContent).not.toContain(
+			'common.cashier'
+		);
+		await confirm();
+		expect(stamped('_pos_user')).toBe('9');
+		expect(stamped('_pos_store')).toBe('6');
+	});
+
+	it('a staged cashier is dropped when the reassign capability is lost while the sheet is open', async () => {
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		mockDirectories = { ...mockDirectories, '6': [{ id: 'r6', name: 'Kiosk till' }] };
+		const props = formProps({ ...payload, cashier_id: '7' });
+		const view = render(<EditOrderMetaForm order={order as never} {...props} />);
+		await stage({ cashier_id: '9' });
+		mockCanReassign = false;
+		view.rerender(<EditOrderMetaForm order={order as never} {...props} />);
+		expect(screen.queryByTestId('order-meta-cashier')).toBeNull();
+		await choose('order-meta-store-select', '6');
+		await act(async () => fireEvent.click(send()));
+		expect(screen.getByTestId('order-meta-send-title').textContent).toBe(
+			'pos_cart.send_order_to_question'
+		);
+		expect(screen.getByTestId('order-meta-send-changes').textContent).not.toContain(
+			'common.cashier'
+		);
+		await confirm();
+		expect(stamped('_pos_user')).toBe('7');
+		expect(stamped('_pos_store')).toBe('6');
+	});
+
+	it('without the reassign capability a send stamps the cashier the record holds at confirm', async () => {
+		mockCanReassign = false;
+		mockStores = [
+			{ id: 2, name: 'Main' },
+			{ id: 6, name: 'Kiosk' },
+		];
+		mockDirectories = { ...mockDirectories, '6': [{ id: 'r6', name: 'Kiosk till' }] };
+		renderBox();
+		await choose('order-meta-store-select', '6');
+		await act(async () => fireEvent.click(send()));
+		// A pull adopts a manager's reassignment (7 to 9) while the confirm is open.
+		order.payload = {
+			...payload,
+			meta_data: meta.map((row) => (row.key === '_pos_user' ? { ...row, value: '9' } : row)),
+		};
+		await confirm();
+		expect(stamped('_pos_user')).toBe('9');
+		expect(stamped('_pos_store')).toBe('6');
 	});
 
 	it('a status-only send asks to send to the store and changes no identity', async () => {

@@ -208,7 +208,7 @@ export function RegisterCount({
 			keyboardShouldPersistTaps="handled"
 		>
 			{/* The footer is this pane's Retry: it sends the count as edited here. */}
-			{refusedClose && <RefusedCloseNotice />}
+			{refusedClose && <RefusedCloseNotice forbidden={session?.sync_error === 'rest_forbidden'} />}
 			{recorded && (
 				<Notice tone="info" testID="count-recorded" title={t('register.count_recorded')} />
 			)}
