@@ -86,6 +86,7 @@ import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useServerFeature } from '../../hooks/use-server-feature';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
+import { PaidOn } from './paid-on';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 
@@ -113,6 +114,7 @@ type Intent = {
 	success: string;
 	failure: string;
 	context: Record<string, unknown>;
+	applied?: (payload: OrderPayload) => boolean;
 };
 
 /**
@@ -121,7 +123,11 @@ type Intent = {
  * row the owner did not change). A row is cleared as '', never dropped: a missing protected row
  * cannot erase the stored one (`mergeProtectedOrderMeta`).
  */
-function withIdentityRow(meta: MetaDataEntry[] | undefined, key: string, value: string) {
+function withIdentityRow(
+	meta: MetaDataEntry[] | undefined,
+	key: string,
+	value: MetaDataEntry['value']
+) {
 	const rows = meta ?? [];
 	return rows.some((row) => row?.key === key)
 		? rows.map((row) => (row?.key === key ? { ...row, value } : row))
@@ -291,6 +297,31 @@ function EditOrderFormFields({ order }: Props) {
 		});
 	}
 
+	function moveSaleDay(atGmt: string, reason: string, success: string) {
+		return sendIntent(() => {
+			const key = POS_META_KEYS.saleDay;
+			const request = JSON.stringify({ at_gmt: atGmt, reason });
+			let replaced: MetaDataEntry['value'] = '';
+			return {
+				write: (payload) => {
+					replaced = payload.meta_data?.find((row) => row.key === key)?.value ?? '';
+					return { meta_data: withIdentityRow(payload.meta_data, key, request) };
+				},
+				revert: (payload) =>
+					payload.meta_data?.find((row) => row.key === key)?.value === request
+						? { meta_data: withIdentityRow(payload.meta_data, key, replaced) }
+						: {},
+				applied: (payload) => {
+					const ack = wooMetaCarrier.readSaleDay(payload.meta_data);
+					return typeof ack?.changedAtGmt === 'string' && ack.atGmt === atGmt;
+				},
+				success,
+				failure: 'Failed to move sale day',
+				context: { atGmt },
+			};
+		});
+	}
+
 	/**
 	 * Flushes the autosave, then writes the intent `prepare` builds from the order as it stands
 	 * (null: nothing to send), pushes it, and restores the previous value when the store refuses.
@@ -310,10 +341,12 @@ function EditOrderFormFields({ order }: Props) {
 			patched = true;
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 			await pushDocument(order);
+			if (intent.applied && !intent.applied(order.getLatest().payload)) return 'refused' as const;
 			mutationLogger.success(intent.success, {
 				showToast: true,
 				context: { orderId: order.getLatest().payload.id, ...intent.context },
 			});
+			return 'applied' as const;
 		} catch (error) {
 			// A pending outcome (the wait timed out, or the row is held offline or for a sign-in) is
 			// not a refusal: the intent stays queued and lands when the store answers, exactly as the
@@ -340,7 +373,7 @@ function EditOrderFormFields({ order }: Props) {
 					);
 				}
 			}
-			if (isErrorReported(error)) return;
+			if (isErrorReported(error)) return pending ? ('pending' as const) : undefined;
 			// "Still on its way" only when the intent is still queued; after a rollback the cashier
 			// must not be told the change is still arriving.
 			reportPushFailure(mutationLogger, intent?.failure ?? 'Failed to update order', error, {
@@ -348,6 +381,7 @@ function EditOrderFormFields({ order }: Props) {
 				...(pending ? { stillSendingTitle: t('common.order_still_sending') } : {}),
 				context: { orderId: order.getLatest().payload.id },
 			});
+			return pending ? ('pending' as const) : undefined;
 		} finally {
 			setLoading(false);
 		}
@@ -610,6 +644,7 @@ function EditOrderFormFields({ order }: Props) {
 							onUpdate={(pick) => void updateIdentity('store', pick)}
 						/>
 					</Suspense>
+					<PaidOn payload={payload} busy={loading || storageDegraded} onMove={moveSaleDay} />
 					<PropertyRow id="customer_note" label={t('common.customer_note')} align="top">
 						<FormField
 							control={form.control}
