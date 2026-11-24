@@ -16,6 +16,7 @@ import {
 	ReportsProvider,
 	ReportsRefunds,
 	ReportsScopeProvider,
+	useComparisonSettled,
 	useReportsCurrency,
 	useReportsData,
 	useReportsHandles,
@@ -264,6 +265,37 @@ describe('ReportsProvider handles context', () => {
 
 		expect(onHandlesRender).toHaveBeenCalledTimes(rendersBefore);
 	});
+});
+
+// #3605: "was whole once" belongs to one handle. A new period whose walk was cut off is not a
+// demotion of the period seen whole before it, so it settles on the cut-off arm.
+it('a lane seen whole on one comparison handle does not hold the next one at loading', async () => {
+	function Settled() {
+		return <span data-testid="settled">{String(useComparisonSettled())}</span>;
+	}
+	const room = (comparisonHandle: QueryHandle) => (
+		<QueryStateProvider
+			collection="orders"
+			initialPageSize={Number.MAX_SAFE_INTEGER}
+			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+		>
+			<React.Suspense fallback={null}>
+				<Provider handle={handle} comparisonHandle={comparisonHandle}>
+					<Settled />
+				</Provider>
+			</React.Suspense>
+		</QueryStateProvider>
+	);
+	const whole = fakeQueryHandle({ laneComplete: true }, 'whole');
+	const view = render(room(whole));
+	expect(screen.getByTestId('settled').textContent).toBe('true');
+
+	const cutOff = fakeQueryHandle(
+		{ laneComplete: false, pending: false, laneProgress: null },
+		'cut-off'
+	);
+	await act(async () => view.rerender(room(cutOff)));
+	expect(screen.getByTestId('settled').textContent).toBe('true');
 });
 
 // The three readers go through `useQuerySnapshot`: an unanswered handle suspends its reader,

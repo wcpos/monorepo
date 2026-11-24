@@ -49,6 +49,36 @@ function reported<T>(error: T): T {
 	return error;
 }
 
+/** The cashier profile read for one login, sent with that login's own token. */
+export function cashierRequest(site: ReadonlySiteRecord, userId: number, accessToken: string) {
+	const pathApiUrl = deriveSyntheticPathBase(site.wcpos_api_url!);
+	const config: WcposRequestConfig = {
+		wcposPreamble: {
+			purpose: 'cashier',
+			accessToken,
+			wpJsonRoot: deriveSyntheticPathRoot(site.wp_api_url ?? pathApiUrl),
+			site: toPreambleSite(site),
+		},
+	};
+	// The REST client's v1 migration persists a base with no trailing slash (`…/wcpos/v2`).
+	return { endpoint: `${pathApiUrl.replace(/\/+$/, '')}/cashier/${userId}`, config };
+}
+
+/**
+ * Another plugin's text in front of the JSON leaves axios a string body (POS-2KN). Recover it
+ * the way the REST client does, but only accept the cashier itself: an unrelated object in the
+ * text must not validate.
+ */
+export function recoverCashierBody(raw: unknown, userId: number) {
+	if (typeof raw !== 'string' || !raw.includes('{')) return null;
+	const recovered = extractValidJSON(raw) as { id?: unknown } | null;
+	return recovered && typeof recovered === 'object' && !Array.isArray(recovered)
+		? recovered.id === userId
+			? recovered
+			: null
+		: null;
+}
+
 interface Props {
 	site: ReadonlySiteRecord;
 	wpUser: ReadonlyWpCredentialsRecord;
@@ -191,18 +221,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			 */
 			const fetchUserData = async () => {
 				try {
-					// Build the endpoint URL
-					const pathApiUrl = deriveSyntheticPathBase(apiUrl);
-					const pathRoot = deriveSyntheticPathRoot(wpApiUrl ?? pathApiUrl);
-					const endpoint = `${pathApiUrl}cashier/${userId}`;
-					const requestConfig: WcposRequestConfig = {
-						wcposPreamble: {
-							purpose: 'cashier',
-							accessToken,
-							wpJsonRoot: pathRoot,
-							site: toPreambleSite(site),
-						},
-					};
+					const { endpoint, config: requestConfig } = cashierRequest(site, userId, accessToken);
 
 					appLogger.debug('Validating user credentials', {
 						context: {
@@ -245,23 +264,13 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					const raw = get(response, 'data', {});
 					let data = raw;
 
-					// Another plugin's text in front of the JSON leaves axios a string body
-					// (POS-2KN). Recover it the way the REST client does, but only accept the
-					// cashier itself: an unrelated object in the text must not validate.
-					if (typeof raw === 'string' && raw.includes('{')) {
-						const recovered = extractValidJSON(raw) as { id?: unknown } | null;
-						if (
-							recovered &&
-							typeof recovered === 'object' &&
-							!Array.isArray(recovered) &&
-							recovered.id === userId
-						) {
-							data = recovered;
-							appLogger.warn('Cashier response was text instead of JSON - recovered', {
-								code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
-								context: { userId, siteUrl, bodyPreview: bodyPreview(raw) },
-							});
-						}
+					const recovered = recoverCashierBody(raw, userId);
+					if (recovered) {
+						data = recovered;
+						appLogger.warn('Cashier response was text instead of JSON - recovered', {
+							code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
+							context: { userId, siteUrl, bodyPreview: bodyPreview(raw) },
+						});
 					}
 
 					// Check if data exists and has expected structure

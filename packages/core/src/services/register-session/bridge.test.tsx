@@ -177,7 +177,7 @@ it('names the failing stage and the rejection, and only escalates once it persis
 				registerId: 'register',
 				stage: 'refresh',
 				status: 401,
-				errorCode: 'jwt_auth_invalid_token',
+				serverCode: 'jwt_auth_invalid_token',
 				message: 'Request failed',
 			}),
 		})

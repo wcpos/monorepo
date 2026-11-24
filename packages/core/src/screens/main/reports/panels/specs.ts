@@ -22,7 +22,7 @@ export type PanelSpec = {
 	}[];
 	missing?: { n: number; m: number };
 	head: string[];
-	rows: { key: string | number; cells: string[]; raw: (string | number)[] }[];
+	rows: { key: string | number; cells: string[]; raw: (string | number)[]; late?: boolean }[];
 	keys: string[];
 	types: ('text' | 'number' | 'money')[];
 	totalRaw: (string | number)[];
@@ -39,6 +39,7 @@ type PanelView = {
 	/** The Products panel's lines after its Category and Brand chips (ledger 42). */
 	productLines?: { orders: ReportOrder[]; refunds: RefundRow[] };
 	unselectedRowIds?: Record<string, boolean>;
+	orderLate?: (order: ReportOrder) => boolean;
 	orderTime?: (
 		order: Pick<ReportOrder, 'date_created_gmt' | 'date_paid_gmt' | 'meta_data'>
 	) => string;
@@ -207,6 +208,7 @@ export function panelSpec(
 					];
 					return {
 						key: order.uuid,
+						late: view.orderLate?.(order),
 						cells,
 						raw: cells.map((cell, index) =>
 							index === 4

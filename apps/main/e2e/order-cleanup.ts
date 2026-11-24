@@ -213,7 +213,7 @@ export async function finalizeCreatedOrders(
 	storeUrl: string,
 	orderIds: Iterable<number>,
 	auth: StoreRequestAuth | null,
-	options: { retain?: ReadonlySet<number> } = {}
+	options: { retain?: ReadonlySet<number>; trash?: (ids: number[]) => Promise<unknown> } = {}
 ): Promise<FinalizeResult> {
 	const retain = options.retain ?? RETAINED_FIXTURE_ORDER_IDS;
 	const result: FinalizeResult = { cancelled: 0, leftHandled: 0, failed: 0, skippedFixtures: 0 };
@@ -248,6 +248,7 @@ export async function finalizeCreatedOrders(
 			return result;
 		}
 
+		const cancelledIds: number[] = [];
 		for (const batch of chunk(toCancel, BATCH_SIZE)) {
 			try {
 				const response = await request.post(`${wcposV1Base(storeUrl)}/orders/batch`, {
@@ -266,6 +267,8 @@ export async function finalizeCreatedOrders(
 					const record = item as { id?: unknown; status?: unknown; error?: unknown } | null;
 					if (record && record.status === TEARDOWN_TERMINAL_STATUS) {
 						result.cancelled += 1;
+						const id = Number(record.id);
+						if (unique.has(id) && batch.includes(id)) cancelledIds.push(id);
 					} else {
 						result.failed += 1;
 						console.warn(`[order-cleanup] order ${record?.id} not finalized:`, record?.error);
@@ -274,6 +277,13 @@ export async function finalizeCreatedOrders(
 			} catch (error) {
 				result.failed += batch.length;
 				console.warn('[order-cleanup] batch finalize threw:', error);
+			}
+		}
+		if (cancelledIds.length > 0 && options.trash) {
+			try {
+				await options.trash(cancelledIds);
+			} catch {
+				console.warn('[order-cleanup] trash cancelled orders threw');
 			}
 		}
 		console.log(
