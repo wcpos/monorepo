@@ -34,6 +34,7 @@ import { useAppState } from '../contexts/app-state';
 import { extractValidJSON } from '../screens/main/hooks/use-rest-http-client/extract-valid-json';
 import { useReportUpdateRequired } from './use-update-required';
 import { storeRequestFailureCode } from '../utils/store-request-failure-code';
+import { storeAnsweredWithStatus } from '../services/permissions-refresh/read-cashier-permissions';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
 
@@ -348,8 +349,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				setIsValid(true);
 			} catch (error) {
 				if (!isAsleepBlock(error)) {
-					const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
-					if (typeof status === 'number' && status !== 401) {
+					const status = storeAnsweredWithStatus(error);
+					if (status !== null && status !== 401) {
 						try {
 							await clearCashierCapabilities(wpUser);
 						} catch (clearError) {

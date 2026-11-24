@@ -274,6 +274,7 @@ jest.mock('./use-unresolved-conflicts', () => ({
 }));
 jest.mock('./queued-emails', () => ({ QueuedEmailsPanel: () => null }));
 jest.mock('./registers-panel', () => ({ RegistersPanel: () => null }));
+jest.mock('./permissions-panel', () => ({ PermissionsPanel: () => null }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
 		'../../../../jest/translate'
