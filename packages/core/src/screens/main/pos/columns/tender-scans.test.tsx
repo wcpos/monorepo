@@ -68,7 +68,7 @@ jest.mock('../hooks/use-add-variation', () => ({
 	useAddVariation: () => ({ addVariation: jest.fn() }),
 }));
 jest.mock('../hooks/use-action-context', () => ({
-	useActionContext: () => ({ readCounting: async () => false }),
+	useActionContext: () => ({ readCounting: async () => false, readPriceCheck: async () => false }),
 }));
 jest.mock('../products/use-scan-feedback', () => ({
 	useScanFeedback: () => ({ begin: () => mockFeedback }),

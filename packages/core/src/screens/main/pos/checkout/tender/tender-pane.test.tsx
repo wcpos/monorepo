@@ -10,7 +10,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
-import { initialTenderState, tenderReducer } from './tender-state';
+import { initialTenderState, type TenderFlowAction, tenderReducer } from './tender-state';
 import { gatesCheckout } from './checkout-body';
 import { splitWith, withFigures } from './tender-figures.test-utils';
 import { TenderPane, UnansweredGate } from './tender-pane';
@@ -501,6 +501,18 @@ it.each([
 		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: balance });
 	}
 );
+
+it('the amount label names the number in the key size and the foreground, not the grey caption', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	const label = screen.getByTestId('checkout-label');
+	expect(label.getAttribute('data-variant')).toBe('key');
+	expect(label.className).toContain('text-foreground');
+});
+
+it('the amount to take is at full strength before the cashier types', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	expect(screen.getByTestId('checkout-entry').className).not.toContain('opacity');
+});
 
 it('says the amount once: the eyebrow and Full balance drop it while the entry is the balance', () => {
 	const card: PaymentMethodDescriptor = {
@@ -1048,6 +1060,109 @@ it('preserves every keypad selector and dispatches the original key action', () 
 	expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'key', key: '5' });
 });
 
+describe('the physical keyboard presses the tender keypad (#3645)', () => {
+	const live = () => ({ ...makeFlow(), saveState: null });
+	it('focuses the pane as the stage opens', () => {
+		render(<TenderPane flow={live()} format={String} />);
+		expect(document.activeElement).toBe(screen.getByTestId('checkout-keypad-pane'));
+	});
+	it.each([
+		[{ key: '5' }, '5'],
+		[{ key: '7', code: 'Numpad7' }, '7'],
+		[{ key: 'Backspace' }, 'backspace'],
+		[{ key: 'Clear', code: 'NumpadClear' }, 'clear'],
+	])('%o dispatches its on-screen key once, and takes the default', (init, key) => {
+		const flow = live();
+		render(<TenderPane flow={flow} format={String} />);
+		expect(fireEvent.keyDown(document.activeElement!, init)).toBe(false);
+		expect(flow.commands.dispatch).toHaveBeenCalledTimes(1);
+		expect(flow.commands.dispatch).toHaveBeenCalledWith({ type: 'key', key });
+	});
+	it.each([
+		['Enter, Escape or a letter', {}, [{ key: 'Enter' }, { key: 'Escape' }, { key: 'a' }]],
+		['a shortcut', {}, ['metaKey', 'ctrlKey', 'altKey'].map((mod) => ({ key: '5', [mod]: true }))],
+		['anything while busy', { busy: true }, [{ key: '5' }, { key: 'Backspace' }]],
+	])('%s dispatches nothing and keeps the default', (_, over, events) => {
+		const flow = { ...live(), ...over };
+		render(<TenderPane flow={flow} format={String} />);
+		const pane = screen.getByTestId('checkout-keypad-pane');
+		for (const init of events) expect(fireEvent.keyDown(pane, init)).toBe(true);
+		expect(flow.commands.dispatch).not.toHaveBeenCalled();
+	});
+	it('a key that has focus after a click still types through the pane', () => {
+		const flow = live();
+		render(<TenderPane flow={flow} format={String} />);
+		const key = screen.getByTestId('checkout-keypad-key-5');
+		fireEvent.click(key);
+		key.focus();
+		expect(document.activeElement).toBe(key);
+		expect(fireEvent.keyDown(key, { key: '0' })).toBe(false);
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'key', key: '0' });
+		expect(flow.commands.dispatch).toHaveBeenCalledTimes(2);
+	});
+	// The real reducer: the keyboard and the on-screen keys move the entry the same way.
+	function Stateful() {
+		const base = live();
+		const [state, dispatch] = React.useReducer(tenderReducer, {
+			...initialTenderState,
+			view: 'amount',
+			methodId: method.id,
+			entryMinor: 9295,
+		});
+		// The pane sends only key actions here; the reducer takes those as the hook passes them on.
+		const keys = (action: TenderFlowAction) => {
+			if (action.type === 'key') dispatch(action);
+		};
+		const flow = withFigures({ ...base, state, commands: { ...base.commands, dispatch: keys } });
+		return <TenderPane flow={flow} format={String} />;
+	}
+	it('typing 5, 0, 0, Backspace moves the entry as pressing 5, 0, 0, ⌫ does', () => {
+		const steps = [
+			['5', '5', '5'],
+			['0', '0', '50'],
+			['0', '0', '500'],
+			['Backspace', 'backspace', '50'],
+		];
+		for (const onScreen of [false, true]) {
+			const { unmount } = render(<Stateful />);
+			expect(screen.getByTestId('checkout-entry').textContent).toBe('9295');
+			for (const [key, name, shown] of steps) {
+				if (onScreen) fireEvent.click(screen.getByTestId(`checkout-keypad-key-${name}`));
+				else fireEvent.keyDown(screen.getByTestId('checkout-keypad-pane'), { key });
+				expect(screen.getByTestId('checkout-entry').textContent).toBe(shown);
+			}
+			unmount();
+		}
+	});
+	// S13 pins Take outside the scroll: the keys still edit the entry while it has focus.
+	it('with Take focused, 5 and Backspace move the entry as they do on the pane (S13)', () => {
+		const seen: Record<string, string[]> = {};
+		for (const target of ['checkout-keypad-pane', 'checkout-commit']) {
+			const { unmount } = render(<Stateful />);
+			const node = screen.getByTestId(target);
+			node.focus();
+			expect(document.activeElement).toBe(node);
+			seen[target] = ['5', 'Backspace'].map((key) => {
+				expect(fireEvent.keyDown(node, { key })).toBe(false);
+				return screen.getByTestId('checkout-entry').textContent!;
+			});
+			unmount();
+		}
+		expect(seen['checkout-commit']).toEqual(['5', '0']);
+		expect(seen['checkout-commit']).toEqual(seen['checkout-keypad-pane']);
+	});
+	it.each(['checkout-keypad-pane', 'checkout-commit'])(
+		'one key on %s dispatches exactly one key (S13)',
+		(target) => {
+			const flow = live();
+			render(<TenderPane flow={flow} format={String} />);
+			fireEvent.keyDown(screen.getByTestId(target), { key: '5' });
+			expect(flow.commands.dispatch).toHaveBeenCalledTimes(1);
+			expect(flow.commands.dispatch).toHaveBeenCalledWith({ type: 'key', key: '5' });
+		}
+	);
+});
+
 describe('split V1: the pane builds each payment', () => {
 	const lines = [
 		{ id: 'l1', name: 'Lemonade', quantity: 4, totalMinor: 2000 },
@@ -1212,6 +1327,55 @@ describe('split V1: the pane builds each payment', () => {
 		});
 	});
 
+	it('with picks, Exact offers the picked share, not the balance (F44)', () => {
+		// 3 of 4 Lemonade (1500) and 1 of 3 Fish & chips (2200): this payment is 3700 of 18250.
+		const picks = { picked: { l1: 3, l2: 1 } };
+		const flow = splitFlow(picks);
+		const { rerender } = render(<TenderPane flow={flow} format={String} />);
+		expect(text('checkout-entry')).toBe('3700');
+		expect(text('checkout-quick-exact')).toBe('Exact 3700');
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 3700 });
+		// Typed over, Exact still offers the share, never the whole bill.
+		const typed = splitFlow(picks, { entryMinor: 5000, entryDirty: true });
+		rerender(<TenderPane flow={typed} format={String} />);
+		expect(text('checkout-quick-exact')).toBe('Exact 3700');
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(typed.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 3700 });
+		// With + amount armed the tap writes the amount: the picks' price is not counted twice.
+		const extra = splitFlow(picks, { extraMinor: 300 });
+		rerender(<TenderPane flow={extra} format={String} />);
+		expect(text('checkout-quick-exact')).toBe('Exact 4000');
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(extra.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 300 });
+		// A method that gives no change keeps Full balance at the balance, picks or not.
+		const card: PaymentMethodDescriptor = {
+			...method,
+			id: 'card',
+			title: 'Card',
+			kind: 'other',
+			capabilities: { ...method.capabilities, change: false },
+		};
+		const onCard = splitFlow({ ...picks, method: card }, { methodId: card.id });
+		rerender(<TenderPane flow={onCard} format={String} />);
+		expect(text('checkout-quick-balance')).toBe('Full balance 18250');
+		fireEvent.click(screen.getByTestId('checkout-quick-balance'));
+		expect(onCard.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 18250 });
+	});
+
+	// Paul's decision 11A (F45): a tile takes exactly its figure, never picks + it.
+	it('a quick-cash tile dispatches quick-tender, Exact keeps set-entry', () => {
+		const flow = splitFlow({ picked: { l1: 1 } }, { extraMinor: 0 });
+		render(<TenderPane flow={flow} format={String} />);
+		expect(text('checkout-plus-amount')).toBe('+ 0');
+		fireEvent.click(screen.getByTestId('checkout-quick-10.00'));
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'quick-tender', minor: 1000 });
+		expect(text('checkout-quick-exact')).toBe('Exact 500');
+		// F44: Exact offers the picked share; with + amount armed its tap writes the amount (0).
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(flow.commands.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 0 });
+	});
+
 	it('on a phone, Pick items puts the lines in the keypad’s place, and Back to keypad restores it', () => {
 		const paid = { l2: { units: 1, methods: ['Card'] } };
 		const flow = splitFlow({ paidUnits: paid });
@@ -1374,6 +1538,24 @@ describe('split V1: the pane builds each payment', () => {
 		expect(text('checkout-plan-leg-3')).toBe('Then 3 × 4150');
 	});
 
+	it('the split plan reads as text: legs carry no chip chrome and the taken part is a ghost button', () => {
+		const flow = splitFlow(
+			{
+				rows: ab,
+				paidMinor: 3800,
+				balanceMinor: 14450,
+				plan: s10,
+			},
+			{ entryMinor: 2000, entryDirty: true }
+		);
+		render(<TenderPane flow={flow} format={String} />);
+		const done = screen.getByTestId('checkout-plan-done');
+		const legs = screen.getAllByTestId(/^checkout-plan-leg-/);
+		expect(done.getAttribute('data-variant')).toBe('ghost');
+		for (const leg of legs) expect(leg.className).not.toMatch(/border|rounded-full|opacity/);
+		expect(text('checkout-plan')).toContain(`${done.textContent}·${legs[0].textContent}`);
+	});
+
 	it('S10 D reads 4 of 6, and a short D moves the difference to payments 5 and 6', () => {
 		const over = {
 			rows: [...ab, row('c', '20.00')],
@@ -1443,6 +1625,7 @@ const mockLayouts: Record<
 	(event: { nativeEvent: { layout: { height?: number; y?: number } } }) => void
 > = {};
 const mockContentStyles: Record<string, unknown> = {};
+const mockContentSizes: Record<string, (width: number, height: number) => void> = {};
 jest.mock('react-native', () => {
 	const native = jest.requireActual('react-native');
 	function Box({
@@ -1450,27 +1633,43 @@ jest.mock('react-native', () => {
 		testID,
 		className,
 		onLayout,
+		onContentSizeChange,
 		contentContainerStyle,
 		horizontal,
 		contentContainerClassName,
+		ref,
+		tabIndex,
+		onKeyDown,
 	}: React.PropsWithChildren<{
 		testID?: string;
 		className?: string;
 		onLayout?: (typeof mockLayouts)[string];
+		onContentSizeChange?: (typeof mockContentSizes)[string];
 		contentContainerStyle?: unknown;
 		horizontal?: boolean;
 		contentContainerClassName?: string;
+		// As RNW: the ref is the DOM node, and the pane's focus and keys reach it.
+		ref?: React.Ref<HTMLDivElement>;
+		tabIndex?: number;
+		onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
 	}>) {
 		// The jsdom host has no layout engine; expose its committed layout callback to the test.
 		React.useLayoutEffect(() => {
 			if (testID && onLayout) mockLayouts[testID] = onLayout;
 		}, [testID, onLayout]);
+		// And its content size callback, the same way.
+		React.useLayoutEffect(() => {
+			if (testID && onContentSizeChange) mockContentSizes[testID] = onContentSizeChange;
+		}, [testID, onContentSizeChange]);
 		// And the content container's committed style (the pane's fit).
 		React.useLayoutEffect(() => {
 			if (testID && contentContainerStyle) mockContentStyles[testID] = contentContainerStyle;
 		}, [testID, contentContainerStyle]);
 		return (
 			<div
+				ref={ref}
+				tabIndex={tabIndex}
+				onKeyDown={onKeyDown}
 				data-testid={testID}
 				className={className}
 				data-horizontal={horizontal ? '' : undefined}
@@ -1485,7 +1684,8 @@ jest.mock('react-native', () => {
 it('shrinks the shared keypad under a short measured pane and restores tile fit', () => {
 	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
 	act(() => {
-		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
 		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 400 } } });
 	});
 	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
@@ -1498,13 +1698,62 @@ it('shrinks the shared keypad under a short measured pane and restores tile fit'
 it('the shrunk pane floors its content at the fit and never fixes its height, so overflow scrolls', () => {
 	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
 	act(() => {
-		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
 		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 400 } } });
 	});
 	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
 	const style = mockContentStyles['checkout-keypad-pane'] as Record<string, unknown>;
 	expect(style).not.toHaveProperty('height');
 	expect(style.minHeight).toBeGreaterThanOrEqual(400);
+});
+
+it('the commit bar sits outside the keypad scroll, so it never scrolls off', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	expect(screen.getByTestId('checkout-commit')).toBeTruthy();
+	expect(
+		screen.getByTestId('checkout-keypad-pane').contains(screen.getByTestId('checkout-commit'))
+	).toBe(false);
+});
+
+// Tile fit: keypad y 200 + 3 gaps of 8 + 4 rows of 64 = 480, with no foot inside the scroll.
+it('the keypad keeps tile keys while the scroll fits them, the bar no longer counted', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	act(() => {
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
+		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 480 } } });
+	});
+	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
+	act(() => mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 479 } } }));
+	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
+});
+
+// Control floor: keypad y 200 + 3 gaps of 8 + 4 rows of 44 = 400.
+it('the shrunk scroll floors its content at the control-height fit', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	act(() => {
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
+		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 300 } } });
+	});
+	const style = mockContentStyles['checkout-keypad-pane'] as Record<string, unknown>;
+	expect(style.minHeight).toBe(400);
+});
+
+it('a row added above the keypad shrinks it with no keypad layout event (web)', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	act(() => {
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { height: 280 } } });
+		mockContentSizes['checkout-keypad-pane'](0, 480);
+		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 604 } } });
+	});
+	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
+	// head 371 + 24 + 256 = 651 > 604
+	act(() => mockContentSizes['checkout-keypad-pane'](0, 651));
+	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
+	const style = mockContentStyles['checkout-keypad-pane'] as Record<string, unknown>;
+	expect(style.minHeight).toBe(604);
 });
 
 // Fractional widths plus a gap must not wrap five methods into four columns.
@@ -1652,6 +1901,30 @@ describe('declared UI (contract 1.2)', () => {
 		);
 		fireEvent.click(screen.getByTestId('checkout-commit'));
 		expect(flow.commands.takeTender).toHaveBeenCalled();
+	});
+	it('a declared field keeps its own keys; the pane around it still types (#3645)', () => {
+		const partial = {
+			...invoice,
+			capabilities: { ...invoice.capabilities, amount: { partial: true } },
+		};
+		const flow = invoiceFlow({
+			method: partial,
+			tiles: [{ ...invoiceFlow().tiles[0], method: partial }],
+		});
+		render(<TenderPane flow={flow} format={String} />);
+		const email = screen.getByTestId('checkout-field-woocommerce_pos_invoice_email_address');
+		email.focus();
+		for (const key of ['5', 'Backspace']) expect(fireEvent.keyDown(email, { key })).toBe(true);
+		expect(flow.commands.dispatch).not.toHaveBeenCalled();
+		expect(fireEvent.keyDown(screen.getByTestId('checkout-keypad-pane'), { key: '5' })).toBe(false);
+		expect(flow.commands.dispatch).toHaveBeenCalledWith({ type: 'key', key: '5' });
+	});
+	it('a fixed amount takes no physical key (#3645)', () => {
+		const flow = invoiceFlow();
+		render(<TenderPane flow={flow} format={String} />);
+		const pane = screen.getByTestId('checkout-keypad-pane');
+		for (const key of ['5', 'Backspace']) expect(fireEvent.keyDown(pane, { key })).toBe(true);
+		expect(flow.commands.dispatch).not.toHaveBeenCalled();
 	});
 	it('an amount typed over the balance on another pill is not an overpayment here', () => {
 		render(
@@ -1875,13 +2148,13 @@ describe('declared UI (contract 1.2)', () => {
 });
 
 // ADR 0040 Decided 1 rule 1: the tile taken offline says it is sent later, and the risk.
-it('a settlesLater tile says Sent later and Store may refuse; a plain manual tile says nothing', () => {
+it('a settlesLater tile says Sent when back online and Store may refuse; a plain manual tile says nothing', () => {
 	const flow = makeFlow(2);
 	flow.tiles[0] = { ...flow.tiles[0], settlesLater: true };
 	flow.tiles[1] = { ...flow.tiles[1], method: { ...method, id: 'other' } };
 	render(<TenderPane flow={flow} format={String} compact />);
 	expect(screen.getByTestId('checkout-method-sent-later-pos_cash').textContent).toBe(
-		'Sent laterStore may refuse'
+		'Sent when back onlineStore may refuse'
 	);
 	expect(screen.queryByTestId('checkout-method-sent-later-other')).toBeNull();
 });
@@ -1920,7 +2193,7 @@ describe('offline with no method that can take the sale', () => {
 		const notice = screen.getByTestId('checkout-offline');
 		expect(notice.textContent).toContain('No connection');
 		expect(notice.textContent).toContain(
-			'Payments need one; the sale is saved in your open orders.'
+			'Taking a payment needs a connection. The sale is saved in your open orders.'
 		);
 		expect(screen.queryByTestId('checkout-commit')).toBeNull();
 		fireEvent.click(screen.getByTestId('checkout-offline-leave'));

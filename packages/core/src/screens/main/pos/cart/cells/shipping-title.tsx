@@ -7,6 +7,7 @@ import { EditableField } from '@wcpos/components/editable-field';
 
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCartTableReadOnly } from './read-only';
+import { useStripClear } from './strip-clear';
 
 type ShippingLine = import('@wcpos/query').OrderShippingLine;
 interface Props {
@@ -20,19 +21,20 @@ export function ShippingTitle({ row }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
 	const { updateCartLine } = useUpdateCartLine();
 	const readOnly = useCartTableReadOnly();
+	const clear = useStripClear();
 
 	return (
 		// No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29).
-		<View className="w-full">
+		<View className="w-full" {...clear.box('name')}>
 			{readOnly ? (
-				<Text className="py-1.5" numberOfLines={2} decodeHtml>
+				<Text className="my-1.5" numberOfLines={2} decodeHtml>
 					{item.method_title ?? ''}
 				</Text>
 			) : (
 				<EditableField
 					variant="ghost"
 					bold={false}
-					numberOfLines={2}
+					numberOfLines={clear.lines('name', 2)}
 					value={item.method_title}
 					onChangeText={(method_title) => updateCartLine('shipping_lines', uuid, { method_title })}
 				/>

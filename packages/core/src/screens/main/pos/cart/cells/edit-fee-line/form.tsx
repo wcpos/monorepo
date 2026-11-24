@@ -130,7 +130,7 @@ function EditFeeLineFormFields({ uuid, item }: Props) {
 						}
 					/>
 					<TaxRow prefix="fee-line" />
-					<CustomFieldRows prefix="fee-line" meta={item.meta_data} />
+					<CustomFieldRows prefix="fee-line" />
 				</PropertyList>
 			</DialogBody>
 			<DialogFooter close />

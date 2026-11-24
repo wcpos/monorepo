@@ -47,6 +47,10 @@ interface ReceiptStore {
 	email: string;
 	tax_id?: string;
 	tax_ids?: { type: string; value: string; country?: string; label?: string }[];
+	// The store's receipt texts, as the server receipt data carries them.
+	personal_notes: string;
+	policies_and_conditions: string;
+	footer_imprint: string;
 }
 
 interface ReceiptCustomer {
@@ -389,12 +393,18 @@ function getLinePriceConvenienceFields({
 		}
 	}
 
-	const unitSavings: Record<TaxBasis, number | null> = {
-		incl: regular.incl !== null ? Math.max(0, regular.incl - selling.incl) : null,
-		excl: regular.excl !== null ? Math.max(0, regular.excl - selling.excl) : null,
-	};
+	// A returned line (a negative quantity) carries no savings fields, as the plugin's receipt
+	// (#2684): giving money back saved the customer nothing, and the totals skip it.
+	const returned = quantity < 0;
+	const none: Record<TaxBasis, number | null> = { incl: null, excl: null };
+	const unitSavings: Record<TaxBasis, number | null> = returned
+		? none
+		: {
+				incl: regular.incl !== null ? Math.max(0, regular.incl - selling.incl) : null,
+				excl: regular.excl !== null ? Math.max(0, regular.excl - selling.excl) : null,
+			};
 	const multiply = (value: number | null): number | null =>
-		value === null ? null : value * quantity;
+		value === null || returned ? null : value * quantity;
 	const lineRegular = { incl: multiply(regular.incl), excl: multiply(regular.excl) };
 	const lineSelling = { incl: multiply(selling.incl), excl: multiply(selling.excl) };
 	const lineSavings = { incl: multiply(unitSavings.incl), excl: multiply(unitSavings.excl) };
@@ -448,7 +458,7 @@ function getLinePriceConvenienceFields({
 		savings_in_discounts: savingsInDiscounts,
 		// Raw (unrounded) values for totals aggregation — the PHP sums floats
 		// and rounds once, so summing the rounded strings above would drift.
-		raw: { lineSavings, lineSelling, savingsInDiscounts },
+		raw: { lineSavings, lineSelling, savingsInDiscounts, returned },
 	};
 }
 
@@ -661,6 +671,7 @@ export function buildReceiptData(
 		lineSavings: Record<TaxBasis, number | null>;
 		lineSelling: Record<TaxBasis, number | null>;
 		savingsInDiscounts: boolean;
+		returned: boolean;
 		subtotal: Record<TaxBasis, number>;
 	}[] = [];
 	const mappedLines: ReceiptLine[] = lineItems.map((item: Record<string, any>) => {
@@ -669,8 +680,9 @@ export function buildReceiptData(
 		const subtotalIncl = subtotalExcl + toNum(item.subtotal_tax);
 		const totalExcl = toNum(item.total);
 		const totalIncl = totalExcl + toNum(item.total_tax);
-		const unitPriceExcl = quantity > 0 ? roundToPrecision(subtotalExcl / quantity, dp) : 0;
-		const unitPriceIncl = quantity > 0 ? roundToPrecision(subtotalIncl / quantity, dp) : 0;
+		// A returned line (−1 × 4.00) divides to its positive unit price; only 0 has none.
+		const unitPriceExcl = quantity !== 0 ? roundToPrecision(subtotalExcl / quantity, dp) : 0;
+		const unitPriceIncl = quantity !== 0 ? roundToPrecision(subtotalIncl / quantity, dp) : 0;
 		const discountsExcl = subtotalExcl - totalExcl;
 		const discountsIncl = subtotalIncl - totalIncl;
 		const meta = Array.isArray(item.meta_data)
@@ -757,6 +769,7 @@ export function buildReceiptData(
 	const additionalSavings: Record<TaxBasis, number> = { incl: 0, excl: 0 };
 	const savingsComplete: Record<TaxBasis, boolean> = { incl: true, excl: true };
 	for (const line of rawLineSavings) {
+		if (line.returned) continue;
 		for (const basis of ['incl', 'excl'] as const) {
 			const lineSavings = line.lineSavings[basis];
 			if (lineSavings === null || !Number.isFinite(lineSavings)) {
@@ -778,9 +791,10 @@ export function buildReceiptData(
 			}
 		}
 	}
+	// The saved total nets the lines but never reads below zero (plugin #2684).
 	const totalSaved: Record<TaxBasis, number | null> = {
-		incl: savingsComplete.incl ? discountTotalIncl + additionalSavings.incl : null,
-		excl: savingsComplete.excl ? discountTotalExcl + additionalSavings.excl : null,
+		incl: savingsComplete.incl ? Math.max(0, discountTotalIncl + additionalSavings.incl) : null,
+		excl: savingsComplete.excl ? Math.max(0, discountTotalExcl + additionalSavings.excl) : null,
 	};
 	for (const basis of ['incl', 'excl'] as const) {
 		if (!savingsComplete[basis]) saleSavingsTotals[basis] = null;
@@ -905,6 +919,10 @@ export function buildReceiptData(
 			email: store.email || '',
 			tax_id: derivePrimaryTaxId(store.tax_ids),
 			tax_ids: store.tax_ids ?? [],
+			personal_notes: typeof store.personal_notes === 'string' ? store.personal_notes : '',
+			policies_and_conditions:
+				typeof store.policies_and_conditions === 'string' ? store.policies_and_conditions : '',
+			footer_imprint: typeof store.footer_imprint === 'string' ? store.footer_imprint : '',
 		},
 		customer: (() => {
 			const rawLegacyTaxId = (order as { tax_id?: unknown }).tax_id;

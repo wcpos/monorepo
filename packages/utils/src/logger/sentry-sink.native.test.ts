@@ -39,6 +39,8 @@ jest.mock('expo-file-system', () => ({
 }));
 const testGlobal = globalThis as typeof globalThis & { __DEV__: boolean };
 testGlobal.__DEV__ = false;
+// app.config.ts stamps the commit at build time; read when sentry-core loads.
+process.env.EXPO_PUBLIC_BUILD_COMMIT = 'abc123def456';
 Object.defineProperty(globalThis, 'crypto', {
 	configurable: true,
 	value: { randomUUID: () => 'e49735e4-34af-4abd-a8f6-78f17b350a82' },
@@ -187,10 +189,16 @@ describe('sentry-sink.native', () => {
 				environment: platform,
 				sendDefaultPii: false,
 				enableWatchdogTerminationTracking: true,
+				enableNetworkBreadcrumbs: false,
 				beforeSend: expect.any(Function),
+				beforeBreadcrumb: expect.any(Function),
+				initialScope: { tags: { build_commit: 'abc123def456' } },
 			})
 		);
 		const initOptions = jest.mocked(Sentry.init).mock.calls[0]?.[0];
+		expect(initOptions?.beforeBreadcrumb?.({ message: 'jane@example.com' })).toEqual({
+			message: '[EMAIL]',
+		});
 		expect(initOptions?.enabled).not.toBe(false);
 		// The SDK's derived `<applicationId>@<version>+<build>` is the key the native
 		// upload steps file symbols under; a custom release here would never match.

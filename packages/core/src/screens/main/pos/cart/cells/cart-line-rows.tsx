@@ -6,6 +6,7 @@ import * as z from 'zod';
 
 import { HStack } from '@wcpos/components/hstack';
 import { PropertyAdd, PropertyAddRow, PropertyRow } from '@wcpos/components/property-row';
+import { POS_META_KEYS } from '@wcpos/sync-core';
 
 import { useT } from '../../../../../contexts/translations';
 import { AmountUnitToggle } from '../../../components/amount-unit-toggle';
@@ -71,25 +72,27 @@ export function AmountRow(props: {
 }
 
 /**
- * The line's custom fields, one row each, then the add row: the caller's offered facts
- * (`children`) and Custom field last (rule 11). Keys starting with `_` (`_woocommerce_pos_data`,
- * `_reduced_stock`) are developer facts: they stay in the JSON tab (rule 10) and in the write.
+ * The till's own keys on a line (`_woocommerce_pos_data`, `_reduced_stock`, the line uuid…) are
+ * never rows: a WCPOS-managed key is not shown (rule 11) and stays in the JSON tab and the write.
+ * Every other `_` key is a Hidden field (#3090), as on every other record form. The list is the
+ * till's fixed set, not "every `_` key the line carries": that read the LIVE item, so a custom field
+ * whose key the cashier typed as `_…` was hidden the moment its autosave landed and vanished mid-edit.
  */
-export function CustomFieldRows(props: {
-	prefix: Prefix;
-	meta?: readonly { key?: string }[] | null;
-	children?: React.ReactNode;
-}) {
-	const { prefix, meta } = props;
+const TILL_META_KEYS: readonly string[] = Object.values(POS_META_KEYS).filter((key) =>
+	key.startsWith('_')
+);
+
+/**
+ * The line's custom fields, one row each, then the add row: the caller's offered facts
+ * (`children`) and Custom field last (rule 11).
+ */
+export function CustomFieldRows(props: { prefix: Prefix; children?: React.ReactNode }) {
+	const { prefix } = props;
 	const t = useT();
 	const form = useFormContext();
-	const hiddenKeys = React.useMemo(
-		() => (meta ?? []).map((row) => String(row?.key ?? '')).filter((key) => key.startsWith('_')),
-		[meta]
-	);
 	return (
 		<>
-			<MetaDataForm testID={prefix} hiddenKeys={hiddenKeys} />
+			<MetaDataForm testID={prefix} hiddenKeys={TILL_META_KEYS} />
 			<PropertyAddRow>
 				{props.children}
 				<PropertyAdd

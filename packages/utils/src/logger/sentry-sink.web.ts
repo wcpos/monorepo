@@ -1,8 +1,10 @@
 import { AppInfo } from '../app-info';
 import {
+	BUILD_COMMIT,
 	buildCaptureOptions,
 	createPendingCaptures,
 	prepareEvent,
+	scrubBreadcrumb,
 	SENTRY_DSN,
 } from './sentry-core';
 
@@ -140,7 +142,9 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 						integrations.filter(({ name }) => name !== 'BrowserSession'),
 					sampleRate: 1,
 					beforeSend: prepareEvent,
+					beforeBreadcrumb: scrubBreadcrumb,
 					ignoreErrors: [/ResizeObserver loop/],
+					initialScope: { tags: { build_commit: BUILD_COMMIT } },
 				});
 				const installId = getInstallId();
 				if (installId) sdk.setUser({ id: installId });

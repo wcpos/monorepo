@@ -14,6 +14,8 @@ jest.mock('@wcpos/query/user-db', () => ({
 	...jest.requireActual('@wcpos/query/user-db'),
 	observeCredentialStores: (credentials: { populate$: (key: string) => unknown }) =>
 		credentials.populate$('stores'),
+	observeSiteCredentials: (site: { populate$: (key: string) => never }) =>
+		jest.requireActual('rxjs').defer(() => site.populate$('wp_credentials')),
 }));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 // The bar's icon-only buttons are IconButtons (expo-haptics is ESM, so never loaded here).

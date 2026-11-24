@@ -85,6 +85,61 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 		expect([...server.applied.keys()]).toHaveLength(1); // but only one record applied
 	});
 
+	describe('a replay must carry the same envelope (Write_Controller fingerprint)', () => {
+		const uuid = '5b8e1a3c-2f4d-4a6b-9c8e-1d2f3a4b5c6d';
+		const url = 'https://example.test/wp-json/wcpos/v2/push/orders';
+		const send = (server: ReturnType<typeof createFakeWriteServer>, body: object) =>
+			server.fetch(url, { method: 'POST', body: JSON.stringify(body) });
+		const applied = () => {
+			const server = createFakeWriteServer();
+			server.seed(uuid, { id: 42, revision: 'sha256:r1' });
+			const envelope = {
+				mutationId: 'm-1',
+				operation: 'update',
+				collection: 'orders',
+				recordId: uuid,
+				baseRevision: 'sha256:r1',
+				payload: { customer_note: 'a', billing: { first_name: 'A', last_name: 'B' } },
+			};
+			return { server, envelope };
+		};
+
+		it('F1: replays the memoised response when only the key order differs', async () => {
+			const { server, envelope } = applied();
+			const first = await send(server, envelope);
+			const reordered = {
+				payload: { billing: { last_name: 'B', first_name: 'A' }, customer_note: 'a' },
+				baseRevision: envelope.baseRevision,
+				recordId: uuid,
+				collection: 'orders',
+				operation: 'update',
+				mutationId: 'm-1',
+			};
+			const replay = await send(server, reordered);
+			expect(first.status).toBe(200);
+			expect(replay.status).toBe(200);
+			expect(await replay.json()).toEqual(await first.json());
+		});
+
+		it('F2: refuses a replay with a different baseRevision (422) and changes nothing', async () => {
+			const { server, envelope } = applied();
+			await send(server, envelope);
+			const revision = server.applied.get(uuid)!.revision;
+			const replay = await send(server, { ...envelope, baseRevision: revision });
+			expect(replay.status).toBe(422);
+			expect(await replay.json()).toMatchObject({ code: 'woo_rxdb_sync_bad_mutation_id' });
+			expect(server.applied.get(uuid)!.revision).toBe(revision);
+		});
+
+		it('F3: refuses a replay with a different payload (422)', async () => {
+			const { server, envelope } = applied();
+			await send(server, envelope);
+			const replay = await send(server, { ...envelope, payload: { customer_note: 'b' } });
+			expect(replay.status).toBe(422);
+			expect(await replay.json()).toMatchObject({ code: 'woo_rxdb_sync_bad_mutation_id' });
+		});
+	});
+
 	it('deliberately returns 201 for a memoized create replay (#526)', async () => {
 		const server = createFakeWriteServer();
 		const create = buildCreateMutation({ collectionName: 'orders', payload: {} }, deps);

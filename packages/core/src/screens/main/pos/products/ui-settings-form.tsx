@@ -72,7 +72,8 @@ const META_DATA_KEYS_DOCS_URL = 'https://docs.wcpos.com/pos/product-panel/meta-d
  *
  */
 export function UISettingsForm() {
-	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('pos-products');
+	const { uiSettings, getUILabel, getUIDisplayLabel, patchUI, resetUI } =
+		useUISettings('pos-products');
 	const formData = useDocField(uiSettings, (value) => value) as unknown as z.infer<typeof schema>;
 	const { setButtonPressHandler } = useDialogContext();
 	const t = useT();
@@ -251,7 +252,7 @@ export function UISettingsForm() {
 							))}
 						</View>
 					) : (
-						<UISettingsColumnsForm getUILabel={getUILabel} />
+						<UISettingsColumnsForm getUILabel={getUILabel} getDisplayLabel={getUIDisplayLabel} />
 					)}
 					<FormField
 						control={form.control}

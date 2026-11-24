@@ -107,7 +107,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
 						orderId: orderID,
-						email,
+						hasRecipient: email.length > 0,
 						reason,
 						error: getErrorMessage(error),
 					},
@@ -145,7 +145,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 							showToast: true,
 							context: {
 								orderId: orderID,
-								email,
+								hasRecipient: email.length > 0,
 							},
 						});
 						return closeDialog();
@@ -164,12 +164,12 @@ export function EmailForm({ order, localOnly = false }: Props) {
 					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 					httpLogger[logLevel]('Failed to send receipt email', {
 						showToast: true,
-						toast: { text2: failure.reason },
+						toast: { text2: failure.reason || undefined },
 						code: ERROR_CODES.RECEIPT_DELIVERY_FAILED,
 						context: {
 							blockCode: failure.blockCode,
 							orderId: orderID,
-							email,
+							hasRecipient: email.length > 0,
 							status: failure.status,
 							error: failure.reason,
 							serverCode: failure.code,

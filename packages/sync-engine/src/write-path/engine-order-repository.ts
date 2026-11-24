@@ -16,6 +16,7 @@ import {
 import { findAllUncached } from '../collections/find-all-uncached';
 import { engineWarn } from '../engine-logger';
 import { stripOrderManifestDigest } from '../local-coverage/existence-manifest-population';
+import { removeCollectionCoverageLanes } from '../local-coverage/remove-collection-coverage-lanes';
 import {
 	type ManifestCollection,
 	removeManifestByWooIds,
@@ -24,12 +25,13 @@ import {
 import { mergeProtectedOrderMeta } from './merge-protected-order-meta';
 import { createOrderPendingMutationIds } from './order-pull-guard';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
-import { hasPendingLocalWork, withoutUnchanged } from './local-work-guard';
+import { hasPendingLocalWork, stampedRevision, withoutUnchanged } from './local-work-guard';
 import { adoptedSync, carriedFacts, readoptRequested, residentRevision } from './order-revision';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
 // Direct import: the scheduler index evaluates the drain and the descriptors, which read this
 // module's constants while it is still initialising (see package-seam.test.ts).
 import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seeder';
+import { RxSchedulerTaskStateRepository } from '../scheduler/rx-scheduler-task-state-repository';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { LocalRefundDocument } from '../collections/refund-schema';
@@ -88,6 +90,10 @@ type SyncCheckpointsCollection = {
 /** Structural: the collections the order repository touches — any engine scope database satisfies it. */
 export type OrderRepositoryDatabase = {
 	recordMutations?: unknown;
+	// The scope database always has it; only structural test fakes omit it.
+	coverageLanes?: Parameters<typeof removeCollectionCoverageLanes>[0];
+	// Likewise: read through RxSchedulerTaskStateRepository, resolved when the reset runs.
+	schedulerTaskStates?: unknown;
 	orders: OrdersCollection;
 	refunds: RefundChildrenCollection;
 	existenceManifestOrders: ManifestCollection;
@@ -283,6 +289,15 @@ export class EngineOrderRepository {
 			.findByIds(documents.map((document) => document.uuid))
 			.exec();
 		const ack = context?.source === 'ack' ? context : undefined;
+		// An ack echo carries the server's stamp of the authenticated user (#936); a read carries a reassignment.
+		// An equal stamp means nothing new on the server; adopting would undo the ack's kept identity (#936).
+		// A readopt is a corrective adoption and takes the server's identity (ADR 0040 §1.3).
+		const identitySourceFor = (resident: unknown, incoming: { remoteId: unknown }) => {
+			if (ack) return 'server';
+			if (readoptRequested(this.db, incoming.remoteId)) return 'read';
+			const stamp = stampedRevision(resident);
+			return stamp !== null && stamp === stampedRevision(incoming) ? 'server' : 'read';
+		};
 		// A pull requested BEFORE the resident was adopted whole answers with an older document.
 		// Measured: dev-next 2026-10-23, orders 115547/115569 — a boot pull answered mid-create
 		// landed after the ack and zeroed the till's total. WooCommerce saves an order several
@@ -307,6 +322,7 @@ export class EngineOrderRepository {
 		const materialized = applicable.map((document) => ({
 			storedDocument: stripOrderManifestDigest(document),
 		}));
+		const identitySources = new Map<string, 'server' | 'read'>();
 		for (const entry of materialized) {
 			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
 				{ payload?: Record<string, unknown>; local?: { receiptPrintCount?: number } } | undefined;
@@ -331,11 +347,14 @@ export class EngineOrderRepository {
 			const localMeta = Array.isArray(resident?.payload?.meta_data)
 				? resident.payload.meta_data
 				: [];
+			const identitySource = identitySourceFor(resident, entry.storedDocument);
+			if (resident) identitySources.set(entry.storedDocument.uuid, identitySource);
 			const serverMeta = mergeProtectedOrderMeta(
 				localMeta,
 				Array.isArray(entry.storedDocument.payload.meta_data)
 					? entry.storedDocument.payload.meta_data
-					: []
+					: [],
+				identitySource
 			);
 
 			if (serverMeta.length > 0) {
@@ -433,7 +452,9 @@ export class EngineOrderRepository {
 							...document.payload,
 							meta_data: mergeProtectedOrderMeta(
 								Array.isArray(localMeta) ? localMeta : [],
-								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : []
+								Array.isArray(document.payload.meta_data) ? document.payload.meta_data : [],
+								// Promoted columns come from the early merge; deciding again could split meta from columns.
+								identitySources.get(document.uuid) ?? identitySourceFor(current, document)
 							),
 						},
 					});
@@ -592,6 +613,8 @@ export class EngineOrderRepository {
 	 * (its uuid in the pending set) stays resident so an offline POS edit survives.
 	 */
 	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string>): Promise<void> {
+		// The orders' lanes claimed records this reset removes; demote them as Clear & Sync does (F2 B2).
+		if (this.db.coverageLanes) await removeCollectionCoverageLanes(this.db.coverageLanes, 'orders');
 		const removable = await this.unprotectedOrders(pendingMutationOrderIds);
 		const counts: Record<string, number> = {};
 		for (const document of removable) {
@@ -619,6 +642,18 @@ export class EngineOrderRepository {
 			}
 			if (Object.keys(removedCounts).length > 0) {
 				await stashPrintCounts(this.db.orders, removedCounts);
+			}
+		}
+		// A walk that started during the scan above published a lane over orders just removed.
+		if (this.db.coverageLanes) await removeCollectionCoverageLanes(this.db.coverageLanes, 'orders');
+		// Forget the completed orders walks, or the seeder's completed-dedupe skips the re-walk of
+		// a range this reset emptied (#3605). Completed only: an in-flight row is a running walk
+		// (this reset runs inside one) whose lease renews by compare-and-replace on that row.
+		if (this.db.schedulerTaskStates) {
+			const tasks = new RxSchedulerTaskStateRepository(this.db);
+			for (const state of await tasks.readForCollections(['orders'])) {
+				// Compare-and-remove: a row re-claimed since the read is left as it is.
+				if (state.status === 'completed') await tasks.remove(state);
 			}
 		}
 		// A retry may find the parents already gone. Sweep against current residency,

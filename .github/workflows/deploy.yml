@@ -78,7 +78,12 @@ jobs:
   changes:
     name: 🔍 Detect Deploy Changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     outputs:
+      e2e_proof: ${{ steps.proof.outputs.e2e_proof }}
       lint: ${{ steps.plan.outputs.lint }}
       unit: ${{ steps.plan.outputs.unit }}
       web: ${{ steps.plan.outputs.web }}
@@ -142,6 +147,14 @@ jobs:
           esac
           echo "lane=${lane:-<unresolved>} (event=$EVENT_NAME base_ref=${BASE_REF:-} ref_name=$REF_NAME input=${INPUT_LANE:-auto})"
           echo "lane=$lane" >> "$GITHUB_OUTPUT"
+      # desk ruling 2026-11-20: tree hash equality only
+      - name: 🪞 Find a PR run that already passed this tree
+        id: proof
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: .github/scripts/main-push-e2e-proof.sh
 
   deploy:
     name: 🚀 Deploy
@@ -255,8 +268,13 @@ jobs:
   e2e-setup:
     name: 🔑 E2E shared setup
     needs: [changes, deploy]
-    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && needs.changes.outputs.e2e_proof == ''
     runs-on: ubuntu-latest
+    # One shared login per lane at a time: every setup logs in as the same free-store user (2026-11-17 AUTH101 race).
+    concurrency:
+      group: ${{ format('deploy-e2e-setup-{0}', needs.changes.outputs.lane || github.run_id) }}
+      cancel-in-progress: false
+      queue: max
     # The queue step lists runs.
     permissions:
       contents: read
@@ -350,11 +368,16 @@ jobs:
   # 2026-08-12 to 2026-08-18: with 2+ PRs active it starved every merge gate
   # (#1265), because one holder kept the store for a whole run. Since
   # 2026-11-13 (desk ruling, after dev-pro hit pm.max_children=32 whenever two
-  # web runs overlapped) each shard queues per lane and shard index in its own
-  # concurrency group (`queue: max`), so runs pipeline shard by shard instead
-  # of holding the store whole. The Merge Gate poll was raised to ~150 min
-  # (merge-gate.yml, MERGE_GATE_MAX_ATTEMPTS) so a PR four runs deep waits
-  # instead of going red. Cross-run safety in the specs still applies:
+  # web runs overlapped) shards queue per lane in concurrency groups
+  # (`queue: max`), so runs pipeline shard by shard instead of holding the
+  # store whole. Since 2026-11-18 (desk ruling, after the 2026-11-17
+  # saturation: ~20 laps × 6 shards since 15:00Z, VPS load ~38 on 12 cores,
+  # production slowed) shards queue in 3 slots per lane, not 6: the pairs are
+  # 1+5, 2+4 and 3+6, balanced by measured length, so a pair takes turns.
+  # Peak is 3 shards × 2 workers = 6 browser sessions per store; a healthy
+  # lap goes from ~21–27 min to ~30–41 min. The Merge Gate poll was raised
+  # to ~240 min (merge-gate.yml, MERGE_GATE_MAX_ATTEMPTS) so a PR four runs
+  # deep waits instead of going red. Cross-run safety in the specs still applies:
   # run-private probe records (checkout-probe.ts / search-probe.ts random
   # tokens), relative count assertions (store-agnostic E2E policy in
   # CLAUDE.md), and Playwright CI retries absorb residual contention.
@@ -364,8 +387,8 @@ jobs:
   # queue in e2e-setup's `🚦 Queue for dev-next` step, shared with
   # e2e-native.yml (scripts/wait-devnext-free.mjs). Only dispatched and
   # scheduled runs reach dev-next — PRs to next skip this suite — so the
-  # queue cannot starve a merge gate. The main lane queues per shard through
-  # the e2e job's concurrency group instead.
+  # queue cannot starve a merge gate. The main lane queues in 3 store slots
+  # through the e2e job's concurrency group instead.
   # dev-next is the next lane's one store (owner ruling 2026-10-19: three dev
   # stores, no fourth). Six shards logging in at once saturated it on
   # 2026-09-30 (#2321); e2e-setup now does every login and sync serially (#2324).
@@ -378,7 +401,7 @@ jobs:
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     needs: [changes, deploy, e2e-setup]
-    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' }}
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && needs.changes.outputs.e2e_proof == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -398,10 +421,10 @@ jobs:
         # nothing. One shard cannot produce that. A quarantine-only run is one shard too.
         shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
         shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[6]') }}
-    # One web E2E run per dev store at a time: shards queue per lane and shard, never
-    # cancelled (desk ruling 2026-11-13). Why, and the exceptions: see the comment above `e2e:`.
+    # At most 3 web E2E shards per dev store: shards queue per lane in 3 slots (pairs 1+5, 2+4,
+    # 3+6), never cancelled (desk rulings 2026-11-13, 2026-11-18). Why: see the comment above `e2e:`.
     concurrency:
-      group: ${{ (github.event_name == 'schedule' || inputs.quarantine_only || needs.changes.outputs.lane == '') && format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) || format('e2e-store-{0}-shard-{1}', needs.changes.outputs.lane, matrix.shardIndex) }}
+      group: ${{ (github.event_name == 'schedule' || inputs.quarantine_only || needs.changes.outputs.lane == '') && format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) || format('e2e-store-{0}-slot-{1}', needs.changes.outputs.lane, fromJSON('[0,1,2,3,2,1,3]')[matrix.shardIndex]) }}
       cancel-in-progress: false
       queue: max
     steps:
@@ -699,6 +722,7 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           DEPLOY_URL: ${{ needs.deploy.outputs.deployment_url }}
           E2E_RESULT: ${{ needs.e2e.result }}
+          E2E_PROOF: ${{ needs.changes.outputs.e2e_proof }}
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           SKIP_E2E_INPUT: ${{ github.event.inputs.skip_e2e }}
@@ -751,6 +775,11 @@ jobs:
           fi
 
           # ---- E2E was skipped: was that legitimate? ----
+          if [ "$EVENT_NAME" = "push" ] && [ "$DEPLOY_RESULT" = "success" ] && [ -n "${E2E_PROOF:-}" ]; then
+            echo "⏭️ Web E2E skipped: this tree already passed all 6 web E2E shards in $E2E_PROOF"
+            echo "⏭️ Web E2E skipped: this tree already passed all 6 web E2E shards in $E2E_PROOF" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 0
+          fi
 
           # Nothing was deployed, so there was nothing to test. Covers draft
           # PRs, dependabot, and PRs that touch no app-affecting paths.

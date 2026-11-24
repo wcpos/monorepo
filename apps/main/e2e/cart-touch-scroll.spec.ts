@@ -93,15 +93,71 @@ async function scrollsAndSwipes(page: Page) {
 	const swipeBody = bodies.nth(visibleIndex);
 	const swipeBox = (await swipeBody.boundingBox())!;
 	const restX = swipeBox.x;
+	const restRight = swipeBox.x + swipeBox.width;
+	// nth(visibleIndex): every cart-line-row renders exactly one body and one strip window, so the indexes pair.
+	const swipeWindow = page.getByTestId('cart-line-strip-window').nth(visibleIndex);
 	const swipeFrom = {
 		x: swipeBox.x + swipeBox.width * 0.75,
 		y: swipeBox.y + swipeBox.height / 2,
 	};
+	// The swipe moves the strip's window in from the row's trailing edge; the body holds still (decision 7A).
 	await untilRowIsUnder(page, swipeFrom);
 	await touchDrag(page, swipeFrom, { x: swipeFrom.x - 150, y: swipeFrom.y });
 	await expect
-		.poll(async () => (await swipeBody.boundingBox())!.x, { timeout: 5_000 })
-		.toBeLessThan(restX - 40);
+		.poll(async () => (await swipeWindow.boundingBox())!.x, { timeout: 5_000 })
+		.toBeLessThan(restRight - 40);
+	expect(Math.abs((await swipeBody.boundingBox())!.x - restX)).toBeLessThanOrEqual(1);
+}
+
+/** Adds a miscellaneous line and returns its row's id-bearing testID (`cart-line-row-<uuid>`). */
+async function addLine(page: Page) {
+	const ids = () =>
+		page
+			.locator('[data-testid^="cart-line-row-"]')
+			.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-testid') ?? ''));
+	const before = new Set(await ids());
+	await page.getByTestId('add-cart-item-menu').click();
+	await page.getByTestId('menu-add-misc-product').click();
+	await page.getByTestId('add-to-cart-submit').click();
+	const cartTab = page.getByTestId('pos-tab-cart');
+	if (await cartTab.isVisible()) await cartTab.tap();
+	await expect.poll(async () => (await ids()).filter((id) => !before.has(id))).toHaveLength(1);
+	return (await ids()).find((id) => !before.has(id))!;
+}
+
+/**
+ * The long swipe left removes the line (the 2026-11-21 strip board, item 10): a drag from 85 % to
+ * 10 % of the row's width crosses the remove point (60 % of the row, never less than 56 px past
+ * the open strip) and the line leaves. A short one only opens the strip.
+ */
+async function longSwipeRemoves(page: Page) {
+	const cartTab = page.getByTestId('pos-tab-cart');
+	if (await cartTab.isVisible()) await cartTab.tap();
+	await ensureRegisterOpen(page);
+	const keptRow = page.getByTestId(await addLine(page));
+	const goneRow = page.getByTestId(await addLine(page));
+	const rows = page.getByTestId('cart-line-row');
+
+	// 150 px: the strip opens and the line stays.
+	const keptBox = (await keptRow.boundingBox())!;
+	const shortFrom = { x: keptBox.x + keptBox.width * 0.75, y: keptBox.y + keptBox.height / 2 };
+	await untilRowIsUnder(page, shortFrom);
+	await touchDrag(page, shortFrom, { x: shortFrom.x - 150, y: shortFrom.y });
+	const keptWindow = keptRow.getByTestId('cart-line-strip-window');
+	await expect
+		.poll(async () => (await keptWindow.boundingBox())!.x, { timeout: 5_000 })
+		.toBeLessThan(keptBox.x + keptBox.width - 40);
+	await expect(keptRow).toHaveCount(1);
+
+	// 85 % to 10 %: past the line, the line leaves.
+	const count = await rows.count();
+	const box = (await goneRow.boundingBox())!;
+	const from = { x: box.x + box.width * 0.85, y: box.y + box.height / 2 };
+	await untilRowIsUnder(page, from);
+	await touchDrag(page, from, { x: box.x + box.width * 0.1, y: from.y });
+	await expect(rows).toHaveCount(count - 1, { timeout: 10_000 });
+	await expect(goneRow).toHaveCount(0);
+	await expect(keptRow).toHaveCount(1);
 }
 
 test.describe('Cart touch scroll — phone', () => {
@@ -123,6 +179,11 @@ test.describe('Cart touch scroll — phone', () => {
 	}) => {
 		await scrollsAndSwipes(page);
 	});
+	test('a long swipe left removes the line; a short one only opens the strip', async ({
+		posPage: page,
+	}) => {
+		await longSwipeRemoves(page);
+	});
 });
 
 test.describe('Cart touch scroll — tablet', () => {
@@ -143,5 +204,10 @@ test.describe('Cart touch scroll — tablet', () => {
 		posPage: page,
 	}) => {
 		await scrollsAndSwipes(page);
+	});
+	test('a long swipe left removes the line; a short one only opens the strip', async ({
+		posPage: page,
+	}) => {
+		await longSwipeRemoves(page);
 	});
 });

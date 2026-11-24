@@ -24,6 +24,8 @@ import { RECORD_UUID_META_KEY } from './recordIdentity';
  *  - IDEMPOTENT replay: a `mutationId` that already succeeded returns the SAME response and mutates
  *    nothing — modelling the server's `mutationId` dedupe, so a re-drain is safe. (404/409/400 are
  *    NOT memoised, so a retry after the record is seeded / the conflict resolved can still land.)
+ *  - a replay must carry a byte-identical (canonical: keys sorted, array order kept) envelope, or it
+ *    is a 422 `woo_rxdb_sync_bad_mutation_id`, as in `Write_Controller::replay_target_mismatch()`.
  *  - `seed()` pre-establishes an existing server record so update/delete flows can be exercised.
  *  - scriptable faults override the above: a permanent 400 `invalid_param` (the wc/v3 schema refusing
  *    a payload — the #832 dead-letter shape), 409 conflict, transient 409 `in_progress` / `record_locked`,
@@ -160,6 +162,22 @@ function unquoteEntityTag(value: string | null): string | null {
 	return tag;
 }
 
+/** JSON with plain-object keys sorted recursively and array order kept — the equality the plugin's
+ * sha256 envelope fingerprint gives. */
+function canonicalEnvelope(value: unknown): string {
+	const sortKeys = (node: unknown): unknown => {
+		if (Array.isArray(node)) return node.map(sortKeys);
+		if (node === null || typeof node !== 'object') return node;
+		const record = node as Record<string, unknown>;
+		return Object.fromEntries(
+			Object.keys(record)
+				.sort()
+				.map((key) => [key, sortKeys(record[key])])
+		);
+	};
+	return JSON.stringify(sortKeys(value));
+}
+
 export function createFakeWriteServer(options: FakeWriteServerOptions = {}): FakeWriteServer {
 	let nextId = options.firstId ?? 500;
 	const records = new Map<string, { id: number; revision: string }>();
@@ -168,7 +186,7 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 	const received: PushEnvelope[] = [];
 	const receivedUrls: string[] = [];
 	// mutationId → the response already produced for a SUCCESS, so a replay is byte-identical (idempotent).
-	const memoByMutation = new Map<string, { status: number; body: unknown }>();
+	const memoByMutation = new Map<string, { status: number; body: unknown; envelope: string }>();
 	let scriptFn: (env: PushEnvelope) => FakeWriteServerFault | undefined = () => undefined;
 
 	/** Stored record → the shape the ack body carries (see the `serialize` option). */
@@ -309,7 +327,15 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 
 			// Replay the exact original verdict: applied creates remain 201, while
 			// born-twice creates remain 200 so the client re-lands their payload.
+			// The plugin fingerprints the whole envelope per mutationId: a differing replay is a 422.
 			const memo = memoByMutation.get(env.mutationId);
+			if (memo && memo.envelope !== canonicalEnvelope(env)) {
+				return asResponse(422, {
+					code: 'woo_rxdb_sync_bad_mutation_id',
+					message: 'mutationId was already used for a different envelope.',
+					data: { status: 422 },
+				});
+			}
 			if (memo) return asResponse(memo.status, memo.body);
 
 			// Validate the route — a doubled/misrouted base or a mismatched collection is a hard 400. This
@@ -352,7 +378,7 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 				}
 			}
 			const remember = (status: number, body: unknown): Response => {
-				memoByMutation.set(env.mutationId, { status, body });
+				memoByMutation.set(env.mutationId, { status, body, envelope: canonicalEnvelope(env) });
 				return asResponse(status, body);
 			};
 

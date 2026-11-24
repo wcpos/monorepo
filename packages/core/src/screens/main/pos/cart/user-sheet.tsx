@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { format as formatDate } from 'date-fns/format';
-import { useRouter } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { defer, filter, firstValueFrom, of, repeat, startWith, switchMap, timer } from 'rxjs';
 
@@ -12,7 +11,11 @@ import {
 	observeRegister$,
 	readLiveSession,
 } from '@wcpos/query/register-session';
-import { observeCredentialStores, PENDING_USER_DB_READ } from '@wcpos/query/user-db';
+import {
+	observeCredentialStores,
+	PENDING_USER_DB_READ,
+	recordCashierProfile,
+} from '@wcpos/query/user-db';
 import { AmountFigure } from '@wcpos/components/amount-figure';
 import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { PressableSurface } from '@wcpos/components/pressable-surface';
@@ -39,6 +42,7 @@ import {
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
+import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import {
 	observeCashierSalesTotal,
@@ -58,6 +62,8 @@ import { usePaymentInFlight } from '../checkout/payments/payment-in-flight';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
 import { useAppState, useStoreSession } from '../../../../contexts/app-state';
+import { cashierRequest, recoverCashierBody } from '../../../../hooks/use-user-validation';
+import { storeRequestFailureCode } from '../../../../utils/store-request-failure-code';
 import { useT } from '../../../../contexts/translations';
 import {
 	convertLocalDateToUTCString,
@@ -489,8 +495,9 @@ export function UserSheet({
 }) {
 	const { site, store, storeDB, userDB, wpCredentials, logout } = useStoreSession();
 	const http = useRestHttpClient();
-	const { login } = useAppState();
-	const router = useRouter();
+	// No token refresh: it reads another login's profile, never the signed-in cashier's.
+	const cashierHttp = useHttpClient();
+	const { login, user } = useAppState();
 	const [request, setRequest] = React.useState<SwitchRequest | null>(null);
 	const [pane, setPane] = React.useState<'sheet' | 'store' | 'register'>('sheet');
 	const { total } = useSalesToday();
@@ -534,25 +541,55 @@ export function UserSheet({
 	const switchUser = async (credential: ReadonlyWpCredentialsRecord) => {
 		try {
 			// Switching is a one-shot read of the first non-pending database answer.
-			const stores = await firstValueFrom(
-				observeCredentialStores(credential).pipe(filter((value) => value !== PENDING_USER_DB_READ))
-			);
-			const next = stores.find((candidate) => candidate.id === store.id);
+			const storeHere = async () =>
+				(
+					await firstValueFrom(
+						observeCredentialStores(credential).pipe(
+							filter((value) => value !== PENDING_USER_DB_READ)
+						)
+					)
+				).find((candidate) => candidate.id === store.id);
+			let next = await storeHere();
+			if (!next) {
+				// A login added from this sheet has no stores until its cashier profile is read, which
+				// only the connect screen did. Read it here with its own token; a login the store has not
+				// confirmed for this store is refused in place, never by signing the till out.
+				if (!online) {
+					Toast.show({ text1: t('register.needs_store_to_switch'), type: 'warning' });
+					return;
+				}
+				const { endpoint, config } = cashierRequest(site, credential.id!, credential.access_token!);
+				// The outgoing session's auth hold cannot fix or break this login's own token.
+				const { data: raw } = await cashierHttp.get(endpoint, { ...config, unauthenticated: true });
+				const data = recoverCashierBody(raw, credential.id!) ?? raw;
+				if (
+					!data ||
+					typeof data !== 'object' ||
+					(data.id !== undefined && data.id !== credential.id)
+				)
+					throw new Error('The cashier profile is not this login');
+				await recordCashierProfile(userDB, credential, data, {
+					userUuid: user.uuid,
+					siteUuid: site.uuid,
+				});
+				next = await storeHere();
+				if (!next) {
+					Toast.show({ text1: t('auth.no_stores_for_this_user'), type: 'warning' });
+					return;
+				}
+			}
 			requestStateManager.clearRefreshedToken();
 			requestStateManager.setAuthFailed(false);
-			if (!next) {
-				await logout();
-				router.replace('/connect');
-				return;
-			}
 			await login({
 				siteID: site.uuid!,
 				wpCredentialsID: credential.uuid!,
 				storeID: next.localID!,
 			});
 		} catch (error) {
+			// What the store answered (a 403 is AUTH201), else the unexpected sign-in failure it was.
+			const code = storeRequestFailureCode(error);
 			log.error('Store login failed', {
-				code: ERROR_CODES.AUTH_UNEXPECTED,
+				code: code === ERROR_CODES.UNEXPECTED_ERROR ? ERROR_CODES.AUTH_UNEXPECTED : code,
 				showToast: true,
 				context: { error },
 			});

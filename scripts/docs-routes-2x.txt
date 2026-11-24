@@ -26,6 +26,7 @@
 /error-codes/AUTH321
 /error-codes/AUTH331
 /error-codes/AUTH341
+/error-codes/AUTH342
 /error-codes/AUTH401
 /error-codes/AUTH411
 /error-codes/AUTH421
@@ -82,6 +83,7 @@
 /error-codes/PAYMENT401
 /error-codes/PAYMENT501
 /error-codes/PAYMENT511
+/error-codes/PAYMENT521
 /error-codes/PAYMENT999
 /error-codes/PRINT101
 /error-codes/PRINT201
@@ -118,6 +120,7 @@
 /error-codes/SYNC201
 /error-codes/SYNC202
 /error-codes/SYNC203
+/error-codes/SYNC204
 /error-codes/SYNC211
 /error-codes/SYNC221
 /error-codes/SYNC222

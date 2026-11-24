@@ -35,12 +35,14 @@ type ColumnField = ColumnsFormValues['columns'][number] & { id: string };
 
 interface UISettingsColumnsFormProps {
 	getUILabel: (key: string) => string;
+	/** A display sub-option's label, in the owner's words (not the column header). */
+	getDisplayLabel: (columnKey: string, displayKey: string) => string;
 }
 
 /**
  *
  */
-export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps) {
+export function UISettingsColumnsForm({ getUILabel, getDisplayLabel }: UISettingsColumnsFormProps) {
 	const t = useT();
 	const form = useFormContext();
 
@@ -82,8 +84,9 @@ export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps
 			{column.display && (
 				<ColumnDisplayOptions
 					columnIndex={columnIndex}
+					columnKey={column.key}
 					display={column.display}
-					getUILabel={getUILabel}
+					getDisplayLabel={getDisplayLabel}
 				/>
 			)}
 		</VStack>
@@ -114,12 +117,14 @@ export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps
  */
 function ColumnDisplayOptions({
 	columnIndex,
+	columnKey,
 	display,
-	getUILabel,
+	getDisplayLabel,
 }: {
 	columnIndex: number;
+	columnKey: string;
 	display: { key: string; show: boolean }[];
-	getUILabel: (key: string) => string;
+	getDisplayLabel: UISettingsColumnsFormProps['getDisplayLabel'];
 }) {
 	const form = useFormContext();
 	const shown = useWatch({ control: form.control, name: `columns.${columnIndex}.show` });
@@ -134,7 +139,7 @@ function ColumnDisplayOptions({
 					name={`columns.${columnIndex}.display.${displayIndex}.show`}
 					render={({ field }) => (
 						<View className="p-2">
-							<FormSwitch label={getUILabel(displayItem.key)} {...field} />
+							<FormSwitch label={getDisplayLabel(columnKey, displayItem.key)} {...field} />
 						</View>
 					)}
 				/>

@@ -19,6 +19,7 @@ import { getStockRejectionForLine, stockRejection$ } from '../../hooks/stock-rej
 import { useUpdateCartLine } from '../../hooks/use-update-cart-line';
 import { useCurrentOrder } from '../../contexts/current-order';
 import { readOnlyLineKey, useCartTableReadOnly } from './read-only';
+import { useStripClear } from './strip-clear';
 type LineItem = import('@wcpos/query').OrderLineItem;
 interface Props {
 	uuid: string;
@@ -37,6 +38,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 	const { updateCartLine } = useUpdateCartLine();
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
+	const clear = useStripClear();
 	const unmet = useCartUnmet().find((condition) => condition.lineUuid === uuid);
 	const scrollRef = React.useMemo(
 		() => lineRef(uuid, 'scroll', () => table.options.meta?.scrollToRow?.(uuid)),
@@ -77,7 +79,7 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
 			{/* Read-only (checkout, receipt): the name the field shows, nothing to press, and no
 			    scroll target — the stilled cart never scrolls to a row. */}
-			<View className="w-full" ref={readOnly ? undefined : scrollRef}>
+			<View className="w-full" ref={readOnly ? undefined : scrollRef} {...clear.box('name')}>
 				{/* Two lines: the name is what the cashier reads, and the amount columns hold
 				    their width at every scale step, so a long name wraps rather than truncates. */}
 				{picker && unpaid > 0 ? (
@@ -88,19 +90,20 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 						testID={`checkout-line-${key}-pick`}
 						onPress={() => picker.pick(key, unpaid)}
 					>
-						<Text className="py-1.5" numberOfLines={2} decodeHtml>
+						{/* Margin, not padding: a clamped Text's padding sits inside its clip and shows the cut-off line's top (F61). */}
+						<Text className="my-1.5" numberOfLines={2} decodeHtml>
 							{item.name ?? ''}
 						</Text>
 					</PressableSurface>
 				) : readOnly ? (
-					<Text className="py-1.5" numberOfLines={2} decodeHtml>
+					<Text className="my-1.5" numberOfLines={2} decodeHtml>
 						{item.name ?? ''}
 					</Text>
 				) : (
 					<EditableField
 						variant="ghost"
 						bold={false}
-						numberOfLines={2}
+						numberOfLines={clear.lines('name', 2)}
 						value={item.name}
 						onChangeText={(name) => updateCartLine('line_items', uuid, { name })}
 					/>
@@ -139,7 +142,13 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
 			{metaData.length > 0 && (
 				/* Native merges nested Text, so Maestro sees only the outer testID. */
-				<Text variant="key" className="leading-tight" numberOfLines={2} testID="cart-line-meta">
+				<Text
+					variant="key"
+					className="leading-tight"
+					numberOfLines={clear.lines('meta', 2)}
+					testID="cart-line-meta"
+					{...clear.box('meta')}
+				>
 					{metaData.map((meta, index) => (
 						<React.Fragment key={meta.id || meta.key || meta.display_key}>
 							{index > 0 && ' · '}

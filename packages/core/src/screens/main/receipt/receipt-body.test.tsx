@@ -18,8 +18,23 @@ jest.mock('@wcpos/components/vstack', () => ({ VStack: jest.requireActual('react
 jest.mock('@wcpos/components/hstack', () => ({ HStack: jest.requireActual('react-native').View }));
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
 jest.mock('@wcpos/components/webview', () => ({
-	WebView: ({ testID, srcDoc, src }: { testID: string; srcDoc: string; src?: string }) => (
-		<iframe data-testid={testID} srcDoc={srcDoc} data-src={src} />
+	WebView: ({
+		testID,
+		srcDoc,
+		src,
+		trustedSrcDoc,
+	}: {
+		testID: string;
+		srcDoc: string;
+		src?: string;
+		trustedSrcDoc?: boolean;
+	}) => (
+		<iframe
+			data-testid={testID}
+			srcDoc={srcDoc}
+			data-src={src}
+			data-trusted={trustedSrcDoc ? 'true' : undefined}
+		/>
 	),
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
@@ -162,6 +177,32 @@ it('shows a fetched page with the URL it was read from as its base', () => {
 	const frame = screen.getByTestId('receipt-preview-frame');
 	expect(frame.getAttribute('srcdoc')).toBe('<p>Server receipt</p>');
 	expect(frame.getAttribute('data-src')).toBe('https://shop.test/r?key=k&mode=live&template=7');
+});
+
+// Revert: mark the fetched store page trusted, so its frame takes the app's origin.
+it('a fetched store page is never marked trusted', () => {
+	const doc = {
+		templates: [],
+		allPrinters: [],
+		previewProps: {
+			renderedHtml: '<p>Server receipt</p>',
+			pageBase: 'https://shop.test/r?key=k&mode=live&template=7',
+			previewPaperWidth: '80mm',
+		},
+	} as unknown as ReturnType<typeof useReceiptDocument>;
+	render(<ReceiptBody doc={doc} />);
+	expect(screen.getByTestId('receipt-preview-frame').getAttribute('data-trusted')).toBeNull();
+});
+
+// Revert: stop marking the local template trusted, so its frame cannot be measured or printed.
+it('a locally rendered template is marked trusted', () => {
+	const doc = {
+		templates: [],
+		allPrinters: [],
+		previewProps: { renderedHtml: '<b>Receipt</b>', previewPaperWidth: '80mm' },
+	} as unknown as ReturnType<typeof useReceiptDocument>;
+	render(<ReceiptBody doc={doc} />);
+	expect(screen.getByTestId('receipt-preview-frame').getAttribute('data-trusted')).toBe('true');
 });
 
 // Hiding the single template or the system-dialog printer leaves the cashier guessing.

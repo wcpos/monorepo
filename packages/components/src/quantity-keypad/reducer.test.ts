@@ -65,3 +65,42 @@ describe('settle', () => {
 		expect(quantityEntryReducer(typed, { type: 'settle' })).toBe(typed);
 	});
 });
+
+describe('± (a signed keypad)', () => {
+	const sign = (shown: number): QuantityEntryAction => ({ type: 'sign', shown });
+
+	it('with nothing typed, the buffer becomes the negated shown quantity', () => {
+		expect(run(sign(3)).buffer).toBe('-3');
+		expect(run(sign(-2)).buffer).toBe('2');
+		expect(run(sign(1.5)).buffer).toBe('-1.5');
+	});
+
+	it('a shown 0 stays nothing typed: −0 is never entered', () => {
+		expect(run(sign(0))).toBe(EMPTY_ENTRY);
+	});
+
+	it('with something typed, it toggles the leading sign', () => {
+		expect(run(...keys('12'), sign(3)).buffer).toBe('-12');
+		expect(run(...keys('12'), sign(3), sign(3)).buffer).toBe('12');
+	});
+
+	it('digits type on the magnitude and keep the sign; deleting the last empties it', () => {
+		expect(run(...keys('1'), sign(3), ...keys('2')).buffer).toBe('-12');
+		expect(run(...keys('1'), sign(3), { type: 'key', key: 'backspace', places: 6 }).buffer).toBe(
+			''
+		);
+	});
+
+	it('the first digit after ± on the shown quantity replaces it, keeping the sign', () => {
+		expect(run(sign(3), ...keys('4'))).toEqual({ buffer: '-4' });
+		expect(run(sign(3), sign(3))).toEqual({ buffer: '' });
+	});
+
+	it('typedQuantity takes a nonzero negative only when signed; 0 and −0 never commit', () => {
+		expect(typedQuantity('-1')).toBeUndefined();
+		expect(typedQuantity('-1', false, true)).toBe(-1);
+		expect(typedQuantity('-0', false, true)).toBeUndefined();
+		expect(typedQuantity('0', false, true)).toBeUndefined();
+		expect(typedQuantity('-', false, true)).toBeUndefined();
+	});
+});

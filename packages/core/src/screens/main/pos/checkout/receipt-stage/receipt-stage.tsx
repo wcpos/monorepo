@@ -27,6 +27,7 @@ import { finishReceipt } from '../checkout-mode';
 import { useCheckoutBack } from '../column/use-checkout-back';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { CapturedUnfinishedNotice } from '../tender/captured-unfinished-notice';
+import { storeSettledTender } from '../tender/store-settled';
 import { useAwaitsStore } from '../use-awaiting-store';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
@@ -202,8 +203,10 @@ function ReceiptStageDocument({
 	);
 	const paidWith =
 		methodTitles.length > 0 ? methodTitles.join(' + ') : derived.payment_method_title;
+	// No till record, but the store took the money (#3755): its title and the order total.
+	const storeTender = storeSettledTender(payload, rows.length, dp);
 	const change = Number(derived.change);
-	const paid = Number(derived.paid);
+	const paid = storeTender ? storeTender.amountMinor / 10 ** dp : Number(derived.paid);
 	const cashRows = settledRows.filter((row) => row.kind === 'cash');
 	const cashTendered = cashRows.reduce(
 		(total, row) => total + Number(row.tendered ?? row.amount),
@@ -215,12 +218,12 @@ function ReceiptStageDocument({
 				paid: format(paid),
 				tendered: format(cashTendered),
 			})
-		: paidWith;
+		: (storeTender?.title ?? paidWith);
 	const finishSale = useFinishSale(order.uuid, compact ? 'modal' : 'columns');
 	useCheckoutBack(finishSale, { escape: false });
 	// Sent (spec §4.2): the stamp is on the order and no money has been taken.
 	const stamp = activeAwaitingCustomer(payload.meta_data);
-	const sent = stamp && Number(derived.balance) > 0 ? stamp : null;
+	const sent = stamp && !storeTender && Number(derived.balance) > 0 ? stamp : null;
 	const awaitsStore = useAwaitsStore(order.uuid);
 	const awaiting = sent ? false : awaitsStore;
 	const newSale = (

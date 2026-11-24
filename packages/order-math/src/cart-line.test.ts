@@ -1,5 +1,6 @@
 import { calculateCartLine } from './cart-line';
 import { createCartConfig } from './config';
+import { settleCart } from './settle';
 
 import type { CartConfigInput } from './config';
 import type { TaxRateInput } from './types';
@@ -2150,5 +2151,42 @@ describe('VAT-exempt line calculation', () => {
 			line: { quantity: 2, meta_data: [posDataMeta({ price: 12.37, tax_status: 'none' })] },
 		};
 		expect(calculateCartLine(none, exempt)).toEqual(calculateCartLine(none, config));
+	});
+});
+
+describe('a returned line (quantity −1) inside the sale', () => {
+	const config = createCartConfig({ ...baseConfig, rates: [rate20], allRates: [rate20] });
+	const priced = (product_id: number, price: number, quantity: number) =>
+		calculateCartLine(
+			{
+				kind: 'line_item',
+				line: {
+					product_id,
+					quantity,
+					tax_class: 'standard',
+					meta_data: [posDataMeta({ price, regular_price: price, tax_status: 'taxable' })],
+				},
+			},
+			config
+		).line;
+
+	it('a −1 commit is minus the price, tax and all', () => {
+		expect(priced(2, 4, -1)).toMatchObject({
+			quantity: -1,
+			price: 4,
+			total: '-4',
+			total_tax: '-0.8',
+			subtotal: '-4',
+		});
+	});
+
+	it('the cart total drops by the returned line', () => {
+		const settle = (lines: ReturnType<typeof priced>[]) => {
+			const result = settleCart({ line_items: lines, coupon_lines: [] }, config);
+			if (!result.ok) throw new Error('settle refused the cart');
+			return result.patch.total;
+		};
+		expect(settle([priced(1, 10, 1)])).toBe('12');
+		expect(settle([priced(1, 10, 1), priced(2, 4, -1)])).toBe('7.2');
 	});
 });

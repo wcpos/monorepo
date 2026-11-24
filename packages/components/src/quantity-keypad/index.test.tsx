@@ -460,3 +460,162 @@ it('in a form, the trigger is named by the form label, then its own number', () 
 	expect(label).toBe('stock-label');
 	expect(trigger.id).toBe(own);
 });
+
+describe('signed (a cart line that may be returned inside the sale)', () => {
+	const rowIds = () =>
+		Array.from(panelNode()!.children).map((row) =>
+			Array.from(row.querySelectorAll('[data-testid]')).map((node) =>
+				node.getAttribute('data-testid')
+			)
+		);
+	const signed = { signed: true, labels: { ...labels, sign: 'Return' } };
+	const sign = () => screen.getByTestId('keypad-key-sign');
+
+	it('a Return row under the stepper spans the panel; seven rows, ✓ alone across the last', async () => {
+		await open(signed);
+		const rows = rowIds();
+		expect(rows).toHaveLength(7);
+		expect(rows[1]).toEqual(['keypad-key-sign']);
+		expect(rows[2]).toEqual(['keypad-key-1', 'keypad-key-2', 'keypad-key-3']);
+		expect(rows[6]).toEqual(['keypad-key-done']);
+		// The word is the key's text and its accessible name; off, no glyph leads it.
+		expect(sign()).toHaveAttribute('aria-label', 'Return');
+		expect(sign()).toHaveTextContent('Return');
+		expect(sign()).toHaveAttribute('aria-pressed', 'false');
+		expect(sign().querySelector('[data-icon]')).toBeNull();
+		expect(sign()).toHaveStyle({ width: '144px' });
+		expect(screen.getByTestId('keypad-key-done')).toHaveStyle({ width: '144px' });
+	});
+
+	it.each([
+		['a line', {}],
+		['a count (stock)', { onRemove: undefined, decimals: 0 }],
+	])(
+		'unsigned (%s), the grid is main’s: no Return key, six rows, ✓ across the panel',
+		async (_name, props: Partial<QuantityKeypadProps>) => {
+			await open({ value: 3, ...props });
+			expect(screen.queryByTestId('keypad-key-sign')).toBeNull();
+			const rows = rowIds();
+			expect(rows).toHaveLength(6);
+			expect(rows[0]).toEqual([
+				'keypad-key-decrease',
+				'quantity-keypad-value',
+				'keypad-key-increase',
+			]);
+			expect(rows[5]).toEqual(['keypad-key-done']);
+			expect(screen.getByTestId('keypad-key-done')).toHaveStyle({ width: '144px' });
+			panelKey('-');
+			expect(shown()).toBe('3');
+		}
+	);
+
+	it('Return on nothing typed negates the shown quantity, lit and led by a minus; ✓ commits −3', async () => {
+		await open({ value: 3, ...signed });
+		await press('keypad-key-sign');
+		expect(shown()).toBe('−3');
+		expect(sign()).toHaveAttribute('aria-pressed', 'true');
+		expect(sign().querySelector('[data-icon="minus"]')).not.toBeNull();
+		expect(sign()).toHaveTextContent('Return');
+		expect(onChange).not.toHaveBeenCalled();
+		await press('keypad-key-done');
+		expect(onChange).toHaveBeenCalledWith(-3);
+	});
+
+	it('Return after typing toggles the typed number; a digit after it on the shown one replaces it', async () => {
+		await open({ value: 3, ...signed });
+		await press('keypad-key-2');
+		await press('keypad-key-sign');
+		expect(shown()).toBe('−2');
+		await press('keypad-key-sign');
+		expect(shown()).toBe('2');
+		expect(sign()).toHaveAttribute('aria-pressed', 'false');
+		await press('keypad-key-sign');
+		await press('keypad-key-5');
+		expect(shown()).toBe('−25');
+		fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+		await act(async () => jest.runOnlyPendingTimers());
+		await press('cart-quantity-input');
+		await press('keypad-key-sign');
+		await press('keypad-key-4');
+		expect(shown()).toBe('−4');
+	});
+
+	it('the physical - is Return, and Escape keeps the stored quantity', async () => {
+		await open({ value: 2, ...signed });
+		panelKey('-');
+		expect(shown()).toBe('−2');
+		fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+		await act(async () => jest.runOnlyPendingTimers());
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it('a typed -0 commits nothing', async () => {
+		await open({ value: 3, ...signed });
+		await press('keypad-key-0');
+		await press('keypad-key-sign');
+		await press('keypad-key-done');
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it('a negative line rests and opens on a true minus, Return lit', async () => {
+		await open({ value: -2, ...signed });
+		expect(screen.getByTestId('cart-quantity-input')).toHaveTextContent('−2');
+		expect(shown()).toBe('−2');
+		expect(sign()).toHaveAttribute('aria-pressed', 'true');
+	});
+
+	it('− steps away from zero and + towards it, + disabled at −1; no trash below +1', async () => {
+		await open({ value: -2, ...signed });
+		const decrease = screen.getByTestId('keypad-key-decrease');
+		expect(decrease).toHaveAttribute('aria-label', 'One fewer');
+		await press('keypad-key-decrease');
+		expect(onChange).toHaveBeenLastCalledWith(-3);
+		expect(screen.getByTestId('keypad-key-increase')).not.toHaveAttribute('aria-disabled');
+		await press('keypad-key-increase');
+		await press('keypad-key-increase');
+		expect(onChange).toHaveBeenLastCalledWith(-1);
+		expect(screen.getByTestId('keypad-key-increase')).toHaveAttribute('aria-disabled', 'true');
+		await press('keypad-key-increase');
+		panelKey('ArrowUp');
+		expect(onChange).toHaveBeenCalledTimes(3);
+		expect(shown()).toBe('−1');
+		expect(screen.getByTestId('keypad-key-decrease')).toHaveAttribute('aria-label', 'One fewer');
+		expect(onRemove).not.toHaveBeenCalled();
+	});
+
+	it('at +1 the trash is still − and removes the line', async () => {
+		await open({ value: 1, ...signed });
+		expect(screen.getByTestId('keypad-key-decrease')).toHaveAttribute('aria-label', 'Remove');
+		await press('keypad-key-decrease');
+		expect(onRemove).toHaveBeenCalledTimes(1);
+	});
+
+	it('growing up, the Return row stays on the stepper: ✓, Return, the stepper last', async () => {
+		const rect = jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+		rect.mockReturnValue({ top: window.innerHeight - 100, height: 36 } as DOMRect);
+		await open(signed);
+		expect(screen.getByTestId('quantity-keypad-value').closest('[data-grow]')).toHaveAttribute(
+			'data-grow',
+			'up'
+		);
+		const rows = rowIds();
+		expect(rows[0]).toEqual(['keypad-key-1', 'keypad-key-2', 'keypad-key-3']);
+		expect(rows.slice(-3)).toEqual([
+			['keypad-key-done'],
+			['keypad-key-sign'],
+			['keypad-key-decrease', 'quantity-keypad-value', 'keypad-key-increase'],
+		]);
+		rect.mockRestore();
+	});
+
+	it('on a phone the sheet has Return between the stepper and 1 2 3, Done alone below', async () => {
+		await open({ value: 2, ...signed }, true);
+		const rows = rowIds();
+		expect(rows[1]).toEqual(['keypad-key-sign']);
+		expect(rows[rows.length - 1]).toEqual(['keypad-key-done']);
+		await press('keypad-key-sign');
+		expect(sign()).toHaveAttribute('aria-pressed', 'true');
+		await press('keypad-key-done');
+		expect(onChange).toHaveBeenCalledWith(-2);
+	});
+});

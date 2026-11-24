@@ -1,6 +1,7 @@
 import { createTestT } from '../../../../../jest/translate';
 import { salesFigures } from '../report/sales-figures';
 import { panelSpec } from './specs';
+import { panelCsv } from './export-csv';
 
 import type { RefundRow, ReportOrder } from '../context';
 
@@ -120,13 +121,40 @@ it('categories retain unknown and uncategorised rows and fractional quantities',
 		...data.figures,
 		categories: {
 			...data.figures.categories,
-			netOfRefunds: () => ({ parts, unknownLines: 0, totalLines: 0 }),
+			netOfRefunds: () => ({ parts, unknownLines: 0, totalLines: 0, total: 4 }),
 		},
 	};
 	expect(specOf('categories', data).rows.map((row) => row.cells)).toEqual([
 		['Unknown product', 'qty:1.5', '£3.00', '75.0%'],
 		['Uncategorised', 'qty:1', '£1.00', '25.0%'],
 	]);
+});
+
+it('the categories and brands Total row is the rounded total of the rows, net of refunds (F6)', () => {
+	const data = inputs(
+		[
+			{
+				total: '60.01',
+				line_items: [
+					{ product_id: 1, total: '40.005', quantity: 2 },
+					{ product_id: 2, total: '20.005', quantity: 1 },
+				],
+			},
+		] as ReportOrder[],
+		[{ line_items: [{ product_id: 1, total: '-20', quantity: -1 }] }] as RefundRow[]
+	);
+	const directory = [
+		{ id: 1, categories: [{ id: 2 }], brands: [{ id: 4 }] },
+		{ id: 2, categories: [{ id: 3 }], brands: [{ id: 4 }] },
+	];
+	data.view.directory = directory;
+	const total = data.figures.categories.netOfRefunds(directory).total;
+	expect(total).toBe(40.01);
+	for (const id of ['categories', 'brands'] as const) {
+		const spec = specOf(id, data);
+		expect(spec.totalRaw[2]).toBe(total);
+		expect(spec.total[2]).toBe(money(total));
+	}
 });
 
 it('the margin columns appear only when the feature is on', () => {
@@ -194,7 +222,7 @@ it('the brands spec', () => {
 		'£4.00',
 		'£6.00',
 		'60.0%',
-		'0.0%',
+		'100.0%',
 	]);
 });
 it('category panels keep assigned categories and translated parent chains', () => {
@@ -317,4 +345,25 @@ it('stores spec names stores and remainders with averages and a total', () => {
 	]);
 	expect(spec.totalRaw).toEqual(['Total', 5, 4, 20]);
 	expect(specOf('stores', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
+});
+
+it('marks order rows through the view without adding cells or CSV columns', () => {
+	const data = inputs([
+		{
+			uuid: 'a',
+			number: '42',
+			total: '10',
+			payment_method: 'cash',
+			meta_data: [{ key: '_pos_user', value: '7' }],
+		},
+	] as ReportOrder[]);
+	data.view.orderTime = () => '09:12';
+	const unmarked = specOf('orders', data);
+	Object.assign(data.view, { orderLate: () => true });
+	const marked = specOf('orders', data);
+	expect(marked.rows[0]).toMatchObject({ late: true });
+	expect(marked.rows[0].cells).toEqual(['#42', '09:12', 'Sam', 'Cash', '£10.00', 'Yes']);
+	expect(marked.rows[0].cells).toEqual(unmarked.rows[0].cells);
+	expect(marked.rows[0].raw).toEqual(unmarked.rows[0].raw);
+	expect(panelCsv(marked)).toBe(panelCsv(unmarked));
 });

@@ -26,6 +26,10 @@ const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 /** The catalog before it loads, and the prop default: no gateway has a stored status. */
 const NO_SETTLED_ORDER_STATUSES: Record<string, string | null> = {};
 
+/** `access_token` is optional: a missing, empty or stringified-undefined token never goes on the URL. */
+const isUsableToken = (value: unknown): value is string =>
+	typeof value === 'string' && value !== '' && value !== 'undefined';
+
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: EngineRecord<'orders'>;
 	/** `stage` when hosted in the wide checkout pane, where no checkout route exists to replace. */
@@ -124,29 +128,30 @@ export function PaymentWebview({
 		logger: orderLogger,
 	});
 
+	const hasToken = isUsableToken(jwt);
 	const paymentURLWithToken = React.useMemo(() => {
-		if (!paymentURL) return '';
+		if (!paymentURL || !hasToken) return '';
 		// Append the JWT token as a query parameter to the payment URL
 		const url = new URL(paymentURL as string);
 		url.searchParams.append('token', jwt);
 		return url.toString();
-	}, [paymentURL, jwt]);
+	}, [paymentURL, jwt, hasToken]);
 
 	React.useEffect(() => {
 		// A new token (this refresh or a background one) allows a refresh again.
 		sessionRefreshRefused.current = false;
 	}, [paymentURLWithToken]);
 
-	// Pin the frame's message origin to the store: on web the shared WebView then drops
-	// `message` events from any other window or origin (Pro posts with '*', which is the
+	// Pin the frame's message origin to the store, token or not: on web the shared WebView then
+	// drops `message` events from any other window or origin (Pro posts with '*', which is the
 	// sender's target; the receiver still sees the store's origin).
 	const frameOrigin = React.useMemo(() => {
 		try {
-			return paymentURLWithToken ? new URL(paymentURLWithToken).origin : undefined;
+			return paymentURL ? new URL(paymentURL).origin : undefined;
 		} catch {
 			return undefined;
 		}
-	}, [paymentURLWithToken]);
+	}, [paymentURL]);
 
 	const { poll, pollAfterGrace, stop } = useServerTruthPoll({
 		http,
@@ -168,6 +173,28 @@ export function PaymentWebview({
 		onLaterDocument: pollAfterGrace,
 		logger: orderLogger,
 	});
+
+	// No token: refresh once per URL (held, so a blank frame never reports ready); none is an expiry.
+	const missingTokenRefreshedFor = React.useRef<string | null>(null);
+	const { hold, release, expire } = frame;
+	React.useEffect(() => {
+		if (!paymentURL || hasToken || sessionRefreshInFlight.current) return;
+		if (missingTokenRefreshedFor.current === paymentURL) return;
+		missingTokenRefreshedFor.current = paymentURL;
+		sessionRefreshInFlight.current = true;
+		hold();
+		void refreshAccessToken()
+			.then((token) => {
+				if (unmountedRef.current || isUsableToken(token)) return;
+				sessionRefreshRefused.current = requestStateManager.isAuthFailed();
+				expire();
+				warnReopen();
+			})
+			.finally(() => {
+				sessionRefreshInFlight.current = false;
+				release();
+			});
+	}, [paymentURL, hasToken, refreshAccessToken, hold, release, expire, warnReopen]);
 
 	const handleSessionExpired = async (messageOrderId: number) => {
 		if (messageOrderId !== orderId) {

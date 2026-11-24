@@ -4,9 +4,11 @@ import { File, Paths } from 'expo-file-system';
 import { AppInfo } from '../app-info';
 import { DEFAULT_APP_SCHEME } from '../app-info/scheme';
 import {
+	BUILD_COMMIT,
 	buildCaptureOptions,
 	createPendingCaptures,
 	prepareEvent,
+	scrubBreadcrumb,
 	SENTRY_DSN,
 } from './sentry-core';
 
@@ -65,7 +67,11 @@ function initialize(): void {
 		environment: AppInfo.platform,
 		sendDefaultPii: false,
 		beforeSend: prepareEvent,
+		beforeBreadcrumb: scrubBreadcrumb,
 		enableWatchdogTerminationTracking: true,
+		// iOS native request breadcrumbs bypass beforeBreadcrumb, so a URL query could reach Sentry unmasked.
+		enableNetworkBreadcrumbs: false,
+		initialScope: { tags: { build_commit: BUILD_COMMIT } },
 	});
 	isInitialized = true;
 	const file = installIdFile();

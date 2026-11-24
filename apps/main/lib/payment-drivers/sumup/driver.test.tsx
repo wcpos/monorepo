@@ -485,6 +485,7 @@ it('registers a stable driver and bootstraps only a served enabled SumUp device 
 			methods: values,
 			byId: new Map(values.map((value) => [value.id, value])),
 			contract: 'test',
+			defaultMethodId: null,
 			loaded: true,
 			unsupportedSchema: false,
 		});

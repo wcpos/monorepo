@@ -1,6 +1,8 @@
 import type * as React from 'react';
 
-import { Calendar } from './index';
+// The gallery renders the eager implementation: `index.tsx` lazy-loads it behind a null Suspense fallback, and a
+// shot that landed before the chunk resolved captured an empty 608×32 cell (#3635).
+import { Calendar, DayCalendar } from './calendar-impl';
 
 const examples: ({ id: string } & React.ComponentProps<typeof Calendar>)[] = [
 	// A month that never holds today: the calendar marks today in the primary colour, and a
@@ -11,7 +13,18 @@ const examples: ({ id: string } & React.ComponentProps<typeof Calendar>)[] = [
 		maxDate: '2026-06-24',
 	},
 ];
-export const stories = examples.map(({ id, ...props }) => ({
-	id,
-	render: () => <Calendar {...props} />,
-}));
+export const stories = [
+	...examples.map(({ id, ...props }) => ({ id, render: () => <Calendar {...props} /> })),
+	{
+		id: 'day',
+		render: () => (
+			<DayCalendar
+				value="2026-06-08"
+				currentDay="2026-06-10"
+				currentDayLabel="Current day"
+				maxDate="2026-06-24"
+				onValueChange={() => {}}
+			/>
+		),
+	},
+];

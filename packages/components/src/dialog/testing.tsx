@@ -138,5 +138,12 @@ export function DialogFooter(props: Real.DialogFooterProps) {
 			{apart ? <div>{trailing}</div> : trailing}
 		</>
 	);
-	return testID ? <div data-testid={testID}>{both}</div> : both;
+	// The footer's `wrapToEnd` shows as `data-wrap-to-end`; without it the output is unchanged.
+	return testID || props.wrapToEnd ? (
+		<div data-testid={testID} data-wrap-to-end={props.wrapToEnd ? 'true' : undefined}>
+			{both}
+		</div>
+	) : (
+		both
+	);
 }

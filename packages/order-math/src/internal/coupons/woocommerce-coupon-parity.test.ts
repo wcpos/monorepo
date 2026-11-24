@@ -504,3 +504,30 @@ describe('WooCommerce coupon parity — discount never exceeds cart value', () =
 		expect(c2.totalDiscount).toBe(72);
 	});
 });
+
+describe('WooCommerce coupon parity — a returned line (get_items_to_apply_coupon skips 0 >= quantity)', () => {
+	it('10% off {A +2 × 10, B −1 × 4} discounts A only', () => {
+		const result = calculateCouponDiscount(coupon({ discount_type: 'percent', amount: '10' }), [
+			item(1, 10, 2),
+			item(2, 4, -1),
+		]);
+		expect(result.totalDiscount).toBe(2);
+		expect(result.perItem.map(({ product_id }) => product_id)).toEqual([1]);
+	});
+
+	it('a returned line takes no share of a fixed cart amount or a unit limit', () => {
+		const fixed = calculateCouponDiscount(coupon({ discount_type: 'fixed_cart', amount: '5' }), [
+			item(1, 10, 2),
+			item(2, 4, -1),
+		]);
+		expect(fixed.totalDiscount).toBe(5);
+		expect(fixed.perItem.filter(({ discount }) => discount !== 0)).toEqual([
+			expect.objectContaining({ product_id: 1, discount: 5 }),
+		]);
+		const limited = calculateCouponDiscount(
+			coupon({ discount_type: 'percent', amount: '10', limit_usage_to_x_items: 1 }),
+			[item(2, 4, -1), item(1, 10, 2)]
+		);
+		expect(limited.totalDiscount).toBe(1);
+	});
+});

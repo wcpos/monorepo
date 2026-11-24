@@ -2,7 +2,8 @@
  * The cart line's swipe, as numbers. Everything the strip decides from a position or a
  * release lives here so it can be read and tested without a gesture.
  *
- * A pull has three rests: home, open (Edit · Remove showing) and gone. Between open and gone
+ * A pull has three rests: home, open (Edit · Remove showing, and Close after them on a fine
+ * pointer: the strip is that much wider, and so is the band's start) and gone. Between open and gone
  * is the remove point — "the line" — where Remove swallows Edit, the row takes its red and
  * one haptic ticks; let go past it and the line leaves (chosen 2026-10-08).
  */
@@ -19,6 +20,34 @@ export const REMOVE_BAND = 56;
 export const REMOVE_FLICK = 800;
 /** Past the line the Remove label rides this far in from the row's trailing edge. */
 export const LABEL_INSET = 20;
+
+/**
+ * The Close tile is never narrower than the Total column's floor (`min-w-18` in the cart table).
+ */
+export const CLOSE_MIN = 72;
+
+/**
+ * Close's width (fine pointer): the press target's footprint (`reach`, the total's leading edge to
+ * the row's end), so the click that opened the strip rests on Close, never on Remove, and a double
+ * click opens and closes (the 2026-11-21 board). A target wider than the row can spare (the Total
+ * column hidden, so the last visible cell is the target) still leaves Edit and Remove in the row.
+ */
+export function closeMinWidth(reach: number, rowWidth: number, editRemove: number): number {
+	return Math.max(CLOSE_MIN, Math.min(reach, rowWidth - editRemove));
+}
+
+/**
+ * The clicks behind a press: react-native-web presses Enter or Space with a pointerless click
+ * (`detail` 0, measured in Chromium) and counts a double click's second click as 2; native has none.
+ */
+function clicks(event: unknown): number | undefined {
+	const press = event as { detail?: number; nativeEvent?: { detail?: number } } | undefined;
+	return (press?.nativeEvent ?? press)?.detail;
+}
+/** Enter or Space. */
+export const byKey = (event: unknown) => clicks(event) === 0;
+/** The second click of a double click never removes or edits a line, whatever the geometry. */
+export const secondClick = (event: unknown) => (clicks(event) ?? 0) > 1;
 
 /** How far the row has to travel before letting go removes it. */
 export function removePoint(rowWidth: number, stripWidth: number): number {
@@ -63,10 +92,50 @@ export function editOffset(
 }
 
 /**
- * Remove's travel. At rest it is the block at the row's far right; past the line it rides
- * beside the row's trailing edge, `LABEL_INSET` in, and never right of its rest.
+ * Remove's travel. At rest its leading edge sits `trailing` in from the row's far right (its own
+ * width, plus the Close tile after it on a fine pointer); past the line it rides beside the row's
+ * trailing edge, `LABEL_INSET` in, and never right of its rest.
  */
-export function removeOffset(revealed: number, removeWidth: number, swallow: number): number {
+export function removeOffset(revealed: number, trailing: number, swallow: number): number {
 	'worklet';
-	return 0 - swallow * Math.max(0, revealed - removeWidth - LABEL_INSET);
+	return 0 - swallow * Math.max(0, revealed - trailing - LABEL_INSET);
+}
+
+/**
+ * The row body's travel. It holds still while the strip slides in over its figures, so the
+ * quantity and the name stay readable at the open rest, and moves only with the pull past it.
+ */
+export function bodyOffset(revealed: number, stripWidth: number): number {
+	'worklet';
+	return 0 - Math.max(0, revealed - stripWidth);
+}
+
+/** The strip's travel inside its window: in from the trailing edge until the open rest, then still. */
+export function stripOffset(revealed: number, stripWidth: number): number {
+	'worklet';
+	return Math.max(0, stripWidth - revealed);
+}
+
+/**
+ * The strip's window is the row wide and slides in from the trailing edge: this is how far right
+ * of the row's left edge its leading edge sits. The row's own clip hides what is pushed past it.
+ */
+export function windowOffset(revealed: number, rowWidth: number): number {
+	'worklet';
+	return Math.max(0, rowWidth - revealed);
+}
+
+/** The strip's counter-slide inside the moving window, so it sits in the row where it always did. */
+export function stripInWindow(revealed: number, stripWidth: number, rowWidth: number): number {
+	'worklet';
+	return stripOffset(revealed, stripWidth) - windowOffset(revealed, rowWidth);
+}
+
+/**
+ * The window's opacity, always set: Reanimated keeps the last value of a key that leaves an animated
+ * style, so the window is hidden while its row is unmeasured and shown again once it is.
+ */
+export function windowOpacity(rowWidth: number): number {
+	'worklet';
+	return rowWidth > 0 ? 1 : 0;
 }

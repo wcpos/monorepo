@@ -52,17 +52,41 @@ function keptTenders(
 	return differing.length ? Object.fromEntries(differing) : null;
 }
 
+// Two closes of one session never run side by side (#3531 review), a recovery during a manual close
+// or a manual close during a recovery: a second close would rewrite the closure, drop its receipt
+// snapshot and record the close twice, so it joins the running one (and the bridge skips it).
+const closing = new Map<string, Promise<CloseResult>>();
+/** Whether `closeRegister` is still running for this session, on this device. */
+export const isCloseInFlight = (sessionId: string) => closing.has(sessionId);
+
 /**
  * Close the register, whole: the status transition, the wait for the session's accounting, the
  * closure (its expected figures derived once, by `writeClosure`), a refused close's requeue, the
  * device's live copy and the audit fact.
  */
-export async function closeRegister(
+export function closeRegister(
+	ctx: CloseContext,
+	sessionId: string,
+	count: RegisterCount
+): Promise<CloseResult> {
+	// A close already running is joined, its count kept (both take the recorded count here).
+	const running = closing.get(sessionId);
+	if (running) return running;
+	const run = closeOnce(ctx, sessionId, count).finally(() => {
+		if (closing.get(sessionId) === run) closing.delete(sessionId);
+	});
+	closing.set(sessionId, run);
+	return run;
+}
+
+async function closeOnce(
 	ctx: CloseContext,
 	sessionId: string,
 	count: RegisterCount
 ): Promise<CloseResult> {
 	const { storeDB, userDB, siteUuid, credentials } = ctx;
+	// The scope whose orders this close reads; a store switch mid-close must not write its closure.
+	const scope = ctx.engine.active()?.scopeId ?? null;
 	const current = await registerCollections(storeDB).register_sessions.findOne(sessionId).exec();
 	if (!current) throw new RegisterSessionRequiredError();
 	// A retry of a refused close (#3304) closes again, so a corrected count reaches the status
@@ -88,6 +112,9 @@ export async function closeRegister(
 		(id === credentials.id ? credentials : cashiers.find((row) => row.id === id))?.display_name ??
 		'';
 	const accounting = await settleSessionAccounting(ctx.engine, closed);
+	// The status transition stands; the bridge recovers the unwritten close on this store's next cycle.
+	if ((ctx.engine.active()?.scopeId ?? null) !== scope)
+		throw new Error('The store changed while the close was settling; the closure was not written');
 	// Read after the accounting's wait, so a movement a refresh stored during it is in the closure.
 	const movements = await registerCollections(storeDB)
 		.cash_movements.find({ selector: { session_id: sessionId } })

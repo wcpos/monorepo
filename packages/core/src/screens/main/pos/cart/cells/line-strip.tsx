@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { Button } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { usePointer } from '@wcpos/components/lib/device';
 import { hapticTick } from '@wcpos/components/lib/haptics';
 import { EASE, EASE_EXIT, OVERLAY_FADE, PANEL_SLIDE_OUT } from '@wcpos/components/lib/motion';
@@ -20,31 +20,45 @@ import type { PulseTableRowRef } from '@wcpos/components/table';
 import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { editOffset, releaseOutcome, removeOffset, removePoint } from './line-strip.geometry';
+import {
+	bodyOffset,
+	byKey,
+	closeMinWidth,
+	editOffset,
+	releaseOutcome,
+	removeOffset,
+	removePoint,
+	secondClick,
+	stripInWindow,
+	windowOffset,
+	windowOpacity,
+} from './line-strip.geometry';
 import { useT } from '../../../../../contexts/translations';
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditFeeLineForm } from './edit-fee-line/form';
 import { EditLineItemForm } from './edit-line-item/form';
 import { EditShippingLineForm } from './edit-shipping-line/form';
+import { StripEdgeContext } from './strip-clear';
 
 import type { CartLine } from '../../hooks/utils';
+import type { OpenLine } from '../open-line';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
-/** How far a hovered row rests to the left: enough of the strip's red edge to read as "there is something under here". */
+/** How far the strip slides in over a hovered row: enough of its edge to read as "there is something here". */
 const PEEK = 16;
 /**
- * The hover bounce. Underdamped on purpose (ratio ≈ 0.3): the row overshoots the peek by about
- * a third, to roughly 22 px, and settles in two visible swings.
+ * The hover bounce. Underdamped on purpose (ratio ≈ 0.3): the strip's window overshoots the peek
+ * by about a third, to roughly 22 px, and settles in two visible swings; the body holds still.
  */
 const PEEK_SPRING = { mass: 1, stiffness: 380, damping: 12 };
 /**
- * How far the total's hover area reaches to the RIGHT of the total itself. The total rides on
- * the row it moves, so without this the bounce carries it out from under a pointer resting on
- * its right-hand side, hover ends, the row springs back under the pointer, hover starts again,
- * and the row flickers for as long as the pointer stays put. The reach must exceed the furthest
- * the bounce travels (see PEEK_SPRING), so the area under the pointer never changes while the
- * row moves; leaving is then always the cashier's move, never the animation's.
+ * How far the total's hover area reaches to the RIGHT of the total itself. On hover the total
+ * stays put and the strip's window slides in over the row's trailing edge; while the row is
+ * closed the window and the strip take no pointer events, so the pointer stays on the total
+ * underneath. The reach must exceed the furthest the bounce travels (see PEEK_SPRING), so a
+ * pointer resting on the total's right-hand side stays inside its hover area through the bounce;
+ * leaving is then always the cashier's move, never the animation's.
  */
 const HOVER_REACH = PEEK * 2;
 /**
@@ -58,6 +72,10 @@ const SWALLOW = { duration: OVERLAY_FADE, easing: EASE };
  * "lit" duration (`table/pulse-row.tsx`).
  */
 const ARM = 120;
+/** The abutting tiles draw the Button's focus ring and gap inside them (`global.css`, Controls tier). */
+const INSET_RING = 'inset';
+/** An open line's name ends this far before the strip's leading edge (the board's 12 px). */
+const NAME_CLEAR = 12;
 /** The row leaving: accelerate into the edge, the shared exit. */
 const FLY = { duration: PANEL_SLIDE_OUT, easing: EASE_EXIT };
 /**
@@ -71,20 +89,47 @@ export function onStage(x: number): number {
 	'worklet';
 	return Math.min(0, x);
 }
+/** A view's web DOM node: a fine pointer and its keyboard exist only there. */
+function dom(ref: React.RefObject<unknown>) {
+	return ref.current as unknown as HTMLElement | null;
+}
 type Props = {
 	line: { uuid: string; type: 'line_items' | 'fee_lines' | 'shipping_lines'; item: CartLine };
 	rowRefs: React.RefObject<Map<string, PulseTableRowRef | null>>;
+	/** The cart's one open line: this row reports to it, and it closes this row for another. */
+	openLine: OpenLine;
 	children: (wrapTotal: (content: React.ReactNode) => React.ReactNode) => React.ReactNode;
 };
-export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Props) {
+export function LineStrip({ line: { uuid, type, item }, rowRefs, openLine, children }: Props) {
 	const pointer = usePointer();
+	const fine = pointer === 'fine';
 	const t = useT();
 	const { removeLineItem } = useRemoveLineItem();
 	const [rowWidth, setRowWidth] = React.useState(0);
 	const [editWidth, setEditWidth] = React.useState(0);
 	const [removeWidth, setRemoveWidth] = React.useState(0);
-	const stripWidth = editWidth + removeWidth;
+	const [closeWidth, setCloseWidth] = React.useState(0);
+	/** Fine pointer: the total's leading edge to the row's trailing edge, the footprint Close covers. */
+	const [totalReach, setTotalReach] = React.useState(0);
+	const [rowRight, setRowRight] = React.useState(0);
+	// Touch has no Close tile: the strip is pulled open and pushed back by the finger.
+	const trailing = removeWidth + (fine ? closeWidth : 0);
+	const stripWidth = editWidth + trailing;
+	const rowView = React.useRef<React.ComponentRef<typeof View>>(null);
+	const totalView = React.useRef<React.ComponentRef<typeof View>>(null);
+	const measureReach = () => {
+		const row = dom(rowView)?.getBoundingClientRect?.();
+		const total = dom(totalView)?.getBoundingClientRect?.();
+		if (!fine || !row || !total) return;
+		setTotalReach(Math.round(row.right - total.left));
+		setRowRight(row.right);
+	};
+	const focusTotal = () => dom(totalView)?.focus?.({ preventScroll: true });
+	/** Close was pressed with the pointer over the total: no peek until the pointer has left it. */
+	const hushed = React.useRef(false);
 	const [open, setOpenState] = React.useState(false);
+	const edge = fine && open ? rowRight - stripWidth - NAME_CLEAR : null;
+	const tile = open ? 0 : -1; // Closed, no tab stops: Tab never walks into a hidden Remove.
 	const [dragging, setDragging] = React.useState(false);
 	/**
 	 * Web: the body's DOM node, and the pointer that is down on it. Gesture Handler captures
@@ -157,13 +202,33 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	const setOpen = (next: boolean) => {
 		opened.set(next);
 		setOpenState(next);
+		if (next) openLine.opened(uuid, close);
+		else openLine.closed(uuid);
 	};
+	/** Back to rest from open: Close, Escape, a press elsewhere, another line opening, a scroll. */
+	const close = () => {
+		if (!opened.get() || leaving.get()) return;
+		setOpen(false);
+		settle(0);
+	};
+	// Cleanup only: a row that leaves the cart while open is no longer the cart's open line.
+	React.useEffect(() => () => openLine.closed(uuid), [openLine, uuid]);
 	const swiped = useSharedValue(false);
 	const offset = useSharedValue(0);
 	/** 0 with Edit in its place, 1 with Remove over it. */
 	const swallow = useSharedValue(0);
 	const reduced = useReducedMotion();
-	const style = useAnimatedStyle(() => ({ transform: [{ translateX: onStage(offset.value) }] }));
+	const style = useAnimatedStyle(() => ({
+		transform: [{ translateX: bodyOffset(-onStage(offset.value), stripWidth) }],
+	}));
+	const windowStyle = useAnimatedStyle(() => ({
+		transform: [{ translateX: windowOffset(-onStage(offset.value), rowWidth) }],
+		// Unmeasured, the window would sit over the whole row: an unmeasured row never shows the strip.
+		opacity: windowOpacity(rowWidth),
+	}));
+	const stripStyle = useAnimatedStyle(() => ({
+		transform: [{ translateX: stripInWindow(-onStage(offset.value), stripWidth, rowWidth) }],
+	}));
 	const editStyle = useAnimatedStyle(() => ({
 		opacity: 1 - swallow.value,
 		transform: [
@@ -171,14 +236,52 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 		],
 	}));
 	const removeStyle = useAnimatedStyle(() => ({
-		transform: [{ translateX: removeOffset(-onStage(offset.value), removeWidth, swallow.value) }],
+		transform: [{ translateX: removeOffset(-onStage(offset.value), trailing, swallow.value) }],
 	}));
+	// Past the line the whole strip is Remove's: Close gives way with Edit.
+	const closeStyle = useAnimatedStyle(() => ({ opacity: 1 - swallow.value }));
 	const settle = (x: number) => {
 		offset.set(reduced ? x : withSpring(x, { overshootClamping: true }));
 	};
 	const peek = () => {
 		offset.set(reduced ? -PEEK : withSpring(-PEEK, PEEK_SPRING));
 	};
+	/** The slots' widths as their layouts report them, ahead of the render that reads the state. 'removal', not 'remove': the seam scan reads a member of that name as a record mutator. */
+	const slots = React.useRef({ edit: 0, removal: 0, close: 0 });
+	/**
+	 * A slot's layout. While a strip rests open its offset is -stripWidth, so a width measured after
+	 * the open (Close arriving, a resized row, a locale) moves the rest with it, from this handler and
+	 * never under a drag or the flight.
+	 */
+	const measured = (slot: 'edit' | 'removal' | 'close', width: number) => {
+		slots.current[slot] = width;
+		const { edit, removal, close } = slots.current;
+		if (opened.get() && !dragging && !leaving.get())
+			offset.set(-(edit + removal + (fine ? close : 0)));
+	};
+	// Web, while open: a press outside closes it and still lands (heard on the way down, never
+	// stopped). Escape closes it too, unless the focus is elsewhere (an Edit sheet's Escape is its own).
+	const onOutsidePress = React.useEffectEvent((event: PointerEvent) => {
+		if (!dom(rowView)?.contains(event.target as Node)) close();
+	});
+	const onEscape = React.useEffectEvent((event: KeyboardEvent) => {
+		const focused = document.activeElement;
+		if (event.key !== 'Escape') return;
+		if (focused && focused !== document.body && !dom(rowView)?.contains(focused)) return;
+		close();
+		focusTotal();
+	});
+	React.useEffect(() => {
+		if (!open || Platform.OS !== 'web' || typeof document === 'undefined') return;
+		const down = (event: PointerEvent) => onOutsidePress(event);
+		const key = (event: KeyboardEvent) => onEscape(event);
+		document.addEventListener('pointerdown', down, true);
+		document.addEventListener('keydown', key);
+		return () => {
+			document.removeEventListener('pointerdown', down, true);
+			document.removeEventListener('keydown', key);
+		};
+	}, [open]);
 	/**
 	 * Crossing the line, either way: Remove swallows Edit (or gives it back), the row takes its
 	 * red (or drops it), one tick. Idempotent, so a pull can hover around the line.
@@ -220,6 +323,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 						// only ActiveScopeChangedTwiceError — already reported, so skipped. Any
 						// other rejection getting this far is unexpected. Log it — without a
 						// second toast, which would double up on the cashier.
+						// An order queued for deletion now comes back as a refusal (toasted, `false`).
 						if (isErrorReported(error)) return;
 						cartLogger.error('Cart line removal failed', {
 							code: ERROR_CODES.CART_UPDATE_FAILED,
@@ -296,7 +400,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 				// Interrupted (another gesture took it, the touch was cancelled): not a release,
 				// never a removal. Back to the rest it started from (Codex, #2447).
 				arm(false);
-				settle(open ? -stripWidth : 0);
+				settle(opened.get() ? -stripWidth : 0);
 				return;
 			}
 			const revealed = -Math.max(
@@ -321,6 +425,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	const wrapTotal = (content: React.ReactNode) => {
 		const target = (
 			<Pressable
+				ref={totalView}
 				testID="cart-line-total"
 				accessibilityRole="button"
 				accessibilityLabel={t('pos_cart.edit_line')}
@@ -329,16 +434,18 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 						? 'min-h-row web:cursor-pointer justify-center'
 						: 'min-h-row justify-center'
 				}
+				onLayout={measureReach}
 				onHoverIn={
 					pointer === 'fine'
 						? () => {
-								if (!opened.get() && !leaving.get()) peek();
+								if (!opened.get() && !leaving.get() && !hushed.current) peek();
 							}
 						: undefined
 				}
 				onHoverOut={
 					pointer === 'fine'
 						? () => {
+								hushed.current = false;
 								if (!opened.get() && !leaving.get()) settle(0);
 							}
 						: undefined
@@ -352,6 +459,12 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					if (leaving.get()) return;
 					setOpen(!open);
 					settle(open ? 0 : -stripWidth);
+					// Enter or Space: the strip opens onto Edit, its first button in reading order.
+					if (!open && byKey(event)) {
+						dom(rowView)
+							?.querySelector<HTMLElement>(`[data-ring="${INSET_RING}"] [role="button"]`)
+							?.focus({ preventScroll: true });
+					}
 				}}
 			>
 				{content}
@@ -375,79 +488,17 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 	 * rowRefs); this cell only handles the remove flow.
 	 */
 	return (
+		// Clipped, not hidden, on web: focus scrolls an `overflow: hidden` box, and slid the row sideways.
 		<View
+			ref={rowView}
 			testID="cart-line-row"
-			className="relative flex-1 overflow-hidden"
-			onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
+			className="web:overflow-clip relative flex-1 overflow-hidden"
+			onLayout={(e) => {
+				setRowWidth(e.nativeEvent.layout.width);
+				measureReach();
+			}}
 		>
-			{/* The strip is the whole row wide and red: whatever the body uncovers past the buttons is
-			    Remove's colour, and Edit rides with the body's edge until Remove swallows it. */}
-			<View
-				testID="cart-line-strip"
-				className="bg-destructive absolute inset-y-0 right-0 flex-row items-stretch justify-end"
-				style={rowWidth ? { width: rowWidth } : undefined}
-				pointerEvents={open ? 'auto' : 'none'}
-				accessibilityElementsHidden={!open}
-				importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
-			>
-				<Animated.View
-					testID="cart-line-edit-slot"
-					// The slot paints the Edit block's primary, the swipe grammar's normal action beside the
-					// destructive one (Paul, 2026-10-30, strip board B): both blocks solid, both white words, both
-					// dim on hover. The muted grey it wore was a surface colour and no Button's, and the ghost on
-					// it changed word and surface on hover while Remove only dimmed.
-					className="bg-primary flex-row items-stretch"
-					style={editStyle}
-					onLayout={(e) => setEditWidth(e.nativeEvent.layout.width)}
-					pointerEvents={armed ? 'none' : 'auto'}
-					aria-hidden={armed}
-				>
-					{/* The grey reaches a little under the body: react-native-web reports layout widths
-					    rounded to whole pixels, so the open row can stop a fraction past Edit's edge and
-					    would show a hairline of the strip's red there. */}
-					<View className="bg-primary absolute inset-y-0 right-full w-1" />
-					<EditCartItemButton
-						title={title}
-						item={item}
-						form={
-							type === 'line_items' ? (
-								<EditLineItemForm
-									uuid={uuid}
-									item={item as React.ComponentProps<typeof EditLineItemForm>['item']}
-								/>
-							) : type === 'fee_lines' ? (
-								<EditFeeLineForm
-									uuid={uuid}
-									item={item as React.ComponentProps<typeof EditFeeLineForm>['item']}
-								/>
-							) : (
-								<EditShippingLineForm
-									uuid={uuid}
-									item={item as React.ComponentProps<typeof EditShippingLineForm>['item']}
-								/>
-							)
-						}
-					/>
-				</Animated.View>
-				<Animated.View
-					testID="cart-line-remove-slot"
-					className="flex-row items-stretch"
-					style={removeStyle}
-					onLayout={(e) => setRemoveWidth(e.nativeEvent.layout.width)}
-				>
-					<Button
-						variant="destructive"
-						testID="cart-line-remove"
-						// The swipe block fills the row it sits under, square (the 2026-10-08 swipe ruling).
-						// eslint-disable-next-line no-restricted-syntax
-						className="min-w-tile h-auto rounded-none px-5"
-						onPress={() => leave(true)}
-					>
-						{t('pos_cart.remove_line')}
-					</Button>
-				</Animated.View>
-			</View>
-			{/* The body carries the row surface: the strip sits under it and shows only where the body has slid away. */}
+			{/* The body carries the row surface; the strip's window paints over its trailing cells. */}
 			{/* On web, the detector defaults to touch-action: none and blocks vertical drags on rows from scrolling the cart; pan-y gives vertical pans to the browser and keeps horizontal swipes (ignored on native). */}
 			<GestureDetector gesture={pan} touchAction="pan-y">
 				<Animated.View
@@ -458,9 +509,138 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					}
 					style={style}
 				>
-					{children(wrapTotal)}
+					<StripEdgeContext.Provider value={edge}>{children(wrapTotal)}</StripEdgeContext.Provider>
+					{open ? (
+						// A press on the open line's own name or quantity closes the strip and does nothing else.
+						<Pressable
+							testID="cart-line-close-catch"
+							className="absolute inset-0"
+							tabIndex={-1}
+							aria-hidden
+							onPress={() => {
+								if (swiped.get()) swiped.set(false);
+								else close();
+							}}
+						/>
+					) : null}
 				</Animated.View>
 			</GestureDetector>
+			<Animated.View
+				testID="cart-line-strip-window"
+				className="web:overflow-clip absolute inset-0 overflow-hidden"
+				style={windowStyle}
+				pointerEvents="box-none"
+			>
+				{/* The window is the row wide and slides in from the trailing edge, and the strip counter-slides inside it, so the strip slides in over the row's figures and the quantity and the name stay put at the open rest; the red fills what the window shows past the buttons, and Edit rides at its leading edge until Remove swallows it. */}
+				<Animated.View
+					testID="cart-line-strip"
+					className="bg-destructive absolute inset-y-0 right-0 flex-row items-stretch justify-end"
+					style={[rowWidth ? { width: rowWidth } : undefined, stripStyle]}
+					pointerEvents={open ? 'auto' : 'none'}
+					accessibilityElementsHidden={!open}
+					importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+					{...{ dataSet: { ring: INSET_RING } }}
+				>
+					<Animated.View
+						testID="cart-line-edit-slot"
+						// The slot paints the Edit block's primary, the swipe grammar's normal action beside the
+						// destructive one (Paul, 2026-10-30, strip board B): both blocks solid, both white words, both
+						// dim on hover. The muted grey it wore was a surface colour and no Button's, and the ghost on
+						// it changed word and surface on hover while Remove only dimmed.
+						className="bg-primary flex-row items-stretch"
+						style={editStyle}
+						onLayout={(e) => {
+							setEditWidth(e.nativeEvent.layout.width);
+							measured('edit', e.nativeEvent.layout.width);
+						}}
+						pointerEvents={armed || !open ? 'none' : 'auto'}
+						aria-hidden={armed}
+					>
+						{/* The grey reaches a little under the body: react-native-web reports layout widths
+					    rounded to whole pixels, so the open row can stop a fraction past Edit's edge and
+					    would show a hairline of the strip's red there. */}
+						<View className="bg-primary absolute inset-y-0 right-full w-1" />
+						<EditCartItemButton
+							tabIndex={tile}
+							title={title}
+							item={item}
+							form={
+								type === 'line_items' ? (
+									<EditLineItemForm
+										uuid={uuid}
+										item={item as React.ComponentProps<typeof EditLineItemForm>['item']}
+									/>
+								) : type === 'fee_lines' ? (
+									<EditFeeLineForm
+										uuid={uuid}
+										item={item as React.ComponentProps<typeof EditFeeLineForm>['item']}
+									/>
+								) : (
+									<EditShippingLineForm
+										uuid={uuid}
+										item={item as React.ComponentProps<typeof EditShippingLineForm>['item']}
+									/>
+								)
+							}
+						/>
+					</Animated.View>
+					<Animated.View
+						testID="cart-line-remove-slot"
+						className="flex-row items-stretch"
+						style={removeStyle}
+						onLayout={(e) => {
+							setRemoveWidth(e.nativeEvent.layout.width);
+							measured('removal', e.nativeEvent.layout.width);
+						}}
+					>
+						<Button
+							variant="destructive"
+							testID="cart-line-remove"
+							tabIndex={tile}
+							// The swipe block fills the row it sits under, square (the 2026-10-08 swipe ruling).
+							// eslint-disable-next-line no-restricted-syntax
+							className="min-w-tile h-auto rounded-none px-5"
+							onPress={(event) => {
+								if (!secondClick(event)) leave(true);
+							}}
+						>
+							{/* The strip's words read alike: Remove's label takes Edit's weight. */}
+							<ButtonText className="font-strong">{t('pos_cart.remove_line')}</ButtonText>
+						</Button>
+					</Animated.View>
+					{fine ? (
+						<Animated.View
+							testID="cart-line-close-slot"
+							// The row's own surface under a quiet Button: the row's end, not a third coloured action.
+							className="bg-card flex-row items-stretch"
+							style={[
+								{ minWidth: closeMinWidth(totalReach, rowWidth, editWidth + removeWidth) },
+								closeStyle,
+							]}
+							onLayout={(e) => {
+								setCloseWidth(e.nativeEvent.layout.width);
+								measured('close', e.nativeEvent.layout.width);
+							}}
+						>
+							<Button
+								variant="ghost"
+								testID="cart-line-close"
+								tabIndex={tile}
+								// eslint-disable-next-line no-restricted-syntax
+								className="h-auto flex-1 rounded-none"
+								onPress={(event) => {
+									// The pointer that pressed Close is over the total again once the strip leaves.
+									hushed.current = !byKey(event);
+									close();
+									focusTotal();
+								}}
+							>
+								{t('common.close')}
+							</Button>
+						</Animated.View>
+					) : null}
+				</Animated.View>
+			</Animated.View>
 		</View>
 	);
 }

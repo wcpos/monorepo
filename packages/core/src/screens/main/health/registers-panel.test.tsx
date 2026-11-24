@@ -701,7 +701,7 @@ it('renders unregistered tills with their count and example order numbers', () =
 		"Sales from tills this store hasn't registered"
 	);
 	expect(screen.getByTestId('health-unregistered').textContent).toContain(
-		'Nothing is lost. Register the till under POS settings › Registers.'
+		'Nothing is lost. These sales name a till this store has no register for, so they are listed here instead of under a till. No action is needed.'
 	);
 	expect(screen.getByTestId('health-unregistered').textContent).toContain(
 		'12345678… — 3 sales, e.g. orders 1001, 1002'

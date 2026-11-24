@@ -20,6 +20,7 @@ jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: () => ({
 		uiSettings: mockSettings,
 		getUILabel: (key: string) => key,
+		getUIDisplayLabel: (columnKey: string, displayKey: string) => `${columnKey}.${displayKey}`,
 		patchUI: mockPatch,
 		resetUI: mockReset,
 	}),
@@ -72,9 +73,9 @@ it.each(['orders', 'customers', 'coupons', 'products'] as const)(
 
 it("nests a shown column's display switches under its switch and drops them when it is off", async () => {
 	render(<DisplayOptions id="orders" />);
-	expect(screen.getByRole('switch', { name: 'avatar' })).toBeTruthy();
+	expect(screen.getByRole('switch', { name: 'customer.avatar' })).toBeTruthy();
 	fireEvent.click(screen.getByRole('switch', { name: 'customer' }));
-	await waitFor(() => expect(screen.queryByRole('switch', { name: 'avatar' })).toBeNull());
+	await waitFor(() => expect(screen.queryByRole('switch', { name: 'customer.avatar' })).toBeNull());
 });
 
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));

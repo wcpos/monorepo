@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { useHttpClient } from '@wcpos/hooks/use-http-client';
+import { PREFLIGHT_BLOCK, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -28,7 +28,12 @@ const DISCOVERY_PROBE_TIMEOUT_MS = 10_000;
 interface ProbeResult {
 	url: string | null;
 	timedOut: boolean;
+	/** Set when the host answered with a bot challenge instead of the site. */
 	challenged: boolean;
+	/** Set when the request never left the device (pre-flight block). */
+	blocked: boolean;
+	/** Transport code when the probe got no response at all (network, DNS, TLS, CORS, offline); null when a response arrived. */
+	unreachable: string | null;
 }
 
 /**
@@ -39,6 +44,27 @@ interface ProbeResult {
 const isTimeoutError = (err: unknown): boolean => {
 	const code = get(err, ['code']);
 	return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
+};
+
+/**
+ * A pre-flight block means the request never reached the network, so it proves
+ * NOTHING about the site. Reporting it as "not a WordPress site" blames the store
+ * for a condition inside the app — the 2026-08-25 failure, where a dead saved
+ * session latched `authFailed` and every store the cashier typed, including the
+ * demo, came back as "not a WordPress site".
+ */
+const isPreFlightBlocked = (err: unknown): boolean =>
+	(err as { isPreFlightBlocked?: boolean })?.isPreFlightBlocked === true;
+
+const isOfflineBlock = (err: unknown): boolean =>
+	isPreFlightBlocked(err) && (err as { blockCode?: string })?.blockCode === PREFLIGHT_BLOCK.OFFLINE;
+
+/** No response says nothing about whether the site is WordPress. */
+const unreachableCode = (err: unknown): string | null => {
+	if (isOfflineBlock(err)) return PREFLIGHT_BLOCK.OFFLINE;
+	if (isPreFlightBlocked(err) || isTimeoutError(err) || get(err, ['response'])) return null;
+	const code: unknown = get(err, ['code']);
+	return typeof code === 'string' && code !== '' ? code : 'NO_RESPONSE';
 };
 
 interface UseUrlDiscoveryReturn {
@@ -96,23 +122,41 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				// error level put a typo'd URL in the error log under a
 				// CLIENT999 fallback code, and raised a dev-client redbox over
 				// the connect screen (E2E flow 01, iOS, 2026-08-29).
+				// unauthenticated: the probe carries no credentials and targets a
+				// host we may never have seen, so the process-wide authFailed latch
+				// must not block it.
 				const response = await http.head(normalizedUrl, {
 					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
 					quietErrors: true,
+					unauthenticated: true,
 				});
 
 				if (!response) {
-					return { url: null, timedOut: false, challenged: false };
+					return {
+						url: null,
+						timedOut: false,
+						challenged: false,
+						blocked: false,
+						unreachable: null,
+					};
 				}
 
 				return {
 					url: extractWpApiUrlFromLink(get(response, ['headers', 'link'])),
 					timedOut: false,
 					challenged: false,
+					blocked: false,
+					unreachable: null,
 				};
 			} catch (err: unknown) {
 				if (isBotChallengeError(err)) {
-					return { url: null, timedOut: false, challenged: true };
+					return {
+						url: null,
+						timedOut: false,
+						challenged: true,
+						blocked: false,
+						unreachable: null,
+					};
 				}
 
 				// Check error response headers for Link header
@@ -121,6 +165,8 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					url: extractWpApiUrlFromLink(link),
 					timedOut: isTimeoutError(err),
 					challenged: false,
+					blocked: isPreFlightBlocked(err),
+					unreachable: unreachableCode(err),
 				};
 			}
 		},
@@ -145,28 +191,54 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				// query-var marker is how a marker-less request is owned
 				// (roadmap#383). The front-page probe needs no marker: the plugin
 				// allows `_method=head` on the front end unconditionally.
+				// unauthenticated for the same reason as the Link-header probe too.
 				const response = await http.head(fallbackUrl, {
 					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
 					quietErrors: true,
 					params: { wcpos: 1 },
+					unauthenticated: true,
 				});
 
 				if (response && response.status === 200) {
-					return { url: fallbackUrl, timedOut: false, challenged: false };
+					return {
+						url: fallbackUrl,
+						timedOut: false,
+						challenged: false,
+						blocked: false,
+						unreachable: null,
+					};
 				}
 
-				return { url: null, timedOut: false, challenged: false };
+				return { url: null, timedOut: false, challenged: false, blocked: false, unreachable: null };
 			} catch (err: unknown) {
 				if (isBotChallengeError(err)) {
-					return { url: null, timedOut: false, challenged: true };
+					return {
+						url: null,
+						timedOut: false,
+						challenged: true,
+						blocked: false,
+						unreachable: null,
+					};
 				}
 
 				// A WP REST API error (e.g. rest_unauthorized) proves the endpoint exists
 				if (isWpRestApiError(err)) {
-					return { url: fallbackUrl, timedOut: false, challenged: false };
+					return {
+						url: fallbackUrl,
+						timedOut: false,
+						challenged: false,
+						blocked: false,
+						unreachable: null,
+					};
 				}
 
-				return { url: null, timedOut: isTimeoutError(err), challenged: false };
+				return {
+					url: null,
+					timedOut: isTimeoutError(err),
+					challenged: false,
+					blocked: isPreFlightBlocked(err),
+					unreachable: unreachableCode(err),
+				};
 			}
 		},
 		[http]
@@ -199,6 +271,8 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				let discoveredUrl = linkProbe.url;
 				let timedOut = linkProbe.timedOut;
 				let challenged = linkProbe.challenged;
+				let blocked = linkProbe.blocked;
+				let unreachable = linkProbe.unreachable;
 
 				// Step 2: If Link header failed, try fallback
 				if (!discoveredUrl) {
@@ -206,9 +280,24 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					discoveredUrl = fallbackProbe.url;
 					timedOut = timedOut || fallbackProbe.timedOut;
 					challenged = challenged || fallbackProbe.challenged;
+					blocked = blocked || fallbackProbe.blocked;
+					unreachable = unreachable && fallbackProbe.unreachable ? unreachable : null;
 				}
 
 				if (!discoveredUrl) {
+					// Order matters: no response from either probe means unreachable,
+					// then pre-flight blocks, bot challenges, and timeout or site verdicts.
+					if (unreachable) {
+						discoveryLogger.debug('Discovery probes got no response', {
+							context: { url: normalizedUrl, transportCode: unreachable },
+						});
+						throw Object.assign(new Error(t('auth.could_not_reach_the_site')), {
+							transportCode: unreachable,
+						});
+					}
+					if (blocked) {
+						throw new Error(t('auth.could_not_send_the_request'));
+					}
 					if (challenged) {
 						discoveryLogger.error(t('auth.host_compatibility_problem'), {
 							code: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,

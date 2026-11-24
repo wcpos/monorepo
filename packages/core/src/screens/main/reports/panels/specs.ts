@@ -22,7 +22,7 @@ export type PanelSpec = {
 	}[];
 	missing?: { n: number; m: number };
 	head: string[];
-	rows: { key: string | number; cells: string[]; raw: (string | number)[] }[];
+	rows: { key: string | number; cells: string[]; raw: (string | number)[]; late?: boolean }[];
 	keys: string[];
 	types: ('text' | 'number' | 'money')[];
 	totalRaw: (string | number)[];
@@ -39,6 +39,7 @@ type PanelView = {
 	/** The Products panel's lines after its Category and Brand chips (ledger 42). */
 	productLines?: { orders: ReportOrder[]; refunds: RefundRow[] };
 	unselectedRowIds?: Record<string, boolean>;
+	orderLate?: (order: ReportOrder) => boolean;
 	orderTime?: (
 		order: Pick<ReportOrder, 'date_created_gmt' | 'date_paid_gmt' | 'meta_data'>
 	) => string;
@@ -60,9 +61,10 @@ export function panelSpec(
 	const productRows = once(() =>
 		figures.products.netOfRefunds(directory, view.productLines?.orders, view.productLines?.refunds)
 	);
-	const groupParts = once(
-		() => (id === 'brands' ? figures.brands : figures.categories).netOfRefunds(directory).parts
+	const groupResult = once(() =>
+		(id === 'brands' ? figures.brands : figures.categories).netOfRefunds(directory)
 	);
+	const groupParts = once(() => groupResult().parts);
 	const { money, number, quantity, percent } = formats;
 	const share = (value: number) => t('reports.percent', { value: percent(value * 100) });
 	const unknown = t('common.unknown'),
@@ -206,6 +208,7 @@ export function panelSpec(
 					];
 					return {
 						key: order.uuid,
+						late: view.orderLate?.(order),
 						cells,
 						raw: cells.map((cell, index) =>
 							index === 4
@@ -279,15 +282,10 @@ export function panelSpec(
 				[
 					total,
 					quantity(grouping.reduce((sum, row) => sum + row.quantity, 0)),
-					money(grouping.reduce((sum, row) => sum + row.amount, 0)),
+					money(groupResult().total),
 					'',
 				],
-				[
-					total,
-					grouping.reduce((sum, row) => sum + row.quantity, 0),
-					grouping.reduce((sum, row) => sum + row.amount, 0),
-					'',
-				]
+				[total, grouping.reduce((sum, row) => sum + row.quantity, 0), groupResult().total, '']
 			);
 		}
 		case 'channels':

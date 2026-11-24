@@ -1,9 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 
+import { isAsleepBlock } from '@wcpos/hooks/use-http-client';
+import { getErrorMessage } from '@wcpos/utils/logger';
 import { MoneyCommandError, type MoneyCommandErrorReason } from '@wcpos/query';
 import {
 	isDefinitiveMoneyRefusal,
 	moneyRefusalOf,
+	ORDER_CLOSED_REFUSALS,
+	type OrderClosedRefusal,
 	PAYMENT_ROW_REFUSALS,
 	type PaymentRowRefusal,
 } from '@wcpos/sync-core';
@@ -65,6 +69,8 @@ export interface RecordManualPaymentDeps {
 	/** Every descriptor the till holds: the derived status reads the primary leg's method. */
 	methods?: readonly PaymentMethodDescriptor[];
 	sleep?: (ms: number) => Promise<void>;
+	/** Resolves when the app is awake (a hidden tab's requests are refused before they leave). */
+	awaitWake?: () => Promise<void>;
 	/**
 	 * A record the store may hold but never answered (the journal keeps it sent): the press
 	 * replays it, same row id and frozen body, instead of minting a second payment for the same
@@ -94,7 +100,7 @@ export interface RecordManualPaymentDeps {
 }
 type InvalidReason =
 	'not_manual' | 'amount_not_positive' | 'tendered_not_allowed' | 'tendered_below_amount';
-type RefusalReason = PaymentRowRefusal;
+type RefusalReason = PaymentRowRefusal | OrderClosedRefusal;
 type Answered = { row: PaymentRow; order: OrderPaymentSummary | null };
 export type RecordManualPaymentOutcome =
 	| ({ kind: 'recorded'; via: 'online' | 'offline'; notMirrored: NotMirrored } & Answered)
@@ -103,7 +109,7 @@ export type RecordManualPaymentOutcome =
 	/** Never dispatched (pre-flight failed, no revision, order changed): nothing reached the store. */
 	| { kind: 'failed'; reason: MoneyCommandErrorReason; cause?: unknown }
 	/** No answer after every re-send: the journal keeps the command, and Try again re-sends it. */
-	| { kind: 'unknown'; row: PaymentRow }
+	| { kind: 'unknown'; row: PaymentRow; reason: string }
 	| { kind: 'invalid'; reason: InvalidReason };
 
 /**
@@ -111,6 +117,24 @@ export type RecordManualPaymentOutcome =
  * body: long enough to ride out a proxy restart, short enough to wait for at a till.
  */
 export const RECORD_UNKNOWN_RETRY_DELAYS_MS = [1000, 3000, 9000] as const;
+
+// A backstop against a wake signal that never clears the sleeping block: a real hidden tab
+// waits in `awaitWake` and never spins (POS-34N).
+export const RECORD_ASLEEP_RESEND_LIMIT = 10;
+
+/** Resolves at once when the app is awake, else on the manager's first wake callback. */
+export function awaitAwake(manager: {
+	isAppSleeping(): boolean;
+	onWake(cb: () => void): () => void;
+}): Promise<void> {
+	if (!manager.isAppSleeping()) return Promise.resolve();
+	return new Promise((resolve) => {
+		const unsubscribe = manager.onWake(() => {
+			unsubscribe();
+			resolve();
+		});
+	});
+}
 
 export class RecordManualPaymentError extends Error {
 	public constructor(
@@ -193,6 +217,7 @@ export async function recordManualPayment(
 	// Every attempt is the same call: the poster re-sends the journaled record for this row id,
 	// its frozen body and identity, and the server replays a row it already stored.
 	let accepted: { payment: PaymentRow; order: OrderPaymentSummary } | undefined;
+	let asleepResends = 0;
 	for (let attempt = 0; !accepted; attempt++)
 		try {
 			const response = await deps.post(`orders/${order.id}/payments`, { payment: row });
@@ -203,7 +228,8 @@ export async function recordManualPayment(
 			// anything else is unknown, never "nothing was taken".
 			if (error instanceof MoneyCommandError && error.reason === 'settled_elsewhere') {
 				const settled = await deps.settledRecord?.(row.id);
-				if (settled?.row.status !== 'captured') return { kind: 'unknown', row };
+				if (settled?.row.status !== 'captured')
+					return { kind: 'unknown', row, reason: 'settled_elsewhere' };
 				const status = settled.status ? { status: settled.status } : {};
 				const notMirrored = await deps.mirror(
 					{ payment: settled.row, ...status },
@@ -216,6 +242,14 @@ export async function recordManualPayment(
 			// changed): nothing was sent, so it is terminal, never the unknown re-send path.
 			if (error instanceof MoneyCommandError && error.phase === 'unsent')
 				return { kind: 'failed', reason: error.reason, cause: error.cause };
+			// The sleeping block is thrown before dispatch, so nothing left the till: once the app
+			// wakes, the journal's copy is re-sent without using a re-send (POS-34N).
+			if (isAsleepBlock(error) && deps.awaitWake && asleepResends < RECORD_ASLEEP_RESEND_LIMIT) {
+				asleepResends++;
+				await deps.awaitWake();
+				attempt--;
+				continue;
+			}
 			const refusal = moneyRefusalOf(error);
 			const refused = refusal?.data as
 				{ payment?: PaymentRow; order?: OrderPaymentSummary } | undefined;
@@ -251,6 +285,12 @@ export async function recordManualPayment(
 				await deps.mirror({ payment: failedRow, ...status }, { accepted: false });
 				return { kind: 'refused', reason, row: failedRow, order: serverOrder };
 			}
+			if (refusal?.code && Object.hasOwn(ORDER_CLOSED_REFUSALS, refusal.code)) {
+				// The store had already closed the order and stored nothing: no mirror, no status
+				// read. The cash in the cashier's hand still needs a story (POS-338).
+				deps.raiseAttention({ row, order: null, reason: 'order_closed' });
+				return { kind: 'refused', reason: 'order_closed', row, order: null };
+			}
 			if (refusal?.code && isDefinitiveMoneyRefusal(refusal)) {
 				// A definitive refusal the server will repeat (conflict, unknown method, bad
 				// param): nothing is written — the caller decides.
@@ -262,7 +302,8 @@ export async function recordManualPayment(
 			}
 			// No answer, a 5xx, a held lock, a session or proxy answer proves nothing: re-send the
 			// same journaled record.
-			if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length) return { kind: 'unknown', row };
+			if (attempt >= RECORD_UNKNOWN_RETRY_DELAYS_MS.length)
+				return { kind: 'unknown', row, reason: getErrorMessage(error) };
 			await (deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
 				RECORD_UNKNOWN_RETRY_DELAYS_MS[attempt]
 			);

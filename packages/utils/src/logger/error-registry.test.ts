@@ -67,6 +67,7 @@ const SEED_SYMBOLS = [
 	'CACHE_SHARED_REPLAY',
 	'CART_LINE_PRICE_BASIS_UNREADABLE',
 	'CART_UPDATE_FAILED',
+	'CASHIER_IDENTITY_CLASH',
 	'CASH_MOVEMENT_REFUSED',
 	'CASH_MOVEMENT_VOID_REFUSED',
 	'CHECKOUT_EMPTY_RESPONSE',
@@ -92,6 +93,7 @@ const SEED_SYMBOLS = [
 	'LOCAL_RECORD_DIVERGED',
 	'MULTI_TAB_LIMITED',
 	'NATIVE_CRASH',
+	'ORDER_CLOSED_ON_STORE',
 	'ORDER_TAX_RATE_UNKNOWN',
 	'OUT_OF_MEMORY',
 	'PAYMENT_ALREADY_PAID_ONLINE',
@@ -100,6 +102,7 @@ const SEED_SYMBOLS = [
 	'PAYMENT_GATEWAY_REFUSED',
 	'PAYMENT_INVOICE_NOT_MIRRORED',
 	'PAYMENT_OK_STATUS_CHECK_FAILED',
+	'PAYMENT_ORDER_CLOSED',
 	'PAYMENT_OUTCOME_UNKNOWN',
 	'PAYMENT_RECORDED_NOT_MIRRORED',
 	'PAYMENT_RECORD_REFUSED',
@@ -355,7 +358,7 @@ describe('error registry', () => {
 		expect(entry.actionHint).not.toMatch(/Clear & re-download/);
 		const guidance = entry.troubleshooting.join(' ');
 		expect(guidance).toContain('changes waiting to send is 0');
-		expect(guidance).toContain('save every open cart with Sync order');
+		expect(guidance).toContain('save every open cart with Save to store');
 	});
 
 	// A device that cannot open its data, or cannot start, may be holding the

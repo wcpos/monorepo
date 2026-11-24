@@ -5,7 +5,7 @@ import 'whatwg-fetch';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { useUserValidation } from './use-user-validation';
+import { cashierRequest, useUserValidation } from './use-user-validation';
 
 const { useHttpClient: useSharedHttpClient } = jest.requireActual<
 	typeof import('@wcpos/hooks/use-http-client/use-http-client')
@@ -43,9 +43,18 @@ jest.mock('@wcpos/utils/update-required-gate', () => ({
 	reportUpdateRequired: (...args: unknown[]) => mockReportUpdateRequired(...args),
 }));
 
+const mockLogError = jest.fn();
+const mockLogWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	...jest.requireActual('@wcpos/utils/logger'),
 	getDatabaseEpoch: () => 0,
+	// Delegate lazily: the hook calls getLogger at module scope, before the spies exist.
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockLogError(...args),
+		warn: (...args: unknown[]) => mockLogWarn(...args),
+		debug: () => undefined,
+		info: () => undefined,
+	}),
 }));
 
 jest.mock('@wcpos/query', () => ({
@@ -384,5 +393,155 @@ describe('useUserValidation when the server refuses this app version', () => {
 		});
 		expect(result.current.isValid).toBe(false);
 		expect(mockIncrementalPatch).not.toHaveBeenCalled();
+	});
+});
+
+describe('useUserValidation when the cashier body is text, not JSON (POS-2KN)', () => {
+	const site = {
+		uuid: 'site-1',
+		url: 'https://example.com',
+		wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+		use_jwt_as_param: false,
+	};
+
+	const makeWpUser = () => ({
+		uuid: 'cashier-1',
+		id$: { value: 7 },
+		access_token$: { value: 'access-token' },
+		refresh_token$: { value: 'refresh-token' },
+		incrementalPatch: mockIncrementalPatch,
+		getLatest: () => ({ stores: [], incrementalModify: mockIncrementalModify }),
+	});
+
+	type LogCall = [string, { code?: string; context?: Record<string, unknown> }?];
+	const callsWithCode = (spy: jest.Mock, code: string) =>
+		(spy.mock.calls as LogCall[]).filter(([, options]) => options?.code === code);
+
+	/** Render the hook against a 200 whose body is `data`, and wait for validation to settle. */
+	const validateWith = async (data: string, headers: Record<string, string> = {}) => {
+		mockGet.mockResolvedValue({ status: 200, headers, data });
+		const wpUser = makeWpUser();
+		const { result } = renderHook(() =>
+			useUserValidation({ site: site as never, wpUser: wpUser as never })
+		);
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+		return result;
+	};
+
+	/** The one AUTH999 row's context. */
+	const auth999Context = () => {
+		const rows = callsWithCode(mockLogError, 'AUTH999');
+		expect(rows).toHaveLength(1);
+		return rows[0][1]?.context ?? {};
+	};
+
+	beforeEach(() => {
+		mockGet.mockReset();
+		mockIncrementalPatch.mockClear();
+		mockIncrementalModify.mockClear();
+		mockLogError.mockClear();
+		mockLogWarn.mockClear();
+		mockWakeCallbacks.length = 0;
+	});
+
+	it('validates when a stray prefix precedes the cashier JSON', async () => {
+		const result = await validateWith(
+			'<br />\n<b>Notice</b>: something deprecated in plugin.php<br />\n{"id":7,"display_name":"Demo Cashier"}'
+		);
+
+		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalled());
+		expect(result.current.isValid).toBe(true);
+		expect(callsWithCode(mockLogWarn, 'SYNC151')).toHaveLength(1);
+		expect(callsWithCode(mockLogError, 'AUTH999')).toHaveLength(0);
+	});
+
+	it('still fails on an HTML page, with diagnostics, even though a JSON object in it parses', async () => {
+		const result = await validateWith(
+			'<!DOCTYPE html><html><head><script>var cfg = {"a":1};</script></head><body>Just a moment...</body></html>',
+			{ 'content-type': 'text/html; charset=UTF-8' }
+		);
+
+		const context = auth999Context();
+		expect(context).toMatchObject({
+			dataType: 'string',
+			contentType: 'text/html; charset=UTF-8',
+		});
+		expect(typeof context.bodyPreview).toBe('string');
+		expect(context.bodyPreview as string).toMatch(/^<!DOCTYPE html>/);
+		expect((context.bodyPreview as string).length).toBeLessThanOrEqual(120);
+		expect(result.current.isValid).toBe(false);
+		expect(mockIncrementalPatch).not.toHaveBeenCalled();
+		expect(callsWithCode(mockLogWarn, 'SYNC151')).toHaveLength(0);
+	});
+
+	it('rejects recovered JSON that belongs to another user', async () => {
+		const result = await validateWith('stray {"id":99,"display_name":"Other"}');
+
+		expect(auth999Context()).toMatchObject({ dataType: 'string' });
+		expect(callsWithCode(mockLogWarn, 'SYNC151')).toHaveLength(0);
+		expect(result.current.isValid).toBe(false);
+		expect(mockIncrementalPatch).not.toHaveBeenCalled();
+	});
+
+	it('fails on an empty body, with diagnostics', async () => {
+		const result = await validateWith('');
+
+		expect(auth999Context()).toMatchObject({ dataType: 'string', bodyPreview: '' });
+		expect(result.current.isValid).toBe(false);
+	});
+
+	it('redacts credentials in the body preview', async () => {
+		await validateWith('Authorization: Bearer sk_live_SECRET123 <html>no json</html>');
+
+		const context = auth999Context();
+		expect(typeof context.bodyPreview).toBe('string');
+		expect(context.bodyPreview as string).not.toContain('SECRET123');
+	});
+
+	it('redacts URL userinfo that crosses the preview cut', async () => {
+		// The userinfo starts at char 109 and its `@` is at char 130: slicing first would
+		// drop the `@` and leave `admin:hunte…` unredacted.
+		await validateWith(
+			'x'.repeat(100) + ' https://admin:hunter2secretpw@example.com/ <html>no json</html>'
+		);
+
+		const context = auth999Context();
+		expect(typeof context.bodyPreview).toBe('string');
+		expect(context.bodyPreview as string).toMatch(/^xxxx/);
+		expect((context.bodyPreview as string).length).toBeLessThanOrEqual(120);
+		expect(context.bodyPreview as string).not.toContain('admin:');
+	});
+
+	it("redacts URL userinfo that crosses the parser's own preview cut", async () => {
+		// A `{` with no parseable JSON makes extractValidJSON log its own SYNC131 row; the
+		// userinfo starts before char 200 and its `@` falls after it.
+		await validateWith(
+			'x'.repeat(180) + ' { https://admin:hunter2secretpw@example.com/ <html>no json</html>'
+		);
+
+		const rows = callsWithCode(mockLogError, 'SYNC131');
+		expect(rows).toHaveLength(1);
+		const preview = rows[0][1]?.context?.responsePreview;
+		expect(typeof preview).toBe('string');
+		expect((preview as string).length).toBeLessThanOrEqual(200);
+		expect(preview as string).not.toContain('admin:');
+		auth999Context();
+	});
+});
+
+describe('cashierRequest', () => {
+	it.each([
+		['a slash-terminated path base', 'https://example.com/wp-json/wcpos/v2/'],
+		[
+			"the REST client's migrated base, with no trailing slash",
+			'https://example.com/wp-json/wcpos/v2',
+		],
+		['a query-form base', 'https://example.com/?rest_route=/wcpos/v2'],
+	])('joins %s and the cashier path with one slash', (_, base) => {
+		const site = { wcpos_api_url: base } as Parameters<typeof cashierRequest>[0];
+		expect(cashierRequest(site, 7, 'token').endpoint).toBe(
+			'https://example.com/wp-json/wcpos/v2/cashier/7'
+		);
 	});
 });

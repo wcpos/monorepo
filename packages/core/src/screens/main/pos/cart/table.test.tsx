@@ -121,7 +121,12 @@ jest.mock('@wcpos/components/table', () => {
 });
 
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	Text: ({
+		children,
+		accessibilityLabel,
+	}: React.PropsWithChildren<{ accessibilityLabel?: string }>) => (
+		<span aria-label={accessibilityLabel}>{children}</span>
+	),
 }));
 
 jest.mock('./cells/line-strip', () => ({
@@ -242,6 +247,11 @@ it('renders the four cart header labels', () => {
 	for (const label of ['Qty', 'Item', 'Price', 'Total'])
 		expect(screen.getByText(label)).toBeTruthy();
 });
+it('heads the qty column with the abbreviation, the full word as its label (#3652)', () => {
+	render(<CartTable />);
+	expect(screen.getByLabelText('Quantity').textContent).toBe('Qty');
+	expect(screen.getByText('Item').getAttribute('aria-label')).toBeNull();
+});
 it('has no Price column on the phone (the decided cart line at phone width)', () => {
 	mockIsPhone = true;
 	try {
@@ -307,6 +317,7 @@ describe('read-only (checkout and receipt)', () => {
 		};
 		render(<CartTable readOnly picker={picker} />);
 		expect(screen.getByText('This payment')).toBeTruthy();
+		expect(screen.queryByLabelText('Quantity')).toBeNull();
 		expect(screen.queryByText('Qty')).toBeNull();
 		const rows = screen.getAllByTestId('checkout-line-row');
 		const picked = rows.filter((row) => row.className.includes('border-primary'));
@@ -314,6 +325,22 @@ describe('read-only (checkout and receipt)', () => {
 		expect(picked[0].className).toContain('bg-muted');
 		expect(picked[0].className).not.toContain('bg-card');
 		expect(rows.filter((row) => row.className.includes('bg-card'))).toHaveLength(1);
+	});
+
+	it('a split by item folds the Price column and gives it back when the split closes', () => {
+		const picker = {
+			picked: { 'line-b': 1 },
+			paid: {},
+			unitMinor: () => 0,
+			format: String,
+			pick: jest.fn(),
+		};
+		const { rerender } = render(<CartTable readOnly picker={picker} />);
+		expect(screen.queryByText('Price')).toBeNull();
+		for (const label of ['Item', 'Total', 'This payment'])
+			expect(screen.getByText(label)).toBeTruthy();
+		rerender(<CartTable readOnly />);
+		expect(screen.getByText('Price')).toBeTruthy();
 	});
 
 	it('never pulses and never shows the empty-cart state', () => {

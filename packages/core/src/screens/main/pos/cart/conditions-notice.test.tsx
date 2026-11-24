@@ -104,3 +104,23 @@ it('a line without a POS uuid (made outside the POS) gets a row and no verb; its
 	expect(mockRemoveLineItem).not.toHaveBeenCalled();
 	expect(mockOpenLineQuantity).not.toHaveBeenCalled();
 });
+
+it('a sale below zero is one row with the refund pointer: no verb, nothing to press', () => {
+	mockUnmet = [
+		belt,
+		{
+			id: 'total',
+			reasonKey: 'pos.checkout_negative_total',
+			params: {},
+			lineUuid: '',
+			fix: 'none',
+			available: null,
+		},
+	];
+	render(<CartConditionsNotice />);
+	const row = screen.getByTestId('cart-condition-row-1');
+	expect(row.textContent).toBe('[product]pos.checkout_negative_total');
+	fireEvent.click(row);
+	expect(mockOpenLineQuantity).not.toHaveBeenCalled();
+	expect(mockRemoveLineItem).not.toHaveBeenCalled();
+});

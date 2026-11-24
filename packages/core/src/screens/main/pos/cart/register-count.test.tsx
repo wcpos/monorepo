@@ -88,6 +88,7 @@ let count_denominations: { value: string; pieces: number }[] | null = null;
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let mockRefusedClose = false;
+let mockSyncError: string | undefined;
 let mockCounted: Record<string, string> | null = null;
 let mockLastClosure: Record<string, unknown> | null = null;
 let figuresPending = false;
@@ -108,6 +109,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			id: 's',
 			register_id: 'r',
 			status: mockSessionStatus,
+			sync_error: mockSyncError,
 			approval_required,
 			approved_counted,
 			count_note,
@@ -189,6 +191,7 @@ beforeEach(() => {
 	count_denominations = null;
 	unsyncedCount = 3;
 	mockRefusedClose = false;
+	mockSyncError = undefined;
 	mockCounted = null;
 	mockLastClosure = null;
 	figuresPending = false;
@@ -486,7 +489,7 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 		/>
 	);
 	expect((screen.getByTestId('count-close') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('count-unsynced').textContent).toContain('3 sales');
+	expect(screen.getByTestId('count-unsynced').textContent).toContain('3 records');
 	enter('480.80');
 	fireEvent.click(screen.getByTestId('count-other-tenders'));
 	fireEvent.change(screen.getByTestId('count-tender-card'), { target: { value: '22' } });
@@ -539,9 +542,9 @@ it('returns to selling without closing', async () => {
 });
 
 it.each([
-	[1, '1 sale not yet'],
-	[3, '3 sales not yet'],
-] as const)('pluralizes %s unsynced sales', (count, text) => {
+	[1, '1 record not yet'],
+	[3, '3 records not yet'],
+] as const)('pluralizes %s unsynced records', (count, text) => {
 	unsyncedCount = count;
 	render(
 		<RegisterCount
@@ -646,7 +649,7 @@ it.each([0, 2])(
 			expect(screen.getByRole('heading').textContent).toBe('Close Front');
 			expect(screen.getByText('Shop · Pat')).toBeTruthy();
 			expect(screen.getByTestId('count-unsynced').textContent).toContain(
-				'the closure will record them'
+				'the closure will carry them'
 			);
 			expect(screen.queryByTestId('count-open-carts')?.textContent ?? null).toBe(
 				count ? '2 carts still open · they wait for their cashier' : null
@@ -744,6 +747,20 @@ describe('#2016: a refused close', () => {
 			);
 		}
 	);
+	it('names the missing cash permission when the store forbids the close', () => {
+		mockRefusedClose = true;
+		mockSyncError = 'rest_forbidden';
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.getByText(/can't open, count or close the register/)).toBeTruthy();
+		expect(screen.queryByText(/The store refused this close/)).toBeNull();
+	});
+	it('shows the generic refused-close notice for another error code', () => {
+		mockRefusedClose = true;
+		mockSyncError = 'woocommerce_rest_invalid_param';
+		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
+		expect(screen.getByText(/The store refused this close/)).toBeTruthy();
+		expect(screen.queryByText(/can't open, count or close the register/)).toBeNull();
+	});
 	it('asks for the manager before a retry over the threshold', async () => {
 		refused('counting');
 		varianceThreshold = '5';

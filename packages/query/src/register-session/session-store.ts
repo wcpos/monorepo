@@ -1,6 +1,7 @@
 import { tz } from '@date-fns/tz';
 import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
+import { firstValueFrom } from 'rxjs';
 
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import {
@@ -37,7 +38,14 @@ import { reversalsInFlight } from './reversal-claims';
 import { registerCollections, type RegisterStoreDatabase } from './store-database';
 import { attributeRefunds, deriveExpected, refundSessionId } from './expected';
 import { baselineContains } from './baseline';
-import { isSessionOrder, isUnsyncedMovement, unaccepted, unsyncedCount } from './drawer-rules';
+import {
+	countRecorded,
+	currentSession,
+	isSessionOrder,
+	isUnsyncedMovement,
+	unaccepted,
+	unsyncedCount,
+} from './drawer-rules';
 
 import type { DeepReadonly } from 'rxdb';
 import type { ReadonlyEngineRecord } from '../records/readonly-engine-record';
@@ -102,6 +110,37 @@ export async function isRegisterCounting(storeDB: RegisterStoreDatabase, registe
 		})
 		.exec();
 	return !!counting;
+}
+/**
+ * The register's current session by `currentSession`'s rule (the products notice and the cart
+ * column read the same one), read once on the tap or scan. `undefined` when it cannot be read.
+ */
+export async function readCurrentSession(storeDB: RegisterStoreDatabase, registerId: string) {
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
+	if (!sessions || !closures) return undefined;
+	// The open or counting register is the common case: one findOne, as `isRegisterCounting`.
+	const live = await sessions
+		.findOne({
+			selector: {
+				register_id: registerId,
+				status: { $in: ['open', 'counting'] },
+				sync_status: { $ne: 'failed' },
+			},
+		})
+		.exec();
+	if (live) return live;
+	const [active, closed, closureRows] = await Promise.all([
+		sessions
+			.find({ selector: { register_id: registerId, status: { $in: ['open', 'counting'] } } })
+			.exec(),
+		sessions
+			.find({
+				selector: { register_id: registerId, status: 'closed', sync_status: { $ne: 'synced' } },
+			})
+			.exec(),
+		closures.find({ selector: { register_id: registerId } }).exec(),
+	]);
+	return currentSession({ active, closed }, closureRows);
 }
 export function openSession(
 	storeDB: RegisterStoreDatabase,
@@ -728,6 +767,27 @@ export async function recoverClosureReservation(
 		refunds: row.period_refunds_total,
 		closureId: row.id,
 	});
+}
+
+/**
+ * A register's closes whose closure write a restart interrupted (#3289): this device's own close,
+ * pending and unacknowledged, with a recorded count and no closure row. A session adopted from
+ * the server (`adoptSessionRow`: `pending_status: null`, synced) never matches.
+ */
+export async function findUnwrittenCloses(storeDB: RegisterStoreDatabase, registerId: string) {
+	const { register_sessions: sessions, closures } = registerCollections(storeDB);
+	const selector = { register_id: registerId, status: 'closed', pending_status: 'closed' } as const;
+	const rows = await firstValueFrom(sessions.find({ selector }).$);
+	const unwritten = [];
+	for (const row of rows)
+		if (
+			row.sync_status === 'pending' &&
+			row.server_status !== 'closed' &&
+			countRecorded(row) &&
+			!(await closures.findOne(row.id).exec())
+		)
+			unwritten.push(row);
+	return unwritten;
 }
 
 type ClosureOrder = {

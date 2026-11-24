@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
 
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { moneyCommandPoster, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -20,7 +21,7 @@ import { completionMetaFor, persistSaleProvenance } from '../sale-completion';
 import { commandProvenance } from '../provenance/command-provenance';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { raisePaymentRefusal } from './payment-refusal-attention';
-import { recordManualPayment } from './record-manual-payment';
+import { awaitAwake, recordManualPayment } from './record-manual-payment';
 
 import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './record-manual-payment';
 
@@ -82,6 +83,7 @@ export function useRecordManualPayment(): (
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post,
 				journal: post.defer,
+				awaitWake: () => awaitAwake(requestStateManager),
 				// A sent record whose row the ledger lacks: an online one never answered, or an offline
 				// one deferred and not yet mirrored (a crash between the two). A deferred record already
 				// in the ledger is the earlier leg's: the next offline leg mints its own row.
@@ -186,8 +188,12 @@ export function useRecordManualPayment(): (
 						orderId: paymentOrder.id,
 						paymentId: outcome.row.id,
 						amount: outcome.row.amount,
+						reason: outcome.reason,
 					},
 				});
+			// A definitive refusal: settle runs the forced refresh, so the till adopts the closed order.
+			if (outcome.kind === 'refused' && outcome.reason === 'order_closed')
+				await post.settle().catch(() => undefined);
 			return outcome;
 		},
 		[

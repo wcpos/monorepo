@@ -23,7 +23,9 @@ export { failureFacts } from './failure-facts';
 export { sessionRefreshRequests } from './refresh';
 export {
 	findOpenSession,
+	findUnwrittenCloses,
 	isRegisterCounting,
+	readCurrentSession,
 	openSession,
 	recordMovement,
 	recordApproval,
@@ -50,6 +52,6 @@ export { runRegisterSessionCycle } from './cycle';
 export { observeRegisterDrawer, observeRegisterStatus } from './drawer';
 export { countRecorded, isLiveMovement } from './drawer-rules';
 export { abandonCount, beginCount } from './count';
-export { type CloseResult, closeRegister, type RegisterCount } from './close';
+export { type CloseResult, closeRegister, isCloseInFlight, type RegisterCount } from './close';
 
 export { carryDrawer, CarryAdoptionError, type CarryTarget } from './carry';

@@ -36,7 +36,7 @@
 		"docsBody": "Clear and re-download just the affected data from Store health, once nothing is waiting to be sent; contact support if the damage comes back.",
 		"troubleshooting": [
 			"Open Store health → Database and check that changes waiting to send is 0 and no \"… changes never reached your server\" or \"… changes were held\" panel is showing — those changes exist only on this device. If the count does not go down within a few minutes, clear nothing and go to the last step.",
-			"The log entry does not say which data is damaged. Only if one kind of data is clearly broken on its own — for example the product list will not load while everything else works — open the ⋮ menu on that row and choose Clear & re-download…: only that data is cleared and downloaded again, and you stay signed in. If it is Orders, first save every open cart with Sync order (or finish it) — clearing Orders deletes a cart never saved to your store; if a cart cannot be saved, go to the last step.",
+			"The log entry does not say which data is damaged. Only if one kind of data is clearly broken on its own — for example the product list will not load while everything else works — open the ⋮ menu on that row and choose Clear & re-download…: only that data is cleared and downloaded again, and you stay signed in. If it is Orders, first save every open cart with Save to store (or finish it) — clearing Orders deletes a cart never saved to your store; if a cart cannot be saved, go to the last step.",
 			"Retry the action that failed. If you cannot tell which data is broken, do not guess — go to the last step.",
 			"If you cannot tell which data is damaged, if the same data is damaged again after a re-download, or if you could not clear it safely, do not clear everything: on the Logs tab, use Copy debug info and contact support."
 		],
@@ -191,6 +191,27 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "SYNC204",
+		"symbol": "ORDER_CLOSED_ON_STORE",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "The store has already closed this order. Reopen it on the store first if the change is still needed, then tap Send again in Store health → Database, or Discard it.",
+		"retryPolicy": "after-change",
+		"dataSafety": "local-only",
+		"escalation": "store-admin",
+		"summary": "The store had already closed this order, so it refused a change to its lines.",
+		"docsBody": "This device sent a change to an order's lines (items, fees, shipping or coupons) after the store had already closed that order: it was paid or completed, cancelled or refunded. The store does not change the lines of a closed order, so it refused the change and kept its own copy as it was. The refused change stays listed in Store health → Database until you settle it. To make the change land, the order has to be reopened on the store first; otherwise discard the change.",
+		"troubleshooting": [
+			"Expand the log entry: it names the order the store refused and the store's reason. If it also shows a rounding fee amount, the refused change carried a cash rounding line.",
+			"Open the same order in WooCommerce → Orders in WP Admin and check its status and lines. If the store's copy is already right, nothing was lost: press Discard on the change's row in Store health → Database.",
+			"If the change is still needed, a store admin has to reopen the order in WP Admin first; then press Send again on the row.",
+			"If the same order keeps being refused while it is still open on this device, another device or an admin is closing it — agree who finishes the sale before changing it here."
+		],
+		"logSources": ["wp-admin-pos-logs"],
+		"evidence": "Sentry POS-338: 422 reopen_required from Order_Writer::money_gate() for an order whose status was already closed, logged as SYNC201 at error",
+		"introducedIn": "2.0.1"
+	},
+	{
 		"code": "SYNC211",
 		"symbol": "RECORD_INVALID_FIELD",
 		"domain": "SYNC",
@@ -229,7 +250,7 @@
 			"Keep selling — nothing on this device is lost. The log entry may say how many store changes were skipped; they can be any kind of data, and the log does not say which.",
 			"Open Store health → Database. Before re-downloading anything, wait until changes waiting to send is 0 and no \"… changes never reached your server\" or \"… changes were held\" panel is showing.",
 			"At a quiet moment — no sales or edits on this device until you finish — re-download every row: immediately before each one, repeat the checks from the previous step, then open its ⋮ menu, choose Clear & re-download… and wait for it to finish. Start with Products, Variations and Tax rates, which affect prices at the till.",
-			"Before clearing Orders, save every open cart on this device with Sync order (or finish it) — a cart never saved to your store is not counted in those checks, and clearing Orders deletes it. If a cart cannot be saved, skip the Orders row and contact support.",
+			"Before clearing Orders, save every open cart on this device with Save to store (or finish it) — a cart never saved to your store is not counted in those checks, and clearing Orders deletes it. If a cart cannot be saved, skip the Orders row and contact support.",
 			"If the code keeps reappearing, use Copy debug info on the Logs tab and contact support rather than clearing more data."
 		],
 		"logSources": [],
@@ -295,7 +316,7 @@
 		"troubleshooting": [
 			"Keep selling. Open Store health → Database: the record is named at the top — \"… can't download from your store\" for a record whose copy differs, or \"… must be removed from this device\" for one your store has deleted.",
 			"Before selling that item, check its price and stock against the shelf or with whoever manages the store (they can compare it with WP Admin).",
-			"Before clearing anything, check that changes waiting to send is 0 and no \"… changes never reached your server\" or \"… changes were held\" panel is showing, and settle any listed change first (SYNC201, SYNC221). Before clearing Orders, also save every open cart with Sync order (or finish it) — clearing Orders deletes a cart never saved to your store; if one cannot be saved, skip Orders and contact support.",
+			"Before clearing anything, check that changes waiting to send is 0 and no \"… changes never reached your server\" or \"… changes were held\" panel is showing, and settle any listed change first (SYNC201, SYNC221). Before clearing Orders, also save every open cart with Save to store (or finish it) — clearing Orders deletes a cart never saved to your store; if one cannot be saved, skip Orders and contact support.",
 			"Then open the ⋮ menu on the record's collection row (for example Products) and choose Clear & re-download…: the device drops its copy and fetches the store's, and a deleted record is removed rather than downloaded. The entry can stay listed until the next background check — judge by whether the price and stock now match. If the callout then names a record in another collection, repeat the checks and this step there.",
 			"Site admin: if the same records keep coming back after a re-download, the cause is usually a bulk change that bypassed WooCommerce's save hooks — a CSV import, a migration plugin, WP-CLI or direct SQL. Prefer editing through WooCommerce; WCPOS rebuilds its integrity data by itself once the same difference keeps repeating.",
 			"If the till keeps showing a wrong price or stock after a re-download, use Copy debug info on the Logs tab and contact support."
@@ -485,7 +506,7 @@
 		"summary": "WCPOS could not confirm whether checkout completed.",
 		"docsBody": "Do not retry blindly. Check the store for the order first, then export diagnostics if its outcome is still unclear.",
 		"troubleshooting": [
-			"Do not press Process Payment again and do not charge the customer again until you know what happened.",
+			"Do not press Charge again and do not charge the customer again until you know what happened.",
 			"Check the payment side first — the payment provider's own screen, receipt or dashboard shows whether the customer was charged.",
 			"Refresh the till's orders: in Store health → Database, open the ⋮ menu on the Orders row and choose Check for changes now. An order that arrives as paid normally leaves the cart and, on WCPOS Pro, shows as paid in Orders; without Pro, ask someone to check WooCommerce → Orders in WP Admin, searching by the total and the last few minutes.",
 			"If the provider shows a charge, do not charge again: reload the app and refresh the orders again — the sale is complete once the order shows as paid. If money was taken but no paid order appears, go to the last step.",
@@ -1255,6 +1276,27 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "PAYMENT521",
+		"symbol": "PAYMENT_ORDER_CLOSED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Return the money to the customer, or reopen the order on the store and record the payment again.",
+		"retryPolicy": "never",
+		"dataSafety": "money-moved",
+		"escalation": "none",
+		"summary": "The store had already closed the order, so a payment taken at the till was not recorded.",
+		"docsBody": "The till took a manual payment (cash, or a card run on a separate machine), but the store had already cancelled, trashed or refunded the order and refused to record it. Nothing was stored on the order, so the payment is listed under needs attention until the cashier returns the money or the order is reopened and the payment recorded again.",
+		"troubleshooting": [
+			"Check the amount and method taken at the till: Store health → Database lists the order under \"… needs attention\", and the same line is in Store health → Logs.",
+			"If the sale should not go ahead, give that payment back the way it was taken: cash from the drawer, or a refund of that charge on the card machine. Do not record a paid out for cash handed back — the refused payment was never counted in the drawer's expected cash.",
+			"If the sale should go ahead, a site administrator reopens the order in WooCommerce (for example sets it back to Pending payment); then record the payment again from the money you already hold, with the same record-only method.",
+			"Site administrator: if this happens repeatedly, orders are being cancelled or refunded elsewhere while they are open on a till."
+		],
+		"logSources": [],
+		"evidence": "POS-338",
+		"introducedIn": "2.0.1"
+	},
+	{
 		"code": "PAYMENT999",
 		"symbol": "PAYMENT_UNEXPECTED",
 		"domain": "PAYMENT",
@@ -1641,6 +1683,24 @@
 		"logSources": [],
 		"evidence": "wcpos/roadmap#385: staging clones report the saved live store's uuid",
 		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "AUTH342",
+		"symbol": "CASHIER_IDENTITY_CLASH",
+		"domain": "AUTH",
+		"severity": "error",
+		"actionHint": "Remove the other saved store from this device, then sign in again.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "site-admin",
+		"summary": "This account is already saved on this device under another store.",
+		"docsBody": "Two stores give this account the same identity. That happens when one store is a copy of the other, such as a staging clone or a second shop started from a backup, and on a WordPress multisite network, where every site shares one set of accounts. The app keeps one saved account per identity, so it cannot hold both sign-ins at once. Nothing was saved by this sign-in.",
+		"troubleshooting": [
+			"Remove the other saved store from this device, then sign in to this store again."
+		],
+		"logSources": [],
+		"evidence": "wcpos/monorepo#3767: reproduced on two dev stores sharing one user uuid; the second store never opens and the first is signed out",
+		"introducedIn": "2.0.4"
 	},
 	{
 		"code": "AUTH411",

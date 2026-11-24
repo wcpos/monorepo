@@ -19,6 +19,29 @@ export interface RefundFailureReport {
 }
 
 /**
+ * The store answered the refund POST with a 2xx whose body holds no created refund
+ * (#3380), so it may or may not have recorded one. Carries the order id and the
+ * HTTP status only, never the body.
+ */
+export class RefundUnconfirmedError extends Error {
+	/** Mirrors an HTTP error's `response.status`, so the form's catch logs the status. */
+	readonly response: { status: number | undefined };
+
+	constructor(
+		readonly orderId: number,
+		status: number | undefined
+	) {
+		super(`Refund not confirmed: order ${orderId}, status ${status ?? 'none'}`);
+		this.name = 'RefundUnconfirmedError';
+		this.response = { status };
+	}
+}
+
+export function isRefundUnconfirmedError(error: unknown): error is RefundUnconfirmedError {
+	return error instanceof RefundUnconfirmedError;
+}
+
+/**
  * Statuses that are a store's definitive "no" to this refund. A 408/409/429 is a
  * request that may still be processing or may be retried by the store, so it is
  * not a refusal.
@@ -43,6 +66,15 @@ function isRefusal(status: number | undefined): status is number {
  * everything else must send the cashier to the order's refunds first.
  */
 export function classifyRefundFailure(error: unknown, t: Translate): RefundFailureReport {
+	// A 2xx with no refund in it: never a success, and never a blind retry.
+	if (isRefundUnconfirmedError(error)) {
+		return {
+			level: 'error',
+			code: ERROR_CODES.REFUND_OUTCOME_UNKNOWN,
+			title: t('orders.refund_unconfirmed'),
+			text2: t('orders.refund_unconfirmed_check'),
+		};
+	}
 	// The auth handler cancels a refused (401) request on purpose while it launches the
 	// sign-in: the store refused it, so no refund was made — never "outcome unknown".
 	const failure = error as { code?: unknown; name?: unknown } | null;

@@ -47,7 +47,7 @@ export function UISettingsForm() {
 		{ value: 'name', label: t('pos_cart.sort_by_name') },
 		{ value: 'price', label: t('pos_cart.sort_by_price') },
 	];
-	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('pos-cart');
+	const { uiSettings, getUILabel, getUIDisplayLabel, resetUI, patchUI } = useUISettings('pos-cart');
 	const formData = useDocField(uiSettings, (value) => value) as unknown as z.infer<typeof schema>;
 	const { setButtonPressHandler } = useDialogContext();
 
@@ -169,7 +169,7 @@ export function UISettingsForm() {
 							/>
 						)}
 					/>
-					<UISettingsColumnsForm getUILabel={getUILabel} />
+					<UISettingsColumnsForm getUILabel={getUILabel} getDisplayLabel={getUIDisplayLabel} />
 				</VStack>
 			</Form>
 		</VStack>

@@ -37,6 +37,10 @@ type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 const kinds = { line_items: 'line_item', fee_lines: 'fee', shipping_lines: 'shipping' } as const;
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+const cartAddTiming =
+	process.env.EXPO_PUBLIC_WCPOS_E2E === '1'
+		? (require('../../../../../e2e/cart-add-timing') as typeof import('../../../../../e2e/cart-add-timing'))
+		: undefined;
 type MetaData = Parameters<typeof inOpenOrdersScope>[0];
 /**
  * Provides the queued mutation used to add a cart line to the current order.
@@ -49,7 +53,7 @@ export const useAddItemToOrder = () => {
 	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
 	const { settledWrite, settleIntent } = useCartWrite();
-	const { ctx, actor, readCounting } = useActionContext();
+	const { ctx, actor, readCounting, readPriceCheck } = useActionContext();
 	const configForOrder = useCartConfigReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const { store, wpCredentials, site } = useStoreSession();
@@ -225,12 +229,15 @@ export const useAddItemToOrder = () => {
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
+			const timingSequence = cartAddTiming?.pendingCartAddSequence();
 			const run = async (target: CurrentOrderRecord, context: OrderMutationContext) => {
+				cartAddTiming?.markCartAddTiming('queued', timingSequence);
 				let latest = target.getLatest();
 				let isNew = Boolean((latest as { isNew?: boolean }).isNew);
 				let orphanedSkeleton: EngineRecord<'orders'> | null = null;
 				if (isNew && !context.order) {
 					const birth = await findBirthState(runtime, recordId);
+					cartAddTiming?.markCartAddTiming('birthRead', timingSequence);
 					if (birth !== 'none') {
 						latest = birth.born ?? birth.orphan;
 						if (birth.born) {
@@ -261,6 +268,7 @@ export const useAddItemToOrder = () => {
 						payload: { type, line: data, lineItems: latest.payload.line_items ?? [] },
 					},
 					bottom: async (e) => {
+						cartAddTiming?.markCartAddTiming('hooks', timingSequence);
 						latest = latest.getLatest();
 						const incoming = e.payload.line as CartLine;
 						const temporaryOrder = order.getLatest();
@@ -330,6 +338,7 @@ export const useAddItemToOrder = () => {
 								} as never,
 							});
 						}
+						cartAddTiming?.markCartAddTiming('written', timingSequence);
 						return result;
 					},
 				});
@@ -354,5 +363,5 @@ export const useAddItemToOrder = () => {
 		]
 	);
 
-	return { addItemToOrder, readCounting };
+	return { addItemToOrder, readCounting, readPriceCheck };
 };

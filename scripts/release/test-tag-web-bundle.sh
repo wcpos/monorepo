@@ -82,6 +82,8 @@ case "$url" in
 		if [[ -n "${MOCK_BODY:-}" && -n "${MOCK_OK_AT:-}" && "$n" -ge "${MOCK_OK_AT}" ]]; then cleared=true; fi
 		if [[ -n "${MOCK_BODY:-}" && "$cleared" == false ]]; then
 			printf '%s' "$MOCK_BODY" > "$body"
+		elif [[ "$url" == */"${MOCK_SERVE_PATH:-__none__}" ]]; then
+			cat "$MOCK_SERVE_FILE" > "$body"
 		elif [[ "$n" -ge "${MOCK_OK_AT:-1}" || "$url" == */ready.js ]] && [[ "$url" != */"${MOCK_BAD_PATH:-__none__}" ]]; then
 			printf good > "$body"
 		else
@@ -218,6 +220,11 @@ MOCK_PURGE_BODY='{"paths":{"x":{"throttled":true,"throttlingReset":120}}}' PATH=
 	purge_changed_hashed 1.11 v1.11.0 <<<"$good_sha $entry" > "$tmpdir/out"
 expect_eq "a throttled chunk purge reaches the caller's throttle state" "1 120" "$CDN_PURGE_THROTTLED $CDN_PURGE_THROTTLE_RESET"
 CDN_PURGE_THROTTLED=""; CDN_PURGE_THROTTLE_RESET=0
+bracketed='_expo/static/js/web/[...orderId]-abc.js'
+bracketed_enc='_expo/static/js/web/%5B...orderId%5D-abc.js'
+out=$(MOCK_PURGE_BODY="{\"paths\":{\"/gh/wcpos/web-bundle@1.11/build/$bracketed_enc\":{\"throttled\":false}}}" PATH="$tmpdir/cdn:$PATH" purge_cdn_path 1.11 "$bracketed")
+expect_eq "the purged key is named when it differs from the one sent" \
+	"purge @1.11/build/$bracketed -> HTTP 200, accepted (jsDelivr key: /gh/wcpos/web-bundle@1.11/build/$bracketed_enc)" "$out"
 expect_eq "previous lane tag is the newest below this one" v1.11.11 "$(printf 'v1.10.40\nv1.11.9\nv1.11.11\nv1.11.12\nv2.0.9\n' | previous_lane_tag 1.11 v1.11.12)"
 expect_eq "previous lane tag ignores other lanes and a later tag" v1.11.2 "$(printf 'v1.11.2\nv1.11.3\nv1.10.40\nv1.11.4\n' | previous_lane_tag 1.11 v1.11.3)"
 expect_eq "a new lane has no previous tag" "" "$(printf 'v1.10.40\n' | previous_lane_tag 1.11 v1.11.0)"
@@ -235,6 +242,33 @@ for path in index.html opfs.worker.js sqlite.worker.js; do
 done
 MOCK_BAD_PATH=metadata.json expect_status "wrong unhashed bytes fail phase B" fail cdn phase
 MOCK_VERSION=1.11.0 expect_status "matching bytes but stale version fails phase B" fail cdn phase
+# --- --tolerate-release-only: a listed chunk may differ from the tag only in the SENTRY_RELEASE version ---
+rel='_expo/static/js/web/[id]-rel.js'
+banner() { printf 'a();\nvar SENTRY_RELEASE;SENTRY_RELEASE={name: "WCPOS", version: "%s"};\n%s' "$1" "$2"; }
+mkdir -p "$tmpdir/tol/ref-v1.11.1/_expo/static/js/web" && banner 1.0.1 'x()' > "$tmpdir/tol/ref-v1.11.1/$rel"
+jq -n --arg g "$good_sha" --arg r "$(banner 1.0.1 'x()' | git hash-object --stdin)" --arg e "$entry" --arg l "$rel" \
+	'{truncated: false, tree: ([["metadata.json", $g], ["index.html", $g], [$e, $g], [$l, $r]] | map({type: "blob", path: "build/\(.[0])", sha: .[1]}))}' > "$tmpdir/tree-tol"
+phase_tol() { (CDN_HASHED_DEADLINE_SECONDS=0; CDN_UNHASHED_DEADLINE_SECONDS=5; CDN_VERIFY_SECONDS=0; verify_lane_live 1.11 v1.11.1 "" "$1"); }
+tol() { MOCK_TREE="$tmpdir/tree-tol" MOCK_DIR="$tmpdir/tol" MOCK_SERVE_PATH="$rel" MOCK_SERVE_FILE="$tmpdir/served" cdn phase_tol "$@"; }
+banner 1.0.0 'x()' > "$tmpdir/served"
+expect_status "tolerate: a listed chunk that differs only in the SENTRY_RELEASE version passes" pass tol "$rel"
+expect_eq "tolerate: it is TOLERATED and counted apart" 2 "$(grep -Fc -e "TOLERATED: @1.11/build/$rel" -e ', 1 tolerated (release string only)' "$tmpdir/out")"
+MOCK_BAD_PATH="$entry" expect_status "tolerate: an unlisted stale chunk still fails" fail tol "$rel"
+banner 1.0.0 'y()' > "$tmpdir/served"
+expect_status "tolerate: a listed chunk that differs beyond the release string fails" fail tol "$rel"
+expect_eq "tolerate: and says so" 1 "$(grep -Fc "FAIL: @1.11/build/$rel differs from v1.11.1 beyond the SENTRY_RELEASE banner (HTTP 200)" "$tmpdir/out")"
+# Part A transition: the tag has no banner line, a stale edge still serves it.
+mkdir -p "$tmpdir/tol2/ref-v1.11.1/_expo/static/js/web" && printf 'a();\n%s' 'x()' > "$tmpdir/tol2/ref-v1.11.1/$rel"
+sed "s/$(banner 1.0.1 'x()' | git hash-object --stdin)/$(printf 'a();\n%s' 'x()' | git hash-object --stdin)/" "$tmpdir/tree-tol" > "$tmpdir/tree-tol2"
+tol2() { MOCK_TREE="$tmpdir/tree-tol2" MOCK_DIR="$tmpdir/tol2" MOCK_SERVE_PATH="$rel" MOCK_SERVE_FILE="$tmpdir/served" cdn phase_tol "$@"; }
+banner 1.0.0 'x()' > "$tmpdir/served"
+expect_status "tolerate: a listed chunk served with the banner line while the tag has none passes" pass tol2 "$rel"
+expect_eq "tolerate: banner gone is TOLERATED" 1 "$(grep -Fc "TOLERATED: @1.11/build/$rel differs from v1.11.1 only in the SENTRY_RELEASE banner" "$tmpdir/out")"
+banner 1.0.0 'y()' > "$tmpdir/served"
+expect_status "tolerate: banner gone plus any other difference fails" fail tol2 "$rel"
+: > "$MOCK_LOG"
+expect_status "tolerate: a listed path not in the tree is refused" fail tol _expo/static/js/web/typo.js
+expect_eq "tolerate: refusing to tolerate it, before any purge" "1 0" "$(grep -c 'refusing to tolerate it' "$tmpdir/out") $(grep -c purge.jsdelivr.net "$MOCK_LOG" || true)"
 expect_status "library can run standalone" pass cdn bash "$SCRIPT_DIR/cdn-verify.sh" 1.11 0 <<<"$good_sha $entry"
 
 # --- purge throttling: logged, recorded, and named on failure ---
@@ -319,6 +353,9 @@ expect_eq "and says it would resume" 1 "$(grep -c 'already v1.11.1; would resume
 expect_status "a stale worker (rxdb bumped, worker not rebuilt) is refused" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.7.0 "$TAG" bundlesha --dry-run
 expect_eq "and says to rebuild the worker" 1 "$(grep -c 'rebuild the worker' "$tmpdir/out")"
 expect_status "a failed build/ listing of the bundle fails closed" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.6.0 MOCK_LIST_FAIL=bundlesha "$TAG" bundlesha --dry-run
+: > "$tmpdir/empty-list"
+expect_eq "tolerate: no file, a missing file or an empty file exits 2" 222 "$(for f in "" "$tmpdir/nope" "$tmpdir/empty-list"; do
+	run "$TAG" bundlesha --dry-run --tolerate-release-only ${f:+"$f"} >/dev/null 2>&1 || printf '%s' "$?"; done)"
 
 at bundlesha opfs.worker.js=17.7.0 indexeddb.worker.js=16.21.1
 expect_status "dry run refuses an RXDB_VERSION change on a tagged lane" fail run MOCK_VERSION=1.11.2 MOCK_TAGS="$tags" MOCK_PIN=17.7.0 "$TAG" bundlesha --dry-run

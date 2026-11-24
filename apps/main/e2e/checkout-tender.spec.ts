@@ -423,13 +423,12 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 			await expect(page.getByTestId('checkout-label')).toBeVisible();
-			// The taken payment is the done disclosure pill, marked with the success class; the
-			// payment to come keeps its leg index.
-			await expect(page.getByTestId('checkout-plan-done')).toHaveClass(/\bbg-success\/20\b/, {
-				timeout: 60_000,
-			});
+			// The done chip exists only once a payment is counted (tender-pane, counted.length >= 1);
+			// the payment to come keeps its leg index.
+			await expect(page.getByTestId('checkout-plan-done')).toBeVisible({ timeout: 60_000 });
 			await expect(legs).toHaveCount(1);
-			await expect(page.getByTestId('checkout-plan-leg-1')).not.toHaveClass(/\bbg-success\/20\b/);
+			await expect(page.getByTestId('checkout-plan-leg-1')).toBeVisible();
+			expect(await readAmountMinor(page, 'checkout-plan-leg-1')).toBe(plannedSecond);
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(plannedSecond);
@@ -994,10 +993,9 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect.poll(() => readAmountMinor(page, 'checkout-entry')).toBe(plannedFirst);
 			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
-			// The taken payment folds into the done pill; the share to come keeps its leg index.
-			await expect(page.getByTestId('checkout-plan-done')).toHaveClass(/\bbg-success\/20\b/, {
-				timeout: 60_000,
-			});
+			// The taken payment folds into the done chip, which exists only once a payment is
+			// counted; the share to come keeps its leg index.
+			await expect(page.getByTestId('checkout-plan-done')).toBeVisible({ timeout: 60_000 });
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(plannedSecond);
@@ -1387,7 +1385,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
 			const row = screen.getByTestId(`data-table-row-${uuid}`);
 			await expect(row).toBeVisible({ timeout: 30_000 });
-			await row.click();
+			await row.getByTestId('order-open-button').click();
 			await expect(page.getByTestId('order-modal')).toBeVisible({ timeout: 15_000 });
 			await expect(page.getByTestId('orders-send-again')).toBeVisible({ timeout: 15_000 });
 			await page.getByTestId('orders-send-again').click();
@@ -1418,7 +1416,7 @@ liveTest.describe('POS declared UI: a gateway that sends the customer away (live
 			await navigateToPage(page, 'orders');
 			await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
 			await expect(row).toBeVisible({ timeout: 30_000 });
-			await row.click();
+			await row.getByTestId('order-open-button').click();
 			await expect(page.getByTestId('orders-cancel-invoice')).toBeVisible({ timeout: 15_000 });
 			await page.getByTestId('orders-cancel-invoice').click();
 			server = await pollOrder(

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { type TextInputInstance, View } from 'react-native';
 
+import { decode } from 'html-entities';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import omit from 'lodash/omit';
@@ -350,13 +351,17 @@ function POSProductsContent({
 		sort: getPOSProductSort(sortBy, sortDirection),
 	};
 	const conditionLabels = useActiveConditionLabels(filterItems, state, resetState, browsePlace);
+	// The search text is the cashier's own, quoted as typed; the term names in the labels are
+	// decoded where they are read (`useActiveConditionLabels`).
 	const conditions = [
 		...(state.search.trim() ? [`“${state.search.trim()}”`] : []),
 		...conditionLabels,
 	].join(', ');
 	const placeTerm = browsePlace?.term;
 	const placeCount = placeTerm?.kind === 'term' ? placeTerm.count : census;
-	const placeName = placeTerm?.kind === 'term' ? placeTerm.name : '';
+	// Woo sends term names entity-encoded ("Flags &amp; Banners"); the crumb and tiles decode
+	// (#3065), and so does this sentence.
+	const placeName = placeTerm?.kind === 'term' ? decode(placeTerm.name) : '';
 	const conditionsOn = conditionsBeyond(browsePlace, state, initialFilters);
 	// The footer's denominator follows the matches under any narrowing, the setting's included.
 	const narrowed = narrowedBeyondPlace(browsePlace, state);
@@ -369,7 +374,9 @@ function POSProductsContent({
 			title={
 				emptyStore
 					? t('pos_products.no_products_yet')
-					: conditionsOn && placeCount !== null && conditions
+					: // A count of 0 is a place kept for its POS-only products (`term-row.tsx`): "None of the
+						// 0 products" would be false, so the sentence falls back to the plain one.
+						conditionsOn && placeCount && conditions
 						? placeName
 							? t('pos_products.none_match_in', { count: placeCount, place: placeName, conditions })
 							: t('pos_products.none_match', { count: placeCount, place: placeName, conditions })

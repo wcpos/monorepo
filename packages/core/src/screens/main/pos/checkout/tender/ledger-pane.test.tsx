@@ -108,6 +108,13 @@ it('lists the legs without a bar or timeline: event times, Next, and cash-only c
 	// Without `closing` (the phone pane) there are no closing rows.
 	expect(screen.queryByTestId('checkout-ledger-totals')).toBeNull();
 });
+// Climb wording batch W6. Revert: pass statusLabel(row.status, t) without row.kind in ledger-pane.
+it("a captured cash row's chip reads Paid; a captured card row's reads Captured", () => {
+	render(<LedgerLegs view={view} format={format} />);
+	expect(within(screen.getByTestId('checkout-leg-cash')).getByText('Paid')).toBeTruthy();
+	expect(within(screen.getByTestId('checkout-leg-cash')).queryByText('Captured')).toBeNull();
+	expect(within(screen.getByTestId('checkout-leg-card')).getByText('Captured')).toBeTruthy();
+});
 it('lists what each payment paid for, and keeps a cancelled one struck through as Cancelled', () => {
 	render(
 		<LedgerLegs
@@ -174,6 +181,25 @@ it('closing ends the block with Total, Paid and Remaining, or Paid in full as th
 	rerender(<LedgerLegs view={{ ...view, rows: [], paidMinor: 0 }} format={format} closing />);
 	expect(screen.getByText('No payments yet')).toBeTruthy();
 	expect(screen.getByTestId('checkout-ledger-totals').textContent).toContain('Paid£0');
+});
+// #3755. Revert: ignore the storeTender prop in LedgerLegs.
+it('a store tender with no rows draws its one row, Paid the amount and Paid in full', () => {
+	const empty = { ...view, rows: [], paidMinor: 0, balanceMinor: 3000 };
+	const storeTender = { amountMinor: 3000, title: 'Cash on delivery' };
+	const { rerender } = render(
+		<LedgerLegs view={empty} format={format} closing storeTender={storeTender} />
+	);
+	expect(screen.queryByText('No payments yet')).toBeNull();
+	expect(screen.getByTestId('checkout-ledger').textContent).toBe('Cash on delivery£30');
+	// Paid in full leads; the hidden zero stays readable for the specs.
+	expect(screen.getByTestId('checkout-ledger-totals').textContent).toBe(
+		'Total£30Paid£30Paid in full£0'
+	);
+	expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('£0');
+	// Without the prop the empty ledger is unchanged: No payments yet, the total remaining.
+	rerender(<LedgerLegs view={empty} format={format} closing />);
+	expect(screen.getByText('No payments yet')).toBeTruthy();
+	expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('£30');
 });
 it('a sent order with no money taken says where the invoice went instead of the empty state', () => {
 	render(

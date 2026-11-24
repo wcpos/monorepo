@@ -12,3 +12,14 @@ export function Calendar(props: React.ComponentProps<typeof CalendarImpl>) {
 		</React.Suspense>
 	);
 }
+
+const DayCalendarImpl = retryableLazy(() =>
+	import('./calendar-impl').then((m) => ({ default: m.DayCalendar }))
+);
+export function DayCalendar(props: React.ComponentProps<typeof DayCalendarImpl>) {
+	return (
+		<React.Suspense fallback={null}>
+			<DayCalendarImpl {...props} />
+		</React.Suspense>
+	);
+}

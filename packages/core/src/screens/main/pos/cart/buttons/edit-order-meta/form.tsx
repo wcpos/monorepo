@@ -55,6 +55,7 @@ import { useCashierLabel } from '../../../../hooks/use-cashier-label';
 import { useOrderStatusLabel } from '../../../../hooks/use-order-status-label';
 import { storeListResource } from '../../../../hooks/store-list-resource';
 import { useStorageMoneyPathGuard } from '../../../../hooks/use-storage-health';
+import { useUserCapabilities } from '../../../../hooks/use-user-capabilities';
 import { useCurrentOrderActions } from '../../../contexts/current-order';
 import { FormErrors } from '../../../../components/form-errors';
 import {
@@ -111,6 +112,7 @@ export function EditOrderMetaForm({
 	formData,
 	handOverData,
 	flushRef,
+	onUnsentChange,
 }: {
 	order: CurrentOrderRecord;
 	formData: FormValues;
@@ -120,6 +122,8 @@ export function EditOrderMetaForm({
 	 * (the sheet's Sync order) carries the edit the cashier just made, not the one before.
 	 */
 	flushRef?: React.RefObject<(() => Promise<boolean>) | null>;
+	/** Whether the hand-over has a change not yet sent; the sheet's footer gives up its primary while it does. */
+	onUnsentChange?: (unsent: boolean) => void;
 }) {
 	const t = useT();
 	const { writeOrderFields } = useOrderFieldsWrite();
@@ -204,6 +208,11 @@ export function EditOrderMetaForm({
 	);
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 	const { label: cashierBefore } = useCashierLabel(base.cashier_id);
+	// The store takes a hand-over to another cashier only from a user who may reassign sales
+	// (Paul, 2026-11-20): anyone else gets no picker, so the order keeps its own cashier.
+	const { canReassignSales } = useUserCapabilities().caps;
+	// A cashier staged before the capability was lost is never shown, judged or sent.
+	const effectiveCashierId = canReassignSales ? cashierId : base.cashier_id;
 	const { getLabel: statusLabel } = useOrderStatusLabel();
 	const stores = useObservableSuspense(storeListResource(wpCredentials));
 	const storeOptions = React.useMemo(
@@ -231,7 +240,7 @@ export function EditOrderMetaForm({
 			field: 'cashier',
 			label: t('common.cashier'),
 			from: base.cashier_id,
-			to: cashierId,
+			to: effectiveCashierId,
 			before: cashierBefore,
 			after: cashierLabel,
 		},
@@ -253,11 +262,17 @@ export function EditOrderMetaForm({
 		},
 	];
 	const changes = staged.filter((change) => change.from !== change.to);
+	const unsent = changes.length > 0;
+	React.useEffect(() => {
+		if (!onUnsentChange) return;
+		onUnsentChange(unsent);
+		return () => onUnsentChange(false);
+	}, [unsent, onUnsentChange]);
 	const changed = (field: HandOverField) => changes.some((change) => change.field === field);
 	const tone = (field: HandOverField) => (changed(field) ? ('attention' as const) : undefined);
 	const leaves = leavesCart({
 		status,
-		cashier_id: cashierId,
+		cashier_id: effectiveCashierId,
 		store_id: storeId,
 		register_id: registerId,
 	});
@@ -343,7 +358,8 @@ export function EditOrderMetaForm({
 		const patch = () => ({
 			...(statusChanged ? { status } : {}),
 			meta_data: wooMetaCarrier.stampIdentity(previous.meta_data ?? [], {
-				userId: cashier_id,
+				// Without the capability, the cashier the record holds now, never the staged snapshot's.
+				userId: canReassignSales ? cashier_id : (identity.cashierId ?? ''),
 				storeId: Number(store_id) || NO_STORE,
 				// None chosen keeps the order's own, unless it moved to a store without registers.
 				registerId: register_id || (store_id !== base.store_id ? null : undefined),
@@ -471,27 +487,29 @@ export function EditOrderMetaForm({
 									)}
 								/>
 							</PropertyRow>
-							<PropertyRow id="cashier" label={t('common.cashier')}>
-								<FormField
-									control={handOverForm.control}
-									name="cashier_id"
-									render={({ field }) => (
-										<View testID="order-meta-cashier">
-											<FormCombobox
-												customComponent={CashierSelect}
-												portalHost="pos"
-												tone={tone('cashier')}
-												{...field}
-												// An order with no cashier names the choice, not an empty box.
-												value={{
-													value: field.value,
-													label: cashierLabel || t('common.select_cashier'),
-												}}
-											/>
-										</View>
-									)}
-								/>
-							</PropertyRow>
+							{canReassignSales && (
+								<PropertyRow id="cashier" label={t('common.cashier')}>
+									<FormField
+										control={handOverForm.control}
+										name="cashier_id"
+										render={({ field }) => (
+											<View testID="order-meta-cashier">
+												<FormCombobox
+													customComponent={CashierSelect}
+													portalHost="pos"
+													tone={tone('cashier')}
+													{...field}
+													// An order with no cashier names the choice, not an empty box.
+													value={{
+														value: field.value,
+														label: cashierLabel || t('common.select_cashier'),
+													}}
+												/>
+											</View>
+										)}
+									/>
+								</PropertyRow>
+							)}
 							{stores.length > 1 && (
 								<PropertyRow id="store" label={t('common.store')}>
 									<FormField
@@ -551,9 +569,9 @@ export function EditOrderMetaForm({
 									</Text>
 									<ChangeRows changes={changes} />
 								</View>
-								{/* An intent keeps its verb button (property rows rule 12). */}
+								{/* An intent keeps its verb button (property rows rule 12); a pending hand-over makes it the sheet's one primary (decision 6A). */}
 								<Button
-									variant="outline"
+									variant={unsent ? 'default' : 'outline'}
 									testID="order-meta-send"
 									disabled={loading || changes.length === 0 || blocked}
 									onPress={() => void onSend()}

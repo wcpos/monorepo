@@ -117,6 +117,7 @@ import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
+import { removeCollectionCoverageLanes } from './local-coverage/remove-collection-coverage-lanes';
 import { createReconcilePorts, removeTargeted } from './local-coverage/reconcile-port';
 import {
 	type ConflictResolutionChoice,
@@ -1216,15 +1217,7 @@ export function createRxdbSyncEngine(
 					await coverageRecords.bulkRemove(recordDocs.map((doc) => doc.primary)),
 					'create-rxdb-sync-engine remove'
 				);
-			const coverageLanes = db.collections.coverageLanes;
-			const laneDocs = await findAllUncached(coverageLanes, {
-				selector: { collectionName: collection },
-			});
-			if (laneDocs.length > 0)
-				assertBulkSuccess(
-					await coverageLanes.bulkRemove(laneDocs.map((doc) => doc.primary)),
-					'create-rxdb-sync-engine remove'
-				);
+			await removeCollectionCoverageLanes(db.collections.coverageLanes, collection);
 		});
 	}
 
@@ -1729,6 +1722,7 @@ export function createRxdbSyncEngine(
 		variationCensusTotal: async () => (await censusPublisher.totals()).variations,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
 		currentProductBrowseWindowKey: requirePlane.lastProductBrowseQueryKey,
+		liveOrderBrowseQueryKeys: requirePlane.liveOrderBrowseQueryKeys,
 		...(ports.defaultProductBrowseSort !== undefined
 			? { defaultProductBrowseSort: ports.defaultProductBrowseSort }
 			: {}),
@@ -2357,6 +2351,9 @@ export function createRxdbSyncEngine(
 				});
 				scheduleStatusChange();
 				reports.push(report);
+			}
+			if (!options?.signal?.aborted) {
+				await requirePlane.refreshLiveOrderBrowseWindows();
 			}
 			const drain = reports[1]!;
 			const worst = reports.some((report) => report.status === 'error')
