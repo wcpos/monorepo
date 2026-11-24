@@ -94,11 +94,20 @@ test('finalizeCreatedOrders hands only the ids it cancelled to trash', async () 
 
 test('finalizeCreatedOrders swallows a throwing trash', async () => {
 	const { request } = fakeRequest(cancelReplies());
-	await expect(
-		finalizeCreatedOrders(request, STORE, [1, 2, 3], auth, {
+	const originalLog = console.log;
+	const lines: string[] = [];
+	console.log = (message) => {
+		lines.push(String(message));
+	};
+	try {
+		const result = finalizeCreatedOrders(request, STORE, [1, 2, 3], auth, {
 			trash: async () => {
 				throw new Error('trash failed');
 			},
-		})
-	).resolves.toMatchObject({ cancelled: 1 });
+		});
+		await expect(result).resolves.toMatchObject({ cancelled: 1 });
+		expect(lines.some((line) => line.startsWith('[order-cleanup] finalized 1 '))).toBe(true);
+	} finally {
+		console.log = originalLog;
+	}
 });
