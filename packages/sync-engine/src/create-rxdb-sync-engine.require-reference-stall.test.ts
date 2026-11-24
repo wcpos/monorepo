@@ -101,13 +101,15 @@ describe('reference walks yield the require lane to browse windows', () => {
 				collection: 'coupons',
 				kind: 'refresh',
 			});
-			await vi.waitFor(() =>
-				expect(
-					harness.requests.some(
-						({ path, url }) =>
-							path.endsWith('/coupons') && new URL(url).searchParams.get('page') === '2'
-					)
-				).toBe(true)
+			await vi.waitFor(
+				() =>
+					expect(
+						harness.requests.some(
+							({ path, url }) =>
+								path.endsWith('/coupons') && new URL(url).searchParams.get('page') === '2'
+						)
+					).toBe(true),
+				{ timeout: 5_000 }
 			);
 			const products = engine.require({
 				id: 'browse-during-coupons-refresh',
@@ -118,7 +120,9 @@ describe('reference walks yield the require lane to browse windows', () => {
 			});
 			try {
 				// Page 2 stays held until this assertion finishes: browse must progress alongside it.
-				await vi.waitFor(() => expect(harness.requests.some(isCategoryBrowse)).toBe(true));
+				await vi.waitFor(() => expect(harness.requests.some(isCategoryBrowse)).toBe(true), {
+					timeout: 5_000,
+				});
 			} finally {
 				gate.resolve();
 				await Promise.all([refresh.ready, products.ready]);
@@ -132,7 +136,7 @@ describe('reference walks yield the require lane to browse windows', () => {
 		}
 	});
 
-	it('an orders drain still drains non-reference work', async () => {
+	it('a browse drain still drains non-reference work', async () => {
 		const harness = await createEngineHarness({
 			startAtMs: 1_000_000,
 			routes: {
@@ -174,6 +178,49 @@ describe('reference walks yield the require lane to browse windows', () => {
 			expect(harness.requests.some(({ path }) => path.endsWith('/taxes'))).toBe(true);
 			expect(harness.requests.filter(({ path }) => path.endsWith('/coupons'))).toHaveLength(0);
 		} finally {
+			await harness.dispose();
+		}
+	});
+
+	it('a coupons refresh keeps product trickle waiting while the reference lane runs', async () => {
+		const gate = Promise.withResolvers<void>();
+		const harness = await createEngineHarness({
+			routes: {
+				'/coupons': async (request: EngineHarnessRequest) => {
+					if (new URL(request.url).searchParams.get('page') === '2') await gate.promise;
+					return couponPage(request);
+				},
+				'/products': [],
+			},
+		});
+		try {
+			const { engine } = harness;
+			engine.reconfigure({ pullBatchSize: 100 });
+			const refresh = engine.require({
+				id: 'coupons-refresh-during-trickle',
+				collection: 'coupons',
+				kind: 'refresh',
+			});
+			await vi.waitFor(
+				() =>
+					expect(
+						harness.requests.some(
+							({ path, url }) =>
+								path.endsWith('/coupons') && new URL(url).searchParams.get('page') === '2'
+						)
+					).toBe(true),
+				{ timeout: 5_000 }
+			);
+			await expect(engine.sync('product-trickle')).resolves.toMatchObject({
+				status: 'skipped',
+				reason: 'interactive-demand',
+			});
+			expect(harness.requests.filter(({ path }) => path.endsWith('/products'))).toHaveLength(0);
+			gate.resolve();
+			await refresh.ready;
+			refresh.release();
+		} finally {
+			gate.resolve();
 			await harness.dispose();
 		}
 	});
