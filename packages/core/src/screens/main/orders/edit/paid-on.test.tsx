@@ -11,6 +11,8 @@ import {
 	WriteDeferredError,
 	WriteOutcomeTimeoutError,
 } from '@wcpos/query';
+import { wooMetaCarrier } from '@wcpos/sync-core';
+import { mergeProtectedOrderMeta } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { EditOrderForm } from './form';
@@ -18,9 +20,36 @@ import { EditOrderForm } from './form';
 const mockPush = jest.fn();
 const mockFlush = jest.fn();
 const mockLocalPatch = jest.fn();
+const mockResidentPatch = jest.fn();
+const mockRuntime = {};
+jest.mock('@wcpos/query/mutations', () => ({
+	...jest.requireActual('@wcpos/query/mutations'),
+	patchEngineResident: (...args: unknown[]) => mockResidentPatch(...args),
+}));
 let mockCanReassign = true;
 let mockFeature = true;
 let mockPhone = false;
+let mockWindowHeight = 768;
+let mockPlatform = 'web';
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	Platform: {
+		...jest.requireActual('react-native').Platform,
+		get OS() {
+			return mockPlatform;
+		},
+	},
+	useWindowDimensions: () => ({ width: 1024, height: mockWindowHeight, scale: 1, fontScale: 1 }),
+}));
+let mockPopover: {
+	side: string;
+	sideOffset: number;
+	alignOffset: number;
+	align: string;
+	avoidCollisions: boolean;
+	insets: Record<string, number>;
+	onLayout: (event: { nativeEvent: { layout: { height: number; width: number } } }) => void;
+};
 let mockLocale = enGB;
 const mockStore = { id: 4, timezone: 'Europe/Madrid' };
 const mockStores = new BehaviorSubject([{ id: 3, timezone: 'America/New_York' }, mockStore]);
@@ -81,15 +110,18 @@ jest.mock('@wcpos/components/textarea', () => ({
 		onChangeText,
 		testID,
 		editable,
+		maxLength,
 	}: {
 		value: string;
 		onChangeText: (value: string) => void;
 		testID: string;
 		editable?: boolean;
+		maxLength?: number;
 	}) => (
 		<textarea
 			data-testid={testID}
 			value={value}
+			maxLength={maxLength}
 			onChange={(e) => onChangeText(e.target.value)}
 			disabled={editable === false}
 		/>
@@ -149,11 +181,17 @@ jest.mock('@wcpos/components/popover', () => {
 			React.useImperativeHandle(ref, () => ({
 				open: () => change(true),
 				close: () => change(false),
+				measureInWindow: (measure: (x: number, y: number, width: number, height: number) => void) =>
+					measure(621, 415, 375, 44),
 			}));
 			return mockButton({ ...props, onPress: () => change(true) });
 		}),
-		PopoverContent: ({ children }: React.PropsWithChildren) =>
-			React.useContext(Open).open ? <div data-testid="calendar-popover">{children}</div> : null,
+		PopoverContent: ({ children, ...props }: React.PropsWithChildren<typeof mockPopover>) => {
+			mockPopover = props;
+			return React.useContext(Open).open ? (
+				<div data-testid="calendar-popover">{children}</div>
+			) : null;
+		},
 	};
 });
 let mockCalendar: {
@@ -188,6 +226,7 @@ jest.mock('../../../../hooks/use-locale', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => mockRuntime,
 	useDocField: (value: unknown, select: (value: unknown) => unknown) =>
 		value ? select(value) : undefined,
 }));
@@ -280,18 +319,37 @@ function setCorrection(value: unknown) {
 		{ key: '_wcpos_sale_day', value },
 	];
 }
+function setRequest(at = '2026-11-22T15:12:17Z', from = '') {
+	payload.meta_data = [
+		...(payload.meta_data ?? []).filter((row) => row.key !== '_wcpos_sale_day_request'),
+		{
+			key: '_wcpos_sale_day_request',
+			value: JSON.stringify({ at_gmt: at, reason: 'New request', from }),
+		},
+	];
+}
 function applyRequest() {
 	const request = JSON.parse(
-		String(payload.meta_data?.find((row) => row.key === '_wcpos_sale_day')?.value)
+		String(payload.meta_data?.find((row) => row.key === '_wcpos_sale_day_request')?.value)
 	);
-	setCorrection({ ...request, by: 9, changed_at_gmt: '2026-11-24T16:00:00Z' });
+	if (request.from === (wooMetaCarrier.readSaleDay(payload.meta_data)?.atGmt ?? ''))
+		setCorrection({
+			at_gmt: request.at_gmt,
+			reason: request.reason,
+			by: 9,
+			changed_at_gmt: '2026-11-24T16:00:00Z',
+		});
+	payload.meta_data = payload.meta_data?.filter((row) => row.key !== '_wcpos_sale_day_request');
 	emit();
+	return { ...order, payload: JSON.parse(JSON.stringify(payload)) };
 }
 beforeEach(() => {
 	jest.clearAllMocks();
 	mockCanReassign = true;
 	mockFeature = true;
 	mockPhone = false;
+	mockWindowHeight = 768;
+	mockPlatform = 'web';
 	mockLocale = enGB;
 	payload = {
 		id: 50,
@@ -321,9 +379,25 @@ beforeEach(() => {
 	mockLocalPatch.mockReset().mockImplementation(async ({ changes, data }) => {
 		const patch = changes ? changes(payload) : data;
 		writes.push(patch);
-		Object.assign(payload, patch);
+		Object.assign(payload, {
+			...patch,
+			...(patch.meta_data
+				? {
+						meta_data: mergeProtectedOrderMeta(
+							payload.meta_data ?? [],
+							patch.meta_data,
+							'mutation'
+						),
+					}
+				: {}),
+		});
 		emit();
 		return { document: order, changes: patch };
+	});
+	mockResidentPatch.mockReset().mockImplementation(async ({ changes }) => {
+		Object.assign(payload, changes);
+		emit();
+		return order;
 	});
 	mockPush.mockReset().mockImplementation(async () => applyRequest());
 });
@@ -398,6 +472,8 @@ it('owns a staged form, requires a different day and a nonblank reason, and canc
 		'Move this sale to another day'
 	);
 	expect(screen.getByTestId('order-paid-on-move').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('order-paid-on-move').textContent).toBe('Move sale');
+	expect(screen.getByTestId('order-paid-on-reason').getAttribute('maxlength')).toBe('500');
 	reason();
 	pick('2026-11-24');
 	expect(screen.getByTestId('order-paid-on-move').hasAttribute('disabled')).toBe(true);
@@ -446,8 +522,8 @@ it('flushes and writes exactly one JSON-string request row, preserving all other
 			meta_data: [
 				...saleMeta(),
 				{
-					key: '_wcpos_sale_day',
-					value: '{"at_gmt":"2026-11-23T15:12:17Z","reason":"Card taken yesterday"}',
+					key: '_wcpos_sale_day_request',
+					value: '{"at_gmt":"2026-11-23T15:12:17Z","reason":"Card taken yesterday","from":""}',
 				},
 			],
 		},
@@ -483,11 +559,13 @@ it.each([
 		reason();
 		await move();
 		expect(
-			JSON.parse(String(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day')?.value))
-		).toEqual({ at_gmt: expected, reason: 'Card taken yesterday' });
+			JSON.parse(
+				String(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day_request')?.value)
+			)
+		).toEqual({ at_gmt: expected, reason: 'Card taken yesterday', from: '' });
 	}
 );
-it('uses the current correction clock rather than the rung-up clock when moved again', async () => {
+it('uses the rung-up clock after an earlier correction and sends that fact as from', async () => {
 	setCorrection(correction('2026-11-23T18:35:41Z'));
 	mount();
 	open();
@@ -495,24 +573,34 @@ it('uses the current correction clock rather than the rung-up clock when moved a
 	reason();
 	await move();
 	expect(
-		JSON.parse(String(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day')?.value))
-			.at_gmt
-	).toBe('2026-11-22T18:35:41Z');
+		JSON.parse(
+			String(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day_request')?.value)
+		)
+	).toEqual({
+		at_gmt: '2026-11-22T15:12:17Z',
+		reason: 'Card taken yesterday',
+		from: '2026-11-23T18:35:41Z',
+	});
+	expect(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day')?.value).toEqual(
+		correction('2026-11-23T18:35:41Z')
+	);
 });
 it('never asks for a moment still ahead of now when the sale moves to today', async () => {
-	// The correction's clock, carried onto today, would land after the pinned 02:00Z clock.
+	// The rung-up clock, carried onto today, would land after the pinned 02:00Z clock.
 	jest.useFakeTimers({ doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask', 'nextTick'] });
 	jest.setSystemTime(new Date('2026-11-25T02:00:00Z'));
 	try {
-		setCorrection(correction('2026-11-24T03:30:00Z'));
+		payload.date_paid_gmt = '2026-11-24T03:30:00';
+		setCorrection(correction('2026-11-23T15:12:17Z'));
 		mount();
 		open();
 		pick('2026-11-24');
 		reason();
 		await move();
 		expect(
-			JSON.parse(String(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day')?.value))
-				.at_gmt
+			JSON.parse(
+				String(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day_request')?.value)
+			).at_gmt
 		).toBe('2026-11-25T02:00:00Z');
 	} finally {
 		jest.useRealTimers();
@@ -553,7 +641,10 @@ it('shows loading while sending, then the confirmed previous day while deferred,
 	expect(screen.getByTestId('order-paid-on-waiting').textContent).toBe(
 		'Moving to Sun 22 Nov · waiting for the store'
 	);
-	expect(screen.getByTestId('order-edit-change-day').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('order-edit-change-day').hasAttribute('disabled')).toBe(false);
+	expect(paidRow().textContent).toContain('Rung up Tue 24 Nov 2026, 10:12');
+	expect(paidRow().textContent).toContain('Moved by Marta Ruiz');
+	expect(screen.getByText('Rung up later')).toBeTruthy();
 	expect(logger.success).not.toHaveBeenCalled();
 	act(() => applyRequest());
 	expect(screen.queryByTestId('order-paid-on-waiting')).toBeNull();
@@ -561,7 +652,7 @@ it('shows loading while sending, then the confirmed previous day while deferred,
 	expect(mockPush).toHaveBeenCalledTimes(1);
 });
 it('falls back to the rung-up day when reopening a queued request', () => {
-	setCorrection({ at_gmt: '2026-11-23T15:12:17Z', reason: 'Offline' });
+	setRequest('2026-11-23T15:12:17Z');
 	mount();
 	expect(paidRow().textContent).toContain('Tue 24 Nov 2026');
 	expect(screen.getByTestId('order-paid-on-waiting').textContent).toContain('Mon 23 Nov');
@@ -581,7 +672,7 @@ it.each([false, true])(
 		reason();
 		await move();
 		expect(screen.getByTestId('order-paid-on-refused').textContent).toBe(
-			'Not moved: you can no longer change sales'
+			'Not moved. The store did not accept this change.'
 		);
 		expect(paidRow().textContent).toContain(previous ? 'Mon 23 Nov 2026' : 'Tue 24 Nov 2026');
 		expect(logger.success).not.toHaveBeenCalled();
@@ -636,7 +727,7 @@ it.each([false, true])(
 		expect(screen.getByText('Reports count the sale on this day.')).toBeTruthy();
 	}
 );
-it('restores only the replaced sale-day row on a thrown refusal', async () => {
+it('removes only this request locally on a thrown refusal, keeping the fact', async () => {
 	const before = correction();
 	setCorrection(before);
 	mockPush.mockRejectedValueOnce(new Error('HTTP 403')).mockResolvedValueOnce(undefined);
@@ -645,10 +736,163 @@ it('restores only the replaced sale-day row on a thrown refusal', async () => {
 	pick('2026-11-22');
 	reason();
 	await move();
-	expect(writes).toHaveLength(2);
-	expect(writes[1]).toEqual({
-		meta_data: [...saleMeta(), { key: '_wcpos_sale_day', value: before }],
-	});
-	expect(mockPush).toHaveBeenCalledTimes(2);
+	expect(writes).toHaveLength(1);
+	expect(payload.meta_data).toEqual([...saleMeta(), { key: '_wcpos_sale_day', value: before }]);
+	expect(mockPush).toHaveBeenCalledTimes(1);
 	expect(logger.success).not.toHaveBeenCalled();
+});
+
+it.each(['', '2026-11-23T15:12:17Z'])(
+	'fresh mounts preserve the counted fact and request (%s)',
+	(from) => {
+		if (from) setCorrection(correction());
+		setRequest('2026-11-22T15:12:17Z', from);
+		const first = mount();
+		const text = paidRow().textContent;
+		first.unmount();
+		mount();
+		expect(paidRow().textContent).toBe(text);
+		expect(paidRow().textContent).toContain(from ? 'Mon 23 Nov 2026' : 'Tue 24 Nov 2026');
+		expect(screen.getByTestId('order-paid-on-waiting').textContent).toContain('Sun 22 Nov');
+		if (from) {
+			expect(screen.getByText('Rung up later')).toBeTruthy();
+			expect(paidRow().textContent).toContain('Moved by Marta Ruiz');
+		}
+	}
+);
+it.each(['2026-11-21T15:12:17Z', '2026-11-23T15:12:17Z'])(
+	'ignores stale or already-applied requests: %s',
+	(at) => {
+		setCorrection(correction());
+		setRequest(at, '');
+		mount();
+		expect(screen.queryByTestId('order-paid-on-waiting')).toBeNull();
+	}
+);
+it('can replace a pending request without replacing the fact', async () => {
+	setCorrection(correction());
+	setRequest('2026-11-22T15:12:17Z', '2026-11-23T15:12:17Z');
+	mockPush.mockRejectedValueOnce(new WriteDeferredError('m1'));
+	mount();
+	open();
+	pick('2026-11-21');
+	reason();
+	await move();
+	expect(payload.meta_data?.filter((row) => row.key === '_wcpos_sale_day_request')).toEqual([
+		{
+			key: '_wcpos_sale_day_request',
+			value:
+				'{"at_gmt":"2026-11-21T15:12:17Z","reason":"Card taken yesterday","from":"2026-11-23T15:12:17Z"}',
+		},
+	]);
+	expect(paidRow().textContent).toContain('Mon 23 Nov 2026');
+	expect(screen.getByTestId('order-paid-on-waiting').textContent).toContain('Sat 21 Nov');
+});
+it.each([false, true])(
+	'uses the returned answer, then cleans the resident without enqueueing (applied: %s)',
+	async (applied) => {
+		const fact = correction();
+		setCorrection(fact);
+		mockPush.mockImplementationOnce(async () => ({
+			...order,
+			payload: {
+				...payload,
+				meta_data: [
+					...saleMeta(),
+					{ key: '_wcpos_sale_day', value: applied ? correction('2026-11-22T15:12:17Z') : fact },
+				],
+			},
+		}));
+		mount();
+		open();
+		pick('2026-11-22');
+		reason();
+		await move();
+		expect(payload.meta_data?.some((row) => row.key === '_wcpos_sale_day_request')).toBe(false);
+		expect(writes).toHaveLength(1);
+		expect(mockPush).toHaveBeenCalledTimes(1);
+		expect(logger.success).toHaveBeenCalledTimes(applied ? 1 : 0);
+		expect(!!screen.queryByTestId('order-paid-on-refused')).toBe(!applied);
+	}
+);
+it('reads from the fact at write time, not when the form opened', async () => {
+	mount();
+	open();
+	pick('2026-11-22');
+	reason();
+	const land = mockLocalPatch.getMockImplementation()!;
+	mockLocalPatch.mockImplementationOnce(async (input) => {
+		input.changes(payload); // Pre-flight sees no fact; the landed resolver must read again.
+		setCorrection(correction());
+		return land(input);
+	});
+	await move();
+	expect(
+		JSON.parse(
+			String(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day_request')?.value)
+		).from
+	).toBe('2026-11-23T15:12:17Z');
+});
+
+it.each([
+	[1200, 'bottom', 8],
+	[768, 'left', 148],
+])(
+	'places the calendar below with room, otherwise clear of the card (%s high)',
+	(height, side, offset) => {
+		mockWindowHeight = Number(height);
+		mount();
+		open();
+		fireEvent.click(screen.getByTestId('order-paid-on-day'));
+		act(() => mockPopover.onLayout({ nativeEvent: { layout: { height: 410, width: 320 } } }));
+		expect(mockPopover).toMatchObject({
+			side,
+			sideOffset: offset,
+			align: 'start',
+			avoidCollisions: side === 'left',
+			insets: { top: 16, bottom: 16, left: 16, right: 16 },
+		});
+	}
+);
+it('accepts a 500-character reason and sets the native input limit at 500', async () => {
+	mount();
+	open();
+	pick();
+	expect(screen.getByTestId('order-paid-on-reason').getAttribute('maxlength')).toBe('500');
+	reason('x'.repeat(500));
+	await move();
+	expect(
+		JSON.parse(
+			String(writes[0].meta_data?.find((row) => row.key === '_wcpos_sale_day_request')?.value)
+		).reason
+	).toBe('x'.repeat(500));
+});
+it('ignores an already-applied request even if its from matches the fact', () => {
+	setCorrection(correction());
+	setRequest('2026-11-23T15:12:17Z', '2026-11-23T15:12:17Z');
+	mount();
+	expect(screen.queryByTestId('order-paid-on-waiting')).toBeNull();
+});
+it.each(['answer', 'error'])('does not discard a newer request on %s', async (outcome) => {
+	mockPush.mockImplementationOnce(async () => {
+		setRequest('2026-11-21T15:12:17Z');
+		if (outcome === 'error') throw new Error('HTTP 403');
+		return { ...order, payload: { ...payload, meta_data: saleMeta() } };
+	});
+	mount();
+	open();
+	pick();
+	reason();
+	await move();
+	expect(wooMetaCarrier.readSaleDayRequest(payload.meta_data)?.atGmt).toBe('2026-11-21T15:12:17Z');
+	expect(mockResidentPatch).not.toHaveBeenCalled();
+});
+
+it('uses the native vertical-side and horizontal-offset props to place a short-screen calendar beside the card', () => {
+	mockPlatform = 'ios';
+	mount();
+	open();
+	fireEvent.click(screen.getByTestId('order-paid-on-day'));
+	act(() => mockPopover.onLayout({ nativeEvent: { layout: { height: 410, width: 320 } } }));
+	expect(mockPopover).toMatchObject({ side: 'bottom', sideOffset: 8, alignOffset: -468 });
 });

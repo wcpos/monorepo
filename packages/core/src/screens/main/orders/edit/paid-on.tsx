@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 
 import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
@@ -13,6 +13,7 @@ import { FieldBox } from '@wcpos/components/field-box';
 import { Form } from '@wcpos/components/form';
 import { Icon } from '@wcpos/components/icon';
 import { useIsPhone } from '@wcpos/components/lib/device';
+import { useSpacingUnit } from '@wcpos/components/lib/use-spacing-unit';
 import { Notice } from '@wcpos/components/notice';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { PropertyRow, PropertyVerb } from '@wcpos/components/property-row';
@@ -67,9 +68,10 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const dayLabel = (day: string, short = false) =>
 		format(parseISO(day), short ? 'EEE d MMM' : 'EEE d MMM yyyy', { locale });
 	const correction = wooMetaCarrier.readSaleDay(payload.meta_data);
-	const pending = !!correction && correction.changedAtGmt === null;
-	const [previous, setPrevious] = React.useState<string>();
-	const countedAt = pending ? (previous ?? rungUp) : (correction?.atGmt ?? rungUp);
+	const request = wooMetaCarrier.readSaleDayRequest(payload.meta_data);
+	const pending =
+		!!request && request.atGmt !== correction?.atGmt && request.from === (correction?.atGmt ?? '');
+	const countedAt = correction?.atGmt ?? rungUp;
 	const currentDay = dayOf(countedAt);
 	const { label: movedBy } = useCashierLabel(correction?.by);
 	const knownName =
@@ -86,6 +88,12 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const [editing, setEditing] = React.useState(false);
 	const [calendarOpen, setCalendarOpen] = React.useState(false);
 	const trigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
+	const { height: windowHeight } = useWindowDimensions();
+	const unit = useSpacingUnit();
+	const [anchorBottom, setAnchorBottom] = React.useState(0);
+	const [calendarSize, setCalendarSize] = React.useState({ height: 0, width: 0 });
+	const beside = windowHeight - anchorBottom - 6 * unit < calendarSize.height;
+	const leftSide = beside && Platform.OS === 'web';
 	const [refused, setRefused] = React.useState(false);
 	const form = useForm({ defaultValues: { day: '', reason: '' } });
 	const day = useWatch({ control: form.control, name: 'day' });
@@ -93,8 +101,8 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const sending = form.formState.isSubmitting;
 	const ready = !!day && day !== currentDay && !!reason.trim();
 	const submit = form.handleSubmit(async ({ day, reason }) => {
-		if (!ready || busy || locked || pending) return;
-		const clock = moment(correction?.atGmt ?? rungUp);
+		if (!ready || busy || locked) return;
+		const clock = moment(rungUp);
 		const picked = set(
 			inZone(timezone, dayBounds(calendarDate(parseISO(day))).from),
 			{
@@ -107,7 +115,6 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 		);
 		// Today at a clock time still ahead is not a moment a sale can have been paid: the store refuses the future.
 		const atGmt = notAfterNow(picked.getTime());
-		setPrevious(countedAt);
 		const result = await onMove(
 			atGmt,
 			reason.trim(),
@@ -119,7 +126,7 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const verb = (
 		<PropertyVerb
 			testID="order-edit-change-day"
-			disabled={busy || pending}
+			disabled={busy || sending}
 			onPress={() => {
 				form.reset({ day: '', reason: '' });
 				setRefused(false);
@@ -135,6 +142,7 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 			<Form {...form}>
 				<Notice
 					testID="order-paid-on-card"
+					className="-mx-3"
 					tone="info"
 					icon={null}
 					live={false}
@@ -143,7 +151,15 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 					<PropertyRow label={t('orders.sale_day_from')}>{dayLabel(currentDay)}</PropertyRow>
 					<PropertyRow label={t('orders.sale_day_to')} align="top">
 						<View className="gap-1">
-							<Popover onOpenChange={setCalendarOpen}>
+							<Popover
+								onOpenChange={(open) => {
+									setCalendarOpen(open);
+									if (open && !phone)
+										trigger.current?.measureInWindow((_x, y, _width, height) => {
+											setAnchorBottom(y + height);
+										});
+								}}
+							>
 								<PopoverTrigger
 									ref={trigger}
 									testID="order-paid-on-day"
@@ -159,7 +175,17 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 										<Text>{day ? dayLabel(day) : t('orders.sale_day_pick')}</Text>
 									</FieldBox>
 								</PopoverTrigger>
-								<PopoverContent>
+								<PopoverContent
+									side={leftSide ? 'left' : 'bottom'}
+									align="start"
+									// Beside the whole row: the key (32), column gap (3), then a gutter (2).
+									sideOffset={leftSide ? 37 * unit : 2 * unit}
+									// Native has vertical sides only; its horizontal offset clears the same row.
+									alignOffset={beside && !leftSide ? -calendarSize.width - 37 * unit : 0}
+									avoidCollisions={beside}
+									insets={{ top: 4 * unit, bottom: 4 * unit, left: 4 * unit, right: 4 * unit }}
+									onLayout={({ nativeEvent }) => setCalendarSize(nativeEvent.layout)}
+								>
 									<DayCalendar
 										value={day || undefined}
 										onValueChange={(value) => {
@@ -188,10 +214,11 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 							onChangeText={(value) => form.setValue('reason', value)}
 							editable={!sending}
 							accessibilityLabel={t('orders.sale_day_reason')}
-							placeholder={t('orders.sale_day_reason_placeholder')}
+							maxLength={500}
+							placeholder={t('common.add_value', { label: t('orders.sale_day_reason') })}
 						/>
 					</PropertyRow>
-					<Text className="text-muted-foreground min-h-6">
+					<Text variant="help">
 						{day && !reason.trim() ? t('orders.sale_day_reason_required') : ' '}
 					</Text>
 					<View className={phone ? 'flex-col-reverse gap-2' : 'flex-row justify-end gap-2'}>
@@ -201,17 +228,17 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 							disabled={sending}
 							onPress={() => setEditing(false)}
 						>
-							{t('orders.sale_day_cancel')}
+							{t('common.cancel')}
 						</Button>
 						<Button
 							testID="order-paid-on-move"
 							loading={sending}
-							disabled={!ready || busy || sending || !!locked || pending}
+							disabled={!ready || busy || sending || !!locked}
 							onPress={() => void submit()}
 						>
 							{day
 								? t('orders.move_sale_to_day', { day: dayLabel(day, true) })
-								: t('orders.move_sale_day_title')}
+								: t('orders.move_sale')}
 						</Button>
 					</View>
 				</Notice>
@@ -219,21 +246,30 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 		);
 
 	return (
-		<PropertyRow id="paid_on" label={t('orders.paid_on')} align="top">
+		<PropertyRow
+			id="paid_on"
+			label={t('orders.paid_on')}
+			align="top"
+			locked={locked}
+			verb={!locked ? verb : undefined}
+		>
 			<View className="gap-1">
-				{/* A keyless row keeps the verb beside the day; audit lines use the whole value column. */}
-				<PropertyRow locked={locked} verb={!phone && !locked ? verb : undefined}>
-					<View className="flex-row flex-wrap items-center gap-1">
-						<Text>{dayLabel(currentDay)}</Text>
-						{correction?.changedAtGmt && currentDay < dayOf(rungUp) ? (
-							<Badge variant="info" tinted>
-								{t('reports.rung_up_later')}
-							</Badge>
-						) : null}
-					</View>
-				</PropertyRow>
-				{correction?.changedAtGmt ? (
-					<View className="gap-2">
+				<View
+					className={
+						phone
+							? 'flex-row flex-wrap items-center gap-1'
+							: 'min-h-9 flex-row flex-wrap items-center gap-1'
+					}
+				>
+					<Text>{dayLabel(currentDay)}</Text>
+					{correction && currentDay < dayOf(rungUp) ? (
+						<Badge variant="info" tinted>
+							{t('reports.rung_up_later')}
+						</Badge>
+					) : null}
+				</View>
+				{correction ? (
+					<View testID="order-paid-on-audit" className="gap-2">
 						<Text className="text-muted-foreground">
 							{t('orders.sale_day_rung_up', {
 								date: format(moment(rungUp), 'EEE d MMM yyyy, HH:mm', { locale }),
@@ -246,7 +282,6 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 						</Text>
 					</View>
 				) : null}
-				{phone && !locked ? <View className="items-start">{verb}</View> : null}
 				{pending || refused ? (
 					<View
 						testID={pending ? 'order-paid-on-waiting' : 'order-paid-on-refused'}
@@ -262,7 +297,7 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 							}
 						>
 							{pending
-								? t('orders.sale_day_waiting', { day: dayLabel(dayOf(correction.atGmt), true) })
+								? t('orders.sale_day_waiting', { day: dayLabel(dayOf(request.atGmt), true) })
 								: t('orders.sale_day_refused')}
 						</Text>
 					</View>

@@ -115,15 +115,17 @@ type Intent = {
 	failure: string;
 	context: Record<string, unknown>;
 	applied?: (payload: OrderPayload) => boolean;
+	/** The server never stores request rows: discard them locally after an answer or refusal. */
+	requestOnly?: boolean;
 };
 
 /**
- * The order's meta with one identity row set by value. Every other row stays exactly as it is,
+ * The order's meta with one row set by value. Every other row stays exactly as it is,
  * an absent one included (`stampIdentity` stamps the cashier AND the store, so it would write the
- * row the owner did not change). A row is cleared as '', never dropped: a missing protected row
+ * row the owner did not change). Identity is cleared as '', never dropped: a missing protected row
  * cannot erase the stored one (`mergeProtectedOrderMeta`).
  */
-function withIdentityRow(
+function withMetaRow(
 	meta: MetaDataEntry[] | undefined,
 	key: string,
 	value: MetaDataEntry['value']
@@ -279,15 +281,13 @@ function EditOrderFormFields({ order }: Props) {
 				// an order that already holds the pick writes (and pushes, and reports) nothing.
 				write: (payload) => {
 					replaced = valueOf(payload.meta_data);
-					return replaced === next
-						? {}
-						: { meta_data: withIdentityRow(payload.meta_data, key, next) };
+					return replaced === next ? {} : { meta_data: withMetaRow(payload.meta_data, key, next) };
 				},
 				// Only while the order still holds the refused value: a newer assignment is left alone,
 				// and the empty change writes and pushes nothing.
 				revert: (payload) =>
 					valueOf(payload.meta_data) === next
-						? { meta_data: withIdentityRow(payload.meta_data, key, replaced) }
+						? { meta_data: withMetaRow(payload.meta_data, key, replaced) }
 						: {},
 				success: field === 'cashier' ? t('orders.cashier_updated') : t('orders.store_updated'),
 				failure:
@@ -299,21 +299,25 @@ function EditOrderFormFields({ order }: Props) {
 
 	function moveSaleDay(atGmt: string, reason: string, success: string) {
 		return sendIntent(() => {
-			const key = POS_META_KEYS.saleDay;
-			const request = JSON.stringify({ at_gmt: atGmt, reason });
-			let replaced: MetaDataEntry['value'] = '';
+			const key = POS_META_KEYS.saleDayRequest;
+			let request = '';
 			return {
 				write: (payload) => {
-					replaced = payload.meta_data?.find((row) => row.key === key)?.value ?? '';
-					return { meta_data: withIdentityRow(payload.meta_data, key, request) };
+					request = wooMetaCarrier.saleDayRequestRow(
+						atGmt,
+						reason,
+						wooMetaCarrier.readSaleDay(payload.meta_data)?.atGmt ?? ''
+					);
+					return { meta_data: withMetaRow(payload.meta_data, key, request) };
 				},
 				revert: (payload) =>
 					payload.meta_data?.find((row) => row.key === key)?.value === request
-						? { meta_data: withIdentityRow(payload.meta_data, key, replaced) }
+						? { meta_data: payload.meta_data.filter((row) => row.key !== key) }
 						: {},
+				requestOnly: true,
 				applied: (payload) => {
 					const ack = wooMetaCarrier.readSaleDay(payload.meta_data);
-					return typeof ack?.changedAtGmt === 'string' && ack.atGmt === atGmt;
+					return ack?.atGmt === atGmt;
 				},
 				success,
 				failure: 'Failed to move sale day',
@@ -340,8 +344,10 @@ function EditOrderFormFields({ order }: Props) {
 			if (!(await saveOrderFields(order, intent.write))) return;
 			patched = true;
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-			await pushDocument(order);
-			if (intent.applied && !intent.applied(order.getLatest().payload)) return 'refused' as const;
+			const answer = await pushDocument(order);
+			const applied = !intent.applied || intent.applied((answer ?? order.getLatest()).payload);
+			if (intent.requestOnly) await saveOrderFields(order, intent.revert, { localOnly: true });
+			if (!applied) return 'refused' as const;
 			mutationLogger.success(intent.success, {
 				showToast: true,
 				context: { orderId: order.getLatest().payload.id, ...intent.context },
@@ -351,7 +357,7 @@ function EditOrderFormFields({ order }: Props) {
 			// A pending outcome (the wait timed out, or the row is held offline or for a sign-in) is
 			// not a refusal: the intent stays queued and lands when the store answers, exactly as the
 			// old Save left it, and the cashier is told it is still on its way. Only a refusal rolls
-			// the value back (the cart sheet's rule) and pushes the revert.
+			// the value back (the cart sheet's rule) and pushes the revert; a request-only row is discarded locally.
 			const pending =
 				error instanceof WriteOutcomeTimeoutError || error instanceof WriteDeferredError;
 			if (
@@ -360,7 +366,8 @@ function EditOrderFormFields({ order }: Props) {
 				!pending &&
 				!blockIfDegraded('save-order', { orderId: order.uuid })
 			) {
-				const reverted = await saveOrderFields(order, intent.revert);
+				if (intent.requestOnly) await saveOrderFields(order, intent.revert, { localOnly: true });
+				const reverted = !intent.requestOnly && (await saveOrderFields(order, intent.revert));
 				if (reverted) {
 					void pushDocument(order).catch((revertError) =>
 						mutationLogger.warn('Failed to send the reverted order', {
