@@ -1373,6 +1373,61 @@ export async function sweepOrphanedProbeCategories(
 	}
 }
 
+export interface TrashOrdersResult {
+	trashed: number;
+	failed: number;
+	skipped: number;
+}
+
+export async function trashOrdersAsWriter(
+	request: APIRequestContext,
+	storeUrl: string,
+	ids: readonly number[],
+	writer?: StoreAuthorization | null
+): Promise<TrashOrdersResult> {
+	const result: TrashOrdersResult = { trashed: 0, failed: 0, skipped: 0 };
+	if (ids.length === 0) return result;
+	if (writer === undefined) {
+		writer = await productWriterAuthorization(request, storeUrl).catch(() => null);
+	}
+	if (writer === null) {
+		result.skipped = ids.length;
+		console.log(`[order-trash] no writer credential; ${ids.length} order(s) left cancelled`);
+		return result;
+	}
+	for (const id of ids) {
+		let failure = 'threw';
+		try {
+			const response = await probeRequest(
+				request,
+				'delete',
+				storeUrl,
+				'orders',
+				id,
+				storeRequestOptions(writer)
+			);
+			if (response.ok()) {
+				const body = (await response.json()) as { status?: unknown } | null;
+				if (body?.status === 'trash') {
+					result.trashed += 1;
+					continue;
+				}
+				failure = `status ${body?.status}`;
+			} else {
+				failure = `HTTP ${response.status()}`;
+			}
+		} catch {
+			// Request errors may contain query-auth tokens.
+		}
+		result.failed += 1;
+		console.warn(`[order-trash] order ${id} not trashed: ${failure}`);
+	}
+	console.log(
+		`[order-trash] trashed=${result.trashed} failed=${result.failed} skipped=${result.skipped}`
+	);
+	return result;
+}
+
 /** Force-delete a probe without ever turning teardown trouble into a test failure. */
 export async function deleteSearchProbe(options: {
 	request: APIRequestContext;
