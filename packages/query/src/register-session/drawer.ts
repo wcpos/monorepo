@@ -127,9 +127,11 @@ function deriveDrawer(
 	return {
 		session,
 		refusedClose,
-		/** The store no longer has the session (#3753), said by its row or a movement's: set it aside. */
+		/** The store no longer has the session (#3753), or a set aside did not finish: set it aside. */
 		sessionUnreachable:
-			!!session && (sessionUnreachable(session) || movements.some(sessionUnreachable)),
+			!!session &&
+			(sessionUnreachable(session) ||
+				movements.some((row) => sessionUnreachable(row) || row.sync_error === SESSION_SET_ASIDE)),
 		movements,
 		refusedMovements,
 		refusedCash,
