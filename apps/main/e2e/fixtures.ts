@@ -825,6 +825,114 @@ function recordCadenceStart(page: Page): void {
 	);
 }
 
+type RequirePlaneRecord = {
+	/** Open requirements by `requirementId`; the same id can be open twice (a lane re-required). */
+	inFlight: Map<string, number>;
+	cadenceStarted: boolean;
+	/** When the in-flight set last became empty (epoch ms); the arm time until then. */
+	emptySince: number;
+	detach: () => void;
+};
+
+const requirePlanes = new WeakMap<Page, RequirePlaneRecord>();
+
+/** Exactly one of these closes a `coverage.require.started` (sync-engine require-plane.ts). */
+const REQUIRE_SETTLED = new Set([
+	'coverage.require.outcome',
+	'coverage.require.error',
+	'coverage.require.stalled',
+]);
+
+/**
+ * Arm a per-page record of the require plane's open requirements and of `cadence.start`,
+ * read from the E2E ledger. Call before the app boots, beside `recordCadenceStart`; a
+ * second call on the same page replaces the record and detaches the old listener.
+ */
+export function recordRequirePlane(page: Page): void {
+	requirePlanes.get(page)?.detach();
+	const onConsole = (message: { text(): string }) => {
+		const text = message.text();
+		if (!text.startsWith(ENGINE_LEDGER_PREFIX)) return;
+		if (isCadenceStartLine(text)) {
+			record.cadenceStarted = true;
+			return;
+		}
+		let event: { type?: unknown; requirementId?: unknown };
+		try {
+			event = JSON.parse(text.slice(ENGINE_LEDGER_PREFIX.length));
+		} catch {
+			return;
+		}
+		if (typeof event.requirementId !== 'string' || typeof event.type !== 'string') return;
+		const open = record.inFlight.get(event.requirementId) ?? 0;
+		if (event.type === 'coverage.require.started') {
+			record.inFlight.set(event.requirementId, open + 1);
+		} else if (REQUIRE_SETTLED.has(event.type)) {
+			if (open > 1) record.inFlight.set(event.requirementId, open - 1);
+			else record.inFlight.delete(event.requirementId);
+			if (record.inFlight.size === 0) record.emptySince = Date.now();
+		}
+	};
+	const record: RequirePlaneRecord = {
+		inFlight: new Map(),
+		cadenceStarted: false,
+		emptySince: Date.now(),
+		detach: () => page.off('console', onConsole),
+	};
+	requirePlanes.set(page, record);
+	page.on('console', onConsole);
+}
+
+/**
+ * Wait until the require plane is idle: `cadence.start` has printed AND no requirement
+ * has been in flight for 1 s straight. The hold covers the pump starting the next queued
+ * requirement right after an outcome, and console events arriving late.
+ *
+ * #3799: product-category-filter armed its 45 s filtered-window wait while the plane was
+ * still serving the startup sync on dev-free (run 45271928655, job 138052074713). The
+ * plane is serial and never preempts, and the in-flight `orders-browse` requirement took
+ * 48 s paging ~2,700 coupons, so the category request left after the window had closed.
+ * `cadence.start` alone is not the condition: it printed mid-drain, 7 s into those 48 s.
+ * Without the ledger (production bundle) this falls back to network silence plus an idle
+ * main thread, as `waitForCadenceStart` does.
+ */
+export async function waitForRequirePlaneIdle(page: Page, timeout = 90_000): Promise<void> {
+	const ledgerOn = await page
+		.evaluate(
+			() => (globalThis as { __wcposE2eEngineLedger?: true }).__wcposE2eEngineLedger === true
+		)
+		.catch(() => false);
+	if (!ledgerOn) {
+		console.log(
+			'WCPOS_E2E require plane unavailable: no engine ledger in this bundle, waiting for network silence and an idle main thread instead'
+		);
+		expect(
+			await waitForStoreQuiescence(page, { quietMs: 1_500, capMs: timeout, idleMainThread: true }),
+			'store traffic or the main thread did not settle before the filtered window'
+		).toBe(true);
+		return;
+	}
+	const record = requirePlanes.get(page);
+	if (!record) {
+		throw new Error('recordRequirePlane was not armed before boot on this page');
+	}
+	const startedAt = Date.now();
+	for (;;) {
+		const idle =
+			record.cadenceStarted &&
+			record.inFlight.size === 0 &&
+			Date.now() - record.emptySince >= 1_000;
+		if (idle) return;
+		if (Date.now() - startedAt >= timeout) break;
+		await page.waitForTimeout(250);
+	}
+	const open = [...record.inFlight.keys()].join(', ') || 'none';
+	expect(
+		false,
+		`require plane not idle within ${timeout} ms: cadence.start ${record.cadenceStarted ? 'seen' : 'not seen'}; in flight: ${open}`
+	).toBe(true);
+}
+
 /**
  * Wait until the sync engine has drained its startup pulls and started change-signal
  * polling (`cadence.start`). Resolves at once when that already happened on this page.
@@ -1366,6 +1474,7 @@ export async function hydrateAuthenticatedPage(
 	const { waitForCatalogue = true, beforeBoot } = options;
 	// Before anything boots, so a spec can wait on a cadence.start that already printed.
 	recordCadenceStart(page);
+	recordRequirePlane(page);
 	observeRegisterDirectory(page);
 	const variant = getStoreVariant(testInfo);
 	const cashierAuth = getE2ECashierAuth(variant, currentShardIndex(testInfo.config));
@@ -1484,6 +1593,7 @@ export async function hydrateAuthenticatedPage(
 			await page.unroute('**/*', blockScriptRequests).catch(() => {});
 			// Re-arm: a cadence.start from the abandoned restored boot is not this session's.
 			recordCadenceStart(page);
+			recordRequirePlane(page);
 			await authenticateWithStore(page, testInfo, {
 				waitForCatalogue,
 				credentials: cashierAuth ?? undefined,
