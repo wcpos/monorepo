@@ -115,8 +115,6 @@ type Intent = {
 	failure: string;
 	context: Record<string, unknown>;
 	applied?: (payload: OrderPayload) => boolean;
-	/** The server never stores request rows: discard them locally after an answer or refusal. */
-	requestOnly?: boolean;
 };
 
 /**
@@ -312,9 +310,8 @@ function EditOrderFormFields({ order }: Props) {
 				},
 				revert: (payload) =>
 					payload.meta_data?.find((row) => row.key === key)?.value === request
-						? { meta_data: payload.meta_data.filter((row) => row.key !== key) }
+						? { meta_data: withMetaRow(payload.meta_data, key, '') }
 						: {},
-				requestOnly: true,
 				applied: (payload) => {
 					const ack = wooMetaCarrier.readSaleDay(payload.meta_data);
 					return ack?.atGmt === atGmt;
@@ -346,7 +343,6 @@ function EditOrderFormFields({ order }: Props) {
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 			const answer = await pushDocument(order);
 			const applied = !intent.applied || intent.applied((answer ?? order.getLatest()).payload);
-			if (intent.requestOnly) await saveOrderFields(order, intent.revert, { localOnly: true });
 			if (!applied) return 'refused' as const;
 			mutationLogger.success(intent.success, {
 				showToast: true,
@@ -357,7 +353,7 @@ function EditOrderFormFields({ order }: Props) {
 			// A pending outcome (the wait timed out, or the row is held offline or for a sign-in) is
 			// not a refusal: the intent stays queued and lands when the store answers, exactly as the
 			// old Save left it, and the cashier is told it is still on its way. Only a refusal rolls
-			// the value back (the cart sheet's rule) and pushes the revert; a request-only row is discarded locally.
+			// the value back (the cart sheet's rule) and pushes the revert.
 			const pending =
 				error instanceof WriteOutcomeTimeoutError || error instanceof WriteDeferredError;
 			if (
@@ -366,8 +362,7 @@ function EditOrderFormFields({ order }: Props) {
 				!pending &&
 				!blockIfDegraded('save-order', { orderId: order.uuid })
 			) {
-				if (intent.requestOnly) await saveOrderFields(order, intent.revert, { localOnly: true });
-				const reverted = !intent.requestOnly && (await saveOrderFields(order, intent.revert));
+				const reverted = await saveOrderFields(order, intent.revert);
 				if (reverted) {
 					void pushDocument(order).catch((revertError) =>
 						mutationLogger.warn('Failed to send the reverted order', {

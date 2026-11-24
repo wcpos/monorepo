@@ -20,12 +20,6 @@ import { EditOrderForm } from './form';
 const mockPush = jest.fn();
 const mockFlush = jest.fn();
 const mockLocalPatch = jest.fn();
-const mockResidentPatch = jest.fn();
-const mockRuntime = {};
-jest.mock('@wcpos/query/mutations', () => ({
-	...jest.requireActual('@wcpos/query/mutations'),
-	patchEngineResident: (...args: unknown[]) => mockResidentPatch(...args),
-}));
 let mockCanReassign = true;
 let mockFeature = true;
 let mockPhone = false;
@@ -226,7 +220,6 @@ jest.mock('../../../../hooks/use-locale', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
-	useQueryRuntime: () => mockRuntime,
 	useDocField: (value: unknown, select: (value: unknown) => unknown) =>
 		value ? select(value) : undefined,
 }));
@@ -393,11 +386,6 @@ beforeEach(() => {
 		});
 		emit();
 		return { document: order, changes: patch };
-	});
-	mockResidentPatch.mockReset().mockImplementation(async ({ changes }) => {
-		Object.assign(payload, changes);
-		emit();
-		return order;
 	});
 	mockPush.mockReset().mockImplementation(async () => applyRequest());
 });
@@ -650,7 +638,7 @@ it('shows loading while sending, then the confirmed previous day while deferred,
 	expect(screen.getByTestId('order-paid-on-waiting').textContent).toBe(
 		'Moving to Sun 22 Nov · waiting for the store'
 	);
-	expect(screen.getByTestId('order-edit-change-day').hasAttribute('disabled')).toBe(false);
+	expect(screen.getByTestId('order-edit-change-day').hasAttribute('disabled')).toBe(true);
 	expect(audit().textContent).toContain('Rung up Tue 24 Nov 2026, 10:12');
 	expect(audit().textContent).toContain('Moved by Marta Ruiz');
 	expect(screen.getByText('Rung up later')).toBeTruthy();
@@ -736,7 +724,7 @@ it.each([false, true])(
 		expect(screen.getByText('Reports count the sale on this day.')).toBeTruthy();
 	}
 );
-it('removes only this request locally on a thrown refusal, keeping the fact', async () => {
+it('clears this request through the ordinary write and pushes the revert on a thrown refusal', async () => {
 	const before = correction();
 	setCorrection(before);
 	mockPush.mockRejectedValueOnce(new Error('HTTP 403')).mockResolvedValueOnce(undefined);
@@ -745,9 +733,15 @@ it('removes only this request locally on a thrown refusal, keeping the fact', as
 	pick('2026-11-22');
 	reason();
 	await move();
-	expect(writes).toHaveLength(1);
-	expect(payload.meta_data).toEqual([...saleMeta(), { key: '_wcpos_sale_day', value: before }]);
-	expect(mockPush).toHaveBeenCalledTimes(1);
+	expect(writes).toHaveLength(2);
+	expect(writes[1].meta_data).toEqual(payload.meta_data);
+	expect(wooMetaCarrier.readSaleDayRequest(payload.meta_data)).toBeNull();
+	expect(payload.meta_data).toEqual([
+		...saleMeta(),
+		{ key: '_wcpos_sale_day', value: before },
+		{ key: '_wcpos_sale_day_request', value: '' },
+	]);
+	expect(mockPush).toHaveBeenCalledTimes(2);
 	expect(logger.success).not.toHaveBeenCalled();
 });
 
@@ -778,27 +772,30 @@ it.each(['2026-11-21T15:12:17Z', '2026-11-23T15:12:17Z'])(
 		expect(screen.queryByTestId('order-paid-on-waiting')).toBeNull();
 	}
 );
-it('can replace a pending request without replacing the fact', async () => {
+it('Change day is disabled while a request is pending', () => {
 	setCorrection(correction());
 	setRequest('2026-11-22T15:12:17Z', '2026-11-23T15:12:17Z');
-	mockPush.mockRejectedValueOnce(new WriteDeferredError('m1'));
+	const before = payload.meta_data;
 	mount();
+	expect(screen.getByTestId('order-edit-change-day').hasAttribute('disabled')).toBe(true);
 	open();
-	pick('2026-11-21');
-	reason();
-	await move();
-	expect(payload.meta_data?.filter((row) => row.key === '_wcpos_sale_day_request')).toEqual([
-		{
-			key: '_wcpos_sale_day_request',
-			value:
-				'{"at_gmt":"2026-11-21T15:12:17Z","reason":"Card taken yesterday","from":"2026-11-23T15:12:17Z"}',
-		},
-	]);
+	expect(screen.queryByTestId('order-paid-on-card')).toBeNull();
+	expect(payload.meta_data).toEqual(before);
+	expect(writes).toHaveLength(0);
+	expect(mockPush).not.toHaveBeenCalled();
 	expect(paidRow().textContent).toContain('Mon 23 Nov 2026');
-	expect(screen.getByTestId('order-paid-on-waiting').textContent).toContain('Sat 21 Nov');
+	expect(screen.getByTestId('order-paid-on-waiting').textContent).toContain('Sun 22 Nov');
+	act(() => {
+		payload.meta_data = payload.meta_data?.filter((row) => row.key !== '_wcpos_sale_day_request');
+		emit();
+	});
+	expect(screen.queryByTestId('order-paid-on-waiting')).toBeNull();
+	expect(screen.getByTestId('order-edit-change-day').hasAttribute('disabled')).toBe(false);
+	open();
+	expect(screen.getByTestId('order-paid-on-card')).toBeTruthy();
 });
 it.each([false, true])(
-	'uses the returned answer, then cleans the resident without enqueueing (applied: %s)',
+	'uses the returned answer without cleaning the resident request (applied: %s)',
 	async (applied) => {
 		const fact = correction();
 		setCorrection(fact);
@@ -817,11 +814,12 @@ it.each([false, true])(
 		pick('2026-11-22');
 		reason();
 		await move();
-		expect(payload.meta_data?.some((row) => row.key === '_wcpos_sale_day_request')).toBe(false);
+		expect(payload.meta_data?.some((row) => row.key === '_wcpos_sale_day_request')).toBe(true);
 		expect(writes).toHaveLength(1);
 		expect(mockPush).toHaveBeenCalledTimes(1);
 		expect(logger.success).toHaveBeenCalledTimes(applied ? 1 : 0);
 		expect(!!screen.queryByTestId('order-paid-on-refused')).toBe(!applied);
+		if (!applied) expect(screen.queryByTestId('order-paid-on-waiting')).toBeNull();
 	}
 );
 it('reads from the fact at write time, not when the form opened', async () => {
@@ -874,7 +872,7 @@ it.each(['answer', 'error'])('does not discard a newer request on %s', async (ou
 	reason();
 	await move();
 	expect(wooMetaCarrier.readSaleDayRequest(payload.meta_data)?.atGmt).toBe('2026-11-21T15:12:17Z');
-	expect(mockResidentPatch).not.toHaveBeenCalled();
+	expect(mockPush).toHaveBeenCalledTimes(1);
 });
 
 it('anchors the calendar to its field with a screen gutter and no measured offsets', () => {

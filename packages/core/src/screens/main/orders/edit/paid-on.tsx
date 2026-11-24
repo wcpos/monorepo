@@ -94,6 +94,7 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const trigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	const unit = useSpacingUnit();
 	const [refused, setRefused] = React.useState(false);
+	const waiting = pending && !refused;
 	const form = useForm({ defaultValues: { day: '', reason: '' } });
 	const day = useWatch({ control: form.control, name: 'day' });
 	const reason = useWatch({ control: form.control, name: 'reason' });
@@ -125,8 +126,9 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const verb = (
 		<PropertyVerb
 			testID="order-edit-change-day"
-			disabled={busy || sending}
+			disabled={busy || sending || pending}
 			onPress={() => {
+				if (pending) return;
 				form.reset({ day: '', reason: '' });
 				setRefused(false);
 				setEditing(true);
@@ -265,19 +267,19 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 				) : null}
 				{pending || refused ? (
 					<View
-						testID={pending ? 'order-paid-on-waiting' : 'order-paid-on-refused'}
+						testID={waiting ? 'order-paid-on-waiting' : 'order-paid-on-refused'}
 						className="flex-row items-start gap-2 pb-2"
 					>
 						<Icon
-							name={pending ? 'pending' : 'alert'}
-							className={pending ? 'text-muted-foreground' : 'text-bad'}
+							name={waiting ? 'pending' : 'alert'}
+							className={waiting ? 'text-muted-foreground' : 'text-bad'}
 						/>
 						<Text
 							className={
-								pending ? 'text-muted-foreground min-w-0 flex-1' : 'text-bad min-w-0 flex-1'
+								waiting ? 'text-muted-foreground min-w-0 flex-1' : 'text-bad min-w-0 flex-1'
 							}
 						>
-							{pending
+							{waiting
 								? t('orders.sale_day_waiting', { day: dayLabel(dayOf(request.atGmt), true) })
 								: t('orders.sale_day_refused')}
 						</Text>

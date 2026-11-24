@@ -22,36 +22,22 @@ type BeforeReopen = { status: OrderPayload['status']; identity: MetaDataEntry[] 
 
 export function useOrderRecord() {
 	const { localPatch } = useLocalMutation();
-	const runtime = useQueryRuntime();
 	// The Edit tab manages an order; it is not the till ringing it up, so none of its writes add
 	// this device's register or till rows to an order without them. A reopen does (`reopenOrder`).
-	// A queued resolver is applied to the payload the write lands on; one that finds nothing to change
+	// A resolver is applied to the payload the write lands on; one that finds nothing to change
 	// writes nothing and resolves false.
 	const saveOrderFields = React.useCallback(
 		async (
 			order: ReadonlyEngineRecord<'orders'>,
-			data: Partial<OrderPayload> | ((payload: OrderPayload) => Partial<OrderPayload>),
-			// Server-acknowledged request cleanup uses the existing resident-only write, never a push.
-			{ localOnly = false }: { localOnly?: boolean } = {}
+			data: Partial<OrderPayload> | ((payload: OrderPayload) => Partial<OrderPayload>)
 		): Promise<boolean> => {
-			if (localOnly) {
-				const changes = typeof data === 'function' ? data(order.getLatest().payload) : data;
-				if (!Object.keys(changes).length) return false;
-				await patchEngineResident({
-					manager: runtime,
-					collection: 'orders',
-					recordId: order.uuid,
-					changes,
-				});
-				return true;
-			}
 			if (typeof data !== 'function')
 				return !!(await localPatch({ document: order, data }, { stampTill: false }))?.document;
 			const changes = (payload: Record<string, unknown>) => data(payload as OrderPayload);
 			const result = await localPatch({ document: order, changes }, { stampTill: false });
 			return !!result?.document && Object.keys(result.changes).length > 0;
 		},
-		[localPatch, runtime]
+		[localPatch]
 	);
 	/**
 	 * Null when the local write failed; otherwise the queued row to follow, if one was queued,

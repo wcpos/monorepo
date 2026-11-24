@@ -17,10 +17,6 @@ import { EditOrderForm } from './form';
 
 // Paid on has its own integration suite; keep this form harness focused on its existing rows.
 jest.mock('./paid-on', () => ({ PaidOn: () => null }));
-jest.mock('@wcpos/query', () => ({
-	...jest.requireActual('@wcpos/query'),
-	useQueryRuntime: () => ({}),
-}));
 
 const testLogger = getLogger(['test']);
 

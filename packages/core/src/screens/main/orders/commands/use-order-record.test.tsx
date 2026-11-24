@@ -152,25 +152,3 @@ describe('the Orders command never stamps this device on an order (Edit tab writ
 		expect(mockWrite.mock.lastCall![0]).toEqual(expect.objectContaining({ explicit: true }));
 	});
 });
-
-it('discards an acknowledged request locally, without enqueueing or changing the fact', async () => {
-	const fact = {
-		key: '_wcpos_sale_day',
-		value: { at_gmt: '2026-11-23T15:12:17Z', reason: 'Recorded' },
-	};
-	seed([...identity, fact, { key: '_wcpos_sale_day_request', value: 'request' }]);
-	const { result } = renderHook(() => useOrderRecord());
-	await act(async () => {
-		expect(
-			await result.current.saveOrderFields(
-				order,
-				(payload) => ({
-					meta_data: payload.meta_data?.filter((row) => row.key !== '_wcpos_sale_day_request'),
-				}),
-				{ localOnly: true }
-			)
-		).toBe(true);
-	});
-	expect(mockStored.payload.meta_data).toEqual([...identity, fact]);
-	expect(mockWrite).not.toHaveBeenCalled();
-});
