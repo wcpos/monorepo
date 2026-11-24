@@ -141,6 +141,25 @@ describe('useSiteConnect', () => {
 		expect(result.current.status).toBe('error');
 	});
 
+	it('decodes the saved site name in the identity clash error', async () => {
+		jest
+			.mocked(saveConnectedSite)
+			.mockRejectedValueOnce(new SiteIdentityClashError('Tom &amp; Jerry'));
+		mockDiscoverApiEndpoints.mockResolvedValueOnce({
+			endpoints: { wcpos_api_url: 'https://staging.example.com/wp-json/wcpos/v2/' },
+			siteData: { uuid: 'site-uuid', url: 'https://staging.example.com', wcpos_version: '2.0.0' },
+		});
+		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
+		const { result } = renderHook(() => useSiteConnect());
+
+		await act(async () => {
+			expect(await result.current.onConnect('https://staging.example.com')).toBeNull();
+		});
+
+		expect(result.current.error).toContain('Tom & Jerry');
+		expect(result.current.error).not.toContain('&amp;');
+	});
+
 	it('refuses a raw copy that still reports the saved store as its home but was reached at another address', async () => {
 		// A database copy without a search-replace: the REST index reports the
 		// live store's url and uuid, only the address the connect reached differs.
