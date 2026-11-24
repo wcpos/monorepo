@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { render } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { EditCouponScreen } from './coupons/edit';
 import { EditCustomerScreen } from './customers/edit';
@@ -12,7 +13,17 @@ import { EditProductScreen } from './products/edit/product';
 import { EditVariationScreen } from './products/edit/variation';
 import { ReceiptScreen } from './receipt';
 
-const mockResource = { marker: 'engine-resource' };
+// A pending record: CheckoutScreen waits for its first answer (`useFirstAnswer`), so the fake
+// has no value yet and `read()` suspends on one promise that never settles; the screen decides
+// nothing and renders null. The other routes hand the resource to mocked children unread.
+const mockPendingRead = new Promise<never>(() => {});
+const mockResource = {
+	marker: 'engine-resource',
+	valueRef$$: new BehaviorSubject<unknown>(undefined),
+	read: () => {
+		throw mockPendingRead;
+	},
+};
 const mockUseEngineRecord = jest.fn((_collection: unknown, _uuid: unknown) => mockResource);
 let mockRouteParams: Record<string, string> = {};
 
