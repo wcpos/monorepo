@@ -6,6 +6,7 @@ import { normalizeCheckpoint, type StoredOrderDocument, withOrderColumns } from 
 import { orderBrowserQueryKey } from '../../../sync-engine/src/scheduler/order-browser-scheduler-descriptor';
 import {
 	createOrdersSchedulerFetcher,
+	orderDocumentFromWooPayload,
 	type OrdersSchedulerCoverageRepository,
 } from '../../../sync-engine/src/scheduler/rx-scheduler-order-fetcher';
 import { compileQuery } from '../../src/query-state/query-state-translator';
@@ -159,4 +160,30 @@ it('stores an order created in the Reports window but excludes it when paid afte
 
 	expect(documents.map((doc) => doc.uuid)).toEqual([uuidFor(B.id)]);
 	expect(counted).toHaveLength(0);
+});
+
+it('reads a resident sale entered on November 24 only on its corrected November 23', () => {
+	const entered = Date.parse('2026-11-24T10:00:00Z') / 1_000;
+	const corrected = order(4, entered, entered);
+	corrected.meta_data.push({
+		key: '_wcpos_sale_day',
+		value: JSON.stringify({ at_gmt: '2026-11-23T09:12:00Z', reason: 'Late entry' }),
+	});
+	const document = withOrderColumns(orderDocumentFromWooPayload(corrected));
+	for (const [day, expected] of [
+		['23', true],
+		['24', false],
+	] as const) {
+		const state: QueryStateOf<'orders'> = {
+			search: '',
+			filters: {
+				status: 'completed',
+				dateRange: { from: `2026-11-${day}T00:00:00`, to: `2026-11-${day}T23:59:59` },
+			},
+			limit: Number.MAX_SAFE_INTEGER,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+		};
+		const { read } = compileQuery('orders', state, { id: 'sales', storeScope: 'sales' });
+		expect(new Query(read.prefilter).test(document) && read.residual(document)).toBe(expected);
+	}
 });
