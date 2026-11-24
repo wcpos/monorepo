@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { useEngineRecord } from '@wcpos/query/record-readers';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -13,7 +14,9 @@ import {
 	leaveSheet,
 	routeBeneath,
 	STANDALONE_CHECKOUT_PARAM,
+	tillCartHref,
 } from './till-route';
+import { bouncesToCart } from './use-checkout-url-seed';
 
 export function CheckoutScreen() {
 	const router = useRouter();
@@ -24,6 +27,13 @@ export function CheckoutScreen() {
 	}>();
 	const { orderId } = params;
 	const resource = useEngineRecord('orders', orderId);
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- ObservableResource exposes a stable BehaviorSubject property, not an RxDB $-getter; same exception as use-first-answer.ts (2026-10-01).
+	const answered = useObservableEagerState(resource.valueRef$$) !== undefined;
+	// Decided once, at the first answer (null until then): Pay clears its save state as it settles.
+	const bounce = React.useMemo(() => {
+		if (!answered) return null;
+		return bouncesToCart(resource.valueRef$$.value?.current?.payload.id, orderId);
+	}, [answered, resource, orderId]);
 
 	const phone = useIsPhone();
 	const { loaded, unsupportedSchema } = usePaymentMethods();
@@ -34,11 +44,13 @@ export function CheckoutScreen() {
 	// A Redirect that pops: replacing stacked a second POS screen under the sheet (#3148).
 	useFocusEffect(
 		React.useCallback(() => {
-			if (!redirectToColumns) return;
+			const beneath = routeBeneath(navigation.getState());
+			if (bounce) leaveSheet(router, tillCartHref(phone, orderId), beneath);
+			if (bounce !== false || !redirectToColumns) return;
 			enterCheckout(orderId);
-			leaveSheet(router, columnsCheckoutHref(orderId), routeBeneath(navigation.getState()));
-		}, [redirectToColumns, orderId, router, navigation])
+			leaveSheet(router, columnsCheckoutHref(orderId), beneath);
+		}, [bounce, phone, redirectToColumns, orderId, router, navigation])
 	);
-	if (redirectToColumns) return null;
+	if (bounce !== false || redirectToColumns) return null;
 	return <Checkout resource={resource} />;
 }

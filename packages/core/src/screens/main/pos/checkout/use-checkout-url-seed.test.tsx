@@ -3,7 +3,13 @@ import { act, renderHook } from '@testing-library/react';
 
 import type { QueryHandle, QueryResult } from '@wcpos/query';
 
-import { getCheckoutModeSnapshot, leaveCheckout, resetCheckoutMode } from './checkout-mode';
+import {
+	enterCheckout,
+	getCheckoutModeSnapshot,
+	leaveCheckout,
+	markOrderSaving,
+	resetCheckoutMode,
+} from './checkout-mode';
 import { readCheckoutSeed } from './pos-url';
 import { tillCartHref } from './till-route';
 import { useCheckoutUrlSeed } from './use-checkout-url-seed';
@@ -78,6 +84,8 @@ it('ignores ordinary cart links', () => {
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 	expect(mockReplace).not.toHaveBeenCalled();
 });
+// Loosely typed so the red run against main's one-argument seed fails on behaviour, not arity.
+const seedHook = useCheckoutUrlSeed as (...args: unknown[]) => void;
 type Hit = { id: string; serverId?: number };
 const snapshotOf = (hits: Hit[] | null) => ({
 	ready: hits !== null,
@@ -106,7 +114,7 @@ it.each(['lg', 'sm'])(
 	(size) => {
 		mockSize = size;
 		const { handle } = openOrders([{ id: 'u' }]);
-		renderHook(() => useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout', 'cash']), handle));
+		renderHook(() => seedHook(readCheckoutSeed(['u', 'checkout', 'cash']), handle));
 		expect(mockReplace).toHaveBeenCalledTimes(1);
 		expect(mockReplace).toHaveBeenCalledWith(tillCartHref(size === 'sm', 'u'));
 		expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
@@ -115,16 +123,14 @@ it.each(['lg', 'sm'])(
 );
 it('enters checkout from a reload for an order the store has created', () => {
 	const { handle } = openOrders([{ id: 'u', serverId: 42 }]);
-	renderHook(() => useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout', 'cash']), handle));
+	renderHook(() => seedHook(readCheckoutSeed(['u', 'checkout', 'cash']), handle));
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('u')).toBe(true);
 	expect(getCheckoutModeSnapshot().tenderMethods.get('u')).toBe('cash');
 	expect(mockReplace).not.toHaveBeenCalled();
 });
 it('waits for the order record before entering or redirecting', () => {
 	const { handle, answer } = openOrders(null);
-	const { rerender } = renderHook(() =>
-		useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout']), handle)
-	);
+	const { rerender } = renderHook(() => seedHook(readCheckoutSeed(['u', 'checkout']), handle));
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 	expect(mockReplace).not.toHaveBeenCalled();
 	act(() => answer([{ id: 'u' }]));
@@ -132,4 +138,20 @@ it('waits for the order record before entering or redirecting', () => {
 	expect(mockReplace).toHaveBeenCalledTimes(1);
 	expect(mockReplace).toHaveBeenCalledWith(tillCartHref(false, 'u'));
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
+});
+it('clears a checkout stage something else entered when it sends an unsaved order to its cart', () => {
+	// `CheckoutScreen` entered checkout on wide before handing the link to the columns route.
+	enterCheckout('u');
+	const { handle } = openOrders([{ id: 'u' }]);
+	renderHook(() => seedHook(readCheckoutSeed(['u', 'checkout']), handle));
+	expect(mockReplace).toHaveBeenCalledTimes(1);
+	expect(mockReplace).toHaveBeenCalledWith(tillCartHref(false, 'u'));
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('u')).toBe(false);
+});
+it('keeps an unsaved order in checkout while its own save is in flight', () => {
+	markOrderSaving('u');
+	const { handle } = openOrders([{ id: 'u' }]);
+	renderHook(() => seedHook(readCheckoutSeed(['u', 'checkout', 'cash']), handle));
+	expect(mockReplace).not.toHaveBeenCalled();
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('u')).toBe(true);
 });

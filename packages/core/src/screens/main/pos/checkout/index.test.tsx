@@ -2,9 +2,11 @@
 import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { CheckoutScreen } from './index';
-import { getCheckoutModeSnapshot, resetCheckoutMode } from './checkout-mode';
+import { getCheckoutModeSnapshot, markOrderSaving, resetCheckoutMode } from './checkout-mode';
+import { tillCartHref } from './till-route';
 
 let mockSize = 'lg';
 let mockLoaded = true;
@@ -28,7 +30,15 @@ jest.mock('expo-router', () => ({
 	useRouter: () => mockRouter,
 }));
 jest.mock('./checkout', () => ({ Checkout: () => <div data-testid="modal" /> }));
-jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecord: () => null }));
+// The order's record as `useEngineRecord` answers it: undefined until it resolves. By default an
+// order the store has created, so the lanes above the bounce behave as before.
+const resourceOf = (serverId?: number | 'unresolved') => ({
+	valueRef$$: new BehaviorSubject(
+		serverId === 'unresolved' ? undefined : { current: { payload: { id: serverId } } }
+	),
+});
+let mockResource = resourceOf(42);
+jest.mock('@wcpos/query/record-readers', () => ({ useEngineRecord: () => mockResource }));
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({ loaded: mockLoaded, unsupportedSchema: mockUnsupported }),
 }));
@@ -47,6 +57,7 @@ beforeEach(() => {
 	mockReplace.mockReset();
 	mockParams = { orderId: 'a' };
 	mockBeneath = '(columns)/cart/[...orderId]';
+	mockResource = resourceOf(42);
 });
 it('a wide sheet over a till pops to it and enters checkout', () => {
 	mockCanDismiss = true;
@@ -95,4 +106,50 @@ it('a standalone link opens the order itself, never the columns cart that holds 
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 	expect(mockDismiss).not.toHaveBeenCalled();
 	expect(mockReplace).not.toHaveBeenCalled();
+});
+describe('a cold load of an order the store has not created, with no save of its own', () => {
+	beforeEach(() => {
+		mockResource = resourceOf(undefined);
+		mockCanDismiss = false;
+		mockBeneath = 'index';
+	});
+	it('wide: goes back to its cart instead of entering checkout', () => {
+		render(<CheckoutScreen />);
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledWith(tillCartHref(false, 'a'));
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(false);
+	});
+	it('phone: goes back to its cart instead of rendering the sheet', () => {
+		mockSize = 'sm';
+		render(<CheckoutScreen />);
+		expect(screen.queryByTestId('modal')).toBeNull();
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledWith(tillCartHref(true, 'a'));
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(false);
+	});
+	it('phone: Pay in flight still opens the sheet', () => {
+		mockSize = 'sm';
+		markOrderSaving('a');
+		render(<CheckoutScreen />);
+		expect(screen.getByTestId('modal')).not.toBeNull();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockDismiss).not.toHaveBeenCalled();
+	});
+});
+it('a wide cold load of an order the store has created enters checkout in the columns', () => {
+	mockCanDismiss = false;
+	render(<CheckoutScreen />);
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(true);
+	expect(mockReplace).toHaveBeenCalledWith({
+		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
+		params: { orderId: ['a', 'checkout'] },
+	});
+});
+it('decides nothing while the order record is unresolved', () => {
+	mockResource = resourceOf('unresolved');
+	render(<CheckoutScreen />);
+	expect(screen.queryByTestId('modal')).toBeNull();
+	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
+	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
 });

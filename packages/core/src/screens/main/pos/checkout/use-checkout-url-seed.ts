@@ -6,13 +6,19 @@ import { useIsPhone } from '@wcpos/components/lib/device';
 import type { QueryHandle, QueryResult } from '@wcpos/query';
 
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
-import { enterCheckout, setTenderMethod } from './checkout-mode';
+import { enterCheckout, getOrderSaveState, leaveCheckout, setTenderMethod } from './checkout-mode';
 import { type CheckoutSeed } from './pos-url';
 import { tillCartHref } from './till-route';
 
 import type { OpenOrderHit } from '../contexts/current-order/context';
 
 const noSubscribe = () => () => {};
+
+/** No server id (the tender's `pressLane` test) and no save state (Pay always leaves one, a reload
+ * drops it): a cold load of a checkout no save stands behind, so it goes back to its cart. */
+export function bouncesToCart(serverId: unknown, orderId: string) {
+	return !(Number.isInteger(serverId) && Number(serverId) > 0) && !getOrderSaveState(orderId);
+}
 
 /**
  * Cold-load seed: `/cart/<uuid>/checkout[/<methodId>]` re-enters checkout for that order
@@ -41,9 +47,7 @@ export function useCheckoutUrlSeed(seed: CheckoutSeed, openOrders?: QueryHandle<
 		if (!checkout || !orders.ready) return null;
 		const hit = (orders.hits as OpenOrderHit[]).find((candidate) => candidate.id === orderId);
 		if (!hit) return null;
-		// The tender's `pressLane` test: a positive integer id is an order the store has created.
-		const serverId = hit.record.payload.id;
-		return Number.isInteger(serverId) && Number(serverId) > 0;
+		return !bouncesToCart(hit.record.payload.id, hit.id);
 	};
 	const onStore = React.useSyncExternalStore(
 		openOrders?.subscribe ?? noSubscribe,
@@ -56,6 +60,7 @@ export function useCheckoutUrlSeed(seed: CheckoutSeed, openOrders?: QueryHandle<
 		if (lastSeed.current === key) return;
 		lastSeed.current = key;
 		if (!onStore) {
+			leaveCheckout(orderId); // a stage entered before the link got here (`CheckoutScreen`)
 			router.replace(tillCartHref(phone, orderId));
 			return;
 		}
