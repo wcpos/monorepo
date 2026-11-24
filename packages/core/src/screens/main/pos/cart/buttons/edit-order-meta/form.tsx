@@ -211,6 +211,8 @@ export function EditOrderMetaForm({
 	// The store takes a hand-over to another cashier only from a user who may reassign sales
 	// (Paul, 2026-11-20): anyone else gets no picker, so the order keeps its own cashier.
 	const { canReassignSales } = useUserCapabilities().caps;
+	// A cashier staged before the capability was lost is never shown, judged or sent.
+	const effectiveCashierId = canReassignSales ? cashierId : base.cashier_id;
 	const { getLabel: statusLabel } = useOrderStatusLabel();
 	const stores = useObservableSuspense(storeListResource(wpCredentials));
 	const storeOptions = React.useMemo(
@@ -238,7 +240,7 @@ export function EditOrderMetaForm({
 			field: 'cashier',
 			label: t('common.cashier'),
 			from: base.cashier_id,
-			to: cashierId,
+			to: effectiveCashierId,
 			before: cashierBefore,
 			after: cashierLabel,
 		},
@@ -270,7 +272,7 @@ export function EditOrderMetaForm({
 	const tone = (field: HandOverField) => (changed(field) ? ('attention' as const) : undefined);
 	const leaves = leavesCart({
 		status,
-		cashier_id: cashierId,
+		cashier_id: effectiveCashierId,
 		store_id: storeId,
 		register_id: registerId,
 	});
@@ -356,7 +358,8 @@ export function EditOrderMetaForm({
 		const patch = () => ({
 			...(statusChanged ? { status } : {}),
 			meta_data: wooMetaCarrier.stampIdentity(previous.meta_data ?? [], {
-				userId: cashier_id,
+				// Without the capability, the cashier the record holds now, never the staged snapshot's.
+				userId: canReassignSales ? cashier_id : (identity.cashierId ?? ''),
 				storeId: Number(store_id) || NO_STORE,
 				// None chosen keeps the order's own, unless it moved to a store without registers.
 				registerId: register_id || (store_id !== base.store_id ? null : undefined),
