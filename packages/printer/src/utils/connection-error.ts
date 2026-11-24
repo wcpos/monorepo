@@ -12,6 +12,7 @@
  *   be misleading there.
  */
 export interface ConnectionDiagnostics {
+	reason: 'unreachable' | 'timeout';
 	/** e.g. "Epson" / "Star" */
 	vendorLabel: string;
 	/** e.g. "Epson ePOS over HTTPS" — what was attempted, in words. */
@@ -138,6 +139,7 @@ export function buildConnectionError(opts: BuildConnectionErrorOptions): Printer
 		suggestions.map((s, i) => `${i + 1}. ${s}`).join(' ');
 
 	return new PrinterConnectionError(message, {
+		reason,
 		vendorLabel,
 		attemptLabel,
 		url,

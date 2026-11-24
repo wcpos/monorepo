@@ -3,6 +3,7 @@ import * as React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { DiscoveredPrinter, DiscoveryError } from '@wcpos/printer';
+import { buildConnectionError } from '@wcpos/printer/utils/connection-error';
 
 import { isWindowsPlatform } from '../dialog/connection/is-windows';
 import {
@@ -356,6 +357,21 @@ it.each([9100, 8123])('resolves an Epson web draft port from %s', async (port) =
 
 describe('trouble reason', () => {
 	const identity = { vendor: 'epson' as const, lane: null, ports: [] };
+
+	it('a connection failure is a lane problem, not a permission one', () => {
+		const options = {
+			vendorLabel: 'Epson',
+			protocolName: 'ePOS',
+			url: 'http://192.168.1.10:8008/cgi-bin/epos/service.cgi',
+			enableHint: 'ensure ePOS is enabled on the printer',
+			plainHttpPort: 8008,
+		};
+		expect(troubleReasonFor(undefined, buildConnectionError(options).message)).toBe('lane');
+		expect(
+			troubleReasonFor(undefined, buildConnectionError({ ...options, reason: 'timeout' }).message)
+		).toBe('unresponsive');
+		expect(troubleReasonFor(undefined, 'NotAllowedError')).toBe('permission');
+	});
 
 	it('reads Secure Printing off the identity before anything else', () => {
 		expect(
