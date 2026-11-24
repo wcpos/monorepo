@@ -263,7 +263,7 @@ export const aggregateData = (
 					{
 						...order,
 						date_paid_gmt: new Date(time).toISOString(),
-						meta_data: order.meta_data?.filter((entry) => entry.key !== POS_META_KEYS.saleDay),
+						meta_data: order.meta_data?.filter((entry) => entry?.key !== POS_META_KEYS.saleDay),
 					},
 				]
 			: [];

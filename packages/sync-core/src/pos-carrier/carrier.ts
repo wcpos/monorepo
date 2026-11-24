@@ -146,6 +146,9 @@ export const wooMetaCarrier: PosCarrier = {
 				typeof parsed.at_gmt !== 'string' ||
 				!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z?$/.test(parsed.at_gmt) ||
 				Number.isNaN(Date.parse(parsed.at_gmt)) ||
+				// A day the calendar does not have (30 February) rolls over in Date.parse.
+				new Date(`${parsed.at_gmt.slice(0, 19)}Z`).toISOString().slice(0, 19) !==
+					parsed.at_gmt.slice(0, 19) ||
 				typeof parsed.reason !== 'string'
 			)
 				return null;
