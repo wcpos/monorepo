@@ -143,7 +143,11 @@ it('makes outside-month days unavailable with border ink', async () => {
 
 it("keeps today unavailable when it sits in a neighbouring month's cells", async () => {
 	// The library reports 24 June as 'today', not 'disabled', while May is shown.
-	await mount({ value: '2026-05-20', currentDay: undefined });
+	await mount({ currentDay: undefined });
+	fireEvent.click(getDay('2026-06-24'));
+	expect(defaults.onValueChange).toHaveBeenCalledWith('2026-06-24');
+	jest.clearAllMocks();
+	act(() => calendar.onMonthChange!(date('2026-05-01')));
 	const day = getDay('2026-06-24');
 	fireEvent.click(day);
 	expect(defaults.onValueChange).not.toHaveBeenCalled();
