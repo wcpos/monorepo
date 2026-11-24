@@ -120,6 +120,37 @@ test('drains orphans across more than one page with batch deletes', async () => 
 	});
 });
 
+test('keeps paging past a full page that holds no orphan', async () => {
+	const merchants = Array.from({ length: 100 }, (_, i) => ({
+		...probe(i + 1, PROBE_COUPON_ORPHAN_AGE_MS + 120_000),
+		description: 'merchant coupon',
+	}));
+	const orphans = Array.from({ length: 5 }, (_, i) => probe(i + 101));
+	const store = fakeStore([...merchants, ...orphans]);
+	const census = await sweepOrphanedProbeCoupons({
+		request: store.request,
+		storeUrl: STORE,
+		authorization,
+		now: () => NOW,
+	});
+	const batches = store.calls.filter((call) => call.method === 'post');
+	expect(batches.flatMap((call) => call.data!.delete)).toEqual(orphans.map((record) => record.id));
+	expect(store.remaining()).toHaveLength(100);
+	expect(
+		store.remaining().some((record) => record.description.startsWith(PROBE_COUPON_DESCRIPTION_LEAD))
+	).toBe(false);
+	expect(census).toEqual({
+		store: 'store.test',
+		before: 105,
+		probe: 5,
+		orphans: 5,
+		deleted: 5,
+		failed: 0,
+		after: 100,
+		complete: true,
+	});
+});
+
 test('counts refused batch entries as failed and does not loop on them', async () => {
 	const coupons = Array.from({ length: 120 }, (_, i) => probe(i + 1));
 	const refused = coupons.slice(0, 30);

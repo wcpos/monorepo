@@ -14,8 +14,8 @@ import type { APIRequestContext, APIResponse } from '@playwright/test';
  * window the category-filter spec waits on and the quiet the perf specs need before they
  * measure (main run 41536443936, shards 2/4/6, free only). So, like
  * `sweepOrphanedProductProbes`, each fixture sweeps the previous runs' orphans before it mints
- * its own. The sweep drains every orphan within its budget with batch deletes and prints a
- * census line to stdout.
+ * its own. The sweep reads every page of `zx` coupons within its budget, including pages with
+ * nothing to delete, batch-deletes orphans and prints a census line to stdout.
  */
 export const PROBE_COUPON_DESCRIPTION_LEAD = 'wcpos-e2e coupon';
 
@@ -169,7 +169,7 @@ export async function sweepOrphanedProbeCoupons(options: {
 			census.deleted += deletedThisRound;
 			census.failed += ids.length - deletedThisRound;
 			offset += records.length - deletedThisRound;
-			if (records.length < SWEEP_PAGE_SIZE || ids.length === 0) break;
+			if (records.length < SWEEP_PAGE_SIZE) break;
 		}
 		if (census.deleted > 0) {
 			const afterResponse = await couponRequest(request, 'get', storeUrl, undefined, {
