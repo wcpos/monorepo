@@ -50,7 +50,11 @@ const notAfterNow = (time: number) =>
 export function PaidOn(props: Props) {
 	// Suppress the creation-date fallback: this fact exists only when money was taken at the POS.
 	const rungUp = rungUpMomentOf({ ...props.payload, date_created_gmt: undefined });
-	return rungUp && wooMetaCarrier.readIdentity(props.payload.meta_data).cashierId ? (
+	// The store corrects a standing sale only: an order awaiting payment again has none.
+	const open = ['pos-open', 'pos-partial', 'pending', 'on-hold', 'failed', 'cancelled'].includes(
+		props.payload.status ?? ''
+	);
+	return rungUp && !open && wooMetaCarrier.readIdentity(props.payload.meta_data).cashierId ? (
 		<PaidOnRow {...props} rungUp={rungUp} />
 	) : null;
 }
@@ -142,7 +146,6 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 			<Form {...form}>
 				<Notice
 					testID="order-paid-on-card"
-					className="-mx-3"
 					tone="info"
 					icon={null}
 					live={false}
@@ -246,21 +249,14 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 		);
 
 	return (
-		<PropertyRow
-			id="paid_on"
-			label={t('orders.paid_on')}
-			align="top"
-			locked={locked}
-			verb={!locked ? verb : undefined}
-		>
-			<View className="gap-1">
-				<View
-					className={
-						phone
-							? 'flex-row flex-wrap items-center gap-1'
-							: 'min-h-9 flex-row flex-wrap items-center gap-1'
-					}
-				>
+		<>
+			<PropertyRow
+				id="paid_on"
+				label={t('orders.paid_on')}
+				locked={locked}
+				verb={!locked ? verb : undefined}
+			>
+				<View className="flex-row flex-wrap items-center gap-1">
 					<Text>{dayLabel(currentDay)}</Text>
 					{correction && currentDay < dayOf(rungUp) ? (
 						<Badge variant="info" tinted>
@@ -268,8 +264,11 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 						</Badge>
 					) : null}
 				</View>
+			</PropertyRow>
+			{/* Under the value, not the key: the dialog's key column (32) and its gap (3). */}
+			<View className={phone ? 'gap-2' : 'ml-35 gap-2'}>
 				{correction ? (
-					<View testID="order-paid-on-audit" className="gap-2">
+					<View testID="order-paid-on-audit" className="gap-2 pb-2">
 						<Text className="text-muted-foreground">
 							{t('orders.sale_day_rung_up', {
 								date: format(moment(rungUp), 'EEE d MMM yyyy, HH:mm', { locale }),
@@ -285,7 +284,7 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 				{pending || refused ? (
 					<View
 						testID={pending ? 'order-paid-on-waiting' : 'order-paid-on-refused'}
-						className="flex-row items-start gap-2 pt-2 pb-4"
+						className="flex-row items-start gap-2 pb-2"
 					>
 						<Icon
 							name={pending ? 'pending' : 'alert'}
@@ -303,6 +302,6 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 					</View>
 				) : null}
 			</View>
-		</PropertyRow>
+		</>
 	);
 }

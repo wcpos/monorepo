@@ -403,6 +403,7 @@ beforeEach(() => {
 });
 const mount = () => render(<EditOrderForm order={order} />);
 const paidRow = () => screen.getByTestId('order-row-paid_on');
+const audit = () => screen.getByTestId('order-paid-on-audit');
 function open() {
 	fireEvent.click(screen.getByTestId('order-edit-change-day'));
 }
@@ -434,6 +435,14 @@ it.each(['unpaid', 'no cashier'])('omits Paid on for %s', (kind) => {
 	mount();
 	expect(screen.queryByTestId('order-row-paid_on')).toBeNull();
 });
+it.each(['pending', 'pos-open', 'on-hold', 'cancelled'])(
+	'omits Paid on for a sale reopened or awaiting payment (%s), even with a paid date',
+	(status) => {
+		payload.status = status;
+		mount();
+		expect(screen.queryByTestId('order-row-paid_on')).toBeNull();
+	}
+);
 it('uses captured ledger money when date_paid_gmt is absent, not the creation date', () => {
 	payload.date_paid_gmt = undefined;
 	payload.meta_data?.push({
@@ -541,8 +550,8 @@ it('flushes and writes exactly one JSON-string request row, preserving all other
 	);
 	expect(screen.queryByTestId('order-paid-on-card')).toBeNull();
 	expect(paidRow().textContent).toContain('Mon 23 Nov 2026');
-	expect(paidRow().textContent).toContain('Rung up Tue 24 Nov 2026, 10:12');
-	expect(paidRow().textContent).toContain('Moved by Marta Ruiz: “Card taken yesterday”');
+	expect(audit().textContent).toContain('Rung up Tue 24 Nov 2026, 10:12');
+	expect(audit().textContent).toContain('Moved by Marta Ruiz: “Card taken yesterday”');
 	expect(screen.getByText('Rung up later').getAttribute('data-tone')).toBe('info');
 });
 it.each([
@@ -617,8 +626,8 @@ it.each(['2026-11-23T15:12:17Z', '2026-11-24T16:12:17Z', '2026-11-25T15:12:17Z']
 it.each([null, 999])('does not invent a name for correction author %s', (by) => {
 	setCorrection(correction(undefined, by));
 	mount();
-	expect(paidRow().textContent).toContain('Moved: “Card taken yesterday”');
-	expect(paidRow().textContent).not.toContain('Moved by');
+	expect(audit().textContent).toContain('Moved: “Card taken yesterday”');
+	expect(audit().textContent).not.toContain('Moved by');
 });
 it('shows loading while sending, then the confirmed previous day while deferred, and the ack without a refresh', async () => {
 	setCorrection(correction());
@@ -642,8 +651,8 @@ it('shows loading while sending, then the confirmed previous day while deferred,
 		'Moving to Sun 22 Nov · waiting for the store'
 	);
 	expect(screen.getByTestId('order-edit-change-day').hasAttribute('disabled')).toBe(false);
-	expect(paidRow().textContent).toContain('Rung up Tue 24 Nov 2026, 10:12');
-	expect(paidRow().textContent).toContain('Moved by Marta Ruiz');
+	expect(audit().textContent).toContain('Rung up Tue 24 Nov 2026, 10:12');
+	expect(audit().textContent).toContain('Moved by Marta Ruiz');
 	expect(screen.getByText('Rung up later')).toBeTruthy();
 	expect(logger.success).not.toHaveBeenCalled();
 	act(() => applyRequest());
@@ -756,7 +765,7 @@ it.each(['', '2026-11-23T15:12:17Z'])(
 		expect(screen.getByTestId('order-paid-on-waiting').textContent).toContain('Sun 22 Nov');
 		if (from) {
 			expect(screen.getByText('Rung up later')).toBeTruthy();
-			expect(paidRow().textContent).toContain('Moved by Marta Ruiz');
+			expect(audit().textContent).toContain('Moved by Marta Ruiz');
 		}
 	}
 );
