@@ -423,3 +423,282 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 		});
 	}
 }
+
+/** The plugin feature that records a sale-day correction, and the order meta that carries it. */
+const SALE_DAY_FEATURE = 'order_sale_day_correction';
+const SALE_DAY_META = '_wcpos_sale_day';
+
+type MetaEntry = { key?: unknown; value?: unknown };
+
+/**
+ * Passes every wcpos/v2 orders response through with each paid POS sale in it (a `date_paid_gmt`
+ * and a `_pos_user`) carrying an applied correction to the day before it was paid. Only that one
+ * meta entry changes, in the browser: the store's own orders are never written.
+ */
+async function serveSaleDayCorrected(page: Page, moved: Set<number>) {
+	const correct = (order: Record<string, unknown>) => {
+		const meta = order.meta_data as MetaEntry[];
+		const cashier = Number(meta.find((entry) => entry?.key === '_pos_user')?.value);
+		const paid = order.date_paid_gmt;
+		if (typeof paid !== 'string' || !Number.isFinite(cashier) || cashier <= 0) return;
+		const atGmt = new Date(Date.parse(`${paid.slice(0, 19)}Z`) - 86_400_000)
+			.toISOString()
+			.slice(0, 19);
+		order.meta_data = [
+			...meta.filter((entry) => entry?.key !== SALE_DAY_META),
+			{
+				key: SALE_DAY_META,
+				value: {
+					at_gmt: atGmt,
+					reason: 'Card machine batch settled after midnight',
+					by: cashier,
+					changed_at_gmt: new Date().toISOString().slice(0, 19),
+				},
+			},
+		];
+		if (typeof order.id === 'number') moved.add(order.id);
+	};
+	// The list, a targeted include= read and the pull envelope all carry whole orders somewhere.
+	const walk = (node: unknown, depth: number) => {
+		if (!node || typeof node !== 'object' || depth > 4) return;
+		if (Array.isArray(node)) {
+			for (const item of node) walk(item, depth + 1);
+			return;
+		}
+		const record = node as Record<string, unknown>;
+		if (Array.isArray(record.meta_data) && 'date_paid_gmt' in record) {
+			correct(record);
+			return;
+		}
+		for (const value of Object.values(record)) walk(value, depth + 1);
+	};
+	await page.route(
+		(url) => /^\/wcpos\/v2\/orders(\/|$)/.test(wcposRestRoute(url.href) ?? ''),
+		async (intercepted) => {
+			if (intercepted.request().method() !== 'GET') {
+				await intercepted.fallback();
+				return;
+			}
+			try {
+				const response = await intercepted.fetch();
+				let body: unknown;
+				try {
+					body = await response.json();
+				} catch {
+					await intercepted.fulfill({ response });
+					return;
+				}
+				walk(body, 0);
+				await intercepted.fulfill({ response, json: body });
+			} catch (error) {
+				if (isRouteTeardownError(error)) return;
+				console.warn('[orders-captures] orders route failed; aborting request:', error);
+				await intercepted.abort().catch(() => {});
+			}
+		}
+	);
+}
+
+/**
+ * The Edit tab's Paid on row on a paid POS sale. Read only: a day is picked and a reason typed,
+ * but Move is never pressed, so nothing is written to the store.
+ * - walk: capability and feature stubbed on; resting, the open card, its calendar, ready to move;
+ * - locked-cashier: the cashier's list loses the capability ("Set at the sale");
+ * - locked-plugin: the capability on, the status without `order_sale_day_correction`;
+ * - corrected: the orders responses carry an applied correction (see serveSaleDayCorrected).
+ */
+const PAID_ON_WALKS = [
+	{ walk: 'walk', capability: true, feature: true },
+	{ walk: 'locked-cashier', capability: false, feature: true },
+	{ walk: 'locked-plugin', capability: true, feature: false },
+	{ walk: 'corrected', capability: true, feature: true },
+] as const;
+
+for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
+	for (const colorScheme of CAPTURE_SCHEMES) {
+		test.describe(`${device}-${colorScheme}-regular`, () => {
+			test.use({ viewport, colorScheme, hasTouch: device === 'phone' });
+			for (const { walk, capability, feature } of PAID_ON_WALKS) {
+				test(`orders edit tab: paid on ${walk}`, async ({ page }, info) => {
+					test.skip(getStoreVariant(info) === 'free', 'The Orders page is Pro-only on Free');
+					// The corrected walk can wait out one rendered-row refresh (60 s) for its re-read.
+					test.setTimeout(walk === 'corrected' ? 330_000 : 240_000);
+					page.setDefaultTimeout(15_000);
+					const moved = new Set<number>();
+					await hydrateAuthenticatedPage(page, info, {
+						beforeBoot: async (booting) => {
+							await editCapabilities(booting, /^\/wcpos\/v2\/cashier\/\d+$/, (list) =>
+								list && capability
+									? [...list, REASSIGN_CAPABILITY]
+									: list?.filter((entry) => entry !== REASSIGN_CAPABILITY)
+							);
+							await editCapabilities(booting, /^\/wcpos\/v2\/status$/, (list) => [
+								...(list ?? []).filter((entry) => entry !== SALE_DAY_FEATURE),
+								...(capability ? [REASSIGN_FEATURE] : []),
+								...(feature ? [SALE_DAY_FEATURE] : []),
+							]);
+							if (walk === 'corrected') await serveSaleDayCorrected(booting, moved);
+						},
+					});
+					const restore = await ensureCaptureSettings(page, { english: true });
+					let walked = false;
+					const shoot = async (state: string) => {
+						const unscale = await applyScale(page, 'regular');
+						try {
+							await capture(page, info, state);
+						} finally {
+							await unscale();
+						}
+					};
+					try {
+						await navigate(page, 'orders');
+						const root = page.getByTestId('screen-orders');
+						await expect(
+							root.getByTestId('data-table-count').or(root.getByTestId('no-data-message')).first()
+						).toBeVisible({ timeout: 30_000 });
+						// The row shows on a completed sale only; the list's first rows can all be awaiting payment.
+						await root.getByTestId('order-filter-status').click();
+						await page.getByTestId('order-filter-status-completed').click();
+						await expect(root.getByTestId('order-filter-status-remove')).toBeVisible();
+						// The filtered list can take a store round trip to fill on the phone.
+						await expect(root.getByTestId(/^data-table-row-/).first()).toBeVisible({
+							timeout: 60_000,
+						});
+						if (walk === 'corrected') {
+							// The rendered-row refresh re-reads the visible orders on mount and every 60 s.
+							await expect
+								.poll(() => moved.size, { timeout: 75_000, intervals: [1_000] })
+								.toBeGreaterThan(0);
+						}
+						// The first paid POS sale in scope: an unpaid order or an online one has no Paid on row.
+						const rows = root.getByTestId(/^data-table-row-/);
+						const modal = page.getByTestId('order-modal');
+						const paidOn = modal.getByTestId('order-row-paid_on');
+						let found = false;
+						for (let index = 0; index < Math.min(await rows.count(), 10) && !found; index++) {
+							const row = rows.nth(index);
+							await (device === 'tablet' ? row.getByTestId('order-open-button') : row).click();
+							await expect(modal).toBeVisible();
+							await modal.getByRole('tab').nth(1).click();
+							found = await becomesVisible(paidOn, 5_000);
+							if (found && walk === 'corrected') {
+								// The audit line, not the Rung up later badge beside the day.
+								// The filtered rows are re-read on the next refresh pass, up to 60 s away.
+								found = await becomesVisible(modal.getByTestId('order-paid-on-audit'), 70_000);
+							}
+							if (!found) await page.getByTestId('order-modal-close').click();
+						}
+						test.skip(
+							!found,
+							walk === 'corrected'
+								? 'No paid POS sale in the active scope shows the served correction'
+								: 'No paid POS sale (an order with a cashier and a paid date) in the active scope'
+						);
+						// The phone's pane scrolls under its pinned footer, so an end-aligned element hides behind it.
+						const showWhole = (element: typeof paidOn) =>
+							device === 'phone'
+								? element.evaluate((node) => node.scrollIntoView({ block: 'center' }))
+								: element.scrollIntoViewIfNeeded();
+						await showWhole(paidOn);
+						const changeDay = modal.getByTestId('order-edit-change-day');
+						if (walk === 'locked-cashier' || walk === 'locked-plugin') {
+							await expect(changeDay).toHaveCount(0);
+							await shoot(`edit-paid-on-${walk}`);
+						} else if (walk === 'corrected') {
+							await expect(changeDay).toBeVisible();
+							await shoot('edit-paid-on-corrected');
+						} else {
+							await expect(changeDay).toBeVisible({ timeout: 30_000 });
+							await shoot('edit-paid-on-resting');
+							await changeDay.click();
+							const card = modal.getByTestId('order-paid-on-card');
+							await expect(card).toBeVisible();
+							await showWhole(card);
+							await shoot('edit-paid-on-card');
+							await card.getByTestId('order-paid-on-day').click();
+							const cells = page.locator('[data-testid^="order-paid-on-day-"]');
+							await expect(cells.first()).toBeVisible();
+							await shoot('edit-paid-on-calendar');
+							// The day before the sale's own, or the nearest earlier day the calendar offers.
+							const pickable = async () =>
+								cells.evaluateAll((elements) =>
+									elements.map((element) => ({
+										day: (element.getAttribute('data-testid') ?? '').replace(
+											'order-paid-on-day-',
+											''
+										),
+										enabled: element.getAttribute('aria-disabled') !== 'true',
+										// The one unavailable day that is not in the future is the sale's own.
+										current:
+											element.getAttribute('aria-disabled') === 'true' &&
+											(element.getAttribute('data-testid') ?? '').replace(
+												'order-paid-on-day-',
+												''
+											) <= new Date().toLocaleDateString('en-CA'),
+									}))
+								);
+							const earlier = (list: Awaited<ReturnType<typeof pickable>>, before: string) =>
+								list
+									.filter((cell) => cell.enabled && cell.day < before)
+									.map((cell) => cell.day)
+									.sort()
+									.pop();
+							let shown = await pickable();
+							// The latest such day: the grid's previous-month days are unavailable too, and earlier.
+							const current =
+								shown
+									.filter((cell) => cell.current)
+									.map((cell) => cell.day)
+									.sort()
+									.at(-1) ?? '9999-12-31';
+							let day = earlier(shown, current);
+							if (!day) {
+								await page.locator('[data-testid$=".leftArrow"]').first().click();
+								await page.waitForTimeout(SETTLE_MS);
+								shown = await pickable();
+								day = earlier(shown, current);
+							}
+							expect(day, 'an earlier day the calendar offers').toBeTruthy();
+							await page.getByTestId(`order-paid-on-day-${day}`).click();
+							await expect(cells.first()).toBeHidden();
+							await card.getByTestId('order-paid-on-reason').fill('Rung up the morning after');
+							const move = card.getByTestId('order-paid-on-move');
+							await expect(move).toBeEnabled();
+							await showWhole(card);
+							await shoot('edit-paid-on-ready');
+							await card.getByTestId('order-paid-on-cancel').click();
+							await expect(card).toBeHidden();
+						}
+						await page.getByTestId('order-modal-close').click();
+						await expect(modal).toBeHidden();
+						await navigate(page, 'pos');
+						await expect(page.getByTestId('search-products').first()).toBeVisible({
+							timeout: 30_000,
+						});
+						await page.waitForTimeout(600);
+						walked = true;
+					} finally {
+						const backToPos: [string, () => Promise<unknown>] = [
+							'back to the POS',
+							async () => {
+								const close = page.getByTestId('order-modal-close');
+								if (await close.isVisible()) {
+									await close.click();
+									await expect(page.getByTestId('order-modal')).toBeHidden();
+								}
+								if (await page.getByTestId('screen-orders').isVisible()) {
+									await navigate(page, 'pos');
+									await expect(page.getByTestId('search-products').first()).toBeVisible({
+										timeout: 30_000,
+									});
+									await page.waitForTimeout(600);
+								}
+							},
+						];
+						await cleanUp(walked, [...(walked ? [] : [backToPos]), ['settings', restore]]);
+					}
+				});
+			}
+		});
+	}
+}
