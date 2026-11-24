@@ -86,6 +86,7 @@ import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useServerFeature } from '../../hooks/use-server-feature';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
+import { PaidOn } from './paid-on';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 
@@ -113,15 +114,20 @@ type Intent = {
 	success: string;
 	failure: string;
 	context: Record<string, unknown>;
+	applied?: (payload: OrderPayload) => boolean;
 };
 
 /**
- * The order's meta with one identity row set by value. Every other row stays exactly as it is,
+ * The order's meta with one row set by value. Every other row stays exactly as it is,
  * an absent one included (`stampIdentity` stamps the cashier AND the store, so it would write the
- * row the owner did not change). A row is cleared as '', never dropped: a missing protected row
+ * row the owner did not change). Identity is cleared as '', never dropped: a missing protected row
  * cannot erase the stored one (`mergeProtectedOrderMeta`).
  */
-function withIdentityRow(meta: MetaDataEntry[] | undefined, key: string, value: string) {
+function withMetaRow(
+	meta: MetaDataEntry[] | undefined,
+	key: string,
+	value: MetaDataEntry['value']
+) {
 	const rows = meta ?? [];
 	return rows.some((row) => row?.key === key)
 		? rows.map((row) => (row?.key === key ? { ...row, value } : row))
@@ -273,20 +279,46 @@ function EditOrderFormFields({ order }: Props) {
 				// an order that already holds the pick writes (and pushes, and reports) nothing.
 				write: (payload) => {
 					replaced = valueOf(payload.meta_data);
-					return replaced === next
-						? {}
-						: { meta_data: withIdentityRow(payload.meta_data, key, next) };
+					return replaced === next ? {} : { meta_data: withMetaRow(payload.meta_data, key, next) };
 				},
 				// Only while the order still holds the refused value: a newer assignment is left alone,
 				// and the empty change writes and pushes nothing.
 				revert: (payload) =>
 					valueOf(payload.meta_data) === next
-						? { meta_data: withIdentityRow(payload.meta_data, key, replaced) }
+						? { meta_data: withMetaRow(payload.meta_data, key, replaced) }
 						: {},
 				success: field === 'cashier' ? t('orders.cashier_updated') : t('orders.store_updated'),
 				failure:
 					field === 'cashier' ? 'Failed to update order cashier' : 'Failed to update order store',
 				context: { [field]: next },
+			};
+		});
+	}
+
+	function moveSaleDay(atGmt: string, reason: string, success: string) {
+		return sendIntent(() => {
+			const key = POS_META_KEYS.saleDayRequest;
+			let request = '';
+			return {
+				write: (payload) => {
+					request = wooMetaCarrier.saleDayRequestRow(
+						atGmt,
+						reason,
+						wooMetaCarrier.readSaleDay(payload.meta_data)?.atGmt ?? ''
+					);
+					return { meta_data: withMetaRow(payload.meta_data, key, request) };
+				},
+				revert: (payload) =>
+					payload.meta_data?.find((row) => row.key === key)?.value === request
+						? { meta_data: withMetaRow(payload.meta_data, key, '') }
+						: {},
+				applied: (payload) => {
+					const ack = wooMetaCarrier.readSaleDay(payload.meta_data);
+					return ack?.atGmt === atGmt;
+				},
+				success,
+				failure: 'Failed to move sale day',
+				context: { atGmt },
 			};
 		});
 	}
@@ -309,11 +341,14 @@ function EditOrderFormFields({ order }: Props) {
 			if (!(await saveOrderFields(order, intent.write))) return;
 			patched = true;
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-			await pushDocument(order);
+			const answer = await pushDocument(order);
+			const applied = !intent.applied || intent.applied((answer ?? order.getLatest()).payload);
+			if (!applied) return 'refused' as const;
 			mutationLogger.success(intent.success, {
 				showToast: true,
 				context: { orderId: order.getLatest().payload.id, ...intent.context },
 			});
+			return 'applied' as const;
 		} catch (error) {
 			// A pending outcome (the wait timed out, or the row is held offline or for a sign-in) is
 			// not a refusal: the intent stays queued and lands when the store answers, exactly as the
@@ -340,7 +375,7 @@ function EditOrderFormFields({ order }: Props) {
 					);
 				}
 			}
-			if (isErrorReported(error)) return;
+			if (isErrorReported(error)) return pending ? ('pending' as const) : undefined;
 			// "Still on its way" only when the intent is still queued; after a rollback the cashier
 			// must not be told the change is still arriving.
 			reportPushFailure(mutationLogger, intent?.failure ?? 'Failed to update order', error, {
@@ -348,6 +383,7 @@ function EditOrderFormFields({ order }: Props) {
 				...(pending ? { stillSendingTitle: t('common.order_still_sending') } : {}),
 				context: { orderId: order.getLatest().payload.id },
 			});
+			return pending ? ('pending' as const) : undefined;
 		} finally {
 			setLoading(false);
 		}
@@ -610,6 +646,7 @@ function EditOrderFormFields({ order }: Props) {
 							onUpdate={(pick) => void updateIdentity('store', pick)}
 						/>
 					</Suspense>
+					<PaidOn payload={payload} busy={loading || storageDegraded} onMove={moveSaleDay} />
 					<PropertyRow id="customer_note" label={t('common.customer_note')} align="top">
 						<FormField
 							control={form.control}

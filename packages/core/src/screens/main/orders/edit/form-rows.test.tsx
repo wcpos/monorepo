@@ -8,6 +8,9 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
 
+// Paid on has its own integration suite; keep this form harness focused on its existing rows.
+jest.mock('./paid-on', () => ({ PaidOn: () => null }));
+
 type Pressable = React.PropsWithChildren<{
 	onPress?: () => void;
 	testID?: string;
