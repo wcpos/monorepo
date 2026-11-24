@@ -1,4 +1,5 @@
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { recordRegisterFact, type RegisterFact } from '../../src/register-session/audit';
 
@@ -459,14 +460,30 @@ it.each<{
 			documentId: 'document-id',
 			registerId: 'r',
 			status: 403,
-			errorCode: 'refused',
+			serverCode: 'refused',
 			field: 'amount',
 			message: 'No',
 		});
+		expect(options.context).not.toHaveProperty('errorCode');
 		expect(JSON.stringify(options)).not.toContain('PRIVATE');
 		expect(options).not.toHaveProperty('actor');
 	}
 );
+it('an approval refusal keeps its own code and files the store code as serverCode', () => {
+	recordRegisterFact({
+		kind: 'outbox-approval-refused',
+		sessionId: 's',
+		registerId: 'r',
+		endpoint: 'sessions/status',
+		status: 403,
+		errorCode: 'wcpos_override_refused',
+	});
+	const options = logger.warn.mock.calls[logger.warn.mock.calls.length - 1][1]!;
+	expect(options.code).toBe(ERROR_CODES.REGISTER_APPROVAL_REFUSED);
+	expect(options.context?.serverCode).toBe('wcpos_override_refused');
+	expect(options.context).not.toHaveProperty('errorCode');
+});
+
 it('retains capped outbox identity and untitled bridge diagnostics', () => {
 	recordRegisterFact({
 		kind: 'outbox-approval-refused',
@@ -487,7 +504,7 @@ it('retains capped outbox identity and untitled bridge diagnostics', () => {
 			registerId: 'r',
 			stage: 'drain',
 			status: undefined,
-			errorCode: undefined,
+			serverCode: undefined,
 			message: 'disk',
 			consecutiveFailures: 2,
 		},
