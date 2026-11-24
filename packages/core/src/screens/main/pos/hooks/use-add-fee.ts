@@ -6,6 +6,7 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
+import { showCountingNotice, showPriceCheckNotice } from './use-add-product';
 import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderActions } from '../contexts/current-order';
@@ -29,7 +30,7 @@ interface FeeData {
  *
  */
 export const useAddFee = () => {
-	const { addItemToOrder } = useAddItemToOrder();
+	const { addItemToOrder, readCounting, readPriceCheck } = useAddItemToOrder();
 	const t = useT();
 	const cartConfig = useCartConfig();
 	// Resolved at the press, not subscribed in render (current-order ledger 1).
@@ -41,6 +42,15 @@ export const useAddFee = () => {
 	 */
 	const addFee = React.useCallback(
 		async (data: FeeData) => {
+			if (await readCounting()) {
+				showCountingNotice(t);
+				return;
+			}
+			const priceCheck = await readPriceCheck();
+			if (priceCheck) {
+				showPriceCheckNotice(t, priceCheck);
+				return;
+			}
 			const currentOrderRecord = getCurrentOrderRecord();
 			const orderLogger = cartLogger.with({
 				orderUUID: currentOrderRecord.uuid,
@@ -104,7 +114,15 @@ export const useAddFee = () => {
 				});
 			}
 		},
-		[cartConfig, getCurrentOrderRecord, addItemToOrder, reportEngineWarnings, t]
+		[
+			cartConfig,
+			getCurrentOrderRecord,
+			addItemToOrder,
+			readCounting,
+			readPriceCheck,
+			reportEngineWarnings,
+			t,
+		]
 	);
 
 	return { addFee };
