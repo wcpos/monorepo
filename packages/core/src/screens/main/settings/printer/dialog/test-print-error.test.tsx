@@ -76,6 +76,7 @@ jest.mock('../../../../../contexts/translations', () => ({
 const failureWithDiagnostics: TestPrintFailure = {
 	message: 'Could not connect to Epson printer at https://localhost:8043/cgi-bin/epos/service.cgi.',
 	diagnostics: {
+		reason: 'unreachable',
 		vendorLabel: 'Epson',
 		attemptLabel: 'Epson ePOS over HTTPS',
 		url: 'https://localhost:8043/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000',
