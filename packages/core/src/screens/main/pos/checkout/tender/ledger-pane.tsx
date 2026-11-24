@@ -137,24 +137,30 @@ export function LedgerLegs({
 	view,
 	format,
 	closing = false,
+	storeTender,
 }: {
 	view: LedgerView;
 	format: Props['format'];
 	closing?: boolean;
+	/** What the store took with no till record (`storeSettledTender`, #3755): drawn only with no rows. */
+	storeTender?: { amountMinor: number; title: string };
 }) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
+	const store = view.rows.length === 0 ? storeTender : undefined;
+	const paidMinor = store ? store.amountMinor : view.paidMinor;
+	const balanceMinor = store ? 0 : view.balanceMinor;
 	const firstPending = view.rows.find((row) => row.status === 'pending');
 	const settled = view.rows.filter(isSettledPaymentRow);
 	const lastTime = settled.at(-1)?.events?.[0]?.t;
 	// A zero balance with nothing settled (every leg failed or voided) is not paid.
-	const paidInFull = view.balanceMinor === 0 && settled.length > 0;
+	const paidInFull = balanceMinor === 0 && (settled.length > 0 || store !== undefined);
 	const paidInFullText = lastTime
 		? t('pos_checkout.paid_in_full_at', { time: formatDate(new Date(lastTime), 'p') })
 		: t('pos_checkout.paid_in_full');
 
 	const legs =
-		view.rows.length === 0 ? (
+		view.rows.length === 0 && !store ? (
 			view.invoiceSent ? (
 				<Text testID="checkout-ledger-sent" variant="key" decodeHtml>
 					{view.invoiceSent.destination
@@ -166,6 +172,14 @@ export function LedgerLegs({
 			)
 		) : (
 			<VStack space="xs" testID="checkout-ledger">
+				{store ? (
+					<HStack className="border-border items-center justify-between gap-2 border-b py-2">
+						<Text variant="subheading" className="flex-1" decodeHtml>
+							{store.title}
+						</Text>
+						<Text className="text-sm tabular-nums">{format(store.amountMinor)}</Text>
+					</HStack>
+				) : null}
 				{view.rows.map((row, index) => (
 					<LedgerLeg
 						key={row.id}
@@ -193,17 +207,17 @@ export function LedgerLegs({
 					amount={format(view.totalMinor)}
 					amountTestID="checkout-order-total"
 				/>
-				<MoneyList.Row label={t('pos_checkout.paid')} amount={format(view.paidMinor)} />
+				<MoneyList.Row label={t('pos_checkout.paid')} amount={format(paidMinor)} />
 				<MoneyList.Total
 					label={paidInFull ? paidInFullText : t('pos_checkout.remaining')}
 					tone={paidInFull ? 'ok' : 'default'}
-					amount={paidInFull ? undefined : format(view.balanceMinor)}
+					amount={paidInFull ? undefined : format(balanceMinor)}
 					amountTestID="checkout-ledger-remaining"
 				/>
 				{/* Paid in full has no amount to show; the zero stays readable for the specs. */}
 				{paidInFull ? (
 					<Text testID="checkout-ledger-remaining" className="hidden">
-						{format(view.balanceMinor)}
+						{format(balanceMinor)}
 					</Text>
 				) : null}
 			</MoneyList>

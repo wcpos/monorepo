@@ -1,5 +1,3 @@
-import { log } from '@wcpos/utils/logger';
-
 import { type StoreAuthorization, storeRequestOptions } from './probe-credential';
 
 import type { APIRequestContext, APIResponse } from '@playwright/test';
@@ -9,13 +7,15 @@ import type { APIRequestContext, APIResponse } from '@playwright/test';
  *
  * Every probe coupon's description starts with this lead and its code with the search-probe
  * token (`zx…`). The fixture that creates one deletes it in `finally`, but a worker killed by
- * a timeout never reaches `finally`, and a delete that 401s is swallowed on purpose (a teardown
- * error must never fail a test). By 2026-11-02 dev-free carried 3,990 of them — 40 pages of
+ * a timeout never reaches `finally`, and a failed teardown delete is logged, never thrown (a
+ * teardown error must never fail a test). Teardown used the setup-time writer token, which a
+ * worker-scoped coupon outlives (30 min), so its delete 401ed silently; it now renews first. By 2026-11-02 dev-free carried 3,990 of them — 40 pages of
  * coupons that the 2.0 startup sync paged through on every run, starving the filtered product
  * window the category-filter spec waits on and the quiet the perf specs need before they
  * measure (main run 41536443936, shards 2/4/6, free only). So, like
  * `sweepOrphanedProductProbes`, each fixture sweeps the previous runs' orphans before it mints
- * its own.
+ * its own. The sweep reads every page of `zx` coupons within its budget, including pages with
+ * nothing to delete, batch-deletes orphans and prints a census line to stdout.
  */
 export const PROBE_COUPON_DESCRIPTION_LEAD = 'wcpos-e2e coupon';
 
@@ -25,14 +25,35 @@ export const PROBE_COUPON_CODE_LEAD = 'zx';
 /** Orphans older than this are swept; a live run is never this long. */
 export const PROBE_COUPON_ORPHAN_AGE_MS = 2 * 60 * 60 * 1_000;
 
-/** One wc/v3 page per sweep: the leak is a few coupons per interrupted run, never hundreds. */
+/** Each sweep round reads one wc/v3 page and batch-deletes at most this many orphans. */
 const SWEEP_PAGE_SIZE = 100;
+
+/** Rounds per sweep: one page read plus one batch delete each. Bounds a sweep at 5,000 coupons. */
+export const SWEEP_MAX_ROUNDS = 50;
+/** Stop starting rounds before the fixture's 180 s timeout; the next sweep carries on. */
+export const SWEEP_BUDGET_MS = 90_000;
+
+export interface CouponSweepCensus {
+	store: string;
+	before: number | null;
+	probe: number;
+	orphans: number;
+	deleted: number;
+	failed: number;
+	after: number | null;
+	complete: boolean;
+}
+
+/** One stdout line of counts, without credentials. */
+export function formatCouponSweepCensus(census: CouponSweepCensus): string {
+	return `[coupon-sweep] ${census.store} before=${census.before ?? '?'} probe=${census.probe} orphans=${census.orphans} deleted=${census.deleted} failed=${census.failed} after=${census.after ?? '?'} complete=${census.complete}`;
+}
 
 export async function couponRequest(
 	request: APIRequestContext,
 	method: 'get' | 'post' | 'delete',
 	storeUrl: string,
-	id: number | undefined,
+	id: number | 'batch' | undefined,
 	options: Record<string, unknown>
 ): Promise<APIResponse> {
 	const base = storeUrl.replace(/\/+$/, '');
@@ -40,6 +61,14 @@ export async function couponRequest(
 	const pretty = await request[method](`${base}/wp-json/wc/v3/${path}`, options);
 	if (pretty.status() !== 404) return pretty;
 	return request[method](`${base}/?rest_route=/wc/v3/${path}`, options);
+}
+
+function isProbeCoupon(record: Record<string, unknown> | null): boolean {
+	const code = typeof record?.code === 'string' ? record.code : '';
+	const description = typeof record?.description === 'string' ? record.description : '';
+	return (
+		code.startsWith(PROBE_COUPON_CODE_LEAD) && description.startsWith(PROBE_COUPON_DESCRIPTION_LEAD)
+	);
 }
 
 /**
@@ -57,14 +86,11 @@ export function selectOrphanedProbeCoupons(records: unknown, nowMs: number): num
 				? (value as Record<string, unknown>)
 				: null;
 		const id = Number(record?.id ?? 0);
-		const code = typeof record?.code === 'string' ? record.code : '';
-		const description = typeof record?.description === 'string' ? record.description : '';
 		const createdGmt = typeof record?.date_created_gmt === 'string' ? record.date_created_gmt : '';
 		if (
 			Number.isInteger(id) &&
 			id > 0 &&
-			code.startsWith(PROBE_COUPON_CODE_LEAD) &&
-			description.startsWith(PROBE_COUPON_DESCRIPTION_LEAD) &&
+			isProbeCoupon(record) &&
 			Date.parse(`${createdGmt}Z`) < cutoff
 		) {
 			ids.push(id);
@@ -78,30 +104,89 @@ export async function sweepOrphanedProbeCoupons(options: {
 	request: APIRequestContext;
 	storeUrl: string;
 	authorization: StoreAuthorization;
-}): Promise<void> {
-	const { request, storeUrl, authorization } = options;
+	now?: () => number;
+}): Promise<CouponSweepCensus | null> {
+	const { request, storeUrl, authorization, now = Date.now } = options;
+	let store = '';
 	try {
+		store = new URL(storeUrl).host;
+		const start = now();
 		const auth = storeRequestOptions(authorization);
-		const response = await couponRequest(request, 'get', storeUrl, undefined, {
+		const beforeResponse = await couponRequest(request, 'get', storeUrl, undefined, {
 			...auth,
-			params: {
-				...auth.params,
-				search: PROBE_COUPON_CODE_LEAD,
-				per_page: String(SWEEP_PAGE_SIZE),
-				orderby: 'date',
-				order: 'asc',
-			},
+			params: { ...auth.params, per_page: '1' },
 		});
-		if (!response.ok()) throw new Error(`HTTP ${response.status()}`);
-		const ids = selectOrphanedProbeCoupons(await response.json(), Date.now());
-		for (const id of ids) {
-			await couponRequest(request, 'delete', storeUrl, id, {
+		const beforeTotal = Number(beforeResponse.headers()['x-wp-total'] ?? NaN);
+		const before = beforeResponse.ok() && Number.isFinite(beforeTotal) ? beforeTotal : null;
+		const census: CouponSweepCensus = {
+			store,
+			before,
+			probe: 0,
+			orphans: 0,
+			deleted: 0,
+			failed: 0,
+			after: before,
+			complete: true,
+		};
+		let offset = 0;
+		for (let round = 0; ; round++) {
+			if (round >= SWEEP_MAX_ROUNDS || (round > 0 && now() - start >= SWEEP_BUDGET_MS)) {
+				census.complete = false;
+				break;
+			}
+			const response = await couponRequest(request, 'get', storeUrl, undefined, {
 				...auth,
-				params: { ...auth.params, force: 'true' },
-			}).catch(() => {});
+				params: {
+					...auth.params,
+					search: PROBE_COUPON_CODE_LEAD,
+					per_page: String(SWEEP_PAGE_SIZE),
+					orderby: 'date',
+					order: 'asc',
+					offset: String(offset),
+				},
+			});
+			if (!response.ok()) break;
+			const records = await response.json();
+			if (!Array.isArray(records)) break;
+			census.probe += records.filter(isProbeCoupon).length;
+			const ids = selectOrphanedProbeCoupons(records, now());
+			census.orphans += ids.length;
+			let deletedThisRound = 0;
+			if (ids.length > 0) {
+				try {
+					const batch = await couponRequest(request, 'post', storeUrl, 'batch', {
+						...auth,
+						data: { delete: ids },
+					});
+					if (batch.ok()) {
+						const body = (await batch.json()) as { delete: { error?: unknown }[] };
+						deletedThisRound = body.delete.filter((entry) => !entry.error).length;
+					}
+				} catch {
+					// Every id in a failed batch counts as failed below.
+				}
+			}
+			census.deleted += deletedThisRound;
+			census.failed += ids.length - deletedThisRound;
+			offset += records.length - deletedThisRound;
+			if (records.length < SWEEP_PAGE_SIZE) break;
 		}
-		if (ids.length > 0) log.info(`[coupon-probe] swept ${ids.length} orphaned probe coupon(s)`);
-	} catch {
-		log.warn('[coupon-probe] orphan coupon sweep failed');
+		if (census.deleted > 0) {
+			const afterResponse = await couponRequest(request, 'get', storeUrl, undefined, {
+				...auth,
+				params: { ...auth.params, per_page: '1' },
+			});
+			const afterTotal = Number(afterResponse.headers()['x-wp-total'] ?? NaN);
+			census.after = afterResponse.ok() && Number.isFinite(afterTotal) ? afterTotal : null;
+		}
+		console.log(formatCouponSweepCensus(census));
+		return census;
+	} catch (error) {
+		const message = (error instanceof Error ? error.message : String(error))
+			.split('\n')[0]
+			.replace(/https?:\/\/\S+/g, '[request]')
+			.replaceAll(authorization.value.replace(/^Bearer\s+/i, ''), '[redacted]');
+		console.log(`[coupon-sweep] ${store} sweep failed: ${message}`);
+		return null;
 	}
 }
