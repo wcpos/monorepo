@@ -1,8 +1,11 @@
 /** @jest-environment jsdom */
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
+
+import type { QueryHandle, QueryResult } from '@wcpos/query';
 
 import { getCheckoutModeSnapshot, leaveCheckout, resetCheckoutMode } from './checkout-mode';
 import { readCheckoutSeed } from './pos-url';
+import { tillCartHref } from './till-route';
 import { useCheckoutUrlSeed } from './use-checkout-url-seed';
 
 let mockSize = 'lg';
@@ -74,4 +77,59 @@ it('ignores ordinary cart links', () => {
 	renderHook(() => useCheckoutUrlSeed(readCheckoutSeed(['u'])));
 	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 	expect(mockReplace).not.toHaveBeenCalled();
+});
+type Hit = { id: string; serverId?: number };
+const snapshotOf = (hits: Hit[] | null) => ({
+	ready: hits !== null,
+	hits: (hits ?? []).map(({ id, serverId }) => ({ id, record: { payload: { id: serverId } } })),
+});
+function openOrders(hits: Hit[] | null) {
+	const listeners = new Set<() => void>();
+	let value = snapshotOf(hits);
+	const handle = {
+		get value() {
+			return value;
+		},
+		subscribe(listener: () => void) {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
+		},
+	} as unknown as QueryHandle<QueryResult>;
+	const answer = (next: Hit[]) => {
+		value = snapshotOf(next);
+		listeners.forEach((listener) => listener());
+	};
+	return { handle, answer };
+}
+it.each(['lg', 'sm'])(
+	'sends a reloaded checkout for an order the store has not created back to its cart (%s)',
+	(size) => {
+		mockSize = size;
+		const { handle } = openOrders([{ id: 'u' }]);
+		renderHook(() => useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout', 'cash']), handle));
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledWith(tillCartHref(size === 'sm', 'u'));
+		expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
+		expect(getCheckoutModeSnapshot().tenderMethods.size).toBe(0);
+	}
+);
+it('enters checkout from a reload for an order the store has created', () => {
+	const { handle } = openOrders([{ id: 'u', serverId: 42 }]);
+	renderHook(() => useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout', 'cash']), handle));
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('u')).toBe(true);
+	expect(getCheckoutModeSnapshot().tenderMethods.get('u')).toBe('cash');
+	expect(mockReplace).not.toHaveBeenCalled();
+});
+it('waits for the order record before entering or redirecting', () => {
+	const { handle, answer } = openOrders(null);
+	const { rerender } = renderHook(() =>
+		useCheckoutUrlSeed(readCheckoutSeed(['u', 'checkout']), handle)
+	);
+	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
+	expect(mockReplace).not.toHaveBeenCalled();
+	act(() => answer([{ id: 'u' }]));
+	rerender();
+	expect(mockReplace).toHaveBeenCalledTimes(1);
+	expect(mockReplace).toHaveBeenCalledWith(tillCartHref(false, 'u'));
+	expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 });

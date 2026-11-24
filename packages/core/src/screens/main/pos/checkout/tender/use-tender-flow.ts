@@ -923,7 +923,8 @@ export function useTenderFlow(
 			const patchFees = async (data: ReturnType<typeof withFees>) => {
 				if (!(await recordLedger(target, data))) throw new Error('rounding_fee_failed');
 			};
-			await recordSaleAttempt(ctx, {
+			// Journaled only once a press can move money: a pre-flight refusal leaves no pending entry.
+			const attempt: Parameters<typeof recordSaleAttempt>[1] = {
 				order,
 				source:
 					balanceMinor === 0
@@ -936,7 +937,7 @@ export function useTenderFlow(
 				completing: sale.completing,
 				settledOrderStatus,
 				settledOrderGateway: method?.id,
-			});
+			};
 			const saveProvenance = async (paymentId?: string) => {
 				if (!sale.completing) return;
 				// A stamp the last leg left in flight lands before this leg's own provenance write.
@@ -947,6 +948,7 @@ export function useTenderFlow(
 			};
 			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
+				await recordSaleAttempt(ctx, attempt);
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
 				// The close approves the sale the press commits: its rounding fee moves the stored
 				// total by the fee alone, so the approved total is the rounded one.
@@ -1023,6 +1025,7 @@ export function useTenderFlow(
 				});
 				return;
 			}
+			await recordSaleAttempt(ctx, attempt);
 
 			if (method.capture.mode === 'device') {
 				const liveDriver = getDriver(method.capture.provider);

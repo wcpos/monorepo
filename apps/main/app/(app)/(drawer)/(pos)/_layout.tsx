@@ -54,7 +54,6 @@ export default function POSLayout() {
 		setPrevInPos(location.inPos);
 		if (location.inPos) setTillEntry(tillEntry + 1);
 	}
-	useCheckoutUrlSeed(location.seed);
 	// The provider follows the till, never a sheet's order (#3150).
 	const tillOrderId = useTillOrderId(location);
 
@@ -64,6 +63,8 @@ export default function POSLayout() {
 	// is what starts the read, and a boundary suspending on a handle its own subtree owns never
 	// commits that effect (#1707).
 	const openOrdersHandle = useOpenOrdersHandle(cashierID, storeID, registerId);
+	// A reloaded checkout reads the order's record from these to know whether the store has it.
+	useCheckoutUrlSeed(location.seed, openOrdersHandle);
 
 	// Built HERE, above the Suspense below, and handed to the provider — the same placement as
 	// the open-orders handle above it and for the same reason: a resource built inside the
