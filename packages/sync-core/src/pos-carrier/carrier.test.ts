@@ -70,12 +70,20 @@ describe.each(carrierFactories)('%s PosCarrier contract', (_name, createCarrier)
 			expect(POS_META_KEYS.saleDay).toBe('_wcpos_sale_day');
 			expect(PROTECTED_ORDER_META_KEYS).toContain('_wcpos_sale_day');
 		});
-		it('rejects a day the calendar does not have', () => {
+		it.each(['2026-02-30T09:12:00Z', '2026-02-29T09:12:00Z'])(
+			'rejects a day the calendar does not have: %s',
+			(at_gmt) => {
+				expect(
+					createCarrier().readSaleDay([{ key: '_wcpos_sale_day', value: { at_gmt, reason: 'x' } }])
+				).toBeNull();
+			}
+		);
+		it('accepts 29 February in a leap year', () => {
 			expect(
 				createCarrier().readSaleDay([
-					{ key: '_wcpos_sale_day', value: { at_gmt: '2026-02-30T09:12:00Z', reason: 'x' } },
-				])
-			).toBeNull();
+					{ key: '_wcpos_sale_day', value: { at_gmt: '2028-02-29T09:12:00Z', reason: 'x' } },
+				])?.atGmt
+			).toBe('2028-02-29T09:12:00Z');
 		});
 		it('reads the decoded object the server serves on a pull', () => {
 			expect(
