@@ -36,6 +36,7 @@ import {
 	assertBulkSuccess,
 	Fetcher,
 	HybridCollection,
+	POS_META_KEYS,
 	ReferenceCollection,
 	type RemoteId,
 	remoteIdOrNull,
@@ -696,8 +697,11 @@ const ordersWriteFacet = createWriteFacet({
 	// cart. Editable values stay local; server-owned money facts replace local meta.
 	// The display-field strip re-applies for payloads predating it (#885/#890).
 	graftAckIdentity: (payload, source, options) => {
+		// The sale-day correction is the server's verdict on a manager's request: the request the
+		// resident holds is replaced by what the store answered, successor or not.
+		const serverKeys = [...SERVER_OWNED_ORDER_META_KEYS, POS_META_KEYS.saleDay];
 		const sourceMeta = (Array.isArray(source.meta_data) ? source.meta_data : []).filter((entry) =>
-			SERVER_OWNED_ORDER_META_KEYS.includes(entry.key)
+			serverKeys.includes(entry.key)
 		);
 		// A whole document's server-owned set replaces the resident's, deletions included. A
 		// trimmed acknowledgement (the push contract allows a bare `{ id }`) says nothing about a
@@ -711,8 +715,7 @@ const ordersWriteFacet = createWriteFacet({
 			// Even with a successor, the server owns these facts; editable intent stays local.
 			meta_data: [
 				...(Array.isArray(payload.meta_data) ? payload.meta_data : []).filter(
-					(entry) =>
-						!SERVER_OWNED_ORDER_META_KEYS.includes(entry.key) || (!whole && !carried.has(entry.key))
+					(entry) => !serverKeys.includes(entry.key) || (!whole && !carried.has(entry.key))
 				),
 				...sourceMeta,
 			],
