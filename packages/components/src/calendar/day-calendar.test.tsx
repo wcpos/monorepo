@@ -141,6 +141,20 @@ it('makes outside-month days unavailable with border ink', async () => {
 	expect(classes(day.querySelector('[dir="auto"]'))).toContain('text-border');
 });
 
+it("keeps today unavailable when it sits in a neighbouring month's cells", async () => {
+	// The library reports 24 June as 'today', not 'disabled', while May is shown.
+	await mount({ value: '2026-05-20', currentDay: undefined });
+	const day = getDay('2026-06-24');
+	fireEvent.click(day);
+	expect(defaults.onValueChange).not.toHaveBeenCalled();
+	expect(day).toHaveAttribute('aria-disabled', 'true');
+});
+
+it('gives its day cells a default test id when the caller passes none', async () => {
+	await mount({ testID: undefined });
+	expect(screen.getByTestId('day-calendar-day-2026-06-08')).toBeTruthy();
+});
+
 it('announces the picked day as a selected radio on the shared surface', async () => {
 	await mount();
 	const day = getDay('2026-06-08');

@@ -240,7 +240,9 @@ interface DayCalendarProps {
 }
 
 // Context updates reach cells through the library's memoized Day wrapper without remounting.
-const DayCalendarContext = React.createContext<Omit<DayCalendarProps, 'locale'> | null>(null);
+const DayCalendarContext = React.createContext<
+	(Omit<DayCalendarProps, 'locale'> & { shownMonth: string }) | null
+>(null);
 
 function DayCell({
 	date,
@@ -248,11 +250,15 @@ function DayCell({
 	accessibilityLabel,
 	children,
 }: React.ComponentProps<NonNullable<CalendarProps['dayComponent']>>) {
-	const { value, currentDay, maxDate, onValueChange, testID } =
+	const { value, currentDay, maxDate, onValueChange, testID, shownMonth } =
 		React.useContext(DayCalendarContext)!;
 	if (!date) return null;
 	const current = date.dateString === currentDay;
-	const unavailable = state === 'disabled' || parseISO(date.dateString) > parseISO(maxDate);
+	// The library reports today as 'today' even in a neighbouring month's cells, so the month is checked here.
+	const unavailable =
+		state === 'disabled' ||
+		!date.dateString.startsWith(shownMonth) ||
+		parseISO(date.dateString) > parseISO(maxDate);
 	const disabled = current || unavailable;
 	const selected = date.dateString === value && !disabled;
 	const ink = unavailable
@@ -264,7 +270,7 @@ function DayCell({
 				: 'text-foreground';
 	return (
 		<PressableSurface
-			testID={testID ? `${testID}-day-${date.dateString}` : undefined}
+			testID={`${testID ?? 'day-calendar'}-day-${date.dateString}`}
 			role="radio"
 			selected={selected}
 			accessibilityLabel={accessibilityLabel}
@@ -300,7 +306,9 @@ export function DayCalendar({
 	const disableArrowRight = shownMonth >= format(lastDay, 'yyyy-MM');
 
 	return (
-		<DayCalendarContext.Provider value={{ value, currentDay, maxDate, onValueChange, testID }}>
+		<DayCalendarContext.Provider
+			value={{ value, currentDay, maxDate, onValueChange, testID, shownMonth }}
+		>
 			<RNCalendar
 				key={loadedLocale ?? 'default'}
 				firstDay={1}
