@@ -1003,8 +1003,13 @@ async function fetchBrowserOrderQuery(
 			requestCount += 1;
 			// Share ingestion, but not coverage/progress or the creation cursor. A failure above
 			// leaves no cursor, so the next pass repeats this step from page one.
+			// A full last page is the last page too: the store refuses a page past the one it advertised.
 			saleDayPage =
-				rawPayloads.length < descriptor.perPage || saleDayPage >= SALE_DAY_MAX_PAGES
+				rawPayloads.length < descriptor.perPage ||
+				(totalPagesHeader !== null &&
+					Number.isSafeInteger(totalPages) &&
+					saleDayPage >= totalPages) ||
+				saleDayPage >= SALE_DAY_MAX_PAGES
 					? 0
 					: saleDayPage + 1;
 			continue;

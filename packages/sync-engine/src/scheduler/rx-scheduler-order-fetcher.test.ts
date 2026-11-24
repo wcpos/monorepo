@@ -2321,6 +2321,24 @@ describe('createOrdersSchedulerFetcher', () => {
 
 	const SALE_DAY_QUERY_KEY = PAID_RANGE_QUERY_KEY.replace(':search=', ':sale_day=1:search=');
 
+	it('stops the corrected sale-day step at the advertised last page, even when that page is full', async () => {
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const corrected = Array.from({ length: 25 }, (_, i) => rangedOrder(100 + i, 1784200000));
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (!params.has('pos_sale_day_after')) return server.fetcher(url);
+			// The store refuses a page past the last one it advertised.
+			if (params.get('page') !== '1') return new Response('{}', { status: 400 });
+			return rangedResponse(corrected, { 'X-WP-Total': '25', 'X-WP-TotalPages': '1' });
+		});
+		await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore() })(
+			orderTask({ queryKey: SALE_DAY_QUERY_KEY })
+		);
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).searchParams.has('pos_sale_day_after'))
+		).toHaveLength(1);
+	});
+
 	it('pages corrected sale days first, then sends the unchanged two-phase sequence and progress', async () => {
 		const oldServer = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
 		const oldCoverage = rangedLaneStore();
