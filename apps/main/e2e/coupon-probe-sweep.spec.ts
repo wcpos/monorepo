@@ -18,7 +18,7 @@ const authorization = { transport: 'query', value: 'secret-token' } as const;
 function probe(id: number, age = PROBE_COUPON_ORPHAN_AGE_MS + 60_000) {
 	return {
 		id,
-		code: `${PROBE_COUPON_CODE_LEAD}${id}`,
+		code: `${PROBE_COUPON_CODE_LEAD}0mi3k2v1a${id.toString(16).padStart(12, '0')}`,
 		description: `${PROBE_COUPON_DESCRIPTION_LEAD} probe (safe to delete)`,
 		date_created_gmt: new Date(NOW - age).toISOString().slice(0, 19),
 	};

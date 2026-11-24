@@ -1,10 +1,8 @@
-import { randomUUID } from 'node:crypto';
-
 import { expect, request as playwrightRequest } from '@playwright/test';
 
 import { getStoreVariant, listStoreIds, openOrderSheet, storeRequestOptions } from './fixtures';
 import { addCheckoutProbeProduct } from './checkout-probe';
-import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
+import { couponRequest, mintProbeCouponCode } from './coupon-probe';
 import { fillKeypadField } from './keypad-field';
 import {
 	cartRecordUuid,
@@ -20,7 +18,6 @@ import {
 	stampRunLabel,
 } from './order-lifecycle';
 import {
-	mintSearchProbeToken,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
 	renewProductWriterIfExpiring,
@@ -70,9 +67,7 @@ const couponTest = liveTest.extend<
 					return;
 				}
 				writerAuth = storeRequestOptions(writer);
-				await sweepOrphanedProbeCoupons({ request, storeUrl, authorization: writer });
-				const code =
-					`${mintSearchProbeToken(workerInfo.workerIndex)}${randomUUID().slice(0, 4)}`.toLowerCase();
+				const code = mintProbeCouponCode(workerInfo.workerIndex);
 				const response = await couponRequest(request, 'post', storeUrl, undefined, {
 					...writerAuth,
 					data: {

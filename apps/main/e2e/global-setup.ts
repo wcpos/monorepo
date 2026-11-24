@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { chromium, expect, type FullConfig } from '@playwright/test';
+import { chromium, expect, type FullConfig, request as playwrightRequest } from '@playwright/test';
 
 import {
 	CATALOGUE_READY_TIMEOUT_MS,
@@ -27,8 +27,9 @@ import {
 } from './fixtures';
 import { hasTillAnchor, restoreLocalStorageAsClone } from './indexeddb-helpers';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
+import { sweepOrphanedProbeCoupons, sweepsProbeCoupons } from './coupon-probe';
 import { closeStaleRegisterSessions } from './register-session-cleanup';
-import { startWriterLoginHolder } from './search-probe';
+import { productWriterAuthorization, startWriterLoginHolder } from './search-probe';
 import { isStoreUnreachable, loginRetryDelaysMs, setupStaggerMs } from './store-login-retry';
 // Resolved by playwright.config, never re-derived here: these used to be two
 // independent copies with different fallbacks, so a lane could bootstrap against
@@ -540,7 +541,33 @@ async function globalSetup(config: FullConfig) {
 	// One writer login holder per shard; workers never log in: concurrent logins on the shared writer row
 	// revoke each other (~/agent/research/dev-sites-e2e-red-2026-11-09/report.md §3, dev-pro 2026-11-12).
 	// Playwright runs the returned function as this setup's teardown.
-	return startWriterLoginHolder([FREE_STORE_URL, PRO_STORE_URL]);
+	const stopWriterHolder = await startWriterLoginHolder([FREE_STORE_URL, PRO_STORE_URL]);
+	if (sweepsProbeCoupons(shardIndex, process.env.CI)) {
+		await sweepProbeCouponsAtSetup([FREE_STORE_URL, PRO_STORE_URL]);
+	}
+	return stopWriterHolder;
+}
+
+/** Sweeps the previous runs' orphaned probe coupons on each store, once per run. Never throws. */
+async function sweepProbeCouponsAtSetup(storeUrls: string[]): Promise<void> {
+	const request = await playwrightRequest.newContext();
+	try {
+		for (const storeUrl of storeUrls) {
+			if (!storeUrl) continue;
+			try {
+				const authorization = await productWriterAuthorization(request, storeUrl);
+				if (!authorization) return;
+				await sweepOrphanedProbeCoupons({ request, storeUrl, authorization });
+			} catch (error) {
+				const message = (error instanceof Error ? error.message : String(error))
+					.split('\n')[0]
+					.replace(/https?:\/\/\S+/g, '[request]');
+				console.log(`[coupon-sweep] ${new URL(storeUrl).host} setup sweep skipped: ${message}`);
+			}
+		}
+	} finally {
+		await request.dispose();
+	}
 }
 
 /** Per store: one cashier login to close with, and every shard's cashier as an opener. */

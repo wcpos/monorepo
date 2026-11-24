@@ -11,8 +11,6 @@
  * line and the checkout push was refused with 400 "Coupon code is required". Each side's own tests
  * were green against its own idea of the contract; only a run through both halves sees the seam.
  */
-import { randomUUID } from 'node:crypto';
-
 import { type ConsoleMessage, expect, request as playwrightRequest } from '@playwright/test';
 
 import {
@@ -24,7 +22,7 @@ import {
 	openOrderSheet,
 	storeRequestOptions,
 } from './fixtures';
-import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
+import { couponRequest, mintProbeCouponCode } from './coupon-probe';
 import {
 	cartRecordUuid,
 	checkoutSurfaceLocator,
@@ -42,7 +40,6 @@ import { resolveProbeAuthorization } from './probe-credential';
 import {
 	createSearchProbe,
 	deleteSearchProbe,
-	mintSearchProbeToken,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
 	renewProductWriterIfExpiring,
@@ -76,7 +73,6 @@ const couponTest = liveTest.extend<object, { probeCoupon: CouponProbe | null }>(
 				writer = await productWriterAuthorization(request, storeUrl);
 				if (!writer) throw new Error('Configured coupon writer did not authorize');
 				writerAuth = storeRequestOptions(writer);
-				await sweepOrphanedProbeCoupons({ request, storeUrl, authorization: writer });
 				// The bug's trigger is a coupon discount whose shortest JS string has fewer than
 				// six decimals (the client wrote "7.5", the server acked "7.500000"). A percent
 				// coupon discounts the EX-TAX price, so on a tax-inclusive store a taxable 25.00
@@ -93,8 +89,7 @@ const couponTest = liveTest.extend<object, { probeCoupon: CouponProbe | null }>(
 				});
 				if (!probe.ok) throw new Error(probe.reason);
 				product = probe.probe;
-				const code =
-					`${mintSearchProbeToken(workerInfo.workerIndex)}${randomUUID().slice(0, 4)}`.toLowerCase();
+				const code = mintProbeCouponCode(workerInfo.workerIndex);
 				const response = await couponRequest(request, 'post', storeUrl, undefined, {
 					...writerAuth,
 					data: {
