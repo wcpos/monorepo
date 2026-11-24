@@ -556,6 +556,14 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 						await expect(
 							root.getByTestId('data-table-count').or(root.getByTestId('no-data-message')).first()
 						).toBeVisible({ timeout: 30_000 });
+						// The row shows on a completed sale only; the list's first rows can all be awaiting payment.
+						await root.getByTestId('order-filter-status').click();
+						await page.getByTestId('order-filter-status-completed').click();
+						await expect(root.getByTestId('order-filter-status-remove')).toBeVisible();
+						// The filtered list can take a store round trip to fill on the phone.
+						await expect(root.getByTestId(/^data-table-row-/).first()).toBeVisible({
+							timeout: 60_000,
+						});
 						if (walk === 'corrected') {
 							// The rendered-row refresh re-reads the visible orders on mount and every 60 s.
 							await expect
@@ -575,7 +583,8 @@ for (const [device, viewport] of Object.entries(CAPTURE_DEVICES)) {
 							found = await becomesVisible(paidOn, 5_000);
 							if (found && walk === 'corrected') {
 								// The audit line, not the Rung up later badge beside the day.
-								found = await becomesVisible(modal.getByTestId('order-paid-on-audit'), 5_000);
+								// The filtered rows are re-read on the next refresh pass, up to 60 s away.
+								found = await becomesVisible(modal.getByTestId('order-paid-on-audit'), 70_000);
 							}
 							if (!found) await page.getByTestId('order-modal-close').click();
 						}

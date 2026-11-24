@@ -843,26 +843,6 @@ it('reads from the fact at write time, not when the form opened', async () => {
 	).toBe('2026-11-23T15:12:17Z');
 });
 
-it.each([
-	[1200, 'bottom', 8],
-	[768, 'left', 148],
-])(
-	'places the calendar below with room, otherwise clear of the card (%s high)',
-	(height, side, offset) => {
-		mockWindowHeight = Number(height);
-		mount();
-		open();
-		fireEvent.click(screen.getByTestId('order-paid-on-day'));
-		act(() => mockPopover.onLayout({ nativeEvent: { layout: { height: 410, width: 320 } } }));
-		expect(mockPopover).toMatchObject({
-			side,
-			sideOffset: offset,
-			align: 'start',
-			avoidCollisions: side === 'left',
-			insets: { top: 16, bottom: 16, left: 16, right: 16 },
-		});
-	}
-);
 it('accepts a 500-character reason and sets the native input limit at 500', async () => {
 	mount();
 	open();
@@ -897,11 +877,15 @@ it.each(['answer', 'error'])('does not discard a newer request on %s', async (ou
 	expect(mockResidentPatch).not.toHaveBeenCalled();
 });
 
-it('uses the native vertical-side and horizontal-offset props to place a short-screen calendar beside the card', () => {
-	mockPlatform = 'ios';
+it('anchors the calendar to its field with a screen gutter and no measured offsets', () => {
 	mount();
 	open();
 	fireEvent.click(screen.getByTestId('order-paid-on-day'));
-	act(() => mockPopover.onLayout({ nativeEvent: { layout: { height: 410, width: 320 } } }));
-	expect(mockPopover).toMatchObject({ side: 'bottom', sideOffset: 8, alignOffset: -468 });
+	expect(mockPopover).toMatchObject({
+		side: 'bottom',
+		align: 'start',
+		insets: { top: 16, bottom: 16, left: 16, right: 16 },
+	});
+	expect(mockPopover.sideOffset).toBeUndefined();
+	expect(mockPopover.alignOffset).toBeUndefined();
 });

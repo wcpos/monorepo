@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, useWindowDimensions, View } from 'react-native';
+import { View } from 'react-native';
 
 import { format } from 'date-fns/format';
 import { parseISO } from 'date-fns/parseISO';
@@ -92,12 +92,7 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const [editing, setEditing] = React.useState(false);
 	const [calendarOpen, setCalendarOpen] = React.useState(false);
 	const trigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
-	const { height: windowHeight } = useWindowDimensions();
 	const unit = useSpacingUnit();
-	const [anchorBottom, setAnchorBottom] = React.useState(0);
-	const [calendarSize, setCalendarSize] = React.useState({ height: 0, width: 0 });
-	const beside = windowHeight - anchorBottom - 6 * unit < calendarSize.height;
-	const leftSide = beside && Platform.OS === 'web';
 	const [refused, setRefused] = React.useState(false);
 	const form = useForm({ defaultValues: { day: '', reason: '' } });
 	const day = useWatch({ control: form.control, name: 'day' });
@@ -154,15 +149,7 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 					<PropertyRow label={t('orders.sale_day_from')}>{dayLabel(currentDay)}</PropertyRow>
 					<PropertyRow label={t('orders.sale_day_to')} align="top">
 						<View className="gap-1">
-							<Popover
-								onOpenChange={(open) => {
-									setCalendarOpen(open);
-									if (open && !phone)
-										trigger.current?.measureInWindow((_x, y, _width, height) => {
-											setAnchorBottom(y + height);
-										});
-								}}
-							>
+							<Popover onOpenChange={setCalendarOpen}>
 								<PopoverTrigger
 									ref={trigger}
 									testID="order-paid-on-day"
@@ -178,16 +165,11 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 										<Text>{day ? dayLabel(day) : t('orders.sale_day_pick')}</Text>
 									</FieldBox>
 								</PopoverTrigger>
+								{/* Anchored to its field: below it, or above when the pane has no room, a gutter clear of the screen. */}
 								<PopoverContent
-									side={leftSide ? 'left' : 'bottom'}
+									side="bottom"
 									align="start"
-									// Beside the whole row: the key (32), column gap (3), then a gutter (2).
-									sideOffset={leftSide ? 37 * unit : 2 * unit}
-									// Native has vertical sides only; its horizontal offset clears the same row.
-									alignOffset={beside && !leftSide ? -calendarSize.width - 37 * unit : 0}
-									avoidCollisions={beside}
 									insets={{ top: 4 * unit, bottom: 4 * unit, left: 4 * unit, right: 4 * unit }}
-									onLayout={({ nativeEvent }) => setCalendarSize(nativeEvent.layout)}
 								>
 									<DayCalendar
 										value={day || undefined}
