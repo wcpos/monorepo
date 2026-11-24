@@ -905,3 +905,53 @@ it('a live day drops comparison orders after now while preserving the whole comp
 		jest.useRealTimers();
 	}
 });
+
+describe('corrected sale days', () => {
+	const range = (day: string): DateRange => ({
+		start: new Date(`2026-11-${day}T00:00:00Z`),
+		end: new Date(`2026-11-${day}T23:59:59.999Z`),
+	});
+	const corrected = {
+		date_created_gmt: '2026-11-24T10:00:00',
+		date_paid_gmt: '2026-11-24T10:00:00',
+		total: '42',
+		meta_data: [
+			{
+				key: '_wcpos_sale_day',
+				value: JSON.stringify({ at_gmt: '2026-11-23T09:12:00Z', reason: 'Late entry' }),
+			},
+		],
+	} as OrderPayload;
+	it('charts under the corrected day, not the paid day', () => {
+		const buckets = aggregateData([corrected], range('23'), undefined, 'UTC');
+		expect(buckets.reduce((sum, bucket) => sum + bucket.total, 0)).toBe(42);
+		expect(buckets.find((bucket) => bucket.total === 42)?.label).toBe('09:00');
+		expect(
+			aggregateData([corrected], range('24'), undefined, 'UTC').reduce(
+				(sum, bucket) => sum + bucket.total,
+				0
+			)
+		).toBe(0);
+	});
+	it('shifts a corrected comparison sale when trimming the current chart', () => {
+		const original = structuredClone(corrected);
+		const buckets = aggregateData(
+			[{ date_paid_gmt: '2026-11-24T12:00:00', total: '10' }] as OrderPayload[],
+			range('24'),
+			undefined,
+			'UTC',
+			{ orders: [corrected], range: range('23') }
+		);
+		expect(buckets[0].label).toBe('09:00');
+		const compared = aggregateComparison(
+			[corrected],
+			range('23'),
+			buckets,
+			range('24'),
+			'day',
+			'UTC'
+		);
+		expect(compared[0].total).toBe(42);
+		expect(corrected).toEqual(original);
+	});
+});

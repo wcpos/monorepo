@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { Badge } from '@wcpos/components/badge';
 import { Checkbox } from '@wcpos/components/checkbox';
 import { Text } from '@wcpos/components/text';
 
@@ -72,7 +73,16 @@ export function OrdersPanel({
 						onCheckedChange={(checked) => toggle([row.key], checked)}
 					/>
 					<View className="min-w-0 flex-1">
-						<Text className="font-semibold">{row.cells[0]}</Text>
+						<View className="flex-row items-center gap-2">
+							<Text className="shrink font-semibold" numberOfLines={1}>
+								{row.cells[0]}
+							</Text>
+							{row.late && (
+								<Badge tinted variant="info" className="shrink-0">
+									{t('reports.rung_up_later')}
+								</Badge>
+							)}
+						</View>
 						<Text className="text-muted-foreground">
 							{t('reports.order_time_cashier', { time: row.cells[1], cashier: row.cells[2] })}
 						</Text>

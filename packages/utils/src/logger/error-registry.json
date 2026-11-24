@@ -1708,6 +1708,24 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "AUTH342",
+		"symbol": "CASHIER_IDENTITY_CLASH",
+		"domain": "AUTH",
+		"severity": "error",
+		"actionHint": "Remove the other saved store from this device, then sign in again.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "site-admin",
+		"summary": "This account is already saved on this device under another store.",
+		"docsBody": "Two stores give this account the same identity. That happens when one store is a copy of the other, such as a staging clone or a second shop started from a backup, and on a WordPress multisite network, where every site shares one set of accounts. The app keeps one saved account per identity, so it cannot hold both sign-ins at once. Nothing was saved by this sign-in.",
+		"troubleshooting": [
+			"Remove the other saved store from this device, then sign in to this store again."
+		],
+		"logSources": [],
+		"evidence": "wcpos/monorepo#3767: reproduced on two dev stores sharing one user uuid; the second store never opens and the first is signed out",
+		"introducedIn": "2.0.4"
+	},
+	{
 		"code": "AUTH411",
 		"symbol": "STORE_URL_INVALID",
 		"domain": "AUTH",

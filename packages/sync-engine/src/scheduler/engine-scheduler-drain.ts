@@ -300,6 +300,8 @@ export type RunEngineSchedulerDrainInput = {
 	censusFreshForMs?: number;
 	/** Restrict an explicitly requested foreground drain to one seeded task. */
 	taskId?: string;
+	/** #3782: a reference walk must not ride another requirement's drain. */
+	referenceLanes?: 'exclude' | 'only';
 	/** Override for an explicitly requested foreground drain. Background drains
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
@@ -575,15 +577,21 @@ export async function runEngineSchedulerDrain(
 			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input, 'propagate-refusal');
 			const supportedRepository = fetcherRegistry.supportedRepository(schedulerRepository);
 			const taskId = input.taskId;
+			const referenceLanes = input.referenceLanes;
 			const repository =
-				taskId === undefined
+				taskId === undefined && referenceLanes === undefined
 					? supportedRepository
 					: {
 							...supportedRepository,
 							readRunnable: async (readAtMs: number) =>
-								(await supportedRepository.readRunnable(readAtMs)).filter(
-									(state) => state.taskId === taskId
-								),
+								(await supportedRepository.readRunnable(readAtMs)).filter((state) => {
+									if (taskId !== undefined && state.taskId !== taskId) return false;
+									if (referenceLanes === undefined) return true;
+									return (
+										(parseReferenceLaneQueryKey(state.queryKey) !== null) ===
+										(referenceLanes === 'only')
+									);
+								}),
 						};
 
 			const result = await runPersistedSchedulerTasks({

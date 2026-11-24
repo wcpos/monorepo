@@ -26,6 +26,7 @@
 /error-codes/AUTH321
 /error-codes/AUTH331
 /error-codes/AUTH341
+/error-codes/AUTH342
 /error-codes/AUTH401
 /error-codes/AUTH411
 /error-codes/AUTH421

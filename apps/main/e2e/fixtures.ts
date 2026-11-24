@@ -33,6 +33,7 @@ import {
 } from './probe-credential';
 import { restoreLocalStorageAsClone, type SavedAuthState } from './indexeddb-helpers';
 import { quarantineGate } from './quarantine';
+import { trashOrdersAsWriter } from './search-probe';
 import {
 	assertStillBound,
 	boundRegister,
@@ -1616,7 +1617,8 @@ export const authenticatedTest = base.extend<{
 						await resolveProbeOptions(request, getStoreUrl(testInfo), storeAuthorization, {
 							route: '/wcpos/v1/orders',
 							timeoutMs: TEARDOWN_CREDENTIAL_TIMEOUT_MS,
-						})
+						}),
+						{ trash: (ids) => trashOrdersAsWriter(request, getStoreUrl(testInfo), ids) }
 					);
 				}
 			} catch (error) {
