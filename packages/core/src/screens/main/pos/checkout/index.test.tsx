@@ -98,6 +98,25 @@ it.each(['phone', 'legacy', 'unsupported'])('retains the %s modal', (lane) => {
 	expect(mockDismiss).not.toHaveBeenCalled();
 	expect(mockReplace).not.toHaveBeenCalled();
 });
+// A legacy Pay pushes this sheet only once `pushRecord` has resolved, and its `finally` then
+// clears the save state: the sheet decides on a record that already carries the server id
+// (`warm-pay-server-id.test.tsx` proves that answer on a real engine), with nothing saving.
+it.each([
+	['unsupported', 'wide'],
+	['unsupported', 'phone'],
+	['legacy', 'wide'],
+	['legacy', 'phone'],
+])('a %s %s Pay with no save state left lands in checkout, never its cart', (lane, size) => {
+	if (lane === 'legacy') mockLoaded = false;
+	if (lane === 'unsupported') mockUnsupported = true;
+	if (size === 'phone') mockSize = 'sm';
+	mockCanDismiss = false;
+	mockBeneath = 'index';
+	render(<CheckoutScreen />);
+	expect(screen.getByTestId('modal')).not.toBeNull();
+	expect(mockReplace).not.toHaveBeenCalled();
+	expect(mockDismiss).not.toHaveBeenCalled();
+});
 it('a standalone link opens the order itself, never the columns cart that holds only open orders', () => {
 	// A refused reopen leaves the order completed: the columns cart could not resolve it.
 	mockParams = { orderId: 'a', standalone: '1' };
