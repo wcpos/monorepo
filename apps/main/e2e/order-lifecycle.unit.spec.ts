@@ -233,7 +233,13 @@ test.describe('trashOrder stale-revision retry', () => {
 			[mine('rev-1'), mine('rev-2')],
 			[notTrashable, reply(409, STALE), reply(200, { document: { status: 'cancelled' } })]
 		);
-		expect(await trashOrder(request, testInfo, null, ORDER)).toBe(true);
+		const trashed: (readonly number[])[] = [];
+		const trashAsWriter = async (_r: APIRequestContext, _s: string, ids: readonly number[]) => {
+			trashed.push(ids);
+			return { trashed: 1, failed: 0, skipped: 0 };
+		};
+		expect(await trashOrder(request, testInfo, null, ORDER, trashAsWriter)).toBe(true);
+		expect(trashed).toEqual([[77]]);
 		const cancels = posted.filter((post) => post.status === 'cancelled');
 		expect(cancels).toHaveLength(2);
 		expect(cancels[0].baseRevision).toBe('rev-1');
