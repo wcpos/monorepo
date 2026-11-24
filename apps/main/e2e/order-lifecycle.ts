@@ -37,6 +37,7 @@ import {
 	storeRequestOptions,
 } from './fixtures';
 import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './probe-credential';
+import { trashOrdersAsWriter } from './search-probe';
 
 /** POST target the app uses to persist an order. */
 export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
@@ -821,7 +822,8 @@ export async function trashOrder(
 	request: APIRequestContext,
 	testInfo: TestInfo,
 	authorization: StoreAuthorization | null,
-	order: TrackedOrder
+	order: TrackedOrder,
+	trashAsWriter: typeof trashOrdersAsWriter = trashOrdersAsWriter
 ): Promise<boolean> {
 	console.log(`[e2e-cleanup] created order ${order.id} (${order.label ?? 'unlabelled'})`);
 	await testInfo
@@ -921,6 +923,7 @@ export async function trashOrder(
 		}
 		if (applied === true) {
 			console.log(`[e2e-cleanup] order ${order.id} -> ${status}`);
+			if (status === 'cancelled') await trashAsWriter(request, storeUrl, [order.id]);
 			return true;
 		}
 	}
