@@ -32,6 +32,7 @@ import {
 	mintClosureNumber,
 	mintUuid,
 	readRegister,
+	recordLiveSession,
 	reviseClosureReservation,
 } from './register-document';
 import { reversalsInFlight } from './reversal-claims';
@@ -43,6 +44,7 @@ import {
 	currentSession,
 	isSessionOrder,
 	isUnsyncedMovement,
+	SESSION_SET_ASIDE,
 	unaccepted,
 	unsyncedCount,
 } from './drawer-rules';
@@ -325,6 +327,33 @@ export async function requeueClose(storeDB: RegisterStoreDatabase, id: string, c
 	const held = HELD_CLOSE_FIELDS.filter((field) => close?.[field] !== undefined);
 	const restored = Object.fromEntries(held.map((field) => [field, close![field]]));
 	return row.incrementalPatch({ ...restored, ...pending, pending_status: 'closed' });
+}
+/**
+ * Set aside a session the store no longer has (#3753): its row, closure and unsent cash stay on
+ * the device with their figures, marked so nothing sends them again and nothing treats them as
+ * current; the register's live copy clears as a close clears it. Nothing is deleted.
+ */
+export async function setAsideSession(
+	storeDB: RegisterStoreDatabase,
+	sessionId: string,
+	live: { userDB: UserDatabase; siteUuid: string }
+) {
+	const { register_sessions: sessions, closures, cash_movements } = registerCollections(storeDB);
+	const row = await sessions.findOne(sessionId).exec();
+	if (!row) throw new Error('invalid_set_aside_target');
+	const marked = {
+		sync_status: 'failed',
+		sync_next_at: null,
+		sync_error: SESSION_SET_ASIDE,
+	} as const;
+	const unsent = await cash_movements
+		.find({ selector: { session_id: sessionId, sync_status: { $in: ['pending', 'failed'] } } })
+		.exec();
+	await Promise.all(unsent.map((movement) => movement.incrementalPatch(marked)));
+	await (await closures.findOne(sessionId).exec())?.incrementalPatch(marked);
+	// The session row is marked last: an interrupted set aside stays current, to be set aside again.
+	await row.incrementalPatch(marked);
+	await recordLiveSession(live.userDB, live.siteUuid, row.register_id, null);
 }
 export function recordMovement(
 	storeDB: RegisterStoreDatabase,

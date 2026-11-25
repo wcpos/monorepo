@@ -65,6 +65,8 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 let mockOverdue = false;
 let mockCanManageCash = true;
 let mockRefusedClose = false;
+let mockUnreachable = false;
+const mockSetAside = jest.fn(async () => undefined);
 let mockHasClosure = true;
 let mockClosureOverrides: Record<string, unknown> = {};
 jest.mock('../../reports/closures/closure-panel', () => ({
@@ -118,6 +120,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		blind,
 		countingHere: mockCountingHere,
 		refusedClose: mockRefusedClose,
+		sessionUnreachable: mockUnreachable,
 		canManageCash: mockCanManageCash,
 		overdue: mockOverdue,
 		closeTime: '17:30',
@@ -157,6 +160,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			startCounting,
 			backToSelling: mockBackToSelling,
 			closeSession: mockCloseSession,
+			setAsideSession: mockSetAside,
 		},
 	}),
 }));
@@ -438,6 +442,7 @@ beforeEach(() => {
 	mockPhone = false;
 	currentLoaded = true;
 	mockRefusedClose = false;
+	mockUnreachable = false;
 	mockCanManageCash = true;
 	currentFiguresPending = false;
 	blind = false;
@@ -911,6 +916,42 @@ it('shows the dead-lettered closure movement error', () => {
 	syncStatus = 'failed';
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('closure-sync-error').textContent).toBe('movement_refused');
+});
+
+it('#3753: a set-aside closure names set aside in words, not its code', () => {
+	syncStatus = 'failed';
+	mockClosureOverrides = { sync_error: 'set_aside:wcpos_session_not_found' };
+	try {
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		const line = screen.getByTestId('closure-sync-error').textContent;
+		expect(line).toBe('register.set_aside_history');
+		expect(line).not.toContain('set_aside:wcpos_session_not_found');
+	} finally {
+		mockClosureOverrides = {};
+	}
+});
+
+it('#3753: a movement refused for a vanished session offers Set aside, not Retry', async () => {
+	const vanished = { ...lost, sync_error: 'wcpos_session_not_found' };
+	movements = [vanished];
+	refusedMovements = [vanished];
+	mockUnreachable = true;
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-refused')).toBeTruthy();
+	expect(screen.queryByTestId('register-panel-retry-refused')).toBeNull();
+	await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+	expect(mockSetAside).toHaveBeenCalledTimes(1);
+	expect(retryMovement).not.toHaveBeenCalled();
+});
+
+it('#3753: an open session the store answered 404 for offers Set aside and no Retry', async () => {
+	currentSession = { id: 'session', status: 'open', opened_at_gmt: '2026-10-28T13:05:00Z' };
+	mockUnreachable = true;
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+	expect(screen.queryByTestId('register-panel-retry-refused')).toBeNull();
+	await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+	expect(mockSetAside).toHaveBeenCalledTimes(1);
 });
 
 // Revert: leave the disabled closure control unexplained for blind cashiers.
@@ -1607,6 +1648,25 @@ describe('#2016: a refused close', () => {
 		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
 		expect(mockBackToSelling).not.toHaveBeenCalled();
 	});
+	it('#3753: a session the store no longer has offers Set aside on the count, no Retry or back', async () => {
+		currentSession = { ...currentSession, status: 'closed', counted: { cash: '155' } };
+		mockRefusedClose = true;
+		mockUnreachable = true;
+		const onOpenChange = jest.fn();
+		render(<RegisterPanel open onOpenChange={onOpenChange} />);
+		const notice = screen.getByTestId('register-panel-refused-close');
+		expect(notice.textContent).toContain('register.session_unreachable');
+		expect(within(notice).getAllByRole('button')).toHaveLength(1);
+		expect(screen.getByTestId('count-close').hasAttribute('disabled')).toBe(true);
+		// The count's back chevron returns to the register pane and abandons nothing.
+		await act(async () => fireEvent.click(screen.getByTestId('count-back')));
+		expect(mockBackToSelling).not.toHaveBeenCalled();
+		await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+		expect(mockSetAside).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByTestId('panel-x'));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(mockBackToSelling).not.toHaveBeenCalled();
+	});
 	it('× on a refused close that reads closed abandons it to selling', async () => {
 		currentSession = { ...currentSession, status: 'closed', counted: { cash: '155' } };
 		mockRefusedClose = true;
@@ -1654,6 +1714,25 @@ describe('without the cash permission', () => {
 		expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
 		expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
 		expect(screen.getAllByTestId('register-panel-no-cash-permission')).toHaveLength(1);
+	});
+	it('#3753: a cashier without the cash right sees Set aside for an unreachable session whose close was forbidden', async () => {
+		const vanished = { ...lost, sync_error: 'wcpos_session_not_found' };
+		currentSession = { ...currentSession, sync_error: 'rest_forbidden' };
+		mockRefusedClose = true;
+		movements = [vanished];
+		refusedMovements = [vanished];
+		mockUnreachable = true;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+		await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+		expect(mockSetAside).toHaveBeenCalledTimes(1);
+	});
+	it('a forbidden close of a reachable session shows no refused-close notice without the cash right', () => {
+		currentSession = { ...currentSession, sync_error: 'rest_forbidden' };
+		mockRefusedClose = true;
+		mockUnreachable = false;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
 	});
 	it('a manager still gets Retry on a forbidden close', () => {
 		mockCanManageCash = true;

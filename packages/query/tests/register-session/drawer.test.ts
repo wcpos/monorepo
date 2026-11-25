@@ -24,8 +24,10 @@ import {
 import {
 	currentSession,
 	isLiveMovement,
+	SESSION_SET_ASIDE,
 	unsyncedCount,
 } from '../../src/register-session/drawer-rules';
+import { setAsideSession } from '../../src/register-session/session-store';
 import {
 	markSeededIn,
 	recordLiveSession,
@@ -203,6 +205,70 @@ describe('the current session', () => {
 		});
 		const settled = await drawer((value) => value.session === null);
 		expect(settled.lastClosure?.id).toBe('s1');
+	});
+
+	it('#3753: flags an unreachable close; set aside, it is history and its refused cash is not offered', async () => {
+		await insert({
+			status: 'closed',
+			sync_status: 'failed',
+			sync_error: 'wcpos_session_not_found',
+			closure_id: 's1',
+		});
+		await storeDB.closures.insert(closure('s1', 'pending'));
+		await storeDB.cash_movements.insert(movement({ sync_status: 'failed' }));
+		const snapshot = await drawer((value) => value.session !== null);
+		expect(snapshot).toMatchObject({ refusedClose: true, sessionUnreachable: true });
+		await setAsideSession(storeDB, 's1', { userDB, siteUuid: 'site' });
+		const settled = await drawer((value) => value.session === null);
+		expect(settled).toMatchObject({ refusedClose: false, sessionUnreachable: false });
+		expect(settled.refusedMovements).toEqual([]);
+		expect(settled.lastClosure).toMatchObject({ id: 's1', sync_error: SESSION_SET_ASIDE });
+		expect(settled.closedElsewhere).toBeNull();
+	});
+
+	it.each([
+		['wcpos_session_not_found', true],
+		['rest_forbidden', false],
+	])(
+		'#3753: an open session whose movement failed with %s is unreachable: %s',
+		async (sync_error, unreachable) => {
+			await insert();
+			await storeDB.cash_movements.insert(movement({ sync_status: 'failed', sync_error }));
+			const snapshot = await drawer((value) => value.movements.length === 1);
+			expect(snapshot.refusedClose).toBe(false);
+			expect(snapshot.sessionUnreachable).toBe(unreachable);
+		}
+	);
+
+	it.each([
+		[SESSION_SET_ASIDE, true],
+		['rest_forbidden', false],
+	])(
+		'#3753: a movement already set aside on a session that is not keeps it unreachable (%s: %s)',
+		async (sync_error, unreachable) => {
+			await insert();
+			await storeDB.cash_movements.insert(movement({ sync_status: 'failed', sync_error }));
+			const snapshot = await drawer((value) => value.movements.length === 1);
+			expect(snapshot.session?.id).toBe('s1');
+			expect(snapshot.sessionUnreachable).toBe(unreachable);
+		}
+	);
+
+	it('#3753: an open session the store answered 404 for stays current until it is set aside', async () => {
+		await insert({ sync_status: 'failed', sync_error: 'wcpos_session_not_found' });
+		const snapshot = await drawer((value) => value.session !== null);
+		expect(snapshot).toMatchObject({ session: { id: 's1' }, sessionUnreachable: true });
+		expect(snapshot.refusedClose).toBe(false);
+		await setAsideSession(storeDB, 's1', { userDB, siteUuid: 'site' });
+		const settled = await drawer((value) => value.session === null);
+		expect(settled.sessionUnreachable).toBe(false);
+	});
+
+	it('#3753: a newer session on the register that is not failed wins over an unreachable one', async () => {
+		await insert({ sync_status: 'failed', sync_error: 'wcpos_session_not_found' });
+		await insert({ id: 's2', opened_at_gmt: '2026-10-28T15:00:00.000Z' });
+		const snapshot = await drawer((value) => value.session?.id === 's2');
+		expect(snapshot.sessionUnreachable).toBe(false);
 	});
 
 	it('the status read applies the same rule', async () => {

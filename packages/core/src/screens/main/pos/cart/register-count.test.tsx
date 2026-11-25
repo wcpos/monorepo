@@ -88,6 +88,8 @@ let count_denominations: { value: string; pieces: number }[] | null = null;
 let approved_counted: Record<string, string> | null = null;
 let unsyncedCount = 3;
 let mockRefusedClose = false;
+let mockUnreachable = false;
+const setAsideSession = jest.fn(async () => undefined);
 let mockSyncError: string | undefined;
 let mockCounted: Record<string, string> | null = null;
 let mockLastClosure: Record<string, unknown> | null = null;
@@ -120,13 +122,14 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		expected: { cash: expectedCash, card: '20' },
 		unsyncedCount,
 		refusedClose: mockRefusedClose,
+		sessionUnreachable: mockUnreachable,
 		lastClosure: mockLastClosure,
 		// The session's movements through the drawer read's refused-cash rule (query's).
 		refusedCash: jest
 			.requireActual('../../../../../../query/src/register-session/drawer-rules')
 			.refusedCashOf(mockMovements),
 		figuresPending,
-		actions: { closeSession, backToSelling },
+		actions: { closeSession, backToSelling, setAsideSession },
 	}),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
@@ -191,6 +194,7 @@ beforeEach(() => {
 	count_denominations = null;
 	unsyncedCount = 3;
 	mockRefusedClose = false;
+	mockUnreachable = false;
 	mockSyncError = undefined;
 	mockCounted = null;
 	mockLastClosure = null;
@@ -781,6 +785,16 @@ describe('#2016: a refused close', () => {
 	it('shows no band at a count the store has not refused', () => {
 		render(<RegisterCount description="Shop" onBack={jest.fn()} onClosed={jest.fn()} />);
 		expect(screen.queryByTestId('register-panel-refused-close')).toBeNull();
+	});
+	it('#3753 M17: an unreachable session whose close was not refused shows the set-aside notice', async () => {
+		mockUnreachable = true;
+		const onBack = jest.fn();
+		render(<RegisterCount description="Shop" onBack={onBack} onClosed={jest.fn()} />);
+		const band = screen.getByTestId('register-panel-refused-close').textContent;
+		expect(band).toContain('This register session no longer exists on the store.');
+		await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+		expect(setAsideSession).toHaveBeenCalledTimes(1);
+		expect(onBack).toHaveBeenCalledTimes(1);
 	});
 	it('back to selling abandons a refused close that reads closed', async () => {
 		refused('closed');

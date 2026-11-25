@@ -2,12 +2,24 @@ import { readLedger } from '@wcpos/order-math';
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 
-type SessionRef = { id: string; sync_status: string; closure_id?: string | null };
+type SessionRef = {
+	id: string;
+	sync_status: string;
+	closure_id?: string | null;
+	sync_error?: string | null;
+};
 type ClosureRef = { id: string; sync_status: string };
 
 /** A closure the store has not taken: neither accepted (`synced`) nor already on file there. */
 export const unaccepted = (closure: { sync_status: string } | null | undefined) =>
 	!!closure && !['synced', 'superseded'].includes(closure.sync_status);
+
+/** The marker a set-aside row carries (#3753): kept on the device, never sent again. */
+export const SESSION_SET_ASIDE = 'set_aside:wcpos_session_not_found';
+const setAside = (row: { sync_error?: string | null }) => row.sync_error === SESSION_SET_ASIDE;
+/** The store answered 404 for the session (#3753): no retry will ever land; set it aside. */
+export const sessionUnreachable = (row: { sync_status: string; sync_error?: string | null }) =>
+	row.sync_status === 'failed' && row.sync_error === 'wcpos_session_not_found';
 
 /** A closed session whose count is written (an interrupted close): closing again uses it (POS-30F). */
 export const countRecorded = (
@@ -27,16 +39,24 @@ export const countRecorded = (
  * session. #2016, the one exception: a refused close is not history until the store has accepted
  * it or the cashier has abandoned it, so a refused (`failed`) close stays current. So does a
  * session whose status POST was refused while its closure is unaccepted (a refused abandon), at
- * whatever status it holds, until the next refresh.
+ * whatever status it holds, until the next refresh. A set-aside session (#3753) is history.
+ * A session the store answered 404 for stays current, so its one way out, Set aside, is offered.
  */
 export function currentSession<T extends SessionRef>(
-	rows: { active: readonly T[]; closed: readonly T[] },
+	all: { active: readonly T[]; closed: readonly T[] },
 	closures: readonly ClosureRef[]
 ): T | null {
+	const rows = {
+		active: all.active.filter((row) => !setAside(row)),
+		closed: all.closed.filter((row) => !setAside(row)),
+	};
 	const unacceptedClosure = (id: string) => unaccepted(closures.find((row) => row.id === id));
 	return (
 		rows.active.find((row) => row.sync_status !== 'failed') ??
-		rows.active.find((row) => row.sync_status === 'failed' && unacceptedClosure(row.id)) ??
+		rows.active.find(
+			(row) =>
+				row.sync_status === 'failed' && (unacceptedClosure(row.id) || sessionUnreachable(row))
+		) ??
 		rows.closed.find(
 			(row) =>
 				row.closure_id === row.id &&
