@@ -263,3 +263,28 @@ it("a caller's style on the multi-select list keeps the trigger floor", () => {
 		mockPlatform.OS = 'web';
 	}
 });
+
+it("a caller's style on the single-select list keeps the trigger floor", () => {
+	mockPhone.current = false;
+	mockPlatform.OS = 'ios';
+	const primitive = jest.requireMock('@rn-primitives/select');
+	const Keep = primitive.Content;
+	const seen = jest.fn();
+	function ContentSpy(props: { style?: unknown }) {
+		seen(props.style);
+		return null;
+	}
+	primitive.Content = ContentSpy;
+	try {
+		render(
+			<C.SelectContent inline style={{ maxHeight: 300 }}>
+				<C.SelectItem value="a" label="A" />
+			</C.SelectContent>
+		);
+		// No trigger is measured here: the caller's style passes through beside the empty floor.
+		expect(seen.mock.calls.at(-1)![0]).toEqual([undefined, { maxHeight: 300 }]);
+	} finally {
+		primitive.Content = Keep;
+		mockPlatform.OS = 'web';
+	}
+});
