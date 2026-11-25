@@ -913,8 +913,8 @@ jobs:
 
           # A cancelled deploy is a pending deploy REPLACED by a newer main push
           # (see the deploy job's concurrency) — superseded, never red.
-          # An actual shard failure wins over every superseded/cancelled signal.
-          if [ "$E2E_RESULT" != "failure" ] && { [ "$GATE_RESULT" = "cancelled" ] || [ "$DEPLOY_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ] || [ "${SUPERSEDED:-}" = "true" ]; }; then
+          # An actual shard or cold-start failure wins over every superseded/cancelled signal.
+          if [ "$E2E_RESULT" != "failure" ] && [ "$COLD_START_RESULT" != "failure" ] && { [ "$GATE_RESULT" = "cancelled" ] || [ "$DEPLOY_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ] || [ "${SUPERSEDED:-}" = "true" ]; }; then
             echo "Ledger unchanged: superseded verification at $short_sha"
             exit 0
           fi

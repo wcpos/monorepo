@@ -601,6 +601,10 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 			assert.match(failed.trace, issues === '[]' ? /issue create/ : /issue comment 42/);
 			assert.doesNotMatch(failed.trace, /^issue close /m);
 		}
+		// A cold-start failure is real too: a late-superseded shard must not hide it.
+		const coldFailed = run({ gate: 'failure', cold: 'failure', issues: '[]', superseded: 'true' });
+		assert.equal(coldFailed.result.status, 0, coldFailed.result.stderr);
+		assert.match(coldFailed.trace, /issue create/);
 		// A main push coalesced into a newer head: a green gate must not close the issue.
 		const coalesced = run({ gate: 'success', issues: '[{"number":42}]', superseded: 'true' });
 		assert.equal(coalesced.result.status, 0, coalesced.result.stdout + coalesced.result.stderr);
