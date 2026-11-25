@@ -705,6 +705,23 @@ it.each([false, true])(
 		expect(screen.queryByTestId('order-paid-on-refused')).toBeNull();
 	}
 );
+it('drops Not moved once the sale is moved from elsewhere', async () => {
+	mockPush.mockImplementationOnce(async () => {
+		payload.meta_data = saleMeta();
+		emit();
+	});
+	mount();
+	open();
+	pick();
+	reason();
+	await move();
+	expect(screen.getByTestId('order-paid-on-refused')).toBeTruthy();
+	act(() => {
+		setCorrection(correction('2026-11-22T15:12:17Z'));
+		emit();
+	});
+	expect(screen.queryByTestId('order-paid-on-refused')).toBeNull();
+});
 it('locks the refused row when the capability has actually gone', async () => {
 	mockPush.mockImplementationOnce(async () => {
 		payload.meta_data = saleMeta();

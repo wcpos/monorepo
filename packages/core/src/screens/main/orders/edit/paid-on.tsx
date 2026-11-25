@@ -81,7 +81,12 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 	const live =
 		!!request && request.atGmt !== correction?.atGmt && request.from === (correction?.atGmt ?? '');
 	const waiting = live && requestIdentity !== answered;
-	const notMoved = answered !== null && (!live || requestIdentity === answered);
+	// The refusal is for the day the row showed when it came: once the fact moves (a move from
+	// elsewhere), it is no longer true that nothing moved.
+	const notMoved =
+		answered !== null &&
+		answered.endsWith(`|${correction?.atGmt ?? ''}`) &&
+		(!live || requestIdentity === answered);
 	const countedAt = correction?.atGmt ?? rungUp;
 	const currentDay = dayOf(countedAt);
 	const { label: movedBy } = useCashierLabel(correction?.by);
