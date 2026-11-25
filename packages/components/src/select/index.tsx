@@ -244,12 +244,14 @@ function SelectContent({
 	const triggerWidth = React.useContext(SelectWidthContext);
 
 	if (isMulti) {
-		const { className, children, portalHost, ...rest } = props;
+		const { className, children, portalHost, style, ...rest } = props;
+		const floor = anchoredListWidth(triggerWidth, matchWidth, Platform.OS !== 'web');
 		return (
 			<SelectMultiContent
 				className={className}
 				portalHost={portalHost}
-				style={anchoredListWidth(triggerWidth, matchWidth, Platform.OS !== 'web')}
+				// A caller's style adds to the floor; spread after it, it used to replace it.
+				style={style ? [floor, style] : floor}
 				{...(rest as any)}
 			>
 				{children}

@@ -247,3 +247,19 @@ it.each([
 		}
 	}
 );
+
+it("a caller's style on the multi-select list keeps the trigger floor", () => {
+	mockPlatform.OS = 'ios';
+	try {
+		render(
+			<C.Select multiple>
+				<C.SelectTrigger />
+				<C.SelectContent style={{ maxHeight: 300 }} />
+			</C.Select>
+		);
+		act(() => mockMultiLayout.current({ nativeEvent: { layout: { width: 240 } } }));
+		expect(mockMultiContent.mock.calls.at(-1)![0]).toEqual([{ minWidth: 240 }, { maxHeight: 300 }]);
+	} finally {
+		mockPlatform.OS = 'web';
+	}
+});
