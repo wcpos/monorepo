@@ -801,16 +801,26 @@ test('the web-bundle retention keeps the previous build inventory; a root file t
 	const readInventory = run.indexOf('git show "HEAD:$INVENTORY"');
 	assert.match(run, /INVENTORY=build\/publish-inventory\.txt/);
 	const loopStart = run.indexOf('git ls-files build | while read');
-	assert.ok(readInventory > 0 && readInventory < loopStart, 'the previous inventory is read before the loop');
+	assert.ok(
+		readInventory > 0 && readInventory < loopStart,
+		'the previous inventory is read before the loop'
+	);
 	const loop = run.slice(loopStart, run.indexOf('\ndone', loopStart));
-	const drop = loop.indexOf('*) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;');
+	const drop = loop.indexOf(
+		'*) echo "dropping $path (a root file this build does not carry)"; git rm -q "$path"; continue ;;'
+	);
 	const listed = loop.indexOf('grep -Fxq -- "${path#build/}" <<< "$previous_inventory"');
 	assert.ok(drop > 0, 'root files this build does not carry are dropped');
-	assert.ok(loop.indexOf('*/*) ;;') > 0 && loop.indexOf('*/*) ;;') < drop, 'hashed _expo/ files fall through to the inventory check');
+	assert.ok(
+		loop.indexOf('*/*) ;;') > 0 && loop.indexOf('*/*) ;;') < drop,
+		'hashed _expo/ files fall through to the inventory check'
+	);
 	assert.ok(listed > drop, 'the drop runs before the inventory check; listed files are kept');
 	// The new inventory comes from the fresh build, after the loop, never into
 	// $BUILD_DIR (the CDN job uploads it), and before git add -A publishes it.
-	const write = run.indexOf('(cd "$BUILD_DIR" && find _expo -type f | LC_ALL=C sort) > "$INVENTORY"');
+	const write = run.indexOf(
+		'(cd "$BUILD_DIR" && find _expo -type f | LC_ALL=C sort) > "$INVENTORY"'
+	);
 	assert.ok(write > loopStart + loop.length, 'the inventory is written after the retention loop');
 	assert.ok(write < run.indexOf('git add -A'), 'the inventory is written before git add -A');
 });
@@ -891,12 +901,26 @@ esac
 `,
 		{ mode: 0o755 }
 	);
-	const pr = { number: 42, merged_at: '2026-11-20T12:00:00Z', base: { ref: 'main' }, head: { sha: 'pr-head' } };
-	const older = { id: 1, created_at: '2026-11-19T12:00:00Z', html_url: 'https://github.test/runs/1' };
-	const newer = { id: 2, created_at: '2026-11-20T12:00:00Z', html_url: 'https://github.test/runs/2' };
+	const pr = {
+		number: 42,
+		merged_at: '2026-11-20T12:00:00Z',
+		base: { ref: 'main' },
+		head: { sha: 'pr-head' },
+	};
+	const older = {
+		id: 1,
+		created_at: '2026-11-19T12:00:00Z',
+		html_url: 'https://github.test/runs/1',
+	};
+	const newer = {
+		id: 2,
+		created_at: '2026-11-20T12:00:00Z',
+		html_url: 'https://github.test/runs/2',
+	};
 	const gate = { name: '🎭 E2E Tests', conclusion: 'success' };
 	const shards = Array.from({ length: 6 }, (_, index) => ({
-		name: `🎭 E2E Tests (${index + 1}/6)`, conclusion: 'success',
+		name: `🎭 E2E Tests (${index + 1}/6)`,
+		conclusion: 'success',
 	}));
 	const green = { jobs: [gate, ...shards] };
 	const failed = { jobs: [gate, ...shards.slice(0, 5), { ...shards[5], conclusion: 'failure' }] };
@@ -906,13 +930,17 @@ esac
 		const result = runShell('.github/scripts/main-push-e2e-proof.sh', {
 			env: {
 				PATH: `${binDir}:${process.env.PATH}`,
-				GITHUB_REPOSITORY: 'wcpos/monorepo', SHA: 'pushed',
-				GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary,
+				GITHUB_REPOSITORY: 'wcpos/monorepo',
+				SHA: 'pushed',
+				GITHUB_OUTPUT: output,
+				GITHUB_STEP_SUMMARY: summary,
 				GH_PUSH: JSON.stringify({ tree: { sha: 'same-tree' } }),
-				GH_PULLS: JSON.stringify([pr]), GH_PULLS_FAIL: '',
+				GH_PULLS: JSON.stringify([pr]),
+				GH_PULLS_FAIL: '',
 				GH_HEAD: JSON.stringify({ tree: { sha: 'same-tree' } }),
 				GH_RUNS: JSON.stringify({ workflow_runs: [newer] }),
-				GH_NEW_JOBS: JSON.stringify(green), GH_OLD_JOBS: JSON.stringify(green),
+				GH_NEW_JOBS: JSON.stringify(green),
+				GH_OLD_JOBS: JSON.stringify(green),
 				...overrides,
 			},
 		});
@@ -933,13 +961,20 @@ esac
 		run({ GH_HEAD: JSON.stringify({ tree: { sha: 'different-tree' } }) });
 		run({ GH_NEW_JOBS: JSON.stringify(failed) });
 		run({ GH_NEW_JOBS: JSON.stringify({ jobs: [gate, ...shards.slice(0, 5)] }) });
-		run({ GH_NEW_JOBS: JSON.stringify({ jobs: [gate, { name: '🎭 E2E Tests (1/1)', conclusion: 'success' }] }) });
+		run({
+			GH_NEW_JOBS: JSON.stringify({
+				jobs: [gate, { name: '🎭 E2E Tests (1/1)', conclusion: 'success' }],
+			}),
+		});
 		run({ GH_PULLS: JSON.stringify([{ ...pr, merged_at: null }]) });
 		run({ GH_PULLS: JSON.stringify([{ ...pr, base: { ref: 'next' } }]) });
-		run({
-			GH_RUNS: JSON.stringify({ workflow_runs: [older, newer] }),
-			GH_NEW_JOBS: JSON.stringify(failed),
-		}, older.html_url);
+		run(
+			{
+				GH_RUNS: JSON.stringify({ workflow_runs: [older, newer] }),
+				GH_NEW_JOBS: JSON.stringify(failed),
+			},
+			older.html_url
+		);
 		run({ GH_RUNS: JSON.stringify({ workflow_runs: [older, newer] }) }, newer.html_url);
 		run({ GH_PULLS_FAIL: '1' });
 		run({ GH_NEW_JOBS: JSON.stringify({ jobs: shards }) });
@@ -959,17 +994,25 @@ test('main push E2E proof: gate', () => {
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-main-push-gate-'));
 	const summary = path.join(workspace, 'summary');
 	const env = {
-		CHANGES_RESULT: 'success', DEPLOY_RESULT: 'success', DEPLOY_URL: 'https://production.test',
-		COLD_START_RESULT: 'success', E2E_RESULT: 'skipped', EVENT_NAME: 'push',
-		E2E_PROOF: 'https://github.test/runs/2', BASE_REF: 'main', SKIP_E2E_INPUT: '',
+		CHANGES_RESULT: 'success',
+		DEPLOY_RESULT: 'success',
+		DEPLOY_URL: 'https://production.test',
+		COLD_START_RESULT: 'success',
+		E2E_RESULT: 'skipped',
+		EVENT_NAME: 'push',
+		E2E_PROOF: 'https://github.test/runs/2',
+		BASE_REF: 'main',
+		SKIP_E2E_INPUT: '',
 		GITHUB_STEP_SUMMARY: summary,
 	};
 	try {
 		const proved = runShell(step.run, { env });
 		assert.equal(proved.status, 0, proved.stdout + proved.stderr);
 		assert.ok(proved.stdout.includes(env.E2E_PROOF));
-		assert.equal(readFileSync(summary, 'utf8'),
-			`⏭️ Web E2E skipped: this tree already passed all 6 web E2E shards in ${env.E2E_PROOF}\n`);
+		assert.equal(
+			readFileSync(summary, 'utf8'),
+			`⏭️ Web E2E skipped: this tree already passed all 6 web E2E shards in ${env.E2E_PROOF}\n`
+		);
 		const unproved = runShell(step.run, { env: { ...env, E2E_PROOF: '' } });
 		assert.notEqual(unproved.status, 0);
 		assert.match(unproved.stdout, /A deployment URL was published/);
@@ -2131,9 +2174,18 @@ test('main-lane web E2E shards queue in three store slots, paired 1+6, 2+5, 3+4'
 
 test('main web E2E tests its own production deploy, never the alias', () => {
 	const workflow = readWorkflow('deploy.yml');
-	assert.match(findStep(workflow, 'deploy', '🚀 Deploy production').run, /DEPLOY_JSON=\$\(eas deploy --export-dir \.\/build --production --json\)\n[\s\S]*deploy_url=\$\(echo "\$DEPLOY_JSON" \| jq -r '\.url \/\/ empty'/);
-	assert.match(findStep(workflow, 'deploy', '📝 Get deployment URL').run, /else\n\s+echo "url=\$\{\{ steps\.deploy-production\.outputs\.deploy_url \}\}"/);
-	assert.match(findStep(workflow, 'e2e-gate', 'Check shard results').run, /\[ -n "\$DEPLOY_URL" \] \|\| \{ echo "::error::Production deployed, but its own URL was not captured/);
+	assert.match(
+		findStep(workflow, 'deploy', '🚀 Deploy production').run,
+		/DEPLOY_JSON=\$\(eas deploy --export-dir \.\/build --production --json\)\n[\s\S]*deploy_url=\$\(echo "\$DEPLOY_JSON" \| jq -r '\.url \/\/ empty'/
+	);
+	assert.match(
+		findStep(workflow, 'deploy', '📝 Get deployment URL').run,
+		/else\n\s+echo "url=\$\{\{ steps\.deploy-production\.outputs\.deploy_url \}\}"/
+	);
+	assert.match(
+		findStep(workflow, 'e2e-gate', 'Check shard results').run,
+		/\[ -n "\$DEPLOY_URL" \] \|\| \{ echo "::error::Production deployed, but its own URL was not captured/
+	);
 });
 
 test('a failed shared login fails e2e-setup and the shards refuse to start', () => {
@@ -2150,7 +2202,9 @@ test('a failed shared login fails e2e-setup and the shards refuse to start', () 
 	const fail = findStep(workflow, 'e2e-setup', '🛑 Fail when the shared login failed');
 	assert.equal(fail.if, "steps.setup.outcome == 'failure'");
 	for (const name of ['🔐 Encrypt the shared auth state', '📤 Upload the encrypted auth state']) {
-		assert.ok(setup.steps.indexOf(fail) > setup.steps.indexOf(findStep(workflow, 'e2e-setup', name)));
+		assert.ok(
+			setup.steps.indexOf(fail) > setup.steps.indexOf(findStep(workflow, 'e2e-setup', name))
+		);
 	}
 
 	const refuse = findStep(workflow, 'e2e', '🛑 Refuse without the shared login');
@@ -3984,15 +4038,18 @@ test('flow 10 times the phone settle at the cart badge and keeps the 15 s gate',
 		)
 	);
 	assert.ok(afterLog.some((step) => step.assertVisible?.id === 'cart-subtotal'));
-	const unreadable = flow.findIndex(
-		(step) => step.assertTrue?.condition?.includes('badge-unreadable')
+	const unreadable = flow.findIndex((step) =>
+		step.assertTrue?.condition?.includes('badge-unreadable')
 	);
 	const quantity = flow.findIndex(
 		(step) => step.assertVisible?.id === 'cart-quantity-input' && step.assertVisible.text === '20'
 	);
 	const gate = flow.findIndex((step) => step.assertTrue?.condition?.includes('<= 15000'));
 	assert.ok(unreadable >= 0, 'missing the unreadable badge assertion');
-	assert.ok(quantity < unreadable && unreadable < gate, 'check the badge after quantity and before latency');
+	assert.ok(
+		quantity < unreadable && unreadable < gate,
+		'check the badge after quantity and before latency'
+	);
 });
 
 test('the Android emulator resolves DNS through public resolvers and proves connectivity before the suite', () => {
