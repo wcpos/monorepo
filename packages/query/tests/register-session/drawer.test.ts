@@ -254,6 +254,23 @@ describe('the current session', () => {
 		}
 	);
 
+	it('#3753: an open session the store answered 404 for stays current until it is set aside', async () => {
+		await insert({ sync_status: 'failed', sync_error: 'wcpos_session_not_found' });
+		const snapshot = await drawer((value) => value.session !== null);
+		expect(snapshot).toMatchObject({ session: { id: 's1' }, sessionUnreachable: true });
+		expect(snapshot.refusedClose).toBe(false);
+		await setAsideSession(storeDB, 's1', { userDB, siteUuid: 'site' });
+		const settled = await drawer((value) => value.session === null);
+		expect(settled.sessionUnreachable).toBe(false);
+	});
+
+	it('#3753: a newer session on the register that is not failed wins over an unreachable one', async () => {
+		await insert({ sync_status: 'failed', sync_error: 'wcpos_session_not_found' });
+		await insert({ id: 's2', opened_at_gmt: '2026-10-28T15:00:00.000Z' });
+		const snapshot = await drawer((value) => value.session?.id === 's2');
+		expect(snapshot.sessionUnreachable).toBe(false);
+	});
+
 	it('the status read applies the same rule', async () => {
 		await insert({ status: 'closed', sync_status: 'pending', closure_id: 's1' });
 		const status = await firstValueFrom(

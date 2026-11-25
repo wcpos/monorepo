@@ -61,6 +61,7 @@ jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => mockApp.binding ?? { registerId: 'register', registerName: 'Front' },
 }));
 jest.mock('../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'device' }) }));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 // While `mockHold.on`, each accounting settle waits until the test releases it, or fails it.
 const mockHold = { on: false, held: [] as ((error?: Error) => void)[] };
 jest.mock('../../../../query/src/register-session/reads', () => {

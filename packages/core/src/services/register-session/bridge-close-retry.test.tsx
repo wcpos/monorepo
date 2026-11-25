@@ -47,6 +47,7 @@ jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'register', registerName: 'Front' }),
 }));
 jest.mock('../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'device' }) }));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 
 const log = jest.mocked(getLogger(['wcpos', 'registerSession']));
 
