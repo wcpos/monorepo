@@ -1210,6 +1210,50 @@ describe('RefundOrderForm', () => {
 			expect(back).not.toHaveBeenCalled();
 		});
 
+		it('a lost refund record logs PAYMENT312, logs no success and closes the form', async () => {
+			const failure = Object.assign(new Error('500'), {
+				response: {
+					status: 500,
+					data: { code: 'wcpos_refund_record_lost', message: 'x', data: { status: 500 } },
+				},
+			});
+			await sendRefund(jest.fn().mockRejectedValue(failure));
+
+			await waitFor(() => expect(back).toHaveBeenCalledTimes(1));
+			expect(error).toHaveBeenCalledWith(
+				'Refund failed',
+				expect.objectContaining({
+					showToast: true,
+					toast: {
+						title: 'orders.refund_record_lost',
+						text2: 'orders.refund_record_lost_check',
+					},
+					code: 'PAYMENT312',
+				})
+			);
+			expect(success).not.toHaveBeenCalled();
+		});
+
+		it('another server error logs PAYMENT311 and stays on the form', async () => {
+			const failure = Object.assign(new Error('500'), {
+				response: { status: 500, data: { code: 'internal_server_error' } },
+			});
+			await sendRefund(jest.fn().mockRejectedValue(failure));
+
+			await waitFor(() => expect(error).toHaveBeenCalledWith('Refund failed', expect.anything()));
+			expect(error).toHaveBeenCalledWith(
+				'Refund failed',
+				expect.objectContaining({
+					toast: {
+						title: 'orders.refund_outcome_unknown',
+						text2: 'orders.refund_check_before_retry',
+					},
+					code: 'PAYMENT311',
+				})
+			);
+			expect(back).not.toHaveBeenCalled();
+		});
+
 		it('a genuine refund logs its success and goes back, as before', async () => {
 			await sendRefund(jest.fn().mockResolvedValue({ id: 230987, amount: '5.00' }));
 
