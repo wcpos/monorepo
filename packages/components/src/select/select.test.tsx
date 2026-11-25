@@ -223,13 +223,15 @@ it.each([
 
 // The multi-select's rows are the same flex-1 labels: at the bare 128-point fallback they truncate.
 it.each([
-	['ios', false, { minWidth: 240 }],
-	['ios', true, { width: 240 }],
-	['web', false, undefined],
-	['web', true, { width: 240 }],
+	['ios', false, 240, { minWidth: 240 }],
+	// A trigger narrower than `min-w-32` keeps that floor: the inline minWidth replaces the class.
+	['ios', false, 96, { minWidth: 128 }],
+	['ios', true, 240, { width: 240 }],
+	['web', false, 240, undefined],
+	['web', true, 240, { width: 240 }],
 ] as const)(
-	'the multi-select list on %s (matchWidth %s) is floored at its trigger',
-	(OS, matchWidth, style) => {
+	'the multi-select list on %s (matchWidth %s, trigger %s) is floored at its trigger',
+	(OS, matchWidth, width, style) => {
 		mockPlatform.OS = OS;
 		try {
 			render(
@@ -238,7 +240,7 @@ it.each([
 					<C.SelectContent matchWidth={matchWidth} />
 				</C.Select>
 			);
-			act(() => mockMultiLayout.current({ nativeEvent: { layout: { width: 240 } } }));
+			act(() => mockMultiLayout.current({ nativeEvent: { layout: { width } } }));
 			expect(mockMultiContent.mock.calls.at(-1)![0]).toEqual(style);
 		} finally {
 			mockPlatform.OS = 'web';

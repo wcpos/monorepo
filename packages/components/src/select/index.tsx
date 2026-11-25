@@ -200,8 +200,11 @@ function SelectSingleContent({
 function anchoredListWidth(triggerWidth: number | undefined, matchWidth?: boolean, native = false) {
 	if (!triggerWidth) return undefined;
 	if (matchWidth) return { width: triggerWidth };
-	return native ? { minWidth: triggerWidth } : undefined;
+	// An inline minWidth replaces the `min-w-32` class, so a narrow trigger keeps that floor here.
+	return native ? { minWidth: Math.max(triggerWidth, LIST_MIN_WIDTH) } : undefined;
 }
+/** `min-w-32` in points: the list's floor under a trigger narrower than it. */
+const LIST_MIN_WIDTH = 128;
 
 /** The anchored adapter: Radix's positioned list, with the rows inside its viewport. */
 function SelectPanel({ position, children, ...props }: SelectPrimitive.ContentProps) {
