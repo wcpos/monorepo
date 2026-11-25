@@ -1,8 +1,6 @@
-import { randomUUID } from 'node:crypto';
-
 import { expect, request as playwrightRequest } from '@playwright/test';
 
-import { couponRequest, sweepOrphanedProbeCoupons } from './coupon-probe';
+import { couponRequest, mintProbeCouponCode } from './coupon-probe';
 import {
 	authenticatedTest,
 	ensureRegisterOpen,
@@ -11,9 +9,9 @@ import {
 	tryAddProductBySku,
 } from './fixtures';
 import {
-	mintSearchProbeToken,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
+	renewProductWriterIfExpiring,
 } from './search-probe';
 
 /**
@@ -42,16 +40,13 @@ const test = authenticatedTest.extend<object, { probeCoupon: ProbeCoupon | null 
 			const storeUrl =
 				(workerInfo.project.use as { storeUrl?: string }).storeUrl || 'https://dev-free.wcpos.com';
 			let created: ProbeCoupon | null = null;
-			let writerAuth: ReturnType<typeof storeRequestOptions> | null = null;
+			let writer: Awaited<ReturnType<typeof productWriterAuthorization>> = null;
 			try {
-				const writer = await productWriterAuthorization(request, storeUrl);
+				writer = await productWriterAuthorization(request, storeUrl);
 				if (!writer) throw new Error('Configured coupon writer did not authorize');
-				writerAuth = storeRequestOptions(writer);
-				await sweepOrphanedProbeCoupons({ request, storeUrl, authorization: writer });
-				const code =
-					`${mintSearchProbeToken(workerInfo.workerIndex)}${randomUUID().slice(0, 4)}`.toLowerCase();
+				const code = mintProbeCouponCode(workerInfo.workerIndex);
 				const response = await couponRequest(request, 'post', storeUrl, undefined, {
-					...writerAuth,
+					...storeRequestOptions(writer),
 					data: {
 						code,
 						discount_type: 'percent',
@@ -68,11 +63,28 @@ const test = authenticatedTest.extend<object, { probeCoupon: ProbeCoupon | null 
 				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API.
 				await use(created);
 			} finally {
-				if (created?.id && writerAuth) {
-					await couponRequest(request, 'delete', storeUrl, created.id, {
-						...writerAuth,
-						params: { ...writerAuth.params, force: 'true' },
-					}).catch(() => {});
+				if (created?.id && writer) {
+					try {
+						await renewProductWriterIfExpiring(request, storeUrl, writer);
+					} catch {
+						// Best-effort renewal; still try deleting with the current writer.
+					}
+					const auth = storeRequestOptions(writer);
+					try {
+						const response = await couponRequest(request, 'post', storeUrl, 'batch', {
+							...auth,
+							data: { delete: [created.id] },
+						});
+						if (!response.ok()) {
+							console.log(
+								`[coupon-probe] teardown could not delete probe coupon ${created.id}: HTTP ${response.status()}`
+							);
+						}
+					} catch {
+						console.log(
+							`[coupon-probe] teardown could not delete probe coupon ${created.id}: threw`
+						);
+					}
 				}
 				await request.dispose();
 			}

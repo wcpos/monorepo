@@ -175,6 +175,9 @@ export default defineConfig<WcposTestOptions>({
 							/server-created-visibility\.spec\.ts/,
 							/checkout-tender\.spec\.ts/,
 							/checkout-device\.spec\.ts/,
+							// Their fixtures mint a probe coupon before the body's free skip.
+							/pos-coupon-apply\.spec\.ts/,
+							/pos-coupon-checkout\.spec\.ts/,
 							/\.perf\.spec\.ts$/,
 							COLD_SPEC,
 							LIVE_SPEC,
