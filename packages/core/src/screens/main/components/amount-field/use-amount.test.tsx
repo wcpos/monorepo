@@ -17,7 +17,14 @@ jest.mock('@rn-primitives/popover', () =>
 jest.mock('react-native-reanimated', () => {
 	const animation = { duration: () => animation, easing: () => animation };
 	return new Proxy(
-		{ __esModule: true, Easing: { bezier: jest.fn() } },
+		{
+			__esModule: true,
+			Easing: { bezier: jest.fn() },
+			ReduceMotion: { System: 'system' },
+			useSharedValue: (value: unknown) => jest.requireActual('react').useRef({ value }).current,
+			useAnimatedStyle: () => ({}),
+			withTiming: (value: unknown) => value,
+		},
 		{ get: (target, key) => Reflect.get(target, key) ?? animation }
 	);
 });

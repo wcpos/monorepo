@@ -91,6 +91,13 @@ export { orderDocumentFromWooPayload } from './rx-scheduler-order-fetcher';
 export { chunk } from './chunk';
 export { exactSkuLegRequired } from './exact-sku-leg';
 
+export {
+	REFUND_HISTORY_CHECKPOINT_KEY,
+	REFUND_HISTORY_DELTA_OVERLAP_MS,
+	REFUND_HISTORY_FULL_WALK_EVERY_MS,
+	type RefundHistoryCheckpointStore,
+} from './rx-scheduler-refund-fetcher';
+
 // Policy types and decisions
 export type { FetchTask } from './replication-policy';
 export {

@@ -16,11 +16,16 @@ import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import type { WebViewHandle } from '@wcpos/components/webview';
 
-import { useBridge } from './bridge/use-bridge';
+import { isUnderPin, useBridge } from './bridge/use-bridge';
 import { type AppInitPayload, BridgeError, type BridgeHandlers } from './bridge/types';
 import { useHostCapabilities } from './capabilities/host';
 import { usePrinterCapabilities } from './capabilities/printers';
-import { meetsMinAppVersion, MINI_APP_ORIGIN, useMiniAppCatalog } from './catalog';
+import {
+	meetsMinAppVersion,
+	MINI_APP_ORIGIN,
+	MINI_APP_PROXY_SCOPES,
+	useMiniAppCatalog,
+} from './catalog';
 import { detectWebEngine } from './detect-web-engine';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -49,7 +54,9 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			item.url.startsWith(`${MINI_APP_ORIGIN}/`) &&
 			item.platforms.includes(appInfo.platform)
 	);
-	const origin = entry ? new URL(entry.url).origin : MINI_APP_ORIGIN;
+	// jsDelivr shares an origin across repos and apps; pin the bridge to this app's own directory.
+	const appBase = entry ? entry.url.slice(0, entry.url.lastIndexOf('/')) : MINI_APP_ORIGIN;
+	const origin = new URL(MINI_APP_ORIGIN).origin;
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const sendRef = React.useRef<(action: string, payload: object) => void>(() => undefined);
 	const closingSentRef = React.useRef(false);
@@ -62,7 +69,12 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 		[onClose]
 	);
 	const printerHandlers = usePrinterCapabilities();
-	const hostHandlers = useHostCapabilities(close);
+	const hostHandlers = useHostCapabilities(
+		close,
+		Object.prototype.hasOwnProperty.call(MINI_APP_PROXY_SCOPES, id)
+			? MINI_APP_PROXY_SCOPES[id as keyof typeof MINI_APP_PROXY_SCOPES]
+			: undefined
+	);
 	const availableHandlers = { ...printerHandlers, ...hostHandlers };
 	const granted = entry?.capabilities.filter((action) => action in availableHandlers) ?? [];
 	const initPayload: AppInitPayload = {
@@ -97,7 +109,7 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			return initPayload;
 		},
 	};
-	const { onMessage, ready, reset, send } = useBridge(webViewRef, origin, handlers);
+	const { onMessage, ready, reset, send } = useBridge(webViewRef, appBase, handlers);
 	const [attempt, setAttempt] = React.useState(0);
 	const [loadGeneration, setLoadGeneration] = React.useState(0);
 	const [failed, setFailed] = React.useState(false);
@@ -163,13 +175,24 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 					if (!initialLoadSeenRef.current) {
 						initialLoadSeenRef.current = true;
 						if (ready) return;
+						reset();
+						setLoadGeneration((value) => value + 1);
+						return;
+					}
+					// Web and Android report only the sender's origin, which the CDN shares across
+					// repos, so any load after the first closes the bridge (failure notice, Retry
+					// reloads the entry). iOS reports the page URL and checks its path, so it re-arms.
+					if (RNPlatform.OS !== 'ios') {
+						reset();
+						setFailed(true);
+						return;
 					}
 					reset();
 					setLoadGeneration((value) => value + 1);
 				}}
-				// Only the catalog origin may load inside a bridged view; anything else is refused.
+				// Only the mini-app's own path may load inside a bridged view; anything else is refused.
 				onShouldStartLoadWithRequest={(request: { url: string }) =>
-					request.url.startsWith(`${origin}/`)
+					isUnderPin(request.url, appBase)
 				}
 				onError={() => setFailed(true)}
 			/>

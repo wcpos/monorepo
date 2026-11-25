@@ -51,3 +51,16 @@ index 6fc3cb0..41f8dd9 100644
 +        // Backwards compat for RCTTypedModuleConstants
 +        using ResultT = Constants;
          struct Input {
+diff --git a/ios/EscPosPrinter.mm b/ios/EscPosPrinter.mm
+index 0ac8e25..4b03277 100644
+--- a/ios/EscPosPrinter.mm
++++ b/ios/EscPosPrinter.mm
+@@ -252,7 +252,7 @@ + (BOOL)requiresMainQueueSetup
+ }
+ 
+ RCT_EXPORT_METHOD(addCommand: (nonnull NSString*) target
+-                  base64string: (NSString*)base64string
++                  data: (NSString*)base64string
+                   resolve:(RCTPromiseResolveBlock)resolve
+                   reject:(RCTPromiseRejectBlock)reject)
+ {

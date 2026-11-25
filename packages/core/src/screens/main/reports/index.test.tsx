@@ -13,6 +13,7 @@ import type { ClosureRow } from '@wcpos/query/register-session';
 import { compileQuery } from '@wcpos/query/query-state';
 
 import { ReportsScreen } from './index';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 import type { QueryHandle, QueryStateOf } from '../../../query';
 
@@ -86,7 +87,7 @@ const mockStoreDB = {};
 const mockSession = {
 	storeDB: mockStoreDB,
 	store: { id: 9 },
-	site: { populate$: () => of([]) },
+	site: { uuid: 'reports-test', populate$: () => of([]) },
 	wpCredentials: { populate$: () => mockViewedStores },
 };
 jest.mock('@wcpos/query/register-session', () => ({
@@ -178,6 +179,10 @@ const latestHandle = (collection: string) => {
 	return mockUseCollectionQueryHandle.mock.results[index].value as FakeHandle;
 };
 beforeEach(() => {
+	mockSession.site.uuid += '-next';
+	jest
+		.mocked(useRestHttpClient)
+		.mockReturnValue({ get: jest.fn(async () => ({ data: { capabilities: [] } })) } as never);
 	mockHandles.clear();
 	mockAnswered = true;
 	mockProvided = null;
@@ -302,6 +307,7 @@ describe('ReportsScreen query-state wiring', () => {
 		jest.useFakeTimers();
 		jest.setSystemTime(new Date(2026, 6, 15, 12));
 		jest.clearAllMocks();
+
 		mockSortBy = 'date_created_gmt';
 		mockSortDirection = 'desc';
 		mockStoreID = 9;
@@ -331,6 +337,36 @@ describe('ReportsScreen query-state wiring', () => {
 			limit: Number.MAX_SAFE_INTEGER,
 		});
 	});
+
+	it.each([[], ['unrelated'], ['order_sale_day_correction']])(
+		'gates both report demands on status capabilities %j',
+		async (...capabilities: string[]) => {
+			jest
+				.mocked(useRestHttpClient)
+				.mockReturnValue({ get: jest.fn(async () => ({ data: { capabilities } })) } as never);
+			await act(async () => {
+				render(<ReportsScreen />);
+			});
+			const salesCalls = mockUseCollectionQueryHandle.mock.calls
+				.filter(
+					([collection, , options]) => collection === 'orders' && options?.storeScope === 'sales'
+				)
+				.slice(-3);
+			expect(salesCalls).toHaveLength(3);
+			for (const [, state, options] of salesCalls) {
+				const { demand } = compileQuery('orders', state as QueryStateOf<'orders'>, {
+					id: 'report',
+					...options,
+				});
+				if (capabilities.includes('order_sale_day_correction'))
+					expect(demand[0]).toHaveProperty('saleDayCorrection', true);
+				else expect(demand[0]).not.toHaveProperty('saleDayCorrection');
+			}
+			expect((salesCalls[0][1] as QueryStateOf<'orders'>).filters.dateRange).not.toEqual(
+				(salesCalls[1][1] as QueryStateOf<'orders'>).filters.dateRange
+			);
+		}
+	);
 
 	it('the sales and comparison handles are acquired with storeScope sales', () => {
 		render(<ReportsScreen />);

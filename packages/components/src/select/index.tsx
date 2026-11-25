@@ -161,6 +161,8 @@ function SelectSingleContent({
 	const { open, onOpenChange } = SelectPrimitive.useRootContext();
 	const triggerWidth = React.useContext(SelectWidthContext);
 
+	const native = Platform.OS !== 'web';
+
 	if (!open) return null;
 	return (
 		<AnchoredOverlay
@@ -171,20 +173,34 @@ function SelectSingleContent({
 				'relative max-h-96 min-w-32 p-1.5',
 				// The trigger-width floor sits on the bordered, padded box, not the viewport: there it
 				// made trigger-width rows inside a trigger-width box, overflowing its padding and border.
-				position === 'popper' && 'min-w-(--radix-select-trigger-width)',
+				// Web only: native has no such variable, and the class still displaced `min-w-32`.
+				position === 'popper' && !native && 'min-w-(--radix-select-trigger-width)',
+				// Native, pinned to a trigger narrower than `min-w-32`: the pin wins, not the fallback.
+				native && matchWidth && triggerWidth && 'min-w-0',
 				position === 'popper' &&
 					'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1'
 			)}
 			// Options in a group: a listbox promises arrow keys a touch sheet lacks (CodeRabbit, #2215).
 			list="group"
 			content={{
-				style: matchWidth && triggerWidth ? { width: triggerWidth } : undefined,
+				style: anchoredListWidth(triggerWidth, matchWidth, native),
 				position,
 				...props,
 			}}
 			sheetStyle={props.style}
 		/>
 	);
+}
+
+/**
+ * Native: the list is at least as wide as its trigger. A row's label is `flex-1 min-w-0`, so it
+ * lends the shrink-to-fit list no width: without a floor the list was its padding and the check
+ * slot, about 60 points of blank card with every label at zero width (merchant, iPad, 2026-11-24).
+ */
+function anchoredListWidth(triggerWidth: number | undefined, matchWidth?: boolean, native = false) {
+	if (!triggerWidth) return undefined;
+	if (matchWidth) return { width: triggerWidth };
+	return native ? { minWidth: triggerWidth } : undefined;
 }
 
 /** The anchored adapter: Radix's positioned list, with the rows inside its viewport. */
