@@ -80,14 +80,15 @@ export function useReportPrint({
 	// A range still arriving over ranged sync passes is a partial set (see ReportsSyncProgress):
 	// the document would claim a whole period it does not hold, so Print waits for the lane.
 	// Ready-gated, as the progress line: a read that has not answered reports no lane.
-	const { handle: salesHandle, refundsHandle } = useReportsHandles();
-	const sales = useQueryHandleFields(salesHandle, ['laneProgress']);
+	// The timer re-checking a sales day that was already whole holds the whole period: no wait.
+	const { handle: salesHandle, refundsHandle, quietRefresh } = useReportsHandles();
+	const sales = useQueryHandleFields(salesHandle, ['laneProgress', 'laneComplete']);
 	const refunds = useQueryHandleFields(refundsHandle, ['laneProgress']);
 	const { waiting, label: waitingLabel } = usePrintWaiting({
 		doc,
 		storeReady: !!formats.store,
 		dataReady,
-		salesLane: sales.ready && !!sales.laneProgress,
+		salesLane: sales.ready && !!sales.laneProgress && !(quietRefresh && sales.laneComplete),
 		refundsLane: refunds.ready && !!refunds.laneProgress,
 		needsRefunds,
 	});

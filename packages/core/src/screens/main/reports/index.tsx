@@ -159,7 +159,10 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		from: range?.from ? convertUTCStringToLocalDate(range.from) : undefined,
 		to: range?.to ? convertUTCStringToLocalDate(range.to) : undefined,
 	};
-	useReportsRefresh(handle, reportsRefreshCadence(refreshRange, presets().today));
+	// Read again when a timer pass runs: nothing re-renders this screen at the store's midnight.
+	const quietRefresh = useReportsRefresh(handle, () =>
+		reportsRefreshCadence(refreshRange, presets().today)
+	);
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
 			value ? convertUTCStringToLocalDate(value) : fallback,
@@ -272,6 +275,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 							handle={handle}
 							comparisonHandle={comparisonHandle}
 							refundsHandle={refundsHandle}
+							quietRefresh={quietRefresh}
 						>
 							<ErrorBoundary
 								FallbackComponent={() => <Reports date={date} header={strip} />}

@@ -18,8 +18,11 @@ import {
 } from './search-probe';
 import { storeApi } from './store-api';
 
-/** The mount read of the Reports window, left to settle before the baseline is read. */
+/** How long the hero total must hold still, with no download line, to be the baseline. */
 const MOUNT_SETTLE_MS = 10_000;
+
+/** The bound on the mount read settling: pages still landing keep the poll going. */
+const MOUNT_SETTLE_TIMEOUT_MS = 60_000;
 
 /**
  * One 60 s Reports pass (`REPORTS_REFRESH_MS` in use-reports-refresh.ts) plus 30 s for the
@@ -36,13 +39,14 @@ const REFRESH_TIMEOUT_MS = 60_000 + 30_000;
  *    frame + payment + leaving checkout 120
  *  - reports screen (90 s): receipt dismissal 30, drawer navigation 12, hero total visible 45,
  *    rounded up
- *  - the mount read's settle (MOUNT_SETTLE_MS)
+ *  - the mount read's settle (60 s, MOUNT_SETTLE_TIMEOUT_MS): no download line and one total
+ *    held across MOUNT_SETTLE_MS, polled until it holds
  *  - store API (60 s): writer login, read-back, two status PUTs, each request-bounded
  *  - one Reports pass (the completion)
  *  - teardown (30 s): the writer's label read and trash (or cancel) in the `finally`
  */
 const TEST_TIMEOUT_MS =
-	120_000 + 300_000 + 90_000 + MOUNT_SETTLE_MS + 60_000 + REFRESH_TIMEOUT_MS + 30_000;
+	120_000 + 300_000 + 90_000 + MOUNT_SETTLE_TIMEOUT_MS + 60_000 + REFRESH_TIMEOUT_MS + 30_000;
 
 /** The JSON record, unwrapped from the document/record/data envelopes; null on a refusal. */
 async function recordOf(response: APIResponse): Promise<Record<string, unknown> | null> {
@@ -71,10 +75,18 @@ async function putStatus(
 	expect(String(order?.status ?? ''), `the store must apply "${status}"`).toBe(status);
 }
 
-/** The hero total as a number: currency symbols and thousands separators stripped. */
+/**
+ * The hero total as a number in any locale: `1.234,56` and `1,234.56` read alike. The last `.`
+ * or `,` followed by exactly the final 1 or 2 digits is the decimal mark; every other one is a
+ * thousands separator. Throws on text with no digit, so a poll keeps going rather than reading 0.
+ */
 async function heroTotal(hero: Locator): Promise<number> {
 	const text = (await hero.textContent()) ?? '';
-	return Number(text.replace(/[^0-9.-]/g, ''));
+	if (!/\d/.test(text)) throw new Error(`the hero total holds no digit yet: "${text}"`);
+	const kept = text.replace(/[^0-9.,-]/g, '');
+	const mark = /[.,](\d{1,2})$/.exec(kept);
+	const whole = (mark ? kept.slice(0, mark.index) : kept).replace(/[.,]/g, '');
+	return Number(mark ? `${whole}.${mark[1]}` : whole);
 }
 
 /**
@@ -174,8 +186,18 @@ test('an order completed on the server reaches the open Reports total', async ({
 		await expect(screen).toBeVisible({ timeout: 30_000 });
 		const hero = screen.getByTestId('hero-total').first();
 		await expect(hero).toBeVisible({ timeout: 45_000 });
-		await page.waitForTimeout(MOUNT_SETTLE_MS);
-		const baseline = await heroTotal(hero);
+		// A mount walk still landing pages moves the total: the baseline is a total that held
+		// still across MOUNT_SETTLE_MS with no download line before or after.
+		const progress = screen.getByTestId('reports-sync-progress').filter({ visible: true });
+		let baseline = Number.NaN;
+		await expect(async () => {
+			expect(await progress.count(), 'no Reports download may be in flight').toBe(0);
+			const first = await heroTotal(hero);
+			await page.waitForTimeout(MOUNT_SETTLE_MS);
+			expect(await progress.count(), 'no Reports download may be in flight').toBe(0);
+			baseline = await heroTotal(hero);
+			expect(baseline, 'the hero total must hold still across the settle').toBe(first);
+		}).toPass({ timeout: MOUNT_SETTLE_TIMEOUT_MS });
 		expect(Number.isFinite(baseline), 'the hero total must parse as a number').toBe(true);
 		console.log(`[reports-server-complete] baseline ${baseline}, order ${orderId} ${orderTotal}`);
 

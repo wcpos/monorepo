@@ -23,17 +23,24 @@ export function reportsRefreshCadence(
 }
 
 /** Re-read the Reports window on focus or foreground return, and on a timer for today. */
+// True while a timer pass re-reads a lane that was whole and idle when it started (quiet).
 export function useReportsRefresh(
-	handle: { sync(): Promise<void> },
-	cadence: ReportsRefreshCadence
-): void {
+	handle: {
+		sync(): Promise<void>;
+		readonly value: { laneComplete: boolean; laneProgress: unknown };
+	},
+	cadenceAt: () => ReportsRefreshCadence
+): boolean {
+	const cadence = cadenceAt();
 	const focused = useIsFocused();
 	const [appState, setAppState] = React.useState(AppState.currentState);
-	// The latest handle, so a range change does not restart the timer.
-	const latest = React.useRef(handle);
+	// The latest handle and cadence: a range change keeps the timer, a pass sees the midnight.
+	const latest = React.useRef({ handle, cadenceAt });
 	React.useEffect(() => {
-		latest.current = handle;
-	}, [handle]);
+		latest.current = { handle, cadenceAt };
+	}, [handle, cadenceAt]);
+	// The handle a quiet pass is re-reading: a handle given mid-pass is not quiet.
+	const [quietHandle, setQuietHandle] = React.useState<object | null>(null);
 	const inFlight = React.useRef<Promise<void> | null>(null);
 	// Mount already declares the window, so only a return from inactive runs a pass.
 	const wasInactive = React.useRef(false);
@@ -52,21 +59,28 @@ export function useReportsRefresh(
 		const returned = wasInactive.current;
 		wasInactive.current = false;
 		if (cadence === 'none') return;
-		const pass = () => {
+		const pass = (timer: boolean) => {
 			if (inFlight.current) return;
-			const current = latest.current
+			const { handle: target, cadenceAt: cadenceNow } = latest.current;
+			if (timer && cadenceNow() !== 'interval') return;
+			// Only the timer re-reading a lane already whole and idle is quiet, never a download.
+			const quiet = timer && target.value.laneComplete && target.value.laneProgress == null;
+			if (quiet) setQuietHandle(target);
+			const current = target
 				.sync()
 				.catch(() => {
 					logger.debug('Reports refresh failed');
 				})
 				.finally(() => {
 					if (inFlight.current === current) inFlight.current = null;
+					if (quiet) setQuietHandle((held) => (held === target ? null : held));
 				});
 			inFlight.current = current;
 		};
-		if (returned) pass();
+		if (returned) pass(false);
 		if (cadence !== 'interval') return;
-		const timer = setInterval(pass, REPORTS_REFRESH_MS);
+		const timer = setInterval(() => pass(true), REPORTS_REFRESH_MS);
 		return () => clearInterval(timer);
 	}, [active, cadence]);
+	return quietHandle === handle;
 }

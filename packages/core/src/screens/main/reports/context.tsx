@@ -63,6 +63,8 @@ export interface ReportsHandles {
 	handle: QueryHandle;
 	comparisonHandle: QueryHandle;
 	refundsHandle: QueryHandle;
+	/** A timer pass is re-reading a sales lane that was already whole: not news to the cashier. */
+	quietRefresh?: boolean;
 }
 
 /** Row selection state. Changes when the cashier ticks a row. */
@@ -333,6 +335,7 @@ export function ReportsProvider({
 	handle,
 	comparisonHandle,
 	refundsHandle,
+	quietRefresh,
 	children,
 }: ReportsProviderProps) {
 	// The answer only: the sync state is read by the progress line, not by every report reader.
@@ -365,8 +368,8 @@ export function ReportsProvider({
 		[allOrders, statusMode, unselectedRowIds]
 	);
 	const handlesValue = React.useMemo<ReportsHandles>(
-		() => ({ handle, comparisonHandle, refundsHandle }),
-		[handle, comparisonHandle, refundsHandle]
+		() => ({ handle, comparisonHandle, refundsHandle, quietRefresh }),
+		[handle, comparisonHandle, refundsHandle, quietRefresh]
 	);
 
 	const selectionValue = React.useMemo<ReportsSelection>(

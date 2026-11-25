@@ -20,9 +20,12 @@ import { useReportsHandles } from './context';
  * continuation cursor is cleared, which is exactly when the range is complete.
  */
 export function ReportsSyncProgress({ lane = 'sales' }: { lane?: 'sales' | 'comparison' } = {}) {
-	const { handle, comparisonHandle } = useReportsHandles();
+	const { handle, comparisonHandle, quietRefresh } = useReportsHandles();
 	const source = lane === 'comparison' ? comparisonHandle : handle;
-	const { ready, laneProgress } = useQueryHandleFields(source, ['laneProgress']);
+	const { ready, laneProgress, laneComplete } = useQueryHandleFields(source, [
+		'laneProgress',
+		'laneComplete',
+	]);
 	// Nothing to report before the read has answered: the line speaks for rows that are here.
 	const progress = ready ? laneProgress : null;
 	const t = useT();
@@ -30,6 +33,8 @@ export function ReportsSyncProgress({ lane = 'sales' }: { lane?: 'sales' | 'comp
 	if (!progress) return null;
 	// The comparison lane's download: its figures are not final until it ends.
 	const comparison = lane === 'comparison';
+	// The timer re-checking a day that was already whole: every order is here.
+	if (!comparison && quietRefresh && laneComplete) return null;
 
 	const percent =
 		progress.total === null || progress.total <= 0

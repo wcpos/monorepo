@@ -10,6 +10,7 @@ const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-hand
 
 let mockHandle = fakeQueryHandle();
 let mockComparisonHandle = fakeQueryHandle();
+let mockQuiet = false;
 
 jest.mock('react-native', () => ({
 	View: ({
@@ -39,7 +40,11 @@ jest.mock('@wcpos/components/progress', () => ({
 	),
 }));
 jest.mock('./context', () => ({
-	useReportsHandles: () => ({ handle: mockHandle, comparisonHandle: mockComparisonHandle }),
+	useReportsHandles: () => ({
+		handle: mockHandle,
+		comparisonHandle: mockComparisonHandle,
+		quietRefresh: mockQuiet,
+	}),
 }));
 
 jest.mock('../../../contexts/translations', () => ({
@@ -51,6 +56,35 @@ describe('ReportsSyncProgress', () => {
 	beforeEach(() => {
 		mockHandle = fakeQueryHandle();
 		mockComparisonHandle = fakeQueryHandle();
+		mockQuiet = false;
+	});
+
+	// A timer re-reading a day that was already whole is not news; any other download is.
+	it.each([
+		[false, true, true, true],
+		[false, false, true, true],
+		[true, true, true, false],
+		[true, false, true, true],
+		[true, true, false, false],
+		[false, false, false, false],
+	] as const)(
+		'quiet %s, whole %s, progress %s: the sales line shows %s',
+		(quiet, complete, progress, shown) => {
+			mockQuiet = quiet;
+			mockHandle.set({
+				laneComplete: complete,
+				laneProgress: progress ? { downloaded: 1, total: 2 } : null,
+			});
+			render(<ReportsSyncProgress />);
+			expect(!!screen.queryByTestId('reports-sync-progress')).toBe(shown);
+		}
+	);
+
+	it('a quiet re-read leaves the comparison line as it is', () => {
+		mockQuiet = true;
+		mockComparisonHandle.set({ laneComplete: true, laneProgress: { downloaded: 1, total: 2 } });
+		render(<ReportsSyncProgress lane="comparison" />);
+		expect(screen.getByTestId('reports-comparison-sync-progress')).toBeInTheDocument();
 	});
 
 	// Self-dismissing: the handle stops reporting progress the moment the lane's
