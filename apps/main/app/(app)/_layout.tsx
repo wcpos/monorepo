@@ -333,6 +333,8 @@ function EngineConnectivityBridge() {
 	// Keep the sync engine's non-React connectivity port aligned with the provider.
 	React.useEffect(() => {
 		setAppOnlineStatus(status);
+		// Signed out, the provider is gone: the engine falls back to the platform's own reading.
+		return () => setAppOnlineStatus(null);
 	}, [status]);
 
 	return null;

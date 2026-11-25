@@ -33,6 +33,7 @@ describe('automatic pulls paused', () => {
 					])
 				);
 				requests.length = 0;
+				events.length = 0;
 				clock.advance(60_000);
 				const changeTimer = timers!.timeouts.findIndex((timer) => timer.delayMs === 10_000);
 				expect(changeTimer).toBeGreaterThanOrEqual(0);
@@ -43,6 +44,13 @@ describe('automatic pulls paused', () => {
 				await vi.waitFor(() =>
 					expect(events).toContainEqual(
 						expect.objectContaining({ type: 'lane-finish', lane: 'write-drain' })
+					)
+				);
+				const skipped = (lane: string) =>
+					expect.objectContaining({ lane, status: 'skipped', detail: 'pulls-paused' });
+				await vi.waitFor(() =>
+					expect(events.filter((event) => event.type === 'lane-finish')).toEqual(
+						expect.arrayContaining([skipped('change-signal'), skipped('scheduler-drain')])
 					)
 				);
 				expect(requests).toEqual([]);

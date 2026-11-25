@@ -1887,7 +1887,12 @@ export function createRxdbSyncEngine(
 				type: 'lane-finish',
 				lane,
 				status: 'skipped',
-				detail: ports.holdAutomaticTicks?.() === true ? 'auth-required' : 'lifecycle-gated',
+				detail:
+					ports.holdAutomaticTicks?.() === true
+						? 'auth-required'
+						: pendingLifecycleOps > 0
+							? 'lifecycle-gated'
+							: 'pulls-paused',
 			});
 		},
 		connectivity: readConnectivity,
