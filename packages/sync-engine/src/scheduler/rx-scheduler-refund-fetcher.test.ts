@@ -408,6 +408,7 @@ describe('refund history checkpoint (#3340)', () => {
 	});
 
 	// Revert the decode to JSON.parse without field checks: the future and v:2 blobs walk delta.
+	// Revert the lastFull <= lastWalk clause: the last row walks delta.
 	it.each([
 		'not json',
 		'{"v":1,"lastWalkStartedAtMs":"x","lastFullWalkStartedAtMs":0}',
@@ -420,6 +421,11 @@ describe('refund history checkpoint (#3340)', () => {
 			v: 2,
 			lastWalkStartedAtMs: T0 - 60 * MIN,
 			lastFullWalkStartedAtMs: T0 - 60 * MIN,
+		}),
+		JSON.stringify({
+			v: 1,
+			lastWalkStartedAtMs: T0 - 60 * MIN,
+			lastFullWalkStartedAtMs: T0 - 30 * MIN,
 		}),
 	])('F8: an unreadable checkpoint %s walks full', async (stored) => {
 		const h = checkpointSetup(baseRows(), new Map([[KEY, stored]]));
@@ -453,5 +459,18 @@ describe('refund history checkpoint (#3340)', () => {
 			Array(3).fill('2026-06-16T00:31:00')
 		);
 		expect(h.port.get).not.toHaveBeenCalled();
+	});
+
+	// Revert the completed guard on the checkpoint write: page 1 writes the blob and the restart walks delta.
+	it('F11: a walk interrupted after page 1 writes no checkpoint and the restart walks full', async () => {
+		const h = checkpointSetup(baseRows());
+		expect(await h.fetcher(task())).toMatchObject({ completed: false });
+		expect(h.port.set).not.toHaveBeenCalled();
+		expect(h.blob()).toBeUndefined();
+		const restarted = h.build();
+		h.state.now += 31 * MIN;
+		const requests = await h.walkAll(task(), restarted);
+		expect(h.afters(requests)).toEqual(Array(3).fill('2026-06-16T00:31:00'));
+		expect(h.local.size).toBe(250);
 	});
 });
