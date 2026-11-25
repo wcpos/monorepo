@@ -5,6 +5,8 @@ import { WebView as RNWebView } from 'react-native-webview';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { sameStoreOrigin } from './same-store-origin';
+
 import type {
 	WebViewErrorEvent,
 	WebViewEvent,
@@ -38,24 +40,6 @@ function originOf(url: string | null): string | null {
 		return new URL(url).origin || null;
 	} catch {
 		return null;
-	}
-}
-
-function senderAdmitted(senderURL: string | null, pinnedOrigin: string): boolean {
-	if (senderURL === null) return false;
-	try {
-		const sender = new URL(senderURL);
-		const pin = new URL(pinnedOrigin);
-		return (
-			['http:', 'https:'].includes(sender.protocol) &&
-			['http:', 'https:'].includes(pin.protocol) &&
-			(sender.protocol === pin.protocol ||
-				(pin.protocol === 'http:' && sender.protocol === 'https:')) &&
-			sender.hostname.replace(/^www\./, '') === pin.hostname.replace(/^www\./, '') &&
-			sender.port === pin.port
-		);
-	} catch {
-		return false;
 	}
 }
 
@@ -138,7 +122,7 @@ function WebView({
 				// Admit only the pin's host/www twin and same scheme or http-to-https upgrade;
 				// on iOS react-native-webview names the sending frame's URL; on Android it names the
 				// top-level page (`mWebView.getUrl()`), so a frame inside the pinned page is admitted there.
-				if (targetOrigin && !senderAdmitted(eventURL(event), targetOrigin)) {
+				if (targetOrigin && !sameStoreOrigin(eventURL(event), targetOrigin)) {
 					if (!loggedDropRef.current) {
 						loggedDropRef.current = true;
 						log.warn('Ignored a message from a page outside the pinned origin', {
