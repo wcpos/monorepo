@@ -297,6 +297,8 @@ export type RxdbSyncEnginePorts = {
 	lastUserActivityMs?: () => number;
 	/** Optional host visibility reader for background cadence and lane gating. */
 	hostVisible?: () => boolean;
+	/** Pause automatic pull lanes only; writes and explicit sync() remain available. */
+	pullsPaused?: () => boolean;
 	/**
 	 * The host's authored default product sort (initial-settings), for the work
 	 * the engine does BEFORE any grid declares a window: the boot browse-window
@@ -1872,6 +1874,7 @@ export function createRxdbSyncEngine(
 		return report;
 	};
 	const automaticTickGate = createAutomaticTickGate({
+		...(ports.pullsPaused === undefined ? {} : { pullsPaused: ports.pullsPaused }),
 		isGated: () => ports.holdAutomaticTicks?.() === true || pendingLifecycleOps > 0,
 		// Mirror the rebaseline-hold emission below: the gate returns before
 		// tickLaneWithEvents can run, so it must name the skip itself — a gated
