@@ -16,6 +16,8 @@ export interface RefundFailureReport {
 	title: string;
 	/** Already-translated second line, when the code's own hint would mislead. */
 	text2?: string;
+	/** The money went back although the store kept no record: leave the form so no retry is offered. */
+	refunded?: true;
 }
 
 /**
@@ -105,6 +107,15 @@ export function classifyRefundFailure(error: unknown, t: Translate): RefundFailu
 
 	const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
 	const status = response?.status;
+	if ((response?.data as { code?: unknown } | undefined)?.code === 'wcpos_refund_record_lost') {
+		return {
+			level: 'error',
+			code: ERROR_CODES.REFUND_RECORD_LOST,
+			title: t('orders.refund_record_lost'),
+			text2: t('orders.refund_record_lost_check'),
+			refunded: true,
+		};
+	}
 	if (response && isRefusal(status)) {
 		// The HTTP client's mapped WordPress code (a missing route, a specific auth
 		// refusal) says more than the status does; fall back on the status only.

@@ -251,6 +251,7 @@ export type CollectionHandleInput<C extends CollectionHandleKey> = {
 	state: QueryStateOf<C>;
 	remoteIds?: readonly RemoteId[];
 	storeScope: 'pos' | 'sales';
+	saleDayCorrection?: boolean;
 	searchFields: string[] | undefined;
 };
 
@@ -413,6 +414,7 @@ export function acquireCollectionQueryHandle<C extends CollectionHandleKey>(
 			id,
 			targeted: remoteIds,
 			storeScope,
+			saleDayCorrection: input.saleDayCorrection,
 			searchFields,
 		});
 		return {
@@ -434,7 +436,11 @@ export function acquireCollectionQueryHandle<C extends CollectionHandleKey>(
 export function useCollectionQueryHandle<C extends CollectionHandleKey>(
 	collection: C,
 	state: QueryStateOf<C>,
-	options: { remoteIds?: readonly RemoteId[]; storeScope?: 'pos' | 'sales' } = {}
+	options: {
+		remoteIds?: readonly RemoteId[];
+		storeScope?: 'pos' | 'sales';
+		saleDayCorrection?: boolean;
+	} = {}
 ): QueryHandle<QueryResult<RxCollection>> {
 	const { engine } = useQueryRuntime();
 	const legacy = (collection === 'tax-rates' ? 'taxes' : collection) as Parameters<
@@ -450,15 +456,17 @@ export function useCollectionQueryHandle<C extends CollectionHandleKey>(
 		{ ...state, search: (state as { search?: string }).search?.trim() },
 		options.remoteIds ?? null,
 		searchFields ?? null,
+		options.saleDayCorrection === true,
 	]);
 	const handle = React.useMemo(() => {
-		const [, , , canonical, remoteIds, fields] = JSON.parse(key) as [
+		const [, , , canonical, remoteIds, fields, saleDayCorrection] = JSON.parse(key) as [
 			string,
 			string,
 			string,
 			QueryStateOf<C>,
 			RemoteId[] | null,
 			string[] | null,
+			boolean,
 		];
 		return acquireCollectionQueryHandle(engine, key, {
 			collection,
@@ -466,6 +474,7 @@ export function useCollectionQueryHandle<C extends CollectionHandleKey>(
 			remoteIds: remoteIds ?? undefined,
 			storeScope,
 			searchFields: fields ?? undefined,
+			saleDayCorrection,
 		});
 	}, [collection, engine, key, storeScope]);
 	React.useEffect(() => handle.retain(), [handle]);

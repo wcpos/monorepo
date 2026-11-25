@@ -11,6 +11,24 @@ import seed from './catalog.seed.json';
 export const MINI_APP_ORIGIN = 'https://cdn.jsdelivr.net/gh/wcpos/mini-apps@1';
 export const CATALOG_URL = `${MINI_APP_ORIGIN}/catalog.json`;
 export const ALLOWED_MINI_APP_IDS = ['printer-wizard'] as const;
+
+export interface MiniAppProxyScope {
+	/** Upper-case HTTP methods the mini-app may send through `http.proxy`. */
+	methods: readonly string[];
+	/** REST path prefixes, each ending in '/'; a path matches its prefix or the prefix without the trailing '/'. */
+	paths: readonly string[];
+	/** The only query keys the mini-app may send. */
+	queryKeys: readonly string[];
+}
+
+// What each mini-app may reach through `http.proxy`, declared here in the app and never read from the
+// remote catalog, so a catalog entry cannot widen it. A new mini-app gets an entry when it is added.
+export const MINI_APP_PROXY_SCOPES: Record<
+	(typeof ALLOWED_MINI_APP_IDS)[number],
+	MiniAppProxyScope
+> = {
+	'printer-wizard': { methods: ['GET'], paths: ['/wcpos/v1/settings/'], queryKeys: [] },
+};
 const FETCH_TIMEOUT_MS = 5_000;
 
 export interface MiniAppCatalogEntry {

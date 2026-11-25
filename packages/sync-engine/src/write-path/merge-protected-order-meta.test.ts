@@ -91,9 +91,18 @@ it.each(['server', 'read'] as const)(
 		expect(mergeProtectedOrderMeta([local], [], source)).toEqual([]);
 	}
 );
-it('keeps the editor sale-day correction on mutation, retaining it when omitted', () => {
+it('keeps the server sale-day fact on mutation, retaining it when omitted', () => {
 	const local = { id: 42, key: '_wcpos_sale_day', value: 'resident' };
 	const edited = { key: '_wcpos_sale_day', value: 'edited' };
-	expect(mergeProtectedOrderMeta([local], [edited], 'mutation')).toEqual([{ ...edited, id: 42 }]);
+	expect(mergeProtectedOrderMeta([local], [edited], 'mutation')).toEqual([local]);
 	expect(mergeProtectedOrderMeta([local], [], 'mutation')).toEqual([local]);
+});
+
+it('protects the request from omission while letting the editor replace it', () => {
+	const local = { key: '_wcpos_sale_day_request', value: 'old request' };
+	const edited = { ...local, value: 'new request' };
+	expect(mergeProtectedOrderMeta([local], [edited], 'mutation')).toEqual([
+		{ ...edited, id: undefined },
+	]);
+	expect(mergeProtectedOrderMeta([local], [], 'mutation')).toEqual([{ ...local, id: undefined }]);
 });
