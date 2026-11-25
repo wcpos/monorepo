@@ -466,6 +466,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 										message: summary,
 										fields: {
 											lane: name,
+											durationMs: now() - startedAtMs,
 											...(starvation ? { starvation: true } : {}),
 											// A body may report BOTH partial work and a stand-down (a
 											// deferred existence-reconcile does exactly that). Naming the

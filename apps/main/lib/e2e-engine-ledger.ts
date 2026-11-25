@@ -25,6 +25,9 @@ const FIELD_ALLOWLIST = [
 	'count',
 	'timedOut',
 	'attempt',
+	'lane',
+	'reason',
+	'starvation',
 ] as const;
 
 type LedgerValue = string | number | boolean;
@@ -86,6 +89,7 @@ export function createE2eEngineLedgerObserver(): SyncObserver | null {
 			}
 			const errorCode = resolveSyncEventErrorCode(event);
 			if (errorCode !== null) payload.errorCode = errorCode;
+			payload.atMs = Date.now();
 			const line = `${PREFIX}${serializePayload(payload)}`;
 			const hook = (globalThis as NativeLoggingGlobal).nativeLoggingHook;
 			if (typeof hook === 'function') hook(line, 1);

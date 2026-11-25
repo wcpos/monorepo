@@ -14,8 +14,13 @@ const originalFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
 const originalHook = nativeGlobal.nativeLoggingHook;
 const event = (partial: Partial<Omit<SyncEvent, 'type'>> & { type: string }): SyncEvent =>
 	({ level: 'info', ...partial }) as SyncEvent;
+const AT_MS = 1_764_000_000_000;
 
 describe('createE2eEngineLedgerObserver', () => {
+	beforeEach(() => {
+		jest.spyOn(Date, 'now').mockReturnValue(AT_MS);
+	});
+
 	afterEach(() => {
 		jest.restoreAllMocks();
 		if (originalFlag === undefined) delete process.env.EXPO_PUBLIC_WCPOS_E2E;
@@ -80,6 +85,7 @@ describe('createE2eEngineLedgerObserver', () => {
 			durationMs: 12,
 			bytes: 34,
 			active: true,
+			atMs: AT_MS,
 		});
 		expect(JSON.parse(lines[1].line.slice(prefix.length))).toEqual({
 			type: 'coverage.require.outcome',
@@ -90,6 +96,37 @@ describe('createE2eEngineLedgerObserver', () => {
 			documents: 12,
 			requests: 2,
 			durationMs: 34,
+			atMs: AT_MS,
+		});
+	});
+
+	it('passes lane, reason and starvation', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		const lines: string[] = [];
+		nativeGlobal.nativeLoggingHook = (line) => lines.push(line);
+
+		createE2eEngineLedgerObserver()?.(
+			event({
+				type: 'maintenance.lane.tick',
+				fields: {
+					lane: 'existence-prime',
+					durationMs: 12,
+					reason: 'offline',
+					starvation: true,
+					queryKey: 'secret',
+				},
+			})
+		);
+
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).not.toContain('secret');
+		expect(JSON.parse(lines[0].slice('WCPOS_E2E_ENGINE '.length))).toEqual({
+			type: 'maintenance.lane.tick',
+			durationMs: 12,
+			lane: 'existence-prime',
+			reason: 'offline',
+			starvation: true,
+			atMs: AT_MS,
 		});
 	});
 
@@ -161,7 +198,7 @@ describe('createE2eEngineLedgerObserver', () => {
 
 		createE2eEngineLedgerObserver()?.(event({ type: 'engine.ready' }));
 
-		expect(warn).toHaveBeenCalledWith('WCPOS_E2E_ENGINE {"type":"engine.ready"}');
+		expect(warn).toHaveBeenCalledWith(`WCPOS_E2E_ENGINE {"type":"engine.ready","atMs":${AT_MS}}`);
 	});
 
 	it('swallows a native hook failure', () => {

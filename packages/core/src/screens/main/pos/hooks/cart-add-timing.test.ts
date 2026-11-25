@@ -47,6 +47,15 @@ describe('cart add handler-to-commit timing', () => {
 		expect(getCartAddTiming().durationMs).toBe(1500);
 	});
 
+	it('stamps the epoch start of the add last, after sequence and status', () => {
+		jest.spyOn(Date, 'now').mockReturnValue(10_000);
+		beginCartAddTiming('order-1', 42, 0, 50);
+		expect(getCartAddTiming().startedAtEpochMs).toBe(9_950);
+		expect(Object.keys(getCartAddTiming()).slice(0, 2)).toEqual(['sequence', 'status']);
+		commitCartAddTiming('order-1', [{ product_id: 42, quantity: 1 }]);
+		expect(getCartAddTiming()).toMatchObject({ status: 'complete', startedAtEpochMs: 9_950 });
+	});
+
 	it('does not count a variation of the same product as the simple product', () => {
 		beginCartAddTiming('variations', 42, 0, 100);
 		commitCartAddTiming('variations', [{ product_id: 42, variation_id: 9, quantity: 1 }]);

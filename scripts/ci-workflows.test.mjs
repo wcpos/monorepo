@@ -1035,6 +1035,25 @@ test('native E2E Metro serves a non-lazy bundle on both platforms', () => {
 	}
 });
 
+test('native E2E switches the storage probe on for dispatched Android runs only', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	// Push and PR runs test the bundle as shipped; only a dispatch carries the probe (#3340).
+	const metroSteps = Object.values(workflow.jobs)
+		.flatMap((job) => job.steps ?? [])
+		.filter((step) => typeof step.run === 'string' && step.run.includes('expo start'));
+	const isAndroid = (step) => step.run.includes('runtimeversion:resolve --platform android');
+	const android = metroSteps.filter(isAndroid);
+	const ios = metroSteps.filter((step) => !isAndroid(step));
+
+	assert.equal(android.length, 1);
+	assert.equal(ios.length, 1);
+	assert.equal(
+		android[0].env?.EXPO_PUBLIC_WCPOS_STORAGE_PROBE,
+		"${{ github.event_name == 'workflow_dispatch' && '1' || '' }}"
+	);
+	assert.equal(Object.hasOwn(ios[0].env ?? {}, 'EXPO_PUBLIC_WCPOS_STORAGE_PROBE'), false);
+});
+
 test("native E2E pre-warm requests the device's bundle URL on both platforms", () => {
 	const workflow = readWorkflow('e2e-native.yml');
 	// The bundle cache keys on the URL's host: warm the one the dev client asks for (#3345).

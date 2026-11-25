@@ -174,7 +174,7 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 		expect(context.diagnostics).toContainEqual(
 			expect.objectContaining({
 				type: 'maintenance.lane.tick',
-				fields: { lane: 'existence-prime', starvation: true },
+				fields: { lane: 'existence-prime', durationMs: expect.any(Number), starvation: true },
 			})
 		);
 		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({

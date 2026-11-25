@@ -1627,7 +1627,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					type: 'coverage.require.started',
 					level: 'debug',
 					collection: next.requirement.collection,
-					fields: { requirementId: next.requirement.id, kind: next.requirement.kind },
+					fields: { requirementId: next.requirement.id, kind: next.requirement.kind, lane },
 				});
 				let declareStalled!: () => void;
 				const stallBarrier = new Promise<typeof STALLED>((resolve) => {
@@ -1667,6 +1667,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							fields: {
 								requirementId: next.requirement.id,
 								kind: next.requirement.kind,
+								lane,
 								action: outcome.action,
 								documents: outcome.documents ?? 0,
 								requests: outcome.requests ?? 0,
@@ -1730,6 +1731,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								fields: {
 									requirementId: next.requirement.id,
 									kind: next.requirement.kind,
+									lane,
 									action: 'released',
 									documents: 0,
 									requests: 0,
@@ -1752,6 +1754,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								fields: {
 									requirementId: next.requirement.id,
 									kind: next.requirement.kind,
+									lane,
 									durationMs: Date.now() - startedAt,
 									// `message` above is an ALLOW-LIST: it keeps our own
 									// `require: …` text and collapses everything else to

@@ -331,6 +331,7 @@ describe('require() for the products browse window', () => {
 				level: 'info',
 				fields: expect.objectContaining({
 					requirementId: 'browse-released-mid-fetch',
+					lane: 'durable',
 					action: 'released',
 				}),
 			})
