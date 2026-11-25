@@ -25,6 +25,7 @@ export {
 	findOpenSession,
 	findUnwrittenCloses,
 	isRegisterCounting,
+	readCurrentSession,
 	openSession,
 	recordMovement,
 	recordApproval,

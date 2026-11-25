@@ -80,6 +80,7 @@ export type OrderBrowserSchedulerDescriptor = {
 	afterSeconds?: number;
 	beforeSeconds?: number;
 	modifiedAfterSeconds?: number;
+	saleDayCorrection?: boolean;
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
 	complete: boolean;
@@ -115,6 +116,7 @@ export type OrderBrowseWindowFields = {
 	afterSeconds?: number | undefined;
 	beforeSeconds?: number | undefined;
 	modifiedAfterSeconds?: number | undefined;
+	saleDayCorrection?: boolean | undefined;
 	orderby?: OrderBrowserSchedulerDescriptor['orderby'];
 	order?: OrderBrowserSchedulerDescriptor['order'];
 };
@@ -157,6 +159,7 @@ function encodeOrderBrowseWindowKey(fields: OrderBrowseWindowFields, limitText: 
 		browseWindowKeyPart('after', fields.afterSeconds),
 		browseWindowKeyPart('before', fields.beforeSeconds),
 		browseWindowKeyPart('modified_after', fields.modifiedAfterSeconds),
+		fields.saleDayCorrection ? ':sale_day=1' : '',
 		orderBrowseWindowSortPart(fields),
 		`:search=${fields.search}`,
 		`:limit=${limitText}`,
@@ -251,6 +254,7 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		afterSeconds,
 		beforeSeconds,
 		modifiedAfterSeconds,
+		saleDayCorrection: dims.saleDayCorrection,
 		orderby: dims.orderby,
 		order: dims.order,
 	});
@@ -279,7 +283,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 	// BETWEEN the colon-free `status` and `:search=` — appending them after `search`
 	// would let a literal search term like `invoice:after=1` be read as a date bound.
 	const match =
-		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::register=([a-f0-9-]{36}))?(?::store=([a-z0-9_-]+))?(?::payment_method=([A-Za-z0-9_.-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::modified_after=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::register=([a-f0-9-]{36}))?(?::store=([a-z0-9_-]+))?(?::payment_method=([A-Za-z0-9_.-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::modified_after=(\d+))?(?::sale_day=(1))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
 			queryKey
 		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
@@ -295,6 +299,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 		afterText,
 		beforeText,
 		modifiedAfterText,
+		saleDayCorrection,
 		orderby,
 		order,
 		search,
@@ -351,6 +356,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 			...(afterSeconds !== undefined ? { afterSeconds } : {}),
 			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
 			...(modifiedAfterSeconds !== undefined ? { modifiedAfterSeconds } : {}),
+			...(saleDayCorrection ? { saleDayCorrection: true } : {}),
 			// A ranged lane is sort-agnostic (see the sortPart note in orderBrowserQueryKey), so the
 			// sort is DROPPED here rather than rejected: lanes and queued tasks persisted before
 			// that change still carry it, and refusing them would strand the task instead of
@@ -384,6 +390,7 @@ export function orderBrowseWindowFields(
 		afterSeconds: descriptor.afterSeconds,
 		beforeSeconds: descriptor.beforeSeconds,
 		modifiedAfterSeconds: descriptor.modifiedAfterSeconds,
+		saleDayCorrection: descriptor.saleDayCorrection,
 		orderby: descriptor.orderby,
 		order: descriptor.order,
 	};

@@ -317,6 +317,11 @@ export type DialogFooterProps = {
 	/** Register sheets' sale height; applies to every button. */
 	size?: 'default' | 'lg';
 	testID?: string;
+	/**
+	 * A wrapped trailing row sits at the trailing edge, so the primary never lands alone at the
+	 * start. Off by default, for a sheet whose footer is known to wrap (the receipt).
+	 */
+	wrapToEnd?: boolean;
 };
 export function DialogFooter({
 	intent,
@@ -327,6 +332,7 @@ export function DialogFooter({
 	aside,
 	size = 'default',
 	testID,
+	wrapToEnd,
 }: DialogFooterProps): React.JSX.Element {
 	// Outside a shell (a Reports panel's phone page) the footer is a page's: ruled above.
 	const presentation = useOverlayPresentation();
@@ -394,6 +400,17 @@ export function DialogFooter({
 					{other}
 					{dismiss}
 					{own}
+					{/* Void is never flush under Close; the tablet already sets it apart on the left. */}
+					{losses.length > 0 && count > losses.length && (
+						<View
+							testID={testID ? `${testID}-apart` : 'dialog-footer-apart'}
+							className="h-ctl justify-center"
+							accessibilityElementsHidden
+							importantForAccessibility="no-hide-descendants"
+						>
+							<View className="border-border border-t" />
+						</View>
+					)}
 					{losing}
 				</>
 			) : (
@@ -406,7 +423,7 @@ export function DialogFooter({
 						</View>
 					)}
 					{(dismissable || alternatives.length > 0 || intent) && (
-						<View className={cn(group, fill && 'flex-1')}>
+						<View className={cn(group, fill && 'flex-1', wrapToEnd && 'justify-end')}>
 							{dismiss}
 							{other}
 							{primary}

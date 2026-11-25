@@ -8,6 +8,7 @@ import {
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 
+import { isRefundUnconfirmedError, RefundUnconfirmedError } from './refund-failure';
 import {
 	buildRefundPayload,
 	createRefundIdempotencyKey,
@@ -131,7 +132,7 @@ describe('buildRefundPayload', () => {
 describe('useRefundMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockPost.mockResolvedValue({ data: { refund_id: 123 } });
+		mockPost.mockResolvedValue({ status: 201, data: { id: 123 } });
 		mockEngineRequire
 			.mockReset()
 			.mockImplementation(() => ({ ready: Promise.resolve(), release: jest.fn() }));
@@ -299,7 +300,7 @@ describe('useRefundMutation', () => {
 			await act(async () => {
 				if (rejectRefresh) rejectRefund(new Error('refund_refresh_failed'));
 				else resolveRefund();
-				await expect(mutation).resolves.toEqual({ refund_id: 123 });
+				await expect(mutation).resolves.toEqual({ id: 123 });
 			});
 			expect(releaseRefund).toHaveBeenCalledTimes(1);
 			expect(mockPost).toHaveBeenCalledTimes(1);
@@ -338,7 +339,7 @@ describe('useRefundMutation', () => {
 		expect(release).toHaveBeenCalledTimes(1);
 		await act(async () => {
 			finish({ action: 'fetched' });
-			await expect(mutation).resolves.toEqual({ refund_id: 123 });
+			await expect(mutation).resolves.toEqual({ id: 123 });
 		});
 		expect(release).toHaveBeenCalledTimes(2);
 		expect(mockPost).toHaveBeenCalledTimes(1);
@@ -364,7 +365,7 @@ describe('useRefundMutation', () => {
 					lineItems: [],
 					refundDestination: 'cash',
 				})
-			).resolves.toEqual({ refund_id: 123 });
+			).resolves.toEqual({ id: 123 });
 		});
 
 		expect(mockPost).toHaveBeenCalledTimes(1);
@@ -395,7 +396,7 @@ describe('useRefundMutation', () => {
 					lineItems: [],
 					refundDestination: 'cash',
 				})
-			).resolves.toEqual({ refund_id: 123 });
+			).resolves.toEqual({ id: 123 });
 		});
 
 		expect(mockPost).toHaveBeenCalledTimes(1);
@@ -422,6 +423,81 @@ describe('useRefundMutation', () => {
 
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(mockEngineRequire).not.toHaveBeenCalled();
+	});
+
+	// #3380: a 2xx with no created refund in it must never read as "Refund processed".
+	describe('when the 2xx answer holds no refund', () => {
+		// The degraded-storage describe below has no clearAllMocks; leave it no POST calls.
+		afterEach(() => {
+			jest.clearAllMocks();
+		});
+
+		// Rendered outside act(), as the tests above do, so `result.current` is the hook's callback.
+		const renderRefund = () => {
+			const { result } = renderHook(() => useRefundMutation());
+			return () =>
+				result.current({
+					order: makeOrder(77) as never,
+					amount: '5.00',
+					reason: '',
+					lineItems: [],
+					refundDestination: 'cash',
+				});
+		};
+
+		it('throws RefundUnconfirmedError for a null body, after both refresh passes ran', async () => {
+			mockPost.mockResolvedValue({ status: 200, data: null });
+			const refund = renderRefund();
+
+			let thrown: unknown;
+			await act(async () => {
+				thrown = await refund().catch((error: unknown) => error);
+			});
+
+			expect(isRefundUnconfirmedError(thrown)).toBe(true);
+			expect(thrown).toBeInstanceOf(RefundUnconfirmedError);
+			expect(thrown).toMatchObject({ orderId: 77, response: { status: 200 } });
+			// A refund the store did create still shows locally.
+			expect(mockEngineRequire.mock.calls.map(([request]) => request.id)).toEqual([
+				'refund:order-refresh:77',
+				'refund:record-refresh:77',
+			]);
+			expect(mockPost).toHaveBeenCalledTimes(1);
+		});
+
+		it.each([
+			['a string body', '<html>ok</html>'],
+			['an empty object', {}],
+			['an array', [{ id: 5 }]],
+			['a zero id', { id: 0 }],
+			['a string id', { id: '12' }],
+			['a fractional id', { id: 1.5 }],
+			['undefined', undefined],
+		])('throws for %s and never carries the body', async (_label, data) => {
+			mockPost.mockResolvedValue({ status: 200, data });
+			const refund = renderRefund();
+
+			let thrown: unknown;
+			await act(async () => {
+				thrown = await refund().catch((error: unknown) => error);
+			});
+
+			expect(thrown).toBeInstanceOf(RefundUnconfirmedError);
+			// The order id and the status only: no body on the error.
+			expect(Object.keys(thrown as object).sort()).toEqual(['name', 'orderId', 'response']);
+			expect((thrown as RefundUnconfirmedError).response).toEqual({ status: 200 });
+			expect((thrown as Error).message).not.toContain('html');
+		});
+
+		it('resolves a genuine 201 refund with its data, as before', async () => {
+			const created = { id: 230987, amount: '5.00' };
+			mockPost.mockResolvedValue({ status: 201, data: created });
+			const refund = renderRefund();
+
+			await act(async () => {
+				await expect(refund()).resolves.toEqual(created);
+			});
+		});
 	});
 });
 

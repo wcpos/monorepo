@@ -6,6 +6,7 @@ import {
 	findOpenSession,
 	isRegisterCounting,
 	readBoundRegister,
+	readCurrentSession,
 } from '@wcpos/query/register-session';
 
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
@@ -29,6 +30,8 @@ export function useActionContext(): {
 	cashier: Cashier | null;
 	/** Whether the bound register's session is being counted; an event-time read, never a subscription. */
 	readCounting: () => Promise<boolean>;
+	/** Why an add is refused, sessions on: `'unbound'` (no register on this device) or `'closed'` (the products column's "Price check only"); `false` lets it through. An event-time read, never a subscription. */
+	readPriceCheck: () => Promise<false | 'closed' | 'unbound'>;
 } {
 	const runtime = useQueryRuntime();
 	const t = useT();
@@ -85,6 +88,14 @@ export function useActionContext(): {
 				const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id;
 				if (!registerId) return false;
 				return isRegisterCounting(storeDB, registerId);
+			},
+			readPriceCheck: async () => {
+				if (!sessionsOn) return false;
+				const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id;
+				// No register here: checkout could never complete the sale, so refuse it now.
+				if (!registerId) return 'unbound';
+				// `undefined` (unreadable) never refuses an add.
+				return (await readCurrentSession(storeDB, registerId)) === null ? 'closed' : false;
 			},
 		}),
 		[

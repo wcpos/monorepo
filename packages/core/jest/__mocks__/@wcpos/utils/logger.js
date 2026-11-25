@@ -62,6 +62,9 @@ module.exports.CategoryLogger = CategoryLogger;
 module.exports.getErrorMessage = (error) =>
 	error instanceof Error ? error.message : String(error);
 module.exports.setToast = jest.fn();
+// The real redactor: a preview is redacted before it is cut, so tests must see real redaction.
+module.exports.redactSensitiveText =
+	require('../../../../../utils/src/logger/redact').redactSensitiveText;
 // Stateful like the real WeakSet, so a lower layer's mark suppresses a caller's report.
 const mockReportedErrors = new WeakSet();
 module.exports.markErrorReported = jest.fn((error) => {

@@ -408,6 +408,21 @@ describe('logger/index', () => {
 				})
 			);
 		});
+		it('passes an explicit empty second line through, so the adapter adds no action hint', () => {
+			const mockToast = jest.fn();
+			setToast(mockToast);
+
+			getLogger(['wcpos', 'test']).error('x', {
+				code: 'PAYMENT999',
+				showToast: true,
+				toast: { title: 'x', text2: '' },
+			});
+			getLogger(['wcpos', 'test']).warn('y', { showToast: true, toast: { title: 'y' } });
+
+			expect(mockToast).toHaveBeenNthCalledWith(1, expect.objectContaining({ description: '' }));
+			expect(mockToast.mock.calls[1][0]).not.toHaveProperty('description');
+		});
+
 		it('maps the level to the toast variant by default', () => {
 			const mockToast = jest.fn();
 			setToast(mockToast);
@@ -542,6 +557,30 @@ describe('logger/index', () => {
 			expect(context.fold).toContain('cart line item updated');
 			expect(context.fold).toContain('diagnostic coffee');
 			expect(context.fold).not.toContain('must not be copied');
+		});
+
+		it('keeps the app error code and makes the server code searchable', async () => {
+			const insert = jest.fn().mockResolvedValue(undefined);
+			setDatabase({
+				insert,
+				find: jest
+					.fn()
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
+					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
+				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
+			});
+
+			getLogger(['wcpos', 'register']).warn('Register session outbox request permanently refused', {
+				code: 'REGISTER101',
+				context: { serverCode: 'rest_forbidden', status: 403 },
+			});
+			await Promise.resolve();
+
+			const [{ context }] = insert.mock.calls[0];
+			expect(context.errorCode).toBe('REGISTER101');
+			expect(context.serverCode).toBe('rest_forbidden');
+			expect(context.search).toContain('rest_forbidden');
 		});
 
 		it('folds accents, case and normal form into context.fold at write time', async () => {

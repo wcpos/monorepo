@@ -5,9 +5,12 @@ import { act, renderHook } from '@testing-library/react';
 
 import { calculateCartLine } from '@wcpos/order-math';
 
+import { showCountingNotice, showPriceCheckNotice } from './use-add-product';
 import { useAddShipping } from './use-add-shipping';
 
 const mockAddItemToOrder = jest.fn();
+const mockReadCounting = jest.fn();
+const mockReadPriceCheck = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
@@ -58,7 +61,16 @@ jest.mock('../contexts/current-order', () => ({
 }));
 
 jest.mock('./use-add-item-to-order', () => ({
-	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
+	useAddItemToOrder: () => ({
+		addItemToOrder: mockAddItemToOrder,
+		readCounting: mockReadCounting,
+		readPriceCheck: mockReadPriceCheck,
+	}),
+}));
+
+jest.mock('./use-add-product', () => ({
+	showCountingNotice: jest.fn(),
+	showPriceCheckNotice: jest.fn(),
 }));
 
 // Only the store settings are stubbed; the tax maths runs for real.
@@ -97,6 +109,32 @@ describe('useAddShipping', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockAddItemToOrder.mockResolvedValue(true);
+		mockReadCounting.mockResolvedValue(false);
+		mockReadPriceCheck.mockResolvedValue(false);
+	});
+
+	it('adds nothing and shows the counting notice while the drawer is being counted', async () => {
+		mockReadCounting.mockResolvedValue(true);
+		const { result } = renderHook(() => useAddShipping());
+
+		await act(async () => {
+			await result.current.addShipping(shipping);
+		});
+
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(showCountingNotice).toHaveBeenCalledTimes(1);
+	});
+
+	it('adds nothing and shows the price-check notice while the register is closed', async () => {
+		mockReadPriceCheck.mockResolvedValue('closed');
+		const { result } = renderHook(() => useAddShipping());
+
+		await act(async () => {
+			await result.current.addShipping(shipping);
+		});
+
+		expect(mockAddItemToOrder).not.toHaveBeenCalled();
+		expect(showPriceCheckNotice).toHaveBeenCalledWith(expect.any(Function), 'closed');
 	});
 
 	it('adds the POS data metadata and logs success', async () => {

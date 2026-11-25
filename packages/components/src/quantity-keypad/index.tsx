@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { fieldBox } from '../field-box';
 import { closingRows, type GrowCell, GrowKeypad, type GrowKeypadHandle } from '../grow-keypad';
-import { DIGIT_ROWS } from '../keypad';
+import { DIGIT_ROWS, type KeypadKey } from '../keypad';
 import { useOverlayPresentation } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { PressableSurface } from '../pressable-surface';
@@ -15,6 +15,8 @@ const CELL = 48;
 const GRID = 10 ** QUANTITY_PLACES;
 const onGrid = (quantity: number) => Math.round(quantity * GRID) / GRID;
 const ARROW_KEYS = { ArrowUp: 'increase', ArrowDown: 'decrease' };
+// A signed keypad: the physical `-` (top row and numeric keypad alike) is ±, as a press.
+const SIGNED_KEYS = { ...ARROW_KEYS, '-': 'sign' };
 const ANIMATION = { down: 'web:animate-quantity-grow', up: 'web:animate-quantity-grow-up' };
 // Measured in the 48 px cell at the regular step (2026-10-30), with no side padding: five
 // characters fit at `text-base` ("2.222", "12345"), six at `text-xs`; seven and more truncate.
@@ -27,6 +29,8 @@ export type QuantityKeypadLabels = {
 	remove: string;
 	backspace: string;
 	done: string;
+	/** The Return key's word and accessible name; read only with `signed`. */
+	sign?: string;
 };
 
 export type QuantityKeypadProps = {
@@ -35,7 +39,7 @@ export type QuantityKeypadProps = {
 	/** The store's number format (separators). */
 	format: (value: number) => string;
 	/**
-	 * A committed quantity, above 0 to six places. Resolving `false`
+	 * A committed quantity, above 0 (or below, `signed`) to six places. Resolving `false`
 	 * says the store refused it (the stock guard), and a − or + step is taken back.
 	 */
 	onChange: (quantity: number) => void | boolean | Promise<void | boolean>;
@@ -46,6 +50,12 @@ export type QuantityKeypadProps = {
 	onRemove?: () => void;
 	/** The places a quantity may carry (six, a line's); with none there is no decimal key. */
 	decimals?: number;
+	/**
+	 * A line that may go negative (a return inside the sale): the Return row under the stepper
+	 * negates the number, − steps a negative away from zero and + towards it, stopping at −1.
+	 * Off: unchanged.
+	 */
+	signed?: boolean;
 	disabled?: boolean;
 	/** The store's decimal separator: the physical key that types a fraction. */
 	decimalSeparator?: string;
@@ -83,6 +93,7 @@ export function QuantityKeypad({
 	onChange,
 	onRemove,
 	decimals = QUANTITY_PLACES,
+	signed = false,
 	disabled = false,
 	decimalSeparator = '.',
 	labels,
@@ -105,8 +116,13 @@ export function QuantityKeypad({
 	}));
 
 	const count = onRemove === undefined;
-	const base = typedQuantity(entry.buffer, count) ?? entry.stepped ?? value;
-	const trash = !count && base <= 1;
+	const base = typedQuantity(entry.buffer, count, signed) ?? entry.stepped ?? value;
+	// The trash is − at 1 of a positive line; a negative line has no trash on its stepper.
+	const trash = !count && base <= 1 && !(signed && base < 0);
+	// A negative line steps towards zero and stops at −1 (never 0, never across to +1): + is off.
+	const floor = signed && base < 0 && base + 1 >= 0;
+	// A signed number's sign is drawn as a true minus; the buffer and the value keep the hyphen.
+	const minus = (text: string) => (signed ? text.replace(/^-/, '\u2212') : text);
 	// Step writes not yet settled: a stored change that lands meanwhile is one of them catching
 	// up, and must not drop the number a second fast press has already moved on to.
 	const pending = React.useRef(0);
@@ -126,7 +142,7 @@ export function QuantityKeypad({
 	}, [value]);
 
 	const onClose = (discarded: boolean) => {
-		const typed = typedQuantity(entry.buffer, count);
+		const typed = typedQuantity(entry.buffer, count, signed);
 		const shown = entry.stepped ?? value;
 		// The write presents its own failure (a toast) and the keypad is already closed.
 		if (!discarded && typed !== undefined && typed !== shown)
@@ -144,6 +160,8 @@ export function QuantityKeypad({
 		}
 		// A count stops at 0; a negative stock (oversold) still steps up from where it is.
 		if (name === 'decrease' && count && base <= 0) return;
+		if (name === 'increase' && floor) return;
+		if (name === 'sign') return dispatch({ type: 'sign', shown: entry.stepped ?? value });
 		if (name === 'increase') step(onGrid(base + 1));
 		else if (name === 'decrease') step(onGrid(base - 1));
 		else
@@ -154,31 +172,39 @@ export function QuantityKeypad({
 			});
 	};
 
-	const display = entry.buffer
-		? entry.buffer.replace('.', decimalSeparator)
-		: format(entry.stepped ?? value);
+	const display = minus(
+		entry.buffer ? entry.buffer.replace('.', decimalSeparator) : format(entry.stepped ?? value)
+	);
+	const rest = minus(format(value));
 	const stepper: GrowCell[] = [
 		trash
 			? { name: 'decrease', label: labels.remove, icon: 'delete', variant: 'bad' }
 			: { name: 'decrease', label: labels.decrease, icon: 'minus' },
 		{ display: <Value display={display} textClassName={textClassName} /> },
-		{ name: 'increase', label: labels.increase, icon: 'plus' },
+		{ name: 'increase', label: labels.increase, icon: 'plus', disabled: floor },
 	];
+	// Under the stepper, hairlined: lit, led by a minus, while the number shown is negative.
+	const on = display.startsWith('\u2212');
+	const word = labels.sign ?? '±';
+	const sign: KeypadKey = { name: 'sign', label: word, text: word, span: 3, on, litAsChip: true };
+	if (on) sign.icon = 'minus';
 	return (
 		<GrowKeypad
 			ref={shell}
 			rows={[
 				stepper,
+				...(signed ? [[sign]] : []),
 				...DIGIT_ROWS,
 				...closingRows(decimals > 0 ? decimalSeparator : undefined, labels),
 			]}
-			ruled={1}
+			ruled={signed ? 2 : 1}
+			landing={signed ? 2 : 1}
 			cell={CELL}
 			align="center"
 			animation={ANIMATION}
 			disabled={disabled}
 			decimalSeparator={decimalSeparator}
-			keyNames={ARROW_KEYS}
+			keyNames={signed ? SIGNED_KEYS : ARROW_KEYS}
 			onPress={press}
 			onOpen={() => dispatch({ type: 'reset' })}
 			onClose={onClose}
@@ -204,14 +230,9 @@ export function QuantityKeypad({
 				    (the cart's `px-1` on the text left "2.222" clipped in its 56-wide column). */}
 				<Text
 					numberOfLines={1}
-					className={cn(
-						'max-w-full tabular-nums',
-						textClassName,
-						sizeFor(format(value), false),
-						'px-0'
-					)}
+					className={cn('max-w-full tabular-nums', textClassName, sizeFor(rest, false), 'px-0')}
 				>
-					{format(value)}
+					{rest}
 				</Text>
 			</PressableSurface>
 		</GrowKeypad>

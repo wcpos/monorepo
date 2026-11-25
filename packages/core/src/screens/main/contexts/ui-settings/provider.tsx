@@ -38,6 +38,7 @@ export interface UISettingsContextValue {
 		'reports-orders': ObservableResource<UISettingState<'reports-orders'>>;
 	};
 	getLabel: (id: string, key: string) => string;
+	getDisplayLabel: (id: string, columnKey: string, displayKey: string) => string;
 	reset: (id: UISettingID) => Promise<void>;
 	patchSettings: <T extends UISettingID>(
 		id: T,
@@ -57,7 +58,7 @@ export const UISettingsContext = React.createContext<UISettingsContextValue | nu
  */
 export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	const { storeDB } = useStoreSession();
-	const { getLabel } = useUILabel();
+	const { getLabel, getDisplayLabel } = useUILabel();
 
 	/**
 	 * Reset UI Settings
@@ -194,11 +195,12 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 		() => ({
 			resources,
 			getLabel,
+			getDisplayLabel,
 			reset,
 			patchSettings,
 			modifySettings,
 		}),
-		[resources, getLabel, reset, patchSettings, modifySettings]
+		[resources, getLabel, getDisplayLabel, reset, patchSettings, modifySettings]
 	);
 
 	return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;

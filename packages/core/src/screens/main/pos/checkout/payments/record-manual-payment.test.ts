@@ -2,6 +2,8 @@ import { MoneyCommandError } from '@wcpos/query';
 import type { OrderPaymentSummary, PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import {
+	awaitAwake,
+	RECORD_ASLEEP_RESEND_LIMIT,
 	RECORD_UNKNOWN_RETRY_DELAYS_MS,
 	recordManualPayment,
 	type RecordManualPaymentDeps,
@@ -476,6 +478,47 @@ describe('recordManualPayment', () => {
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
 
+	// POS-338: the store had already closed the order (`Ledger::accepts_tender`) and stored
+	// nothing, but the cash is in the cashier's hand. It is a needs-attention row, never a throw.
+	it('raises attention for the minted row when the store had already closed the order', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValue(responseError(409, 'wcpos_invalid_transition', { status: 409 }));
+
+		const result = await recordManualPayment(
+			order,
+			card,
+			{ amount: '42.50', lane: 'online' },
+			deps
+		);
+
+		expect(deps.raiseAttention).toHaveBeenCalledTimes(1);
+		expect(deps.raiseAttention).toHaveBeenCalledWith({
+			row: mintedCard,
+			order: null,
+			reason: 'order_closed',
+		});
+		expect(deps.mirror).not.toHaveBeenCalled();
+		expect(deps.fetchOrderStatus).not.toHaveBeenCalled();
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({
+			kind: 'refused',
+			reason: 'order_closed',
+			row: mintedCard,
+			order: null,
+		});
+	});
+
+	it('still throws for a 409 that is not an order-closed refusal, with no attention or mirror', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValue(responseError(409, 'wcpos_command_conflict'));
+
+		const promise = recordManualPayment(order, card, { amount: '42.50', lane: 'online' }, deps);
+		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentError);
+		await expect(promise).rejects.toMatchObject({ code: 'wcpos_command_conflict', status: 409 });
+		expect(deps.mirror).not.toHaveBeenCalled();
+		expect(deps.raiseAttention).not.toHaveBeenCalled();
+	});
+
 	it.each([new Error('network'), responseError(503), responseError(409, 'wcpos_payment_locked')])(
 		'a 5xx re-sends the same row and body and ends unknown with the command (%p)',
 		async (error) => {
@@ -501,6 +544,7 @@ describe('recordManualPayment', () => {
 			expect(result).toEqual({
 				kind: 'unknown',
 				row: expect.objectContaining({ id: UUID.toLowerCase() }),
+				reason: error instanceof Error ? error.message : expect.any(String),
 			});
 		}
 	);
@@ -653,7 +697,11 @@ describe('recordManualPayment', () => {
 	it('a retry whose record another sender settled, but whose settled row is missing, reads as unknown (POS-31A)', async () => {
 		const deps = createDeps();
 		const result = await settledElsewhere(deps, null);
-		expect(result).toMatchObject({ kind: 'unknown', row: { id: mintedCard.id } });
+		expect(result).toMatchObject({
+			kind: 'unknown',
+			row: { id: mintedCard.id },
+			reason: 'settled_elsewhere',
+		});
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 
@@ -763,4 +811,113 @@ it('returns a failed outcome without posting or enqueueing when provenance persi
 	expect(result).toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
 	expect(deps.post).not.toHaveBeenCalled();
 	expect(deps.mirror).not.toHaveBeenCalled();
+});
+
+describe('a hidden tab (POS-34N)', () => {
+	const ASLEEP = { blockCode: 'preflight-asleep', isPreFlightBlocked: true, isSleeping: true };
+	const asleep = () => Object.assign(new Error('App is in background'), ASLEEP);
+	const run = (deps: RecordManualPaymentDeps) =>
+		recordManualPayment(order, cash, { amount: '42.50', lane: 'online' }, deps);
+
+	it('waits for wake and re-sends once, without using a re-send', async () => {
+		const deps = { ...createDeps(), awaitWake: jest.fn(async () => undefined) };
+		deps.post.mockRejectedValueOnce(asleep()).mockImplementationOnce(echo);
+		const result = await run(deps);
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online' });
+		expect(deps.post).toHaveBeenCalledTimes(2);
+		expect(deps.awaitWake).toHaveBeenCalledTimes(1);
+		expect(deps.awaitWake.mock.invocationCallOrder[0]).toBeLessThan(
+			deps.post.mock.invocationCallOrder[1]
+		);
+		expect(deps.sleep).not.toHaveBeenCalled();
+	});
+
+	it('never re-sends while the tab stays asleep', async () => {
+		const deps = { ...createDeps(), awaitWake: jest.fn(() => new Promise<void>(() => {})) };
+		deps.post.mockRejectedValue(asleep());
+		const settled = jest.fn();
+		void run(deps).then(settled);
+		await new Promise((r) => setImmediate(r));
+		expect(deps.post).toHaveBeenCalledTimes(1);
+		expect(settled).not.toHaveBeenCalled();
+	});
+
+	it('real failures after a wake keep the 1 s/3 s/9 s schedule and end unknown', async () => {
+		const deps = { ...createDeps(), awaitWake: jest.fn(async () => undefined) };
+		[1, 2, 3].forEach(() => deps.post.mockRejectedValueOnce(asleep()));
+		deps.post.mockRejectedValue(responseError(503));
+		expect(await run(deps)).toMatchObject({ kind: 'unknown' });
+		expect(deps.post).toHaveBeenCalledTimes(7);
+		expect(deps.sleep.mock.calls).toEqual(RECORD_UNKNOWN_RETRY_DELAYS_MS.map((ms) => [ms]));
+	});
+
+	it('a record another sender settled while the tab slept is never sent twice', async () => {
+		const deps = { ...createDeps(), awaitWake: jest.fn(async () => undefined) };
+		const settledRow = { ...mintedCard, status: 'captured' as const };
+		const sent = { sentAt: NOW, sentRevision: 'sha256:r1' } as never;
+		deps.post
+			.mockRejectedValueOnce(asleep())
+			.mockRejectedValueOnce(new MoneyCommandError('settled_elsewhere', sent));
+		const answer = { row: settledRow, status: 'completed', order: null };
+		deps.settledRecord = jest.fn(async () => answer);
+		expect(await run(deps)).toMatchObject({ kind: 'recorded', via: 'online', row: settledRow });
+		expect(deps.post).toHaveBeenCalledTimes(2);
+	});
+
+	it('a wake that never clears the block stops at the backstop and ends unknown', async () => {
+		const deps = { ...createDeps(), awaitWake: jest.fn(async () => undefined) };
+		deps.post.mockRejectedValue(asleep());
+		expect(await run(deps)).toMatchObject({ kind: 'unknown' });
+		const sends = RECORD_ASLEEP_RESEND_LIMIT + RECORD_UNKNOWN_RETRY_DELAYS_MS.length + 1;
+		expect(deps.post).toHaveBeenCalledTimes(sends);
+	});
+
+	it('without awaitWake an asleep block takes the unknown path as before', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValue(asleep());
+		expect(await run(deps)).toMatchObject({ kind: 'unknown' });
+		expect(deps.post).toHaveBeenCalledTimes(RECORD_UNKNOWN_RETRY_DELAYS_MS.length + 1);
+	});
+
+	it('awaitAwake resolves at once when awake, else on the first wake, then unsubscribes', async () => {
+		const awake = { isAppSleeping: () => false, onWake: jest.fn() };
+		await awaitAwake(awake);
+		expect(awake.onWake).not.toHaveBeenCalled();
+		const unsubscribe = jest.fn();
+		const onWake = jest.fn((_cb: () => void) => unsubscribe);
+		const resolved = jest.fn();
+		const pending = awaitAwake({ isAppSleeping: () => true, onWake }).then(resolved);
+		await new Promise((r) => setImmediate(r));
+		expect(resolved).not.toHaveBeenCalled();
+		onWake.mock.calls[0][0]();
+		await pending;
+		expect(unsubscribe).toHaveBeenCalledTimes(1);
+	});
+
+	it('the re-send after a wake carries the same path and the same row body', async () => {
+		const deps = { ...createDeps(), awaitWake: jest.fn(async () => undefined) };
+		deps.post.mockRejectedValueOnce(asleep()).mockImplementationOnce(echo);
+		expect(await run(deps)).toMatchObject({ kind: 'recorded' });
+		expect(deps.post).toHaveBeenCalledTimes(2);
+		expect(deps.post.mock.calls[1]).toEqual(deps.post.mock.calls[0]);
+		const [first, second] = deps.post.mock.calls as [string, { payment: PaymentRow }][];
+		expect(second[1].payment.id).toBe(first[1].payment.id);
+	});
+
+	it('an offline pre-flight block never takes the wake branch', async () => {
+		const offline = Object.assign(new Error('offline'), {
+			isPreFlightBlocked: true,
+			blockCode: 'preflight-offline',
+		});
+		const control = createDeps();
+		control.post.mockRejectedValue(offline);
+		const controlResult = await run(control);
+		const deps = { ...createDeps(), awaitWake: jest.fn(async () => undefined) };
+		deps.post.mockRejectedValue(offline);
+		const result = await run(deps);
+		expect(deps.awaitWake).not.toHaveBeenCalled();
+		expect(result.kind).toBe(controlResult.kind);
+		expect(deps.post).toHaveBeenCalledTimes(control.post.mock.calls.length);
+		expect(deps.sleep.mock.calls).toEqual(control.sleep.mock.calls);
+	});
 });

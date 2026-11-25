@@ -44,6 +44,9 @@ export const PAYMENT_ROW_REFUSALS = {
 	wcpos_amount_exceeds_balance: 'amount_exceeds_balance',
 } as const;
 export type PaymentRowRefusal = (typeof PAYMENT_ROW_REFUSALS)[keyof typeof PAYMENT_ROW_REFUSALS];
+/** Refusals of a record because the store had already closed the order: nothing is stored (Ledger::accepts_tender). */
+export const ORDER_CLOSED_REFUSALS = { wcpos_invalid_transition: 'order_closed' } as const;
+export type OrderClosedRefusal = (typeof ORDER_CLOSED_REFUSALS)[keyof typeof ORDER_CLOSED_REFUSALS];
 
 /** The named answers a caller branches on. */
 export const MONEY_ANSWER_CODES = {

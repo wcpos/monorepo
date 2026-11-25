@@ -1,3 +1,4 @@
+import { getNetPaymentTotal, type RefundLike } from '@wcpos/order-math';
 import { isMiscProductLine, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { type ConditionRule, type ConditionSnapshot, evaluateConditions } from './evaluate';
@@ -37,13 +38,26 @@ export async function buildConditionSnapshot(
 	return { lines, stock };
 }
 
-/** Counted inside a tender's queue slot (on the record a queued write left), and live by the cart. */
+type Payload = {
+	line_items?: LineItem[] | null;
+	total?: string | number | null;
+	refunds?: readonly RefundLike[] | null;
+};
+
+/**
+ * Counted inside a tender's queue slot (on the record a queued write left), and live by the cart.
+ * The total judged is what Checkout pays; the catalog is read only while the stock rule is on.
+ */
 export async function countConditionsInSlot(
-	record: { getLatest(): { payload: { line_items?: LineItem[] | null } } },
+	record: { getLatest(): { payload: Payload } },
 	ctx: { read: { catalog: Read } },
 	rules: readonly ConditionRule[]
 ) {
 	if (!rules.some((rule) => rule.enabled)) return [];
-	const lineItems = record.getLatest().payload.line_items ?? [];
-	return evaluateConditions(await buildConditionSnapshot(lineItems, ctx.read.catalog), rules);
+	const { line_items, total, refunds } = record.getLatest().payload;
+	const stock = rules.some((rule) => rule.kind === 'stock' && rule.enabled);
+	const snapshot = stock
+		? await buildConditionSnapshot(line_items ?? [], ctx.read.catalog)
+		: { lines: [], stock: {} };
+	return evaluateConditions({ ...snapshot, total: getNetPaymentTotal(total, refunds) }, rules);
 }

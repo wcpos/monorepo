@@ -51,8 +51,13 @@ export function isNoStore(
 	return !storeId || storeId === '0' || !storeIds.includes(storeId);
 }
 
-/** Sales follow captured money; an unpaid order keeps its creation day. */
+/** Reports prefer the manager's corrected sale day. */
 export function saleMomentOf(order: Partial<PayloadOf<'orders'>>) {
+	return wooMetaCarrier.readSaleDay(order.meta_data)?.atGmt ?? rungUpMomentOf(order);
+}
+
+/** Sales follow captured money; an unpaid order keeps its creation day. */
+export function rungUpMomentOf(order: Partial<PayloadOf<'orders'>>) {
 	if (order.date_paid_gmt) return order.date_paid_gmt;
 	const captured = readLedger(order.meta_data).filter(
 		(row) => row.status === 'captured' && row.captured_at_gmt
@@ -452,6 +457,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	options: {
 		id: string;
 		storeScope?: 'pos' | 'sales';
+		saleDayCorrection?: boolean;
 		targeted?: readonly unknown[];
 		searchFields?: string[];
 		/** A read-side predicate intentionally left outside QueryState. */
@@ -694,8 +700,10 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			dimensions.limit === 'all' &&
 			dimensions.afterSeconds !== undefined &&
 			dimensions.beforeSeconds !== undefined
-		)
+		) {
 			dimensions.modifiedAfterSeconds = dimensions.afterSeconds;
+			if (options.saleDayCorrection) dimensions.saleDayCorrection = true;
+		}
 		demand.push({
 			id: requirementId(options.id, 'orders-browse'),
 			collection: 'orders',

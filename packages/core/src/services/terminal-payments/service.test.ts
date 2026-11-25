@@ -930,9 +930,10 @@ it.each(['provider_declined', 'wcpos_amount_exceeds_balance', 'expired'])(
 			expect.any(String),
 			expect.objectContaining({
 				code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
-				context: expect.objectContaining({ type: 'payment.declined', errorCode: code }),
+				context: expect.objectContaining({ type: 'payment.declined', serverCode: code }),
 			})
 		);
+		expect(error.mock.calls[0][1].context).not.toHaveProperty('errorCode');
 		expect(c.completeOrder).not.toHaveBeenCalled();
 	}
 );

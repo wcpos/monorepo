@@ -22,6 +22,9 @@ export function createFakeCarrier(
 	};
 	const carrier: PosCarrier & { state: FakeCarrierState } = {
 		state,
+		readSaleDay: wooMetaCarrier.readSaleDay,
+		readSaleDayRequest: wooMetaCarrier.readSaleDayRequest,
+		saleDayRequestRow: wooMetaCarrier.saleDayRequestRow,
 		vatExempt: wooMetaCarrier.vatExempt,
 		stampVatExempt: wooMetaCarrier.stampVatExempt,
 		readIdentity(meta) {

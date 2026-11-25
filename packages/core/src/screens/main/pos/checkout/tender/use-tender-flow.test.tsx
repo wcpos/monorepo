@@ -292,6 +292,7 @@ let mockPayload: {
 } = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
 let mockMethodsLoaded = true;
 let mockMethods: PaymentMethodDescriptor[] = methods;
+let mockDefaultMethodId: string | null = null;
 let mockOnlineStatus = 'online-website-available';
 let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
@@ -354,6 +355,7 @@ jest.mock('../../../hooks/use-currency-format', () => ({
 jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({
 		methods: mockMethods,
+		defaultMethodId: mockDefaultMethodId,
 		byId: new Map(mockMethods.map((method) => [method.id, method])),
 		contract: 'payments-v1',
 		loaded: mockMethodsLoaded,
@@ -515,6 +517,7 @@ describe('useTenderFlow', () => {
 		// A store order: a manual leg journals against `orders/{id}/payments` (ADR 0040 Decided 1).
 		mockPayload = { id: 42, total: '92.95', meta_data: [] };
 		mockMethods = methods;
+		mockDefaultMethodId = null;
 		mockMethodsLoaded = true;
 		mockOnlineStatus = 'online-website-available';
 		mockTaxDisplayCart = 'excl';
@@ -722,6 +725,55 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it('Try again while the first send is still running says it is still sending, never unanswered (POS-34W)', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('in_flight'), { reason: 'in_flight' })
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.commands.retryCommand());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.payment_still_sending',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.anything()
+		);
+		expect(mockError).not.toHaveBeenCalled();
+	});
+
+	it('Try again refused for another reason is still reported as unanswered, not still sending (POS-34W)', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('revision_unavailable'), {
+				reason: 'revision_unavailable',
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.commands.retryCommand());
+		expect(mockInfo).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_still_sending',
+			expect.anything()
+		);
+		expect(mockError).toHaveBeenCalledWith('pos_checkout.payment_unanswered', expect.anything());
+	});
+
+	it('Try again refused with invalid fields names them on the unanswered log, never their values (POS-357)', async () => {
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new Error('write-rejected'), {
+				data: { params: { billing: 'Invalid email' } },
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.commands.retryCommand());
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.objectContaining({ context: expect.objectContaining({ invalidParams: 'billing' }) })
+		);
+		expect(JSON.stringify(mockError.mock.calls)).not.toContain('Invalid email');
+	});
+
 	// A close replayed after a remote reopen answers its stored completion with the order as it
 	// now stands (`Payments_Controller.php:452-468`). It lands through the table: the completion
 	// judges it with the resident (sale-completion.test.ts), and a close it did not finish was
@@ -924,6 +976,28 @@ describe('useTenderFlow', () => {
 		await act(async () => {});
 	});
 
+	it('preselects the store default over list order', async () => {
+		mockMethods = [cash, card];
+		mockDefaultMethodId = 'pos_card';
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.state.methodId).toBe('pos_card');
+		await act(async () => {});
+	});
+	it('a disabled or unknown default falls back to the first available', async () => {
+		for (const defaultMethodId of ['not_offered', 'device_card']) {
+			mockDefaultMethodId = defaultMethodId;
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			expect(result.current.state.methodId).toBe('pos_cash');
+			await act(async () => {});
+		}
+	});
+	it('a stored method beats the store default', async () => {
+		setTenderMethod(order.uuid, 'pos_cash');
+		mockDefaultMethodId = 'pos_card';
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		expect(result.current.state.methodId).toBe('pos_cash');
+		await act(async () => {});
+	});
 	it('publishes a picked method to the URL store', async () => {
 		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
 		act(() => result.current.commands.pickMethod('pos_cash'));
@@ -1235,6 +1309,126 @@ describe('useTenderFlow', () => {
 				'pos_checkout.payment_unanswered',
 				expect.objectContaining({ code: 'PAYMENT201', showToast: true })
 			);
+			// The cashier reads the catalogue's PAYMENT201 toast: no call-site copy.
+			expect(
+				mockError.mock.calls.find(([m]) => m === 'pos_checkout.payment_unanswered')?.[1]
+			).not.toHaveProperty('toast');
+			expect(mockError).not.toHaveBeenCalledWith(
+				'pos_checkout.payment_not_recorded',
+				expect.anything()
+			);
+		});
+
+		it('a lost take with invalid fields names them on the PAYMENT201 log (POS-357)', async () => {
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockRejectedValueOnce(
+				Object.assign(new Error('Network Error'), {
+					data: { params: { customer_id: 'bad' } },
+				})
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+			act(() => result.current.commands.pickMethod('pos_cash'));
+
+			await act(async () => result.current.commands.takeTender());
+
+			expect(mockError).toHaveBeenCalledWith(
+				'pos_checkout.payment_unanswered',
+				expect.objectContaining({
+					code: 'PAYMENT201',
+					context: expect.objectContaining({ invalidParams: 'customer_id' }),
+				})
+			);
+		});
+
+		// A pre-flight refused before the close left the till: nothing was sent, so not "unanswered".
+		it('whose pre-flight is refused before the send says it was not recorded (PAYMENT999), never PAYMENT201', async () => {
+			const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockRejectedValueOnce(
+				Object.assign(new MoneyCommandError('money_command_preflight_failed'), {
+					reason: 'preflight_failed',
+					phase: 'unsent',
+				})
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+			await act(async () => result.current.commands.takeTender());
+
+			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
+			// The cashier reads the sentence alone: PAYMENT999's "confirm whether it went through" is false.
+			expect(mockError).toHaveBeenCalledWith(
+				'pos_checkout.payment_not_recorded',
+				expect.objectContaining({
+					code: 'PAYMENT999',
+					showToast: true,
+					toast: { title: 'pos_checkout.payment_not_recorded', text2: '' },
+				})
+			);
+			expect(mockError).not.toHaveBeenCalledWith(
+				'pos_checkout.payment_unanswered',
+				expect.anything()
+			);
+		});
+
+		// A split sale: a leg already holds money, so the till never says "nothing was taken".
+		it('whose pre-flight is refused beside a captured leg stays "not answered" (PAYMENT201)', async () => {
+			const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+			mockPayload = {
+				id: 42,
+				total: '50.00',
+				meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments: [payment()] } }],
+			};
+			mockManualPost.mockRejectedValueOnce(
+				Object.assign(new MoneyCommandError('money_command_preflight_failed'), {
+					reason: 'preflight_failed',
+					phase: 'unsent',
+				})
+			);
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+			await act(async () => result.current.commands.takeTender());
+
+			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
+			expect(mockError).toHaveBeenCalledWith(
+				'pos_checkout.payment_unanswered',
+				expect.objectContaining({ code: 'PAYMENT201', showToast: true })
+			);
+			expect(
+				mockError.mock.calls.find(([m]) => m === 'pos_checkout.payment_unanswered')?.[1]
+			).not.toHaveProperty('toast');
+			expect(mockError).not.toHaveBeenCalledWith(
+				'pos_checkout.payment_not_recorded',
+				expect.anything()
+			);
+		});
+
+		// The pre-flight adopted a changed order holding a leg captured elsewhere: the render-time
+		// ledger is clean, the latest is not, so the till never says "nothing was taken".
+		it('whose pre-flight adopts an order with a captured leg stays "not answered" (PAYMENT201)', async () => {
+			const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+			mockPayload = { id: 42, total: '0.00', meta_data: [] };
+			mockManualPost.mockImplementationOnce(async () => {
+				mockPayload = {
+					...mockPayload,
+					meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments: [payment()] } }],
+				};
+				throw Object.assign(new MoneyCommandError('money_command_preflight_failed'), {
+					reason: 'preflight_failed',
+					phase: 'unsent',
+				});
+			});
+			const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+			await act(async () => result.current.commands.takeTender());
+
+			expect(mockManualPost).toHaveBeenCalledWith('orders/42/close', {});
+			expect(mockError).toHaveBeenCalledWith(
+				'pos_checkout.payment_unanswered',
+				expect.objectContaining({ code: 'PAYMENT201', showToast: true })
+			);
+			expect(
+				mockError.mock.calls.find(([m]) => m === 'pos_checkout.payment_unanswered')?.[1]
+			).not.toHaveProperty('toast');
 			expect(mockError).not.toHaveBeenCalledWith(
 				'pos_checkout.payment_not_recorded',
 				expect.anything()
@@ -1255,6 +1449,28 @@ describe('useTenderFlow', () => {
 			'pos_checkout.payment_not_recorded',
 			expect.objectContaining({ code: 'PAYMENT999', showToast: true })
 		);
+	});
+
+	// A leg holds money: the cashier reads the catalogue toast, never "nothing was taken".
+	it('a throw before the close beside a captured leg keeps the catalogue toast (PAYMENT999)', async () => {
+		mockPayload = {
+			id: 42,
+			total: '50.00',
+			meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments: [payment()] } }],
+		};
+		mockLocalPatch.mockResolvedValueOnce(false);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+
+		await act(async () => result.current.commands.takeTender());
+
+		expect(mockManualPost).not.toHaveBeenCalledWith('orders/42/close', {});
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.objectContaining({ code: 'PAYMENT999', showToast: true })
+		);
+		expect(
+			mockError.mock.calls.find(([m]) => m === 'pos_checkout.payment_not_recorded')?.[1]
+		).not.toHaveProperty('toast');
 	});
 
 	it("a definitive store refusal of a cash record logs PAYMENT213 with the store's reason, never PAYMENT999", async () => {
@@ -1293,6 +1509,35 @@ describe('useTenderFlow', () => {
 		expect(mockError).not.toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({ code: 'PAYMENT201' })
+		);
+	});
+
+	// POS-338: a record the store refused because it had closed the order comes back `refused`;
+	// its attention row told the story, so the false "nothing was taken" toast never joins it.
+	it('a cash record refused because the order was closed shows no PAYMENT213 refusal toast', async () => {
+		mockRecordManualPayment.mockResolvedValueOnce({
+			kind: 'refused',
+			reason: 'order_closed',
+			row: payment(),
+			order: null,
+		});
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+
+		await act(async () => result.current.commands.takeTender());
+
+		expect(mockRecordManualPayment).toHaveBeenCalled();
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_refused_by_store',
+			expect.anything()
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ code: 'PAYMENT213' })
+		);
+		expect(mockT).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_refused_by_store',
+			expect.anything()
 		);
 	});
 
@@ -3019,6 +3264,23 @@ describe('device tender', () => {
 		);
 		expect(mockError).not.toHaveBeenCalled();
 	});
+	it('journals no sale attempt for a press refused on an order the store has not created', async () => {
+		delete mockPayload.id;
+		const driver = createSimulatedDriver();
+		registerDriver(driver);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod(deviceMethod.id));
+		await act(async () => {
+			await driver.connect!((await driver.discoverReaders!('bluetooth'))[0], null);
+		});
+		jest.mocked(recordCompletionAttempt).mockClear();
+		await act(async () => result.current.commands.takeTender());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.order_not_on_store_yet',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+	});
 	it('requires connection and stamps the session on device tender', async () => {
 		mockSessionsOn = true;
 		const driver = createSimulatedDriver();
@@ -4630,6 +4892,33 @@ describe('gateway capture mode (contract 1.2)', () => {
 		);
 		expect(mockError).not.toHaveBeenCalledWith(
 			'pos_checkout.payment_not_recorded',
+			expect.anything()
+		);
+	});
+
+	// A pre-flight refused before the submit left the till: the gateway was never called.
+	it('a submit whose pre-flight is refused before the send is not recorded (PAYMENT999), never unanswered', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockManualPost.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('money_command_preflight_failed'), {
+				reason: 'preflight_failed',
+				phase: 'unsent',
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod('wcpos_email_invoice'));
+		await act(async () => result.current.commands.takeTender());
+		expect(mockManualPost).toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.objectContaining({
+				code: 'PAYMENT999',
+				showToast: true,
+				toast: { title: 'pos_checkout.payment_not_recorded', text2: '' },
+			})
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
 			expect.anything()
 		);
 	});

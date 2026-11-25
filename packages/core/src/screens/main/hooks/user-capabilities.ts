@@ -15,6 +15,11 @@ export interface UserCapabilities {
 	 * administrator (`manage_woocommerce`) and this one FAILS CLOSED: unknown capabilities mean no.
 	 */
 	canAcceptReaderTerms: boolean;
+	/**
+	 * Change an order's cashier or store. FAILS CLOSED like reader terms: the store ignores a
+	 * change it refuses, so an unknown user never gets the picker.
+	 */
+	canReassignSales: boolean;
 }
 
 export interface DerivedUserCapabilities {
@@ -54,6 +59,7 @@ export function deriveUserCapabilities(
 			canCreateCustomers: has('create_customers') || has('promote_users'),
 			canDeleteCustomers: has('delete_users'),
 			canAcceptReaderTerms: known && granted.has('manage_woocommerce'),
+			canReassignSales: known && granted.has('reassign_woocommerce_pos_sales'),
 		},
 	};
 }

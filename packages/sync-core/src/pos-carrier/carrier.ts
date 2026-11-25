@@ -10,6 +10,16 @@ export type PosIdentity = {
 export type MetaDataEntry = { id?: number; key?: string; value?: unknown };
 
 export interface PosCarrier {
+	readSaleDay(meta: MetaDataEntry[] | undefined): {
+		atGmt: string;
+		reason: string;
+		by: number | null;
+		changedAtGmt: string | null;
+	} | null;
+	readSaleDayRequest(
+		meta: MetaDataEntry[] | undefined
+	): { atGmt: string; reason: string; from: string } | null;
+	saleDayRequestRow(atGmt: string, reason: string, from: string): string;
 	readIdentity(meta: MetaDataEntry[] | undefined): PosIdentity;
 	stampIdentity(
 		meta: MetaDataEntry[] | undefined,
@@ -46,6 +56,8 @@ export const NO_STORE = 0;
 export const POS_META_KEYS = {
 	// Keep aligned with PAYMENT_METHOD_INDEX_META_KEY in order-math/src/payments/ledger.ts.
 	paymentMethod: '_wcpos_payment_method',
+	saleDay: '_wcpos_sale_day',
+	saleDayRequest: '_wcpos_sale_day_request',
 	user: '_pos_user',
 	store: '_pos_store',
 	register: '_wcpos_register',
@@ -58,7 +70,7 @@ export const POS_META_KEYS = {
 	posData: '_woocommerce_pos_data',
 } as const;
 
-/** Server-owned keys: server adoption replaces them; till mutations retain the resident value. */
+/** Hidden from meta editors; mutations retain omitted rows and cannot replace server-owned facts. */
 export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
 	...SERVER_OWNED_ORDER_META_KEYS,
 	POS_META_KEYS.user,
@@ -66,6 +78,7 @@ export const PROTECTED_ORDER_META_KEYS: readonly string[] = [
 	POS_META_KEYS.register,
 	POS_META_KEYS.till,
 	POS_META_KEYS.vatExempt,
+	POS_META_KEYS.saleDayRequest,
 	RECORD_UUID_META_KEY,
 	'_wcpos_money_owner_hint',
 ];
@@ -126,6 +139,50 @@ export function identityColumnFilter(identity: { cashierId?: string; storeId?: s
 }
 
 export const wooMetaCarrier: PosCarrier = {
+	readSaleDay(meta) {
+		if (!Array.isArray(meta)) return null;
+		const value = meta.find((entry) => entry?.key === POS_META_KEYS.saleDay)?.value;
+		try {
+			// The server stores a JSON string and serves it decoded.
+			const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+			if (
+				!parsed ||
+				typeof parsed !== 'object' ||
+				typeof parsed.at_gmt !== 'string' ||
+				!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z?$/.test(parsed.at_gmt) ||
+				Number.isNaN(Date.parse(parsed.at_gmt)) ||
+				// A day the calendar does not have (30 February) rolls over in Date.parse.
+				new Date(`${parsed.at_gmt.slice(0, 19)}Z`).toISOString().slice(0, 19) !==
+					parsed.at_gmt.slice(0, 19) ||
+				typeof parsed.reason !== 'string'
+			)
+				return null;
+			return {
+				// One form for every comparison: the server's, with its trailing Z.
+				atGmt: parsed.at_gmt.endsWith('Z') ? parsed.at_gmt : `${parsed.at_gmt}Z`,
+				reason: parsed.reason,
+				by: typeof parsed.by === 'number' ? parsed.by : null,
+				changedAtGmt: typeof parsed.changed_at_gmt === 'string' ? parsed.changed_at_gmt : null,
+			};
+		} catch {
+			return null;
+		}
+	},
+	readSaleDayRequest(meta) {
+		if (!Array.isArray(meta)) return null;
+		const value = meta.find((entry) => entry?.key === POS_META_KEYS.saleDayRequest)?.value;
+		if (typeof value !== 'string') return null;
+		try {
+			const parsed = JSON.parse(value);
+			const fact = wooMetaCarrier.readSaleDay([{ key: POS_META_KEYS.saleDay, value: parsed }]);
+			return fact && typeof parsed.from === 'string'
+				? { atGmt: fact.atGmt, reason: fact.reason, from: parsed.from }
+				: null;
+		} catch {
+			return null;
+		}
+	},
+	saleDayRequestRow: (atGmt, reason, from) => JSON.stringify({ at_gmt: atGmt, reason, from }),
 	vatExempt(meta) {
 		return (
 			Array.isArray(meta) &&

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { effectiveRows, toMinor } from '@wcpos/order-math';
@@ -25,9 +26,12 @@ export function CancelPaymentView({ flow, format }: Props) {
 	const t = useT();
 	// A tender correction's R- and the row it reversed are not legs; R+ is the tender (#3647).
 	const legs = effectiveRows(flow.liveRows);
+	// Two buttons side by side outgrow a phone in de and nl (#3654): there they stack, full width.
+	const phone = useIsPhone();
+	const button = phone ? 'w-full' : undefined;
 
 	return (
-		<VStack space="md" className="mx-auto max-w-md p-4">
+		<VStack space="md" className="mx-auto w-full max-w-md p-4">
 			<Text className="text-lg font-semibold">{t('pos_checkout.cancel_payment_question')}</Text>
 			{legs.length === 0 ? (
 				<EmptyState kind="empty" size="inline" title={t('pos_checkout.nothing_taken_yet')} />
@@ -61,10 +65,11 @@ export function CancelPaymentView({ flow, format }: Props) {
 					})}
 				</VStack>
 			)}
-			<HStack className="justify-end gap-2">
+			<HStack className={phone ? 'flex-col items-stretch gap-2' : 'justify-end gap-2'}>
 				{/* Keeping the payment is the safe answer this pane exists for; voiding loses it. */}
 				<Button
 					testID="checkout-cancel-keep-going"
+					className={button}
 					disabled={flow.busy}
 					onPress={() => flow.commands.dispatch({ type: 'back' })}
 				>
@@ -73,6 +78,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 				<Button
 					variant="outline-destructive"
 					testID="checkout-cancel-confirm"
+					className={button}
 					loading={flow.running === 'cancelPayment'}
 					disabled={flow.busy}
 					onPress={() => void flow.commands.cancelPayment()}

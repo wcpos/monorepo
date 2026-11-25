@@ -191,6 +191,27 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "SYNC204",
+		"symbol": "ORDER_CLOSED_ON_STORE",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "The store has already closed this order. Reopen it on the store first if the change is still needed, then tap Send again in Store health → Database, or Discard it.",
+		"retryPolicy": "after-change",
+		"dataSafety": "local-only",
+		"escalation": "store-admin",
+		"summary": "The store had already closed this order, so it refused a change to its lines.",
+		"docsBody": "This device sent a change to an order's lines (items, fees, shipping or coupons) after the store had already closed that order: it was paid or completed, cancelled or refunded. The store does not change the lines of a closed order, so it refused the change and kept its own copy as it was. The refused change stays listed in Store health → Database until you settle it. To make the change land, the order has to be reopened on the store first; otherwise discard the change.",
+		"troubleshooting": [
+			"Expand the log entry: it names the order the store refused and the store's reason. If it also shows a rounding fee amount, the refused change carried a cash rounding line.",
+			"Open the same order in WooCommerce → Orders in WP Admin and check its status and lines. If the store's copy is already right, nothing was lost: press Discard on the change's row in Store health → Database.",
+			"If the change is still needed, a store admin has to reopen the order in WP Admin first; then press Send again on the row.",
+			"If the same order keeps being refused while it is still open on this device, another device or an admin is closing it — agree who finishes the sale before changing it here."
+		],
+		"logSources": ["wp-admin-pos-logs"],
+		"evidence": "Sentry POS-338: 422 reopen_required from Order_Writer::money_gate() for an order whose status was already closed, logged as SYNC201 at error",
+		"introducedIn": "2.0.1"
+	},
+	{
 		"code": "SYNC211",
 		"symbol": "RECORD_INVALID_FIELD",
 		"domain": "SYNC",
@@ -786,6 +807,29 @@
 		"introducedIn": "1.11.3"
 	},
 	{
+		"code": "PAYMENT312",
+		"symbol": "REFUND_RECORD_LOST",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Don't refund again — the money went back. Check the order notes, then ask a store admin to record the refund.",
+		"retryPolicy": "never",
+		"dataSafety": "money-moved",
+		"escalation": "store-admin",
+		"summary": "The refund was returned to the customer, but the store couldn't keep its record.",
+		"docsBody": "The payment provider returned the refund to the customer, but WooCommerce then failed to keep the refund record, so the order does not show it. The money has already gone back: refunding again would refund the customer twice.",
+		"troubleshooting": [
+			"Don't refund this order again from the till.",
+			"Open the order in WooCommerce and read its order notes: they record the refund the provider made.",
+			"Store admin: confirm the refund in the payment provider's dashboard, then record it on the order by hand (WooCommerce → Orders → Refund, with the refund via the gateway turned off) so the order's totals match."
+		],
+		"logSources": [
+			"wp-admin-pos-logs",
+			"payment-provider"
+		],
+		"evidence": "monorepo#3778 (WCPOS Pro #884: wcpos_refund_record_lost)",
+		"introducedIn": "2.0.4"
+	},
+	{
 		"code": "PAYMENT401",
 		"symbol": "TERMINAL_PAIRING_INCOMPLETE",
 		"domain": "PAYMENT",
@@ -1255,6 +1299,27 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"code": "PAYMENT521",
+		"symbol": "PAYMENT_ORDER_CLOSED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Return the money to the customer, or reopen the order on the store and record the payment again.",
+		"retryPolicy": "never",
+		"dataSafety": "money-moved",
+		"escalation": "none",
+		"summary": "The store had already closed the order, so a payment taken at the till was not recorded.",
+		"docsBody": "The till took a manual payment (cash, or a card run on a separate machine), but the store had already cancelled, trashed or refunded the order and refused to record it. Nothing was stored on the order, so the payment is listed under needs attention until the cashier returns the money or the order is reopened and the payment recorded again.",
+		"troubleshooting": [
+			"Check the amount and method taken at the till: Store health → Database lists the order under \"… needs attention\", and the same line is in Store health → Logs.",
+			"If the sale should not go ahead, give that payment back the way it was taken: cash from the drawer, or a refund of that charge on the card machine. Do not record a paid out for cash handed back — the refused payment was never counted in the drawer's expected cash.",
+			"If the sale should go ahead, a site administrator reopens the order in WooCommerce (for example sets it back to Pending payment); then record the payment again from the money you already hold, with the same record-only method.",
+			"Site administrator: if this happens repeatedly, orders are being cancelled or refunded elsewhere while they are open on a till."
+		],
+		"logSources": [],
+		"evidence": "POS-338",
+		"introducedIn": "2.0.1"
+	},
+	{
 		"code": "PAYMENT999",
 		"symbol": "PAYMENT_UNEXPECTED",
 		"domain": "PAYMENT",
@@ -1641,6 +1706,24 @@
 		"logSources": [],
 		"evidence": "wcpos/roadmap#385: staging clones report the saved live store's uuid",
 		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "AUTH342",
+		"symbol": "CASHIER_IDENTITY_CLASH",
+		"domain": "AUTH",
+		"severity": "error",
+		"actionHint": "Remove the other saved store from this device, then sign in again.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "site-admin",
+		"summary": "This account is already saved on this device under another store.",
+		"docsBody": "Two stores give this account the same identity. That happens when one store is a copy of the other, such as a staging clone or a second shop started from a backup, and on a WordPress multisite network, where every site shares one set of accounts. The app keeps one saved account per identity, so it cannot hold both sign-ins at once. Nothing was saved by this sign-in.",
+		"troubleshooting": [
+			"Remove the other saved store from this device, then sign in to this store again."
+		],
+		"logSources": [],
+		"evidence": "wcpos/monorepo#3767: reproduced on two dev stores sharing one user uuid; the second store never opens and the first is signed out",
+		"introducedIn": "2.0.4"
 	},
 	{
 		"code": "AUTH411",

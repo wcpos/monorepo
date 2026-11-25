@@ -999,7 +999,7 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 				sessionId: session.id,
 				endpoint: 'movements',
 				status: 400,
-				errorCode: 'rest_invalid_param',
+				serverCode: 'rest_invalid_param',
 				field: 'reason',
 				documentId: movement.id,
 			}),
@@ -1263,7 +1263,7 @@ it('records a refused manager approval, which today leaves no trace at all', asy
 				sessionId: row.id,
 				registerId: 'register',
 				status: 403,
-				errorCode: 'wcpos_override_refused',
+				serverCode: 'wcpos_override_refused',
 			}),
 		})
 	);

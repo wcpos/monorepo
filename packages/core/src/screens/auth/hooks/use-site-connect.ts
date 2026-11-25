@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
+
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
@@ -152,7 +154,11 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 			} catch (err: unknown) {
 				if (err instanceof SiteIdentityClashError) {
 					throw Object.assign(
-						new Error(t('auth.site_identity_clash', { name: err.existingName })),
+						new Error(
+							t('auth.site_identity_clash', {
+								name: err.existingName ? decode(err.existingName) : err.existingName,
+							})
+						),
 						{
 							errorCode: ERROR_CODES.SITE_IDENTITY_CLASH,
 						}

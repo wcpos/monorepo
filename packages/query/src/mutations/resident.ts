@@ -384,6 +384,11 @@ export async function patchAndEnqueueEngineResident(input: {
 	onEnqueued?: (mutationId: string) => void;
 	/** Queue an explicit row: the cashier asked for this push, so the open-cart hold releases it. */
 	explicit?: boolean;
+	/**
+	 * `false`: a management write (Orders › Edit), not the till ringing up the sale, so an order
+	 * without a register or till row never gains this device's. Default: the till stamps them.
+	 */
+	stampTill?: boolean;
 }): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
@@ -426,7 +431,7 @@ export async function patchAndEnqueueEngineResident(input: {
 					['_wcpos_till', input.tillId ?? getRegisterId()],
 				] as const;
 				const meta = (currentPayload.meta_data ?? []) as { key?: string; value?: unknown }[];
-				if (shouldEnqueue && collection === 'orders') {
+				if (shouldEnqueue && collection === 'orders' && input.stampTill !== false) {
 					for (const [key, value] of identities) {
 						const existing = meta.find((entry) => entry.key === key);
 						const incoming = changes.meta_data === undefined ? meta : changes.meta_data;

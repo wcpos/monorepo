@@ -65,8 +65,12 @@ export function createSignalingClient(restRoot: string, http: HttpFunction) {
 		async postSignal(displayId: string, signal: OutgoingSignal): Promise<void> {
 			await http({ method: 'POST', url: `${root}/displays/${displayId}/signal`, data: signal });
 		},
-		async forget(displayId: string): Promise<void> {
-			await http({ method: 'DELETE', url: `${root}/displays/${displayId}` });
+		async forget(displayId: string, deviceId: string): Promise<void> {
+			await http({
+				method: 'DELETE',
+				url: `${root}/displays/${displayId}`,
+				params: { device_id: deviceId },
+			});
 		},
 	};
 }

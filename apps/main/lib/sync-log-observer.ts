@@ -171,6 +171,14 @@ function sanitizeReason(value: unknown): string | undefined {
 		: sanitized;
 }
 
+const pushRejectedCode = (fields: SyncEventFieldsBase): ErrorCode =>
+	rejectedWriteCode(fields.status, fields.reason, fields.orderClosed === true);
+/** push.rejected codes that warn: a known-gone record and a closed order (Sentry POS-338). */
+const WARN_REJECTED_CODES = new Set<ErrorCode>([
+	ERROR_CODES.RECORD_GONE_ON_STORE,
+	ERROR_CODES.ORDER_CLOSED_ON_STORE,
+]);
+
 /**
  * The affected record's id, across both field vocabularies: push/queue events
  * name it `recordId`, while `apply.escalation` (the pull-side repair signal)
@@ -566,15 +574,18 @@ export const CONFORMANCE_TABLE = {
 	'push.rejected': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
+		// Sentry POS-338: a closed order's reopen_required (SYNC204) warns too; its context
+		// carries the drain's `orderClosed` and any `roundingFeeAmount` as emitted.
 		level: (_event, fields) =>
 			fields.revertPending === true
 				? 'info'
-				: rejectedWriteCode(fields.status, fields.reason) === ERROR_CODES.RECORD_GONE_ON_STORE
+				: WARN_REJECTED_CODES.has(pushRejectedCode(fields))
 					? 'warn'
 					: 'error',
 		// One mapping shared with the screen's toast (`pushFailureCode`), so the row and
-		// the toast always give the same instruction for the same refusal.
-		code: (_event, fields) => rejectedWriteCode(fields.status, fields.reason),
+		// the toast always give the same instruction for the same refusal. The closed-order
+		// case (SYNC204) is the log row's only: the toast never sees `orderClosed`.
+		code: (_event, fields) => pushRejectedCode(fields),
 		message: recordMessage('rejected by server'),
 	},
 	// R1: the write SUCCEEDED — the server accepted the order and the till

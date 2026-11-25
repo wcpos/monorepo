@@ -40,7 +40,10 @@ import {
 	createReferenceCollectionFetcher,
 	TAG_REFERENCE_CONFIG,
 } from './rx-scheduler-reference-fetcher';
-import { createRefundsSchedulerFetcher } from './rx-scheduler-refund-fetcher';
+import {
+	createRefundsSchedulerFetcher,
+	type RefundHistoryCheckpointStore,
+} from './rx-scheduler-refund-fetcher';
 import { parseRefundLaneQueryKey } from './refund-lane-descriptor';
 import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
@@ -300,6 +303,8 @@ export type RunEngineSchedulerDrainInput = {
 	censusFreshForMs?: number;
 	/** Restrict an explicitly requested foreground drain to one seeded task. */
 	taskId?: string;
+	/** #3782: a reference walk must not ride another requirement's drain. */
+	referenceLanes?: 'exclude' | 'only';
 	/** Override for an explicitly requested foreground drain. Background drains
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
@@ -330,6 +335,8 @@ export type RunEngineSchedulerDrainInput = {
 	 */
 	barcodeSelectors?: BarcodeSelectorsReader;
 	exactSkuLeg?: () => boolean;
+	/** The scope's refund history walk checkpoint (#3340); absent means every history walk is full. */
+	refundHistoryCheckpoint?: RefundHistoryCheckpointStore;
 };
 
 export type RunEngineSchedulerTaskInput = Pick<
@@ -364,6 +371,7 @@ function createEngineSchedulerFetcherRegistry(
 		| 'refreshBrowseWindowKey'
 		| 'barcodeSelectors'
 		| 'exactSkuLeg'
+		| 'refundHistoryCheckpoint'
 	>,
 	/**
 	 * How a query-total cache refusal recovers. A DRAIN tick holds claims on
@@ -450,6 +458,9 @@ function createEngineSchedulerFetcherRegistry(
 			fetcher: createRefundsSchedulerFetcher({
 				scope: input.scope,
 				...shared,
+				...(input.refundHistoryCheckpoint !== undefined
+					? { historyCheckpoint: input.refundHistoryCheckpoint }
+					: {}),
 				repository: collectionSchedulerRepository(db.refunds),
 				heldParentIds: async (ids) => {
 					const parents = await db.orders
@@ -575,15 +586,21 @@ export async function runEngineSchedulerDrain(
 			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input, 'propagate-refusal');
 			const supportedRepository = fetcherRegistry.supportedRepository(schedulerRepository);
 			const taskId = input.taskId;
+			const referenceLanes = input.referenceLanes;
 			const repository =
-				taskId === undefined
+				taskId === undefined && referenceLanes === undefined
 					? supportedRepository
 					: {
 							...supportedRepository,
 							readRunnable: async (readAtMs: number) =>
-								(await supportedRepository.readRunnable(readAtMs)).filter(
-									(state) => state.taskId === taskId
-								),
+								(await supportedRepository.readRunnable(readAtMs)).filter((state) => {
+									if (taskId !== undefined && state.taskId !== taskId) return false;
+									if (referenceLanes === undefined) return true;
+									return (
+										(parseReferenceLaneQueryKey(state.queryKey) !== null) ===
+										(referenceLanes === 'only')
+									);
+								}),
 						};
 
 			const result = await runPersistedSchedulerTasks({

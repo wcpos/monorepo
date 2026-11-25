@@ -43,6 +43,8 @@ interface CurrentOrderContextProviderProps {
 	/** Built by `(pos)/_layout.tsx`, above this boundary — see `useNewOrder`. */
 	defaultCustomerResource: DefaultCustomerResource;
 	currentOrderUUID?: string;
+	/** Counts entries into the till: a change is a deliberate arrival, so the route's order is adopted even if it was parked. */
+	tillEntry?: number;
 }
 
 function inFlightFor(id: string | undefined) {
@@ -65,6 +67,7 @@ export function CurrentOrderProvider({
 	scope,
 	defaultCustomerResource,
 	currentOrderUUID,
+	tillEntry,
 }: CurrentOrderContextProviderProps) {
 	const { newOrder } = useNewOrder(defaultCustomerResource);
 	const { hits } = useQuerySnapshot(handle, ['hits']);
@@ -110,6 +113,15 @@ export function CurrentOrderProvider({
 			if (supersededRouteOrderUUID !== undefined) {
 				setSupersededRouteOrderUUID(undefined);
 			}
+		}
+	}
+
+	const [prevTillEntry, setPrevTillEntry] = React.useState(tillEntry);
+	if (tillEntry !== prevTillEntry) {
+		setPrevTillEntry(tillEntry);
+		if (currentOrderUUID !== undefined) {
+			setInternalOrderId(currentOrderUUID);
+			setSupersededRouteOrderUUID(undefined);
 		}
 	}
 
@@ -199,12 +211,15 @@ export function CurrentOrderProvider({
 	return (
 		<CurrentOrderActionsContext.Provider value={actions}>
 			<CurrentOrderContext.Provider
-				value={{
-					currentOrderRecord,
-					openOrders,
-					openOrdersScope: scope,
-					setCurrentOrderID,
-				}}
+				value={React.useMemo(
+					() => ({
+						currentOrderRecord,
+						openOrders,
+						openOrdersScope: scope,
+						setCurrentOrderID,
+					}),
+					[currentOrderRecord, openOrders, scope, setCurrentOrderID]
+				)}
 			>
 				{children}
 			</CurrentOrderContext.Provider>

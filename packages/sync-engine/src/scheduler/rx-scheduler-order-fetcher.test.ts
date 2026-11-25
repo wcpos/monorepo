@@ -703,7 +703,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	it('reads the numeric server ids from task.remoteIds, decoupled from the document-key encoding', async () => {
 		// The ids here are deliberately opaque (a uuid + garbage): the document keys are
 		// never parsed — remoteIds is the only channel for the numeric server ids.
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = { upsertMany: vi.fn(async (_docs: OrderDocument[]) => undefined) };
 		const fetcher = vi.fn(async () =>
 			response([
 				{
@@ -748,7 +748,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	it('fails a targeted order task that is missing its remoteIds channel (contract error, no reverse-parse)', async () => {
 		// The `/^woo-order:(\d+)$/` reverse-parse scaffolding is deleted: a targeted task
 		// without remoteIds is a seeder contract violation, surfaced — never silently parsed.
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = { upsertMany: vi.fn(async (_docs: OrderDocument[]) => undefined) };
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -1073,7 +1073,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	});
 
 	it('does NOT overwrite a browser-window order that has queued local mutations', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = { upsertMany: vi.fn(async (_docs: OrderDocument[]) => undefined) };
 		const fetcher = vi.fn(async () =>
 			response([
 				{
@@ -1495,7 +1495,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	});
 
 	it('sends cashier, store, and sort dimensions through Woo REST browser requests', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = { upsertMany: vi.fn(async (_docs: OrderDocument[]) => undefined) };
 		const fetcher = vi.fn(async (_url: string) => response([]));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -2318,6 +2318,224 @@ describe('createOrdersSchedulerFetcher', () => {
 			expect(second.get('before')).toBe(paidBefore);
 		}
 	);
+
+	const SALE_DAY_QUERY_KEY = PAID_RANGE_QUERY_KEY.replace(':search=', ':sale_day=1:search=');
+
+	it('reads every corrected sale-day page before the creation walk, however many there are', async () => {
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const corrected = Array.from({ length: 251 }, (_, i) => rangedOrder(1000 + i, 1784200000));
+		const repository = { upsertMany: vi.fn(async (_docs: OrderDocument[]) => undefined) };
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (!params.has('pos_sale_day_after')) return server.fetcher(url);
+			const offset = (Number(params.get('page')) - 1) * 25;
+			return rangedResponse(corrected.slice(offset, offset + 25));
+		});
+		await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore(), repository })(
+			orderTask({ queryKey: SALE_DAY_QUERY_KEY })
+		);
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).searchParams.has('pos_sale_day_after'))
+		).toHaveLength(11);
+		const stored = new Set(
+			repository.upsertMany.mock.calls.flatMap(([docs]) => docs).map((doc) => doc.uuid)
+		);
+		expect(corrected.every((order) => stored.has(uuidFor(order.id)))).toBe(true);
+	});
+
+	it('accepts a full last page that is exactly the page bound', async () => {
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const page = Array.from({ length: 25 }, (_, i) => rangedOrder(1000 + i, 1784200000));
+		const fetcher = vi.fn(async (url: string) =>
+			new URL(url).searchParams.has('pos_sale_day_after')
+				? rangedResponse(page, { 'X-WP-Total': '2500', 'X-WP-TotalPages': '100' })
+				: server.fetcher(url)
+		);
+		await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore() })(
+			orderTask({ queryKey: SALE_DAY_QUERY_KEY })
+		);
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).searchParams.has('pos_sale_day_after'))
+		).toHaveLength(100);
+		expect(server.fetcher).toHaveBeenCalled();
+	});
+
+	it('fails the pass, and writes no cursor, when corrected sale-day pages never end', async () => {
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const coverageRepository = rangedLaneStore();
+		const page = Array.from({ length: 25 }, (_, i) => rangedOrder(1000 + i, 1784200000));
+		const fetcher = vi.fn(async (url: string) =>
+			new URL(url).searchParams.has('pos_sale_day_after')
+				? rangedResponse(page)
+				: server.fetcher(url)
+		);
+		await expect(
+			rangedFetcherFor({ fetcher, coverageRepository })(orderTask({ queryKey: SALE_DAY_QUERY_KEY }))
+		).rejects.toThrow('page bound');
+		expect(server.fetcher).not.toHaveBeenCalled();
+		expect(coverageRepository.publishRangedResume).not.toHaveBeenCalled();
+	});
+
+	it('stops the corrected sale-day step at the advertised last page, even when that page is full', async () => {
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const corrected = Array.from({ length: 25 }, (_, i) => rangedOrder(100 + i, 1784200000));
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (!params.has('pos_sale_day_after')) return server.fetcher(url);
+			// The store refuses a page past the last one it advertised.
+			if (params.get('page') !== '1') return new Response('{}', { status: 400 });
+			return rangedResponse(corrected, { 'X-WP-Total': '25', 'X-WP-TotalPages': '1' });
+		});
+		await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore() })(
+			orderTask({ queryKey: SALE_DAY_QUERY_KEY })
+		);
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).searchParams.has('pos_sale_day_after'))
+		).toHaveLength(1);
+	});
+
+	it('pages corrected sale days first, then sends the unchanged two-phase sequence and progress', async () => {
+		const oldServer = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const oldCoverage = rangedLaneStore();
+		await rangedFetcherFor({ fetcher: oldServer.fetcher, coverageRepository: oldCoverage })(
+			orderTask({ queryKey: PAID_RANGE_QUERY_KEY })
+		);
+		expect(oldServer.fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=2026-07-14T23%3A59%3A59&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc',
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&modified_after=2026-06-30T23%3A59%3A59&before=2026-07-01T00%3A00%3A01&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc',
+		]);
+		const server = rangedOrderServer([{ wooId: 1, seconds: PAID_WINDOW_START + 10 }]);
+		const corrected = Array.from({ length: 26 }, (_, i) =>
+			rangedOrder(i === 0 ? 1 : 100 + i, 1784200000)
+		);
+		const coverageRepository = rangedLaneStore();
+		const repository = { upsertMany: vi.fn(async (_docs: OrderDocument[]) => undefined) };
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (!params.has('pos_sale_day_after')) return server.fetcher(url);
+			expect(coverageRepository.publishRangedResume).not.toHaveBeenCalled();
+			expect(params.get('pos_sale_day_after')).toBe('1782864000');
+			expect(params.get('pos_sale_day_before')).toBe('1784073599');
+			for (const key of ['after', 'before', 'modified_after']) expect(params.has(key)).toBe(false);
+			const offset = (Number(params.get('page')) - 1) * 25;
+			return rangedResponse(corrected.slice(offset, offset + 25));
+		});
+		const result = await rangedFetcherFor({ fetcher, coverageRepository, repository })(
+			orderTask({ queryKey: SALE_DAY_QUERY_KEY })
+		);
+		expect(fetcher).toHaveBeenCalledTimes(4);
+		expect(result).toMatchObject({ requestCount: 4, documentCount: 1 });
+		expect(
+			fetcher.mock.calls.slice(0, 2).map(([url]) => new URL(url).searchParams.get('page'))
+		).toEqual(['1', '2']);
+		expect(server.fetcher.mock.calls).toEqual(oldServer.fetcher.mock.calls);
+		expect(repository.upsertMany.mock.calls.flatMap(([docs]) => docs)).toHaveLength(27);
+		expect(
+			repository.upsertMany.mock.calls
+				.flatMap(([docs]) => docs)
+				.filter((doc) => doc.uuid === uuidFor(1))
+		).toHaveLength(2);
+		expect(coverageRepository.lane()).toEqual(oldCoverage.lane());
+		expect(coverageRepository.publishRangedResume.mock.calls.map(([{ resume }]) => resume)).toEqual(
+			oldCoverage.publishRangedResume.mock.calls.map(([{ resume }]) => resume)
+		);
+	});
+
+	it('does not repeat corrected sales on a resumed walk, but repeats on a completed lane re-walk', async () => {
+		const coverageRepository = rangedLaneStore();
+		await coverageRepository.publishRangedResume({
+			resume: {
+				beforeSeconds: PAID_WINDOW_START + 1,
+				excludeWooIds: [],
+				totalRecords: null,
+				downloadedRecords: 0,
+			},
+			expected: null,
+		});
+		const fetcher = vi.fn(async (_url: string) => rangedResponse([]));
+		const run = rangedFetcherFor({ fetcher, coverageRepository });
+		await run(orderTask({ queryKey: SALE_DAY_QUERY_KEY }));
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(new URL(fetcher.mock.calls[0][0]).searchParams.has('pos_sale_day_after')).toBe(false);
+		fetcher.mockClear();
+		await run(orderTask({ queryKey: SALE_DAY_QUERY_KEY }));
+		expect(fetcher).toHaveBeenCalledTimes(3);
+		expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('pos_sale_day_after')).toBe(
+			'1782864000'
+		);
+	});
+
+	it('retries the leading step from page one after failure without writing a cursor', async () => {
+		const coverageRepository = rangedLaneStore();
+		const fetcher = vi
+			.fn(async (_url: string) => rangedResponse([]))
+			.mockResolvedValueOnce(
+				rangedResponse(Array.from({ length: 25 }, (_, i) => rangedOrder(100 + i, 1784200000)))
+			)
+			.mockResolvedValueOnce(new Response('', { status: 500 }));
+		const run = rangedFetcherFor({ fetcher, coverageRepository });
+		await expect(run(orderTask({ queryKey: SALE_DAY_QUERY_KEY }))).rejects.toThrow('500');
+		expect(coverageRepository.publishRangedResume).not.toHaveBeenCalled();
+		expect(coverageRepository.recordCumulativeQueryResult).not.toHaveBeenCalled();
+		expect(coverageRepository.lane()).toBeNull();
+		await run(orderTask({ queryKey: SALE_DAY_QUERY_KEY }));
+		expect(fetcher.mock.calls[2][0]).toBe(fetcher.mock.calls[0][0]);
+		expect(coverageRepository.lane()?.complete).toBe(true);
+	});
+
+	it.each(['9', 'woocommerce-pos'])(
+		'preserves every scope filter on the leading request (%s)',
+		async (store) => {
+			const queryKey = SALE_DAY_QUERY_KEY.replace(
+				':after=',
+				`:customer=42:cashier=7:register=5b8e1a3c-2f4d-4a6b-9c8e-000000000001:store=${store}:payment_method=cash:after=`
+			).replace(':search=', ':search=receipt');
+			const fetcher = vi.fn(async (_url: string) => rangedResponse([]));
+			await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore() })(
+				orderTask({ queryKey })
+			);
+			const params = new URL(fetcher.mock.calls[0][0]).searchParams;
+			expect(Object.fromEntries(params)).toMatchObject({
+				status: 'completed',
+				customer: '42',
+				pos_cashier: '7',
+				pos_register: '5b8e1a3c-2f4d-4a6b-9c8e-000000000001',
+				payment_method: 'cash',
+				search: 'receipt',
+				[store === '9' ? 'pos_store' : 'created_via']: store,
+			});
+			const scopes = (url: string) => {
+				const query = new URL(url).searchParams;
+				for (const key of [
+					'pos_sale_day_after',
+					'pos_sale_day_before',
+					'after',
+					'before',
+					'modified_after',
+				])
+					query.delete(key);
+				return query.toString();
+			};
+			expect(fetcher.mock.calls.map(([url]) => scopes(url))).toEqual([
+				scopes(fetcher.mock.calls[0][0]),
+				scopes(fetcher.mock.calls[0][0]),
+				scopes(fetcher.mock.calls[0][0]),
+			]);
+		}
+	);
+
+	it('never requests corrected sales for a non-sales Orders walk, even with the capability', async () => {
+		const fetcher = vi.fn(async (_url: string) => rangedResponse([]));
+		const queryKey = RANGE_QUERY_KEY.replace(':search=', ':sale_day=1:search=');
+		await rangedFetcherFor({ fetcher, coverageRepository: rangedLaneStore() })(
+			orderTask({ queryKey })
+		);
+		expect(fetcher.mock.calls).toEqual([
+			[
+				'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00&before=2026-07-14T23%3A59%3A59&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc',
+			],
+		]);
+	});
 
 	it('switches to a modified_after request after the created-in-range phase is short', async () => {
 		const coverageRepository = rangedLaneStore();

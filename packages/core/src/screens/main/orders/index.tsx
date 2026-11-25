@@ -33,6 +33,7 @@ import { PaymentMethod } from '../components/order/payment-method';
 import { ListColumn, ListPage } from '../components/list-frame';
 import { useUISettings } from '../contexts/ui-settings';
 import { useReferencedCustomerDemand } from '../hooks/use-referenced-customer-demand';
+import { useRenderedOrderRefresh } from '../hooks/use-rendered-order-refresh';
 import {
 	QueryStateProvider,
 	useCollectionQueryHandle,
@@ -226,6 +227,7 @@ function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'ord
 	// failed read, so it is still listening after the boundary's retry.
 	const results$ = React.useMemo(() => queryHandleAnswers$(handle), [handle]);
 	useReferencedCustomerDemand(results$);
+	useRenderedOrderRefresh(results$);
 	const router = useRouter();
 	const t = useT();
 	// A row opens the order modal (the one order surface), on its View tab.

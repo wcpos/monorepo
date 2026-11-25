@@ -48,6 +48,7 @@ const RETRY_ON_NEW_INPUTS = {
 	in_checkout: true,
 	'pos_cart.only_n_available': true,
 	'pos_products.out_of_stock': true,
+	'pos.checkout_negative_total': false,
 	[CHOOSE_REGISTER_REASON]: false,
 	[SESSION_REQUIRED_REASON]: false,
 } as const satisfies Record<UnmetCondition['reasonKey'], boolean> & Record<string, boolean>;

@@ -72,6 +72,7 @@ import {
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
 	refundBrowserQueryKey,
+	type RefundHistoryCheckpointStore,
 	refundParentQueryKey,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
@@ -207,6 +208,8 @@ export type OrderBrowseDimensions = {
 	 * Used by Reports, which count on the sale moment.
 	 */
 	modifiedAfterSeconds?: number;
+	/** Server advertises corrected sale-day range filtering for this sales demand. */
+	saleDayCorrection?: boolean;
 	/** Supported orders orderby values. Both orderby and order, or neither. */
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
@@ -310,6 +313,8 @@ export type RequirePlaneDeps = {
 	/** The per-scope barcode carriers a demand pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	exactSkuLeg?: () => boolean;
+	/** The scope's refund history walk checkpoint (#3340); absent means every history walk is full. */
+	refundHistoryCheckpointFor?: (scopeId: string) => RefundHistoryCheckpointStore;
 };
 
 /** Rows a `search` requirement walks to when the declarer names no limit. */
@@ -382,7 +387,7 @@ type RequirementSubscriber = {
  */
 type RequirementDrainOverrides = Pick<
 	Parameters<typeof runEngineSchedulerDrain>[0],
-	'taskId' | 'maxRequestsPerTask' | 'refreshBrowseWindowKey' | 'nowMs'
+	'taskId' | 'referenceLanes' | 'maxRequestsPerTask' | 'refreshBrowseWindowKey' | 'nowMs'
 >;
 
 /**
@@ -445,6 +450,13 @@ export type RequirePlane = {
 	 * as "use the default window".
 	 */
 	lastProductBrowseQueryKey(): string | null;
+	/**
+	 * Distinct declared, unreleased orders browse keys in the active scope, reference-counted
+	 * per key. Like lastProductBrowseQueryKey, pre-ready declarations belong to the first
+	 * active scope that reads them; later scope switches never carry them across.
+	 */
+	liveOrderBrowseQueryKeys(): readonly string[];
+	refreshLiveOrderBrowseWindows(): Promise<void>;
 	/**
 	 * The customers sibling of {@link lastProductBrowseQueryKey} — the lane identity of the
 	 * LAST customers browse window a grid declared, and therefore the sort the idle customer
@@ -529,6 +541,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const activeScope = () => deps.manager.activeScope;
 	const productBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
 	const customerBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
+	type LiveOrderKey = {
+		count: number;
+		requirement: Extract<EngineRequirement, { kind: 'orders-browse' }>;
+	};
+	const liveOrderKeys = new Map<string | null, Map<string, LiveOrderKey>>();
+	let beforeReadyOrders = { scopeId: null as string | null };
 	// Demand-path reference refreshes dedupe ONLY against their own last pull
 	// (#1302 round 2): the persisted task timestamp is shared with the idle
 	// maintenance lane, and a maintenance completion landing shortly before a
@@ -543,15 +561,24 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// first drain, not at construction: a read-only engine may open on a host without Web Crypto.
 	let schedulerOwnerId: string | null = null;
 	let seq = 0;
-	// Two lanes, each one execution at a time. A typed search must not queue behind the
+	// Three lanes, each one execution at a time. A typed search must not queue behind the
 	// boot window or a refresh (live runs: >10 s with no search request on a slow host).
 	// Searches stay serial among themselves, so a newer search still supersedes the older
 	// one through release → abandonIfUnclaimed → abort (#1221). Running a search beside a
 	// durable execution is allowed: the demand plane is uncapped by ruling (#1134 item 2).
-	type Lane = 'search' | 'durable';
-	const running: Record<Lane, boolean> = { search: false, durable: false };
-	const laneOf = (entry: QueuedRequirement): Lane =>
-		entry.requirement.kind === 'search' ? 'search' : 'durable';
+	// Reference refreshes get their own lane so a full walk cannot hold a browse window (#3782).
+	type Lane = 'search' | 'durable' | 'reference';
+	const running: Record<Lane, boolean> = { search: false, durable: false, reference: false };
+	const laneOf = (entry: QueuedRequirement): Lane => {
+		if (entry.requirement.kind === 'search') return 'search';
+		if (
+			entry.requirement.kind === 'refresh' &&
+			descriptorFor(entry.requirement.collection)?.shape === 'greedy-prunable'
+		) {
+			return 'reference';
+		}
+		return 'durable';
+	};
 	// Requirement stalls with no requirement completing in between, stamped on
 	// coverage.require.stalled: the screen re-declares a stalled requirement, so
 	// one stall is an attempt; repeated ones (storage that never settles, a walk
@@ -563,6 +590,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const stallStreaks = {
 		search: scopeBoundFailureStreak(deps.manager),
 		durable: scopeBoundFailureStreak(deps.manager),
+		reference: scopeBoundFailureStreak(deps.manager),
 	};
 	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
@@ -901,6 +929,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					ownerId: (schedulerOwnerId ??= mintSchedulerOwnerId('require-plane', webCryptoUuid)),
 					...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 					...(deps.exactSkuLeg !== undefined ? { exactSkuLeg: deps.exactSkuLeg } : {}),
+					...(deps.refundHistoryCheckpointFor !== undefined
+						? { refundHistoryCheckpoint: deps.refundHistoryCheckpointFor(bound.scopeId) }
+						: {}),
 					fetcher: schedulerFetcher,
 					diagnostics: deps.diagnostics,
 					...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
@@ -913,6 +944,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					...(deps.now !== undefined ? { nowMs: deps.now(), now: deps.now } : {}),
 					signal: item.abortController.signal,
 					onProgress: progressObserver(item.requirement, onProgressActivity),
+					referenceLanes: 'exclude',
 					...overrides,
 				});
 
@@ -1208,7 +1240,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								database: database,
 								...(nowMs !== undefined ? { nowMs } : {}),
 							}),
-							...(nowMs !== undefined ? { drain: { nowMs } } : {}),
+							drain: {
+								referenceLanes: 'only',
+								...(nowMs !== undefined ? { nowMs } : {}),
+							},
 						};
 					},
 					droppedMessage: 'require: scope moved mid-refresh (writes dropped)',
@@ -1760,9 +1795,54 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	}
 
 	return {
-		hasPendingWork: () => running.search || running.durable || queue.length > 0,
+		hasPendingWork: () =>
+			running.search || running.durable || running.reference || queue.length > 0,
 		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
 		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
+		liveOrderBrowseQueryKeys: () => {
+			const scopeId = activeScope();
+			const pending = liveOrderKeys.get(null);
+			if (scopeId !== null && pending) {
+				const keys = liveOrderKeys.get(scopeId) ?? new Map<string, LiveOrderKey>();
+				for (const [key, entry] of pending) {
+					const existing = keys.get(key);
+					keys.set(key, {
+						count: (existing?.count ?? 0) + entry.count,
+						requirement: entry.requirement,
+					});
+				}
+				liveOrderKeys.set(scopeId, keys);
+				liveOrderKeys.delete(null);
+				beforeReadyOrders.scopeId = scopeId;
+				beforeReadyOrders = { scopeId: null };
+			}
+			return [...(liveOrderKeys.get(scopeId)?.keys() ?? [])];
+		},
+		async refreshLiveOrderBrowseWindows() {
+			// A full manual sync before any scope is active must not wait on admission.
+			if (activeScope() === null) return;
+			for (const key of this.liveOrderBrowseQueryKeys()) {
+				const decision = parseOrderBrowserSchedulerDescriptor(key);
+				if (!decision || 'skipReason' in decision || decision.descriptor.complete === true)
+					continue;
+				const entry = liveOrderKeys.get(activeScope())?.get(key);
+				if (!entry) continue;
+				try {
+					const handle = this.require({
+						...entry.requirement,
+						id: `${entry.requirement.id}:manual-sync`,
+						forceRefresh: true,
+					});
+					try {
+						await handle.ready;
+					} finally {
+						handle.release();
+					}
+				} catch {
+					// The require path records diagnostics; full sync keeps its existing report.
+				}
+			}
+		},
 		require: (requirement) => {
 			// The runaway backstop is the ONE ceiling left on a browse window (#948/#957),
 			// and it must never behave like the caps it replaced: it is announced, not
@@ -1783,11 +1863,22 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					fields: { requirementId: requirement.id, requested: requirement.limit },
 				});
 			}
+			let orderScope: typeof beforeReadyOrders | undefined;
 			const queryKey = (() => {
 				if (requirement.kind === 'refunds-by-parent')
 					return refundParentQueryKey(requirement.parentRemoteId);
 				if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
-				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
+				if (requirement.kind === 'orders-browse') {
+					const key = orderBrowserQueryKey(requirement);
+					const scopeId = activeScope();
+					orderScope = scopeId === null ? beforeReadyOrders : { scopeId };
+					const keys = liveOrderKeys.get(scopeId) ?? new Map<string, LiveOrderKey>();
+					const entry = keys.get(key) ?? { count: 0, requirement };
+					entry.count += 1;
+					keys.set(key, entry);
+					liveOrderKeys.set(scopeId, keys);
+					return key;
+				}
 				if (requirement.kind === 'refunds-browse') return refundBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
 					// Recorded on DECLARATION, not on completion: the idle backfill must follow the
@@ -1892,6 +1983,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				release: () => {
 					if (subscriber.released) return;
 					subscriber.released = true;
+					if (orderScope) {
+						const keys = liveOrderKeys.get(orderScope.scopeId)!;
+						const entry = keys.get(queryKey!)!;
+						entry.count -= 1;
+						if (entry.count === 0) keys.delete(queryKey!);
+					}
 					entry.subscribers.delete(subscriber);
 					// Resolve NOW — a released (unmounting) caller must not wait for
 					// whatever is in flight ahead of it. The pump drops the entry later.

@@ -6,6 +6,7 @@ import {
 	type RetryBackoffPolicy,
 	retryJitterSeed,
 } from './recordRetryBackoff';
+import { isClosedOrderStatus, roundingFeeAmount } from './woo/closed-order-refusal';
 import { toOrderWirePayload } from './woo/orderWriteContract';
 
 import type { RecordMutation } from './recordMutation';
@@ -132,7 +133,10 @@ function isUpdateRequired(error: unknown): boolean {
 }
 
 /** How one push attempt ended: a verdict to record, settled here, or cut off by an abort. */
-type Settled = { kind: 'pushed'; result: PushResult } | { kind: 'settled' } | { kind: 'aborted' };
+type Settled =
+	| { kind: 'pushed'; result: PushResult; sent: QueuedMutation }
+	| { kind: 'settled' }
+	| { kind: 'aborted' };
 
 /**
  * The queue's record identity: a recordId is unique within its collection, not across
@@ -361,6 +365,13 @@ export async function drainMutationQueue(input: {
 	 * telemetry). It receives the queued row, so `attempts` is there to stamp the push.
 	 */
 	push: (mutation: QueuedMutation) => Promise<PushResult>;
+	/**
+	 * Builds a row's outbound form (the lane's line-identity graft) for a push decision.
+	 * Called before the claim of a row that has never been pushed, and again for the
+	 * re-anchored row of a 409 auto-recover. Its result is what is pushed AND persisted,
+	 * so a retry of a mutationId that may have reached the server re-sends it unchanged.
+	 */
+	prepareOutbound?: (mutation: QueuedMutation) => Promise<QueuedMutation>;
 	/**
 	 * Consecutive failures to RECORD a mutation's settlement locally — the
 	 * backoff reschedule after a failed push, or the acknowledge after a good
@@ -736,6 +747,7 @@ export async function drainMutationQueue(input: {
 			// is then invisible to recovery and to anyone reading the logs.
 			rejection = { mutation, status, reason, serverMessage, ...(data ? { data } : {}) };
 			rejected.push(rejection);
+			const amount = roundingFeeAmount(mutation.payload);
 			// Emitted only once the verdict is DURABLE, for the same reason. The log
 			// pipeline classifies `push.rejected` as a terminal rejection and the
 			// health banner reads that classification, so emitting it on a failed
@@ -752,6 +764,9 @@ export async function drainMutationQueue(input: {
 					mutationId: mutation.mutationId,
 					status,
 					reason,
+					// Sentry POS-338: a closed order's reopen_required refusal logs apart (SYNC204).
+					...(isClosedOrderStatus(data?.order_status) ? { orderClosed: true } : {}),
+					...(amount !== undefined ? { roundingFeeAmount: amount } : {}),
 				},
 			});
 		} catch (error) {
@@ -810,10 +825,24 @@ export async function drainMutationQueue(input: {
 	// re-push both run `attempt`, so a 428 buys the same refresh (`refreshAndRepush`,
 	// one per push it re-anchors) and a throw settles the same way (`settleThrown`)
 	// whichever push met it.
-	const attempt = async (row: QueuedMutation, prepare?: () => Promise<void>): Promise<Settled> => {
+	const attempt = async (
+		row: QueuedMutation,
+		prepare?: (row: QueuedMutation) => Promise<QueuedMutation>,
+		// The envelope as stored: a throw before the re-push's claim settles THIS, never a half-built row.
+		stored: QueuedMutation = row
+	): Promise<Settled> => {
+		let sent = row;
 		try {
-			await prepare?.();
-			return { kind: 'pushed', result: await input.push(row) };
+			if (prepare) {
+				sent = await prepare(row);
+				// POS-2PN: a re-push differs from the stored claim, so persist it first (see refreshAndRepush).
+				if (!(await input.queue.claim(sent, now()))) {
+					blockedRecords.add(recordKey(row));
+					return { kind: 'settled' };
+				}
+				stored = sent;
+			}
+			return { kind: 'pushed', result: await input.push(sent), sent };
 		} catch (error) {
 			// An abort (scope switch) cancelled the push — NOT a real failure. Don't bump attempts,
 			// back it off, or dead-letter a permanent error that raced with cancellation. The row
@@ -822,9 +851,9 @@ export async function drainMutationQueue(input: {
 			// next drain re-pushes it (the server dedupes on mutationId).
 			if (input.signal?.aborted) return { kind: 'aborted' };
 			if ((error as { status?: unknown } | null)?.status === 428) {
-				return refreshAndRepush(row, error);
+				return refreshAndRepush(stored, error);
 			}
-			await settleThrown(row, error);
+			await settleThrown(stored, error);
 			return { kind: 'settled' };
 		}
 	};
@@ -850,7 +879,14 @@ export async function drainMutationQueue(input: {
 		}
 		const restamped = { ...row, baseRevision: revision };
 		try {
-			return { kind: 'pushed', result: await input.push(restamped) };
+			// POS-2PN: persisted before the push, so an abort or crash after the server applies it
+			// re-sends this envelope. A refusal means the row left the queue or another window holds
+			// it, and pushing would race that owner.
+			if (!(await input.queue.claim(restamped, now()))) {
+				blockedRecords.add(recordKey(row));
+				return { kind: 'settled' };
+			}
+			return { kind: 'pushed', result: await input.push(restamped), sent: restamped };
 		} catch (retryError) {
 			if (input.signal?.aborted) return { kind: 'aborted' };
 			// A second 428 proves the refreshed revision ineffective; isNonRetryable
@@ -963,8 +999,13 @@ export async function drainMutationQueue(input: {
 		// current sync.revision (fallback: the enqueue-time base) — an update queued
 		// while an earlier ack was in flight must push against the revision that ack
 		// re-anchored. Creates keep their null base: there is nothing to re-anchor.
+		// POS-2PN: a row pushed before may already be applied, and the server fingerprints its
+		// whole envelope (a different one is replay_target_mismatch, 422): re-send it as persisted.
+		const pushedBefore = mutation.status === 'claimed' || (mutation.attempts ?? 0) > 0;
 		const freshRevision =
-			mutation.operation === 'create' ? undefined : await input.currentRevision?.(mutation);
+			mutation.operation === 'create' || pushedBefore
+				? undefined
+				: await input.currentRevision?.(mutation);
 		// Never INHERIT a foreign lease: strip any `claimedBy`/`claimedUntil` the
 		// scanned row carried before stamping our own (or none). Without this, a
 		// caller with no `drainInstanceId` would spread a foreign holder into
@@ -980,7 +1021,7 @@ export async function drainMutationQueue(input: {
 						).toISOString(),
 					}
 				: {};
-		const draining = {
+		const claimed = {
 			...bare,
 			...(admission === 'released' && mutation.admittedBy
 				? { admissionReleased: mutation.admittedBy }
@@ -989,6 +1030,20 @@ export async function drainMutationQueue(input: {
 			status: 'claimed' as const,
 			...lease,
 		};
+		let prepared: QueuedMutation | undefined;
+		if (!pushedBefore && input.prepareOutbound) {
+			try {
+				prepared = await input.prepareOutbound(claimed);
+			} catch (error) {
+				if (input.signal?.aborted) break;
+				// No backoff: the row was never pushed, so it stays never-pushed and is prepared again next drain.
+				failed += 1;
+				reportFailure({ mutation, reason: error instanceof Error ? error.name : 'unknown' });
+				blockedRecords.add(recordKey(mutation));
+				continue;
+			}
+		}
+		const draining = prepared ? { ...prepared } : claimed;
 		// CONDITIONAL durable claim BEFORE the push (CAS): from here until this row
 		// settles, the write-intent layer refuses to coalesce it (an edit queues
 		// behind it). If the row left the queue between the scan and this claim —
@@ -1034,6 +1089,7 @@ export async function drainMutationQueue(input: {
 		if (first.kind === 'aborted') break;
 		if (first.kind === 'settled') continue;
 		let result = first.result;
+		let sent = first.sent;
 
 		// LEASE FENCE (task 43): the push (and any 428 refresh/retry) is where a slow
 		// drain outlives its lease. Before recording the outcome — a conflict
@@ -1061,9 +1117,14 @@ export async function drainMutationQueue(input: {
 				// A re-anchored push that throws settles exactly as a first attempt
 				// would (a 428 is owed one refresh per push it re-anchors), never
 				// parked 'conflicted' — that would hide the server's real verdict.
-				const retried = await attempt(reanchored, async () => {
-					if (serverDocument) await input.reconcileConflict?.(reanchored, serverDocument);
-				});
+				const retried = await attempt(
+					reanchored,
+					async (row) => {
+						if (serverDocument) await input.reconcileConflict?.(row, serverDocument);
+						return input.prepareOutbound ? input.prepareOutbound(row) : row;
+					},
+					sent
+				);
 				if (retried.kind === 'aborted') break;
 				if (retried.kind === 'settled') continue;
 				const retry = retried.result;
@@ -1079,6 +1140,7 @@ export async function drainMutationQueue(input: {
 				// Park on the SECOND consecutive conflict, carrying the FRESHER server
 				// truth from the retry's 409 — the ruled stopping condition.
 				result = retry;
+				sent = retried.sent;
 				recovered = retry.outcome !== 'conflict';
 				if (recovered) {
 					// A delete carries no field payload (`{ id: <uuid> }`), so there is
@@ -1116,6 +1178,24 @@ export async function drainMutationQueue(input: {
 						});
 					}
 				}
+			} else if (
+				pushedBefore &&
+				draining.operation !== 'create' &&
+				serverRevision &&
+				serverRevision !== sent.baseRevision
+			) {
+				// POS-2PN: a 409 proves the frozen row was never applied, so re-stamp it ONCE from the
+				// resident, as a never-pushed row would be; a second 409 parks it below.
+				const revision = await input.currentRevision?.(draining);
+				if (revision && revision !== sent.baseRevision) {
+					const retried = await attempt({ ...sent, baseRevision: revision }, async (r) => r, sent);
+					if (retried.kind === 'aborted' || input.signal?.aborted) break;
+					if (retried.kind === 'settled') continue;
+					if (!(await stillOwnLease(mutation.mutationId))) continue;
+					result = retried.result;
+					sent = retried.sent;
+					recovered = result.outcome !== 'conflict';
+				}
 			}
 			if (!recovered) {
 				// Stale-revision 409: the terminal-until-resolved transition. Store the
@@ -1129,11 +1209,18 @@ export async function drainMutationQueue(input: {
 					...(current !== null && current !== undefined ? { conflictDocument: current } : {}),
 					conflictRevision: result.conflict?.currentRevision ?? result.currentRevision,
 				});
+				// The server names what moved; without it the log can only say "the store
+				// refused" and the cause is a DevTools dig on the merchant's machine.
+				const differs = result.conflict?.differs ?? [];
 				emit({
 					type: 'queue.write.conflict-transition',
 					level: 'warn',
 					collection: mutation.collectionName,
-					fields: { recordId: mutation.recordId, mutationId: mutation.mutationId },
+					fields: {
+						recordId: mutation.recordId,
+						mutationId: mutation.mutationId,
+						...(differs.length > 0 ? { differs: differs.slice(0, 25).join(',') } : {}),
+					},
 				});
 				blockedRecords.add(recordKey(mutation)); // hold later edits to this record until it's resolved
 				continue;
@@ -1153,7 +1240,7 @@ export async function drainMutationQueue(input: {
 		// ack-apply OR the durable removal throws, do NOT count it pushed — leave it
 		// queued to retry (the re-push dedupes), and block later links for this record.
 		try {
-			await input.applyAck?.(draining, result, input.signal);
+			await input.applyAck?.(sent, result, input.signal);
 			// Re-check abort AFTER applyAck: the signal can abort WHILE applyAck awaits, and
 			// acknowledging then would drop the mutation after cancellation (a TOCTOU). Leave
 			// it queued (still 'claimed') — the next drain re-pushes and the server dedupes
@@ -1187,11 +1274,11 @@ export async function drainMutationQueue(input: {
 			}
 			blockedRecords.add(recordKey(mutation));
 			if (!input.signal?.aborted) {
-				await applyBackoff({ ...draining, status: 'pending' });
+				await applyBackoff({ ...sent, status: 'pending' });
 			}
 			continue;
 		}
-		await settleSupersededDeadLetters(draining, result);
+		await settleSupersededDeadLetters(sent, result);
 		input.onAcknowledged?.(draining);
 	}
 

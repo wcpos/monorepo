@@ -39,14 +39,44 @@ export function observeUserSites(
 	);
 }
 
-/** Site credentials; pending first, then [] for no linked credentials. */
+/** Same ids in the same order; a document patch that leaves the id list alone is not a relink. */
+function sameIdList(a: unknown, b: unknown): boolean {
+	return (
+		Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((id, i) => id === b[i])
+	);
+}
+
+function linkedIds(ids: unknown): string[] {
+	return Array.isArray(ids) ? ids.filter((id) => id != null && id !== '') : [];
+}
+
+/**
+ * Site credentials in link order; pending first, then [] for no linked credentials.
+ * A live find($in), unlike populate$, re-emits when a linked document changes
+ * (a cashier rename), so every name read through this door follows it.
+ */
 export function observeSiteCredentials(
 	site: ReadonlySiteRecord | SiteDocument
 ): Observable<ReadonlyWpCredentialsRecord[] | typeof PENDING_USER_DB_READ> {
-	return defer(() => (site as SiteDocument).populate$('wp_credentials')).pipe(
-		map((credentials) => credentials as ReadonlyWpCredentialsRecord[]),
-		startWith(PENDING_USER_DB_READ)
-	);
+	return defer(() => {
+		const document = site as SiteDocument;
+		return document.get$('wp_credentials').pipe(
+			distinctUntilChanged(sameIdList),
+			switchMap((ids) => {
+				const validIds = linkedIds(ids);
+				if (validIds.length === 0) return of<ReadonlyWpCredentialsRecord[]>([]);
+				return document.collection.database.wp_credentials
+					.find({ selector: { uuid: { $in: validIds } } })
+					.$.pipe(
+						map((credentials) =>
+							[...(credentials as ReadonlyWpCredentialsRecord[])].sort(
+								(a, b) => validIds.indexOf(a.uuid!) - validIds.indexOf(b.uuid!)
+							)
+						)
+					);
+			})
+		);
+	}).pipe(startWith(PENDING_USER_DB_READ));
 }
 
 /**
@@ -60,15 +90,9 @@ export function observeCredentialStores(
 	return defer(() => {
 		const document = credentials as WPCredentialsDocument;
 		return document.get$('stores').pipe(
-			distinctUntilChanged(
-				(a, b) =>
-					Array.isArray(a) &&
-					Array.isArray(b) &&
-					a.length === b.length &&
-					a.every((id, i) => id === b[i])
-			),
+			distinctUntilChanged(sameIdList),
 			switchMap((ids) => {
-				const validIds = Array.isArray(ids) ? ids.filter((id) => id != null && id !== '') : [];
+				const validIds = linkedIds(ids);
 				if (validIds.length === 0) return of<ReadonlyStoreRecord[]>([]);
 				return document.collection.database.stores.find({
 					selector: { localID: { $in: validIds } },

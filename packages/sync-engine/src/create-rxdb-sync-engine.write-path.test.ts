@@ -5158,6 +5158,134 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 		}
 	});
 
+	describe('POS-2PN: a lost-ack retry re-sends the envelope the server applied', () => {
+		/** The `dropAt`-th push is applied server-side and its response lost; the order is queued. */
+		async function lostAck(input: { dropAt: number; serverRevision: string }) {
+			const server = createFakeWriteServer();
+			server.seed(UUID_A, { id: 42, revision: input.serverRevision });
+			let pushes = 0;
+			const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+				const response = await server.fetch(url, init as never);
+				if (url.includes('/push/') && ++pushes === input.dropAt) {
+					throw new TypeError('network dropped after server applied');
+				}
+				return response;
+			};
+			const clock = { nowMs: 1_752_105_600_000 };
+			const engine = engineWith({ fetch, now: () => clock.nowMs });
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, {
+				wooOrderId: 42,
+				revision: 'sha256:pos-2pn-r1',
+			});
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { customer_note: 'leave at the door' },
+			});
+			const updates = () => server.received.filter((env) => env.operation === 'update');
+			const rejectedRows = async () =>
+				(await queueRows(engine)).filter((row) => row.status === 'rejected');
+			return { server, engine, clock, updates, rejectedRows };
+		}
+
+		it('E0: a plain lost ack replays identical bytes', async () => {
+			const { engine, clock, updates, rejectedRows } = await lostAck({
+				dropAt: 1,
+				serverRevision: 'sha256:pos-2pn-r1',
+			});
+			try {
+				expect((await engine.sync('write-drain')).failed).toBe(1);
+				clock.nowMs += 120_000;
+				expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+				expect(updates()[1]).toEqual(updates()[0]);
+				expect(await rejectedRows()).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		});
+
+		it('E1 (P3): a money-command revision stamp between attempts', async () => {
+			const { server, engine, clock, updates, rejectedRows } = await lostAck({
+				dropAt: 1,
+				serverRevision: 'sha256:pos-2pn-r1',
+			});
+			try {
+				expect((await engine.sync('write-drain')).failed).toBe(1);
+				await engine.orderRevision.stamp(UUID_A, server.applied.get(UUID_A)!.revision, Date.now());
+				clock.nowMs += 120_000;
+				expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+				expect(updates()[1]).toEqual(updates()[0]);
+				expect(await rejectedRows()).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		});
+
+		it('E2 (P2): a 409 auto-recover whose re-push is applied but unanswered', async () => {
+			const { engine, clock, updates, rejectedRows } = await lostAck({
+				dropAt: 2,
+				serverRevision: 'sha256:pos-2pn-r2',
+			});
+			try {
+				expect((await engine.sync('write-drain')).failed).toBe(1);
+				expect(updates().map((env) => env.baseRevision)).toEqual([
+					'sha256:pos-2pn-r1',
+					'sha256:pos-2pn-r2',
+				]);
+				clock.nowMs += 120_000;
+				expect(await engine.sync('write-drain')).toMatchObject({ rejected: 0 });
+				expect(updates().at(-1)).toEqual(updates()[1]);
+				expect(await rejectedRows()).toEqual([]);
+			} finally {
+				await engine.dispose();
+			}
+		});
+
+		it('E3: a lost-ack create retry is byte-identical, and its queue row keeps its line ids', async () => {
+			const server = createFakeWriteServer({ firstId: 900_120_000 });
+			let dropResponses = 1;
+			const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+				const response = await server.fetch(url, init as never);
+				if (url.includes('/push/') && dropResponses-- > 0) {
+					throw new TypeError('network dropped after server applied');
+				}
+				return response;
+			};
+			const clock = { nowMs: 1_752_105_600_000 };
+			const engine = engineWith({ fetch, now: () => clock.nowMs });
+			const line = { product_id: 123, quantity: 1, total: '52.00', id: 7001 };
+			try {
+				await engine.ready;
+				await insertBornLocalOrder(engine, UUID_A);
+				await queueFor(engine.active()!.database).enqueue({
+					mutationId: 'pos-2pn-create',
+					collectionName: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					origin: 'minted',
+					payload: { status: 'pos-open', line_items: [line] },
+					baseRevision: null,
+					queuedAt: '2026-01-05T00:00:00.000Z',
+				});
+				const creates = () => server.received.filter((env) => env.operation === 'create');
+				expect((await engine.sync('write-drain')).failed).toBe(1);
+				expect((creates()[0].payload as { line_items: object[] }).line_items).toEqual([
+					{ product_id: 123, quantity: 1, total: '52.00' },
+				]);
+				const row = (await queueRows(engine)).find((r) => r.mutationId === 'pos-2pn-create');
+				expect((row?.payload as { line_items: object[] }).line_items).toEqual([line]);
+				clock.nowMs += 120_000;
+				expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+				expect(creates()).toHaveLength(2);
+				expect(creates()[1]).toEqual(creates()[0]);
+			} finally {
+				await engine.dispose();
+			}
+		});
+	});
+
 	it('gate2 R2 delete (item 1): a delete behind an applied-but-unacked create queues BEHIND instead of annihilating maybe-applied work', async () => {
 		const events: SyncEvent[] = [];
 		const server = createFakeWriteServer({ firstId: 900_110_000 });

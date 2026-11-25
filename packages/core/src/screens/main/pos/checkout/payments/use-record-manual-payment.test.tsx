@@ -97,6 +97,7 @@ jest.mock('@wcpos/query', () => ({
 	MoneyCommandError: class MoneyCommandError extends Error {},
 }));
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockLoggerError(...args),
@@ -271,6 +272,53 @@ it('logs a refused online payment as a failed sync record needing attention', as
 		message:
 			'Order #1042 was already paid online; 40.00 Cash was also taken at the till — refund that payment.',
 	});
+});
+
+// POS-338: the store had already closed the order and stored nothing; the cash taken is still
+// told once, as an error with its amount and method, and kept for Orders.
+it('logs a record refused because the store had closed the order as PAYMENT521 needing attention', async () => {
+	lane = 'online';
+	mockPost.mockRejectedValue({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_invalid_transition', message: 'Closed', data: { status: 409 } },
+		},
+	});
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await act(() => result.current(order, method, { session: gateSession(), lane, amount: 40 }));
+
+	const sentence =
+		'The store had already closed order #1042, so this 40.00 Cash payment was not recorded. Return the money or reopen the order in WooCommerce.';
+	expect(mockT).toHaveBeenCalledWith('payments.refusal.order_closed', {
+		number: '1042',
+		amount: '40.00',
+		method: 'Cash',
+	});
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		sentence,
+		expect.objectContaining({
+			code: 'PAYMENT521',
+			showToast: true,
+			context: expect.objectContaining({
+				reason: sentence,
+				refusal: 'order_closed',
+				orderId: 1042,
+				amount: '40.00',
+				methodId: 'pos_cash',
+			}),
+		})
+	);
+	expect(mockRecordAttention).toHaveBeenCalledWith(mockStoreDB, {
+		rowId: 'payment-id',
+		orderUuid: order.uuid,
+		orderId: 1042,
+		message: sentence,
+	});
+	// The store stored nothing: no row is mirrored onto the resident.
+	expect(mockPatchEngineResident).not.toHaveBeenCalled();
+	// The refusal's settle runs the forced refresh that adopts the store's closed order.
+	expect(mockSettle).toHaveBeenCalledTimes(1);
 });
 
 it('localizes an amount-exceeds-balance refusal with the server balance', async () => {
@@ -729,3 +777,29 @@ jest.mock('@wcpos/query/mutations', () => ({
 	fakeMirror: (manager: unknown, recordId: string, changes: unknown) =>
 		mockPatchEngineResident({ manager, collection: 'orders', recordId, changes }),
 }));
+
+it('logs why an unanswered record is unknown, so Sentry can group it by cause', async () => {
+	jest.useFakeTimers();
+	try {
+		lane = 'online';
+		mockPost.mockRejectedValue(new Error('timeout of 30000ms exceeded'));
+		const { result } = renderHook(() => useRecordManualPayment());
+
+		let pending!: Promise<unknown>;
+		await act(async () => {
+			pending = result.current(order, method, { session: gateSession(), lane, amount: 100 });
+			await jest.advanceTimersByTimeAsync(20000);
+			await pending;
+		});
+
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				code: 'PAYMENT201',
+				context: expect.objectContaining({ reason: 'timeout of 30000ms exceeded' }),
+			})
+		);
+	} finally {
+		jest.useRealTimers();
+	}
+});

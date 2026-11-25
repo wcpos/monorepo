@@ -39,15 +39,16 @@ function LineItemRow({
 	const total = toNumber(item.total);
 	const discounted = subtotal > total;
 	const qty = item.quantity ?? 0;
-	const originalUnit = qty > 0 ? subtotal / qty : toNumber(item.price);
-	const unit = qty > 0 ? (discounted ? total / qty : subtotal / qty) : toNumber(item.price);
+	// A returned line (a negative quantity) divides to its positive unit price, as the receipt.
+	const originalUnit = qty !== 0 ? subtotal / qty : toNumber(item.price);
+	const unit = qty !== 0 ? (discounted ? total / qty : subtotal / qty) : toNumber(item.price);
 	const variations = visibleMeta(item.meta_data);
 
 	return (
 		<View
 			className={`flex-row items-center gap-3 py-2.5 ${last ? '' : 'border-border/60 border-b'}`}
 		>
-			<View className="w-8">
+			<View className="w-9">
 				<Text className="text-foreground text-sm tabular-nums">{qty}</Text>
 			</View>
 			<View className="min-w-0 flex-1 flex-row items-center gap-2.5">
@@ -135,7 +136,7 @@ function FeeRow({
 		<View
 			className={`flex-row items-center gap-3 py-2.5 ${last ? '' : 'border-border/60 border-b'}`}
 		>
-			<View className="w-8" />
+			<View className="w-9" />
 			<View className="min-w-0 flex-1 flex-row items-center gap-2.5">
 				<View className="bg-primary/10 h-7 w-7 items-center justify-center rounded">
 					<Text className="text-primary text-base font-semibold">+</Text>
@@ -164,8 +165,10 @@ function FeeRow({
 function HeadRow({ t, phone }: { t: ReturnType<typeof useT>; phone: boolean }) {
 	return (
 		<View className="border-border flex-row gap-3 border-b pb-2">
-			<View className="w-8">
-				<Text className={TABLE_HEAD_TEXT}>{t('pos_cart.col_qty')}</Text>
+			<View className="w-9">
+				<Text className={TABLE_HEAD_TEXT} accessibilityLabel={t('pos_cart.quantity')}>
+					{t('pos_cart.qty_abbrev')}
+				</Text>
 			</View>
 			<View className="min-w-0 flex-1">
 				<Text className={TABLE_HEAD_TEXT}>{t('pos_cart.col_item')}</Text>

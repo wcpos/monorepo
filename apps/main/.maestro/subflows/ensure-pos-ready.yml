@@ -129,7 +129,8 @@ appId: com.wcpos.main.dev
 # 33662941896 died in flow 04 at 36 s exactly that way. The keyboard's tell
 # on a phone is the tab bar pushed off screen while the search box stays:
 # dismiss only then, and only on phones (tablets have no tab bar to read).
-# Set the persisted variation alternative once per Maestro run.
+# Set the persisted variation alternative once per Maestro run, and record the
+# flag only once the segment reads checked (a lost tap left flow 07 in drill style).
 - runFlow:
     when:
       true: ${!output.variationsStyleInline}
@@ -138,8 +139,89 @@ appId: com.wcpos.main.dev
     commands:
       - tapOn:
           id: "products-settings-button"
+      # On phones #3674's footer leaves the Variations row below the dialog
+      # body's fold, so the tap landed on the footer (run 44903204312).
+      # Maestro calls the segment 100% visible at y=635 while the footer clips
+      # it, so it never scrolled and 7 of 7 taps there were lost (runs 45457511750,
+      # 45477517559, 45436473263). Centring moves it clear of the footer.
+      - scrollUntilVisible:
+          element:
+            id: "products-variations-style-inline"
+          direction: DOWN
+          timeout: 15000
+          centerElement: true
       - tapOn:
           id: "products-variations-style-inline"
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: "products-variations-style-inline"
+                  text: "radio button, checked"
+                timeout: 5000
+                optional: true
+      - runFlow:
+          when:
+            platform: Android
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: "products-variations-style-inline"
+                  checked: true
+                timeout: 5000
+                optional: true
+      - runFlow:
+          when:
+            platform: iOS
+            notVisible:
+              id: "products-variations-style-inline"
+              text: "radio button, checked"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E variations style still not inline after the tap, centring and tapping again')}"
+            - scrollUntilVisible:
+                element:
+                  id: "products-variations-style-inline"
+                direction: DOWN
+                timeout: 15000
+                centerElement: true
+            - tapOn:
+                id: "products-variations-style-inline"
+      - runFlow:
+          when:
+            platform: Android
+            notVisible:
+              id: "products-variations-style-inline"
+              checked: true
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E variations style still not inline after the tap, centring and tapping again')}"
+            - scrollUntilVisible:
+                element:
+                  id: "products-variations-style-inline"
+                direction: DOWN
+                timeout: 15000
+                centerElement: true
+            - tapOn:
+                id: "products-variations-style-inline"
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: "products-variations-style-inline"
+                  text: "radio button, checked"
+                timeout: 10000
+      - runFlow:
+          when:
+            platform: Android
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: "products-variations-style-inline"
+                  checked: true
+                timeout: 10000
       - tapOn:
           id: "ui-settings-close"
       - evalScript: ${output.variationsStyleInline = true}

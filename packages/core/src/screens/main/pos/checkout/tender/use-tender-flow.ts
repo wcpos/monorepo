@@ -60,6 +60,7 @@ import {
 } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useConfirm } from './use-confirm';
+import { refusedBeforeSend } from '../payments/leg-finality';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -107,6 +108,7 @@ import { rowsSince, splitView, useSplitStore } from './split-view';
 import { restoredPlan, splitCommands } from './split-module';
 import { type RememberedReader, useRememberedReader } from './remembered-readers';
 import { disabledReasonText, failureReasonLabel, providerErrorMessage } from './labels';
+import { invalidParamContext } from './invalid-param-names';
 import {
 	activePlan,
 	initTenderState,
@@ -323,7 +325,7 @@ export function useTenderFlow(
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const { confirm, dialog: confirmDialog, open: confirming } = useConfirm({ portalHost });
-	const { methods, byId } = usePaymentMethods();
+	const { methods, byId, defaultMethodId } = usePaymentMethods();
 	const titleOf = React.useCallback((id: string) => byId.get(id)?.title ?? id, [byId]);
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
@@ -365,7 +367,11 @@ export function useTenderFlow(
 		});
 		const first = initialTiles.find((tile) => !tile.disabled)?.method;
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
-		const methodId = stored?.id ?? first?.id ?? null;
+		// Stored wins; a disabled or absent store default falls back to the first available tile.
+		const preferred = initialTiles.find(
+			(tile) => !tile.disabled && tile.method.id === defaultMethodId
+		)?.method;
+		const methodId = stored?.id ?? preferred?.id ?? first?.id ?? null;
 		const initial = initTenderState({ methodId, balanceMinor });
 		// A stored plan is a split: `restoredPlan` turns its chip on (a no-op unless the store lost it).
 		const storedPlan = restoredPlan(order.uuid, balanceMinor);
@@ -810,6 +816,13 @@ export function useTenderFlow(
 					showToast: true,
 					context: { ...orderContext, retry: 'order_changed' },
 				});
+			// The first send of this command still holds it (waiting for wake or re-sending): Try again
+			// found nothing unanswered yet, so it says so instead of PAYMENT201 (POS-34W).
+			else if (error instanceof MoneyCommandError && error.reason === 'in_flight')
+				logger.info(t('pos_checkout.payment_still_sending'), {
+					showToast: true,
+					context: { ...orderContext, retry: 'in_flight' },
+				});
 			else if (inMotion?.kind === 'attempt')
 				noteUnanswered(t, { ...orderContext, attemptId: inMotion.id });
 			// The store answered, and refused: its sentence is the toast title, over the code's summary.
@@ -827,6 +840,7 @@ export function useTenderFlow(
 					context: {
 						...orderContext,
 						error: error instanceof Error ? error.message : String(error),
+						...invalidParamContext(error),
 					},
 				});
 		} finally {
@@ -918,7 +932,8 @@ export function useTenderFlow(
 			const patchFees = async (data: ReturnType<typeof withFees>) => {
 				if (!(await recordLedger(target, data))) throw new Error('rounding_fee_failed');
 			};
-			await recordSaleAttempt(ctx, {
+			// Journaled only once a press can move money: a pre-flight refusal leaves no pending entry.
+			const attempt: Parameters<typeof recordSaleAttempt>[1] = {
 				order,
 				source:
 					balanceMinor === 0
@@ -931,7 +946,7 @@ export function useTenderFlow(
 				completing: sale.completing,
 				settledOrderStatus,
 				settledOrderGateway: method?.id,
-			});
+			};
 			const saveProvenance = async (paymentId?: string) => {
 				if (!sale.completing) return;
 				// A stamp the last leg left in flight lands before this leg's own provenance write.
@@ -942,6 +957,7 @@ export function useTenderFlow(
 			};
 			// A cash due rounded to nothing completes here too, its fee in the same write.
 			if (balanceMinor === 0) {
+				await recordSaleAttempt(ctx, attempt);
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
 				// The close approves the sale the press commits: its rounding fee moves the stored
 				// total by the fee alone, so the approved total is the rounded one.
@@ -1018,6 +1034,7 @@ export function useTenderFlow(
 				});
 				return;
 			}
+			await recordSaleAttempt(ctx, attempt);
 
 			if (method.capture.mode === 'device') {
 				const liveDriver = getDriver(method.capture.provider);
@@ -1315,17 +1332,29 @@ export function useTenderFlow(
 				});
 				return;
 			}
-			const lost = sentMoneyCommand && !isDefinitiveMoneyRefusal(moneyRefusalOf(error));
+			// A pre-flight can adopt a changed order: a leg captured elsewhere is in its latest ledger.
+			const noLiveLeg =
+				liveRows.length === 0 &&
+				!readLedger(order.getLatest().payload.meta_data).some(({ status }) =>
+					isLivePaymentStatus(status)
+				);
+			const lost =
+				sentMoneyCommand &&
+				!(refusedBeforeSend(error) && noLiveLeg) &&
+				!isDefinitiveMoneyRefusal(moneyRefusalOf(error));
 			const sentence = lost
 				? t('pos_checkout.payment_unanswered')
 				: t('pos_checkout.payment_not_recorded');
 			logger.error(sentence, {
 				code: lost ? ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN : ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
+				// Nothing was taken: PAYMENT999's "confirm whether it went through" would contradict it.
+				...(!lost && noLiveLeg ? { toast: { title: sentence, text2: '' } } : {}),
 				context: {
 					...orderContext,
 					method: method?.id ?? null,
 					error: error instanceof Error ? error.message : String(error),
+					...invalidParamContext(error),
 				},
 			});
 		} finally {
@@ -1374,6 +1403,7 @@ export function useTenderFlow(
 		wpCredentials,
 		t,
 		tiles,
+		liveRows,
 	]);
 	const takeTender = React.useCallback(
 		() => exclusive('takeTender', runPress),

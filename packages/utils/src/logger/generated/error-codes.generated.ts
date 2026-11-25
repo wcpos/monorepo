@@ -9,6 +9,7 @@ export type ErrorCode =
 	| 'SYNC201'
 	| 'SYNC202'
 	| 'SYNC203'
+	| 'SYNC204'
 	| 'SYNC211'
 	| 'SYNC301'
 	| 'SYNC311'
@@ -35,6 +36,7 @@ export type ErrorCode =
 	| 'PAYMENT221'
 	| 'PAYMENT301'
 	| 'PAYMENT311'
+	| 'PAYMENT312'
 	| 'PAYMENT401'
 	| 'PAYMENT501'
 	| 'PRINT101'
@@ -56,6 +58,7 @@ export type ErrorCode =
 	| 'AUTH999'
 	| 'CHECKOUT999'
 	| 'PAYMENT511'
+	| 'PAYMENT521'
 	| 'PAYMENT999'
 	| 'PRINT999'
 	| 'PRODUCT999'
@@ -74,6 +77,7 @@ export type ErrorCode =
 	| 'AUTH321'
 	| 'AUTH331'
 	| 'AUTH341'
+	| 'AUTH342'
 	| 'AUTH411'
 	| 'AUTH421'
 	| 'AUTH431'
@@ -221,6 +225,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 			'Nothing to fix on this device. If the order was deleted by mistake, restore it from the trash in WP Admin.',
 		dataSafety: 'order-safe',
 		summary: 'Your store no longer has this order, so this device settled its own copy.',
+	},
+	SYNC204: {
+		code: 'SYNC204',
+		symbol: 'ORDER_CLOSED_ON_STORE',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint:
+			'The store has already closed this order. Reopen it on the store first if the change is still needed, then tap Send again in Store health → Database, or Discard it.',
+		dataSafety: 'local-only',
+		summary: 'The store had already closed this order, so it refused a change to its lines.',
 	},
 	SYNC211: {
 		code: 'SYNC211',
@@ -470,6 +484,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'outcome-unknown',
 		summary: "WCPOS couldn't confirm whether this refund went through.",
 	},
+	PAYMENT312: {
+		code: 'PAYMENT312',
+		symbol: 'REFUND_RECORD_LOST',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			"Don't refund again — the money went back. Check the order notes, then ask a store admin to record the refund.",
+		dataSafety: 'money-moved',
+		summary: "The refund was returned to the customer, but the store couldn't keep its record.",
+	},
 	PAYMENT401: {
 		code: 'PAYMENT401',
 		symbol: 'TERMINAL_PAIRING_INCOMPLETE',
@@ -668,6 +692,17 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'money-moved',
 		summary: 'More was taken at the till than the order still owed.',
 	},
+	PAYMENT521: {
+		code: 'PAYMENT521',
+		symbol: 'PAYMENT_ORDER_CLOSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			'Return the money to the customer, or reopen the order on the store and record the payment again.',
+		dataSafety: 'money-moved',
+		summary:
+			'The store had already closed the order, so a payment taken at the till was not recorded.',
+	},
 	PAYMENT999: {
 		code: 'PAYMENT999',
 		symbol: 'PAYMENT_UNEXPECTED',
@@ -837,6 +872,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Update the WCPOS plugin on the copy, or remove the saved store first.',
 		dataSafety: 'no-impact',
 		summary: 'This store reports the same identity as a store already saved on this device.',
+	},
+	AUTH342: {
+		code: 'AUTH342',
+		symbol: 'CASHIER_IDENTITY_CLASH',
+		domain: 'AUTH',
+		severity: 'error',
+		actionHint: 'Remove the other saved store from this device, then sign in again.',
+		dataSafety: 'no-impact',
+		summary: 'This account is already saved on this device under another store.',
 	},
 	AUTH411: {
 		code: 'AUTH411',
@@ -1246,6 +1290,7 @@ export const ERROR_CODES = {
 	RECORD_REJECTED: 'SYNC201',
 	RECORD_REVERTED: 'SYNC202',
 	RECORD_GONE_ON_STORE: 'SYNC203',
+	ORDER_CLOSED_ON_STORE: 'SYNC204',
 	RECORD_INVALID_FIELD: 'SYNC211',
 	SYNC_BEHIND_HEAD: 'SYNC301',
 	SCHEMA_MISMATCH: 'SYNC311',
@@ -1272,6 +1317,7 @@ export const ERROR_CODES = {
 	PAYMENT_VOID_REFUSED: 'PAYMENT221',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
 	REFUND_OUTCOME_UNKNOWN: 'PAYMENT311',
+	REFUND_RECORD_LOST: 'PAYMENT312',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',
 	PAYMENT_ALREADY_PAID_ONLINE: 'PAYMENT501',
 	AUTOPRINT_DID_NOT_START: 'PRINT101',
@@ -1293,6 +1339,7 @@ export const ERROR_CODES = {
 	AUTH_UNEXPECTED: 'AUTH999',
 	CHECKOUT_UNEXPECTED: 'CHECKOUT999',
 	PAYMENT_EXCEEDS_BALANCE: 'PAYMENT511',
+	PAYMENT_ORDER_CLOSED: 'PAYMENT521',
 	PAYMENT_UNEXPECTED: 'PAYMENT999',
 	PRINT_UNEXPECTED: 'PRINT999',
 	PRODUCT_UNEXPECTED: 'PRODUCT999',
@@ -1311,6 +1358,7 @@ export const ERROR_CODES = {
 	WOOCOMMERCE_MISSING: 'AUTH321',
 	WCPOS_PLUGIN_OUTDATED: 'AUTH331',
 	SITE_IDENTITY_CLASH: 'AUTH341',
+	CASHIER_IDENTITY_CLASH: 'AUTH342',
 	STORE_URL_INVALID: 'AUTH411',
 	AUTH_TOKEN_BLOCKED_BY_HOST: 'AUTH421',
 	REST_TRANSPORT_BLOCKED: 'AUTH431',

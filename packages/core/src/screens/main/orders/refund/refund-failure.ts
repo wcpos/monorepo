@@ -16,6 +16,31 @@ export interface RefundFailureReport {
 	title: string;
 	/** Already-translated second line, when the code's own hint would mislead. */
 	text2?: string;
+	/** The money went back although the store kept no record: leave the form so no retry is offered. */
+	refunded?: true;
+}
+
+/**
+ * The store answered the refund POST with a 2xx whose body holds no created refund
+ * (#3380), so it may or may not have recorded one. Carries the order id and the
+ * HTTP status only, never the body.
+ */
+export class RefundUnconfirmedError extends Error {
+	/** Mirrors an HTTP error's `response.status`, so the form's catch logs the status. */
+	readonly response: { status: number | undefined };
+
+	constructor(
+		readonly orderId: number,
+		status: number | undefined
+	) {
+		super(`Refund not confirmed: order ${orderId}, status ${status ?? 'none'}`);
+		this.name = 'RefundUnconfirmedError';
+		this.response = { status };
+	}
+}
+
+export function isRefundUnconfirmedError(error: unknown): error is RefundUnconfirmedError {
+	return error instanceof RefundUnconfirmedError;
 }
 
 /**
@@ -43,6 +68,15 @@ function isRefusal(status: number | undefined): status is number {
  * everything else must send the cashier to the order's refunds first.
  */
 export function classifyRefundFailure(error: unknown, t: Translate): RefundFailureReport {
+	// A 2xx with no refund in it: never a success, and never a blind retry.
+	if (isRefundUnconfirmedError(error)) {
+		return {
+			level: 'error',
+			code: ERROR_CODES.REFUND_OUTCOME_UNKNOWN,
+			title: t('orders.refund_unconfirmed'),
+			text2: t('orders.refund_unconfirmed_check'),
+		};
+	}
 	// The auth handler cancels a refused (401) request on purpose while it launches the
 	// sign-in: the store refused it, so no refund was made — never "outcome unknown".
 	const failure = error as { code?: unknown; name?: unknown } | null;
@@ -73,6 +107,15 @@ export function classifyRefundFailure(error: unknown, t: Translate): RefundFailu
 
 	const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
 	const status = response?.status;
+	if ((response?.data as { code?: unknown } | undefined)?.code === 'wcpos_refund_record_lost') {
+		return {
+			level: 'error',
+			code: ERROR_CODES.REFUND_RECORD_LOST,
+			title: t('orders.refund_record_lost'),
+			text2: t('orders.refund_record_lost_check'),
+			refunded: true,
+		};
+	}
 	if (response && isRefusal(status)) {
 		// The HTTP client's mapped WordPress code (a missing route, a specific auth
 		// refusal) says more than the status does; fall back on the status only.

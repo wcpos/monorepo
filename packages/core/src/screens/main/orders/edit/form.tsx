@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { useForm, useWatch } from 'react-hook-form';
 import { map } from 'rxjs/operators';
 import * as z from 'zod';
@@ -24,10 +24,12 @@ import {
 	PropertyList,
 	PropertyRow,
 } from '@wcpos/components/property-row';
+import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { allowedOrderStatuses, readLedger } from '@wcpos/order-math';
 import {
 	type EngineRecord,
+	type OrderPayload,
 	useRecordField,
 	WriteDeferredError,
 	WriteOutcomeTimeoutError,
@@ -36,15 +38,20 @@ import {
 	GUEST_CUSTOMER_ID,
 	isGuestCustomer,
 	isPushableOrderStatus,
+	type MetaDataEntry,
+	POS_META_KEYS,
 	PROTECTED_ORDER_META_KEYS,
 	PUSHABLE_ORDER_STATUSES,
+	wooMetaCarrier,
 } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useEngineRecordByWooId } from '@wcpos/query/record-readers';
 
+import { useStoreSession } from '../../../../contexts/app-state';
 import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
+import { CashierSelect } from '../../components/cashier-select';
 import { CurrencySelect } from '../../components/currency-select';
 import { CustomerSelect } from '../../components/customer-select';
 import { billingAddressSchema, shippingAddressSchema } from '../../components/customer/address';
@@ -72,9 +79,13 @@ import { useFieldPresence } from '../../components/use-field-presence';
 import { pushFailureCode, reportPushFailure } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useOrderRecord } from '../commands/use-order-record';
+import { storeListResource } from '../../hooks/store-list-resource';
+import { useCashierLabel } from '../../hooks/use-cashier-label';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
+import { useServerFeature } from '../../hooks/use-server-feature';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 
@@ -94,6 +105,28 @@ const formSchema = z.object({
 
 const statusSchema = z.object({ status: z.string() });
 type FormValues = z.infer<typeof formSchema>;
+/** An intent the Edit tab sends: its write, the write that undoes it, and how it is reported. */
+type OrderFields = Partial<OrderPayload> | ((payload: OrderPayload) => Partial<OrderPayload>);
+type Intent = {
+	write: OrderFields;
+	revert: OrderFields;
+	success: string;
+	failure: string;
+	context: Record<string, unknown>;
+};
+
+/**
+ * The order's meta with one identity row set by value. Every other row stays exactly as it is,
+ * an absent one included (`stampIdentity` stamps the cashier AND the store, so it would write the
+ * row the owner did not change). A row is cleared as '', never dropped: a missing protected row
+ * cannot erase the stored one (`mergeProtectedOrderMeta`).
+ */
+function withIdentityRow(meta: MetaDataEntry[] | undefined, key: string, value: string) {
+	const rows = meta ?? [];
+	return rows.some((row) => row?.key === key)
+		? rows.map((row) => (row?.key === key ? { ...row, value } : row))
+		: [...rows, { key, value }];
+}
 /** Company is a billing part on an order, not an offered fact: the add row offers the addresses. */
 const ORDER_ADDRESS_FACTS = ADDRESS_FACTS.filter((fact) => fact.name !== 'company');
 /** The order's identity lives in its billing: the open Billing row carries it as parts. */
@@ -197,52 +230,104 @@ function EditOrderFormFields({ order }: Props) {
 		values: { status: currentStatus },
 	});
 	const status = useWatch({ control: statusForm.control, name: 'status' });
-	const onUpdateStatus = statusForm.handleSubmit(handleUpdateStatus);
+	const onUpdateStatus = statusForm.handleSubmit((data) =>
+		sendIntent((latest) => {
+			const previous = latest.status ?? '';
+			const allowed = allowedOrderStatuses(PUSHABLE_ORDER_STATUSES, previous, {
+				total: latest.total,
+				refunds: latest.refunds,
+				rows: readLedger(latest.meta_data),
+			});
+			if (!allowed.includes(data.status)) {
+				statusForm.reset({ status: previous });
+				return null;
+			}
+			if (data.status === previous) return null;
+			return {
+				write: { status: data.status },
+				revert: { status: previous },
+				success: t('orders.status_updated'),
+				failure: 'Failed to update order status',
+				context: { status: data.status },
+			};
+		})
+	);
 
-	async function handleUpdateStatus(data: { status: string }) {
+	/**
+	 * Cashier and Store are intents like status (Paul, 2026-11-20): each writes its own identity
+	 * row alone, onto the order's meta as it stands, and the register, till and the other row stay.
+	 */
+	function updateIdentity(field: 'cashier' | 'store', next: string) {
+		const key = field === 'cashier' ? POS_META_KEYS.user : POS_META_KEYS.store;
+		const valueOf = (meta: OrderPayload['meta_data']) => {
+			const identity = wooMetaCarrier.readIdentity(meta);
+			return (field === 'cashier' ? identity.cashierId : identity.storeId) ?? '';
+		};
+		return sendIntent((latest) => {
+			if (!next || next === valueOf(latest.meta_data)) return null;
+			// The value the write replaced, read from the payload it landed on: an assignment made
+			// after the read is what a refusal puts back. A resolver may rerun; its last run lands.
+			let replaced = '';
+			return {
+				// Applied to the payload the write lands on: a custom field written meanwhile stays, and
+				// an order that already holds the pick writes (and pushes, and reports) nothing.
+				write: (payload) => {
+					replaced = valueOf(payload.meta_data);
+					return replaced === next
+						? {}
+						: { meta_data: withIdentityRow(payload.meta_data, key, next) };
+				},
+				// Only while the order still holds the refused value: a newer assignment is left alone,
+				// and the empty change writes and pushes nothing.
+				revert: (payload) =>
+					valueOf(payload.meta_data) === next
+						? { meta_data: withIdentityRow(payload.meta_data, key, replaced) }
+						: {},
+				success: field === 'cashier' ? t('orders.cashier_updated') : t('orders.store_updated'),
+				failure:
+					field === 'cashier' ? 'Failed to update order cashier' : 'Failed to update order store',
+				context: { [field]: next },
+			};
+		});
+	}
+
+	/**
+	 * Flushes the autosave, then writes the intent `prepare` builds from the order as it stands
+	 * (null: nothing to send), pushes it, and restores the previous value when the store refuses.
+	 */
+	async function sendIntent(prepare: (latest: OrderPayload) => Intent | null) {
 		if (loading) return;
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 		setLoading(true);
-		if (!(await flush())) {
-			setLoading(false);
-			return;
-		}
-		const latest = order.getLatest().payload;
-		const previous = latest.status ?? '';
-		const allowed = allowedOrderStatuses(PUSHABLE_ORDER_STATUSES, previous, {
-			total: latest.total,
-			refunds: latest.refunds,
-			rows: readLedger(latest.meta_data),
-		});
-		if (!allowed.includes(data.status)) {
-			statusForm.reset({ status: previous });
-			setLoading(false);
-			return;
-		}
-		if (data.status === previous) {
-			setLoading(false);
-			return;
-		}
 		let patched = false;
+		let intent: Intent | null = null;
 		try {
+			if (!(await flush())) return;
+			intent = prepare(order.getLatest().payload);
+			if (!intent) return;
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
-			if (!(await saveOrderFields(order, { status: data.status }))) return;
+			if (!(await saveOrderFields(order, intent.write))) return;
 			patched = true;
 			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 			await pushDocument(order);
-			mutationLogger.success(t('orders.status_updated'), {
+			mutationLogger.success(intent.success, {
 				showToast: true,
-				context: { orderId: order.getLatest().payload.id, status: data.status },
+				context: { orderId: order.getLatest().payload.id, ...intent.context },
 			});
 		} catch (error) {
 			// A pending outcome (the wait timed out, or the row is held offline or for a sign-in) is
 			// not a refusal: the intent stays queued and lands when the store answers, exactly as the
 			// old Save left it, and the cashier is told it is still on its way. Only a refusal rolls
-			// the status back (the cart sheet's rule) and pushes the revert.
+			// the value back (the cart sheet's rule) and pushes the revert.
 			const pending =
 				error instanceof WriteOutcomeTimeoutError || error instanceof WriteDeferredError;
-			if (patched && !pending && !blockIfDegraded('save-order', { orderId: order.uuid })) {
-				const reverted = await saveOrderFields(order, { status: previous });
+			if (
+				patched &&
+				intent &&
+				!pending &&
+				!blockIfDegraded('save-order', { orderId: order.uuid })
+			) {
+				const reverted = await saveOrderFields(order, intent.revert);
 				if (reverted) {
 					void pushDocument(order).catch((revertError) =>
 						mutationLogger.warn('Failed to send the reverted order', {
@@ -258,7 +343,7 @@ function EditOrderFormFields({ order }: Props) {
 			if (isErrorReported(error)) return;
 			// "Still on its way" only when the intent is still queued; after a rollback the cashier
 			// must not be told the change is still arriving.
-			reportPushFailure(mutationLogger, 'Failed to update order status', error, {
+			reportPushFailure(mutationLogger, intent?.failure ?? 'Failed to update order', error, {
 				title: t('common.failed_to_save_order'),
 				...(pending ? { stillSendingTitle: t('common.order_still_sending') } : {}),
 				context: { orderId: order.getLatest().payload.id },
@@ -404,6 +489,18 @@ function EditOrderFormFields({ order }: Props) {
 	// Set at checkout, so read from the record and locked (property rows rule 6).
 	const payload = useRecordField(order, (record) => record.payload);
 	const paymentMethod = payload.payment_method_title || payload.payment_method;
+	// Cashier and Store: reassigning fails closed on the user's capability, and the Cashier also on
+	// the plugin recording the change (a 2.0.0 plugin ignores it); the store has taken one since 2.0.0.
+	const { canReassignSales } = useUserCapabilities().caps;
+	const cashierEditable = useServerFeature('order_cashier_reassignment') && canReassignSales;
+	const identity = wooMetaCarrier.readIdentity(payload.meta_data);
+	const currentCashier = identity.cashierId ?? '';
+	// Read, never written, until its Update: a form of its own per row, never the autosaved one,
+	// so a write that resets one row's pick never drops the other's.
+	const cashierForm = useForm<{ cashier_id: string }>({ values: { cashier_id: currentCashier } });
+	const cashierPick = useWatch({ control: cashierForm.control, name: 'cashier_id' });
+	const { label: cashierLabel } = useCashierLabel(cashierPick);
+	const lockedAtSale = { where: t('orders.set_at_sale') };
 
 	return (
 		<Form {...form}>
@@ -461,6 +558,58 @@ function EditOrderFormFields({ order }: Props) {
 							/>
 						</PropertyRow>
 					</Form>
+					{/* An order created online has no cashier, so no Cashier row. */}
+					{currentCashier ? (
+						<Form {...cashierForm}>
+							<PropertyRow
+								id="cashier"
+								label={t('common.cashier')}
+								locked={cashierEditable ? undefined : lockedAtSale}
+								verb={
+									cashierEditable ? (
+										<Button
+											variant="outline"
+											testID="order-edit-update-cashier"
+											disabled={
+												loading || storageDegraded || !cashierPick || cashierPick === currentCashier
+											}
+											onPress={() => void updateIdentity('cashier', cashierPick)}
+										>
+											{t('orders.update_cashier')}
+										</Button>
+									) : undefined
+								}
+							>
+								{cashierEditable ? (
+									<FormField
+										control={cashierForm.control}
+										name="cashier_id"
+										render={({ field }) => (
+											<View testID="order-edit-cashier">
+												<FormCombobox
+													customComponent={CashierSelect}
+													{...field}
+													value={{ value: field.value, label: cashierLabel }}
+												/>
+											</View>
+										)}
+									/>
+								) : (
+									cashierLabel
+								)}
+							</PropertyRow>
+						</Form>
+					) : null}
+					{/* The store list is a Suspense resource: only its row waits for it. */}
+					<Suspense fallback={null}>
+						<StoreRow
+							current={identity.storeId ?? ''}
+							editable={canReassignSales}
+							busy={loading || storageDegraded}
+							locked={lockedAtSale}
+							onUpdate={(pick) => void updateIdentity('store', pick)}
+						/>
+					</Suspense>
 					<PropertyRow id="customer_note" label={t('common.customer_note')} align="top">
 						<FormField
 							control={form.control}
@@ -534,6 +683,63 @@ function EditOrderFormFields({ order }: Props) {
 				</PropertyList>
 			</DialogBody>
 			<DialogFooter close={{ testID: 'order-edit-close-button' }} />
+		</Form>
+	);
+}
+
+/** The Store row, as the cart's Order details sheet draws it: only where there is a choice of stores. */
+function StoreRow(props: {
+	current: string;
+	editable: boolean;
+	busy: boolean;
+	locked: { where: string };
+	onUpdate: (pick: string) => void;
+}) {
+	const t = useT();
+	const { wpCredentials } = useStoreSession();
+	const stores = useObservableSuspense(storeListResource(wpCredentials));
+	const storeForm = useForm<{ store_id: string }>({ values: { store_id: props.current } });
+	const pick = useWatch({ control: storeForm.control, name: 'store_id' });
+	if (stores.length < 2) return null;
+	const options = stores.map((row) => ({ value: String(row.id), label: row.name ?? '' }));
+	return (
+		<Form {...storeForm}>
+			<PropertyRow
+				id="store"
+				label={t('common.store')}
+				locked={props.editable ? undefined : props.locked}
+				verb={
+					props.editable ? (
+						<Button
+							variant="outline"
+							testID="order-edit-update-store"
+							disabled={props.busy || !pick || pick === props.current}
+							onPress={() => props.onUpdate(pick)}
+						>
+							{t('orders.update_store')}
+						</Button>
+					) : undefined
+				}
+			>
+				{props.editable ? (
+					<FormField
+						control={storeForm.control}
+						name="store_id"
+						render={({ field }) => (
+							<View testID="order-edit-store">
+								<FormSelect
+									options={options}
+									placeholder={t('common.store')}
+									triggerTestID="order-edit-store-select"
+									{...field}
+								/>
+							</View>
+						)}
+					/>
+				) : (
+					options.find((option) => option.value === pick)?.label || pick
+				)}
+			</PropertyRow>
 		</Form>
 	);
 }

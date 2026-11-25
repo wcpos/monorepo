@@ -158,14 +158,48 @@ env:
 # reaching the main window ~2.7 s after add-to-cart, the same shape as the
 # add-to-cart tap that worked — and the tab never switched; nothing appeared
 # for 30 s. The same sequence, same timing, passes on a local simulator, so this
-# is not the toast overlay (react-native-screens' FullWindowOverlay passes the
-# touch through) and not a covered target; the press is lost inside the app on
+# is not a covered target; the press is lost inside the app on
 # a starved runner. A second tap on an unchanged tab is idempotent, and the
 # console.log below leaves a line in maestro.log every time the first press was
 # lost, so the rate — and whether a second press lands — is measured instead of
 # hidden. If the retry also fails the flow still fails on the 30 s wait below.
+#
+# Never gate the tap on a one-shot `when: visible` sample (#3673; runs
+# 44409800786 and 44527450686): on iOS the added-to-cart toast lives 4 s in its
+# own FullWindowOverlay window, and while it exists Maestro's hierarchy does not
+# see the main window, so a sample taken then skips the tap. A CI phone waits
+# for the tab past the toast; a local run with no DEVICE_CLASS keeps the
+# one-shot look; a tablet has no tab bar and takes neither branch.
 - runFlow:
     when:
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
+    commands:
+      # Required, 15 s: the 4 s toast plus a slow runner. A missing tab fails
+      # here instead of 30 s later on the quantity input.
+      - extendedWaitUntil:
+          visible:
+            id: "pos-tab-cart"
+          timeout: 15000
+      - tapOn:
+          id: "pos-tab-cart"
+      - extendedWaitUntil:
+          visible:
+            id: "pos-tab-cart"
+            selected: true
+          timeout: 10000
+          optional: true
+      - runFlow:
+          when:
+            notVisible:
+              id: "pos-tab-cart"
+              selected: true
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E pos-tab-cart tap did not switch tabs within 10 s, tapping again')}"
+            - tapOn:
+                id: "pos-tab-cart"
+- runFlow:
+    when:
+      true: "${typeof DEVICE_CLASS === 'undefined'}"
       visible:
         id: "pos-tab-cart"
     commands:

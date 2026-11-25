@@ -9,9 +9,19 @@ import { useAddFee } from './use-add-fee';
 import { useAddShipping } from './use-add-shipping';
 
 const mockAddItemToOrder = jest.fn();
+const mockReadCounting = jest.fn();
+const mockReadPriceCheck = jest.fn();
 
 jest.mock('./use-add-item-to-order', () => ({
-	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
+	useAddItemToOrder: () => ({
+		addItemToOrder: mockAddItemToOrder,
+		readCounting: mockReadCounting,
+		readPriceCheck: mockReadPriceCheck,
+	}),
+}));
+jest.mock('./use-add-product', () => ({
+	showCountingNotice: jest.fn(),
+	showPriceCheckNotice: jest.fn(),
 }));
 jest.mock('./use-cart-config', () => {
 	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
@@ -43,6 +53,8 @@ describe('cart fee and shipping add failure reporting', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockAddItemToOrder.mockResolvedValue(undefined);
+		mockReadCounting.mockResolvedValue(false);
+		mockReadPriceCheck.mockResolvedValue(false);
 	});
 
 	it('does not report an existing-order fee write failure a second time', async () => {

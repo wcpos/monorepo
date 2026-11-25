@@ -1,8 +1,19 @@
-import { classifyRefundFailure } from './refund-failure';
+import { classifyRefundFailure, RefundUnconfirmedError } from './refund-failure';
 
 const t = (key: string) => key;
 
 describe('classifyRefundFailure', () => {
+	// #3380: a 2xx with no refund in it. Never a success; the copy sends the cashier to
+	// the order's refunds, never to a blind retry (each retry is a new refund).
+	it('warns that the store did not confirm the refund and sends the cashier to its refunds', () => {
+		expect(classifyRefundFailure(new RefundUnconfirmedError(77, 200), t)).toEqual({
+			level: 'error',
+			code: 'PAYMENT311',
+			title: 'orders.refund_unconfirmed',
+			text2: 'orders.refund_unconfirmed_check',
+		});
+	});
+
 	it('says no refund was made — and not "offline" — when the app was only backgrounded', () => {
 		const asleep = Object.assign(new Error('asleep'), { isSleeping: true });
 
@@ -75,6 +86,32 @@ describe('classifyRefundFailure', () => {
 		});
 
 		expect(classifyRefundFailure(forbidden, t).code).toBe('AUTH201');
+	});
+
+	it('says the money went back when the store lost the refund record', () => {
+		const error = {
+			response: {
+				status: 500,
+				data: { code: 'wcpos_refund_record_lost', message: 'x', data: { status: 500 } },
+			},
+		};
+		expect(classifyRefundFailure(error, t)).toEqual({
+			level: 'error',
+			code: 'PAYMENT312',
+			title: 'orders.refund_record_lost',
+			text2: 'orders.refund_record_lost_check',
+			refunded: true,
+		});
+	});
+
+	it('keeps a different server error unconfirmed', () => {
+		const error = { response: { status: 500, data: { code: 'internal_server_error' } } };
+		expect(classifyRefundFailure(error, t)).toEqual({
+			level: 'error',
+			code: 'PAYMENT311',
+			title: 'orders.refund_outcome_unknown',
+			text2: 'orders.refund_check_before_retry',
+		});
 	});
 
 	// Each retry mints a new idempotency key, so a lost reply must never read as

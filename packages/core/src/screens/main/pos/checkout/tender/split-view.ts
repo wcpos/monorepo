@@ -86,8 +86,17 @@ export interface SplitFacts {
 /** Every split fact the pane, the bill and the order view read, derived once from its three holders. */
 export type SplitView = ReturnType<typeof splitView>;
 
+/**
+ * Whether a payment may be built from picked units. A returned line (a negative quantity) makes
+ * the sale's due less than its other lines, so a picked line could cost more than is owed: the
+ * bill picks nothing while one is in the cart. An even or percent split still divides the due.
+ */
+export const itemsPickable = (lines: readonly { quantity: number }[]) =>
+	lines.every(({ quantity }) => quantity >= 0);
+
 export function splitView({ payload, rows, dp, titleOf, store, plan }: SplitFacts) {
 	const lines = tenderLines(payload.line_items, dp);
+	const pickable = itemsPickable(lines);
 	const allocations = mergedAllocations(payload.meta_data, store.allocations);
 	const liveRows = rows.filter(({ status }) => isLivePaymentStatus(status));
 	const paidUnits = paidUnitsByLine(
@@ -105,11 +114,13 @@ export function splitView({ payload, rows, dp, titleOf, store, plan }: SplitFact
 		allocations,
 		/** Units of each line the live payments covered, with their methods (`paidUnitsByLine`). */
 		paidUnits,
-		/** Units of each line no live payment covers, by `String(line id)`. */
+		/** The bill picks units (`itemsPickable`); the Pick items chip and the bill's steppers read it. */
+		pickable,
+		/** Units of each line no live payment covers, by `String(line id)`; none while not `pickable`. */
 		unpaidUnits: Object.fromEntries(
 			lines.map(({ id, quantity }) => [
 				String(id),
-				Math.max(0, quantity - (paidUnits[id]?.units ?? 0)),
+				pickable ? Math.max(0, quantity - (paidUnits[id]?.units ?? 0)) : 0,
 			])
 		),
 		picked: store.picked,

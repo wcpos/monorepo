@@ -7,11 +7,12 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { clearUpdateRequired, reportUpdateRequired } from '@wcpos/utils/update-required-gate';
 
-import { Site } from './site';
+import { Site, SiteHeader } from './site';
 import en from '../../../contexts/translations/locales/en/core.json';
 
 let mockWcposVersionPass = true;
 let mockIsWeb = true;
+const mockGetInitials = jest.fn(() => 'ES');
 
 jest.mock('@wcpos/utils/platform', () => ({
 	Platform: {
@@ -36,7 +37,12 @@ jest.mock('@wcpos/components/dropdown-menu', () => ({
 	DropdownMenuItem: () => null,
 	DropdownMenuTrigger: () => null,
 }));
-jest.mock('@wcpos/components/avatar', () => ({ Avatar: () => null, getInitials: () => 'ES' }));
+jest.mock('@wcpos/components/avatar', () => ({
+	Avatar: () => null,
+	get getInitials() {
+		return mockGetInitials;
+	},
+}));
 jest.mock('@wcpos/components/button', () => {
 	const { Pressable, Text } = jest.requireActual('react-native');
 	return { Button: Pressable, ButtonText: Text };
@@ -100,6 +106,14 @@ describe('Site login card and the update-required gate', () => {
 		mockWcposVersionPass = true;
 		mockIsWeb = true;
 		clearUpdateRequired(WP_API_URL);
+	});
+
+	it('decodes the site name for the header and avatar initials', () => {
+		render(<SiteHeader site={{ name: 'Tom &amp; Jerry', url: 'https://example.com' }} />);
+
+		expect(screen.getByText('Tom & Jerry')).toBeTruthy();
+		expect(screen.queryByText('Tom &amp; Jerry')).toBeNull();
+		expect(mockGetInitials).toHaveBeenCalledWith('Tom & Jerry');
 	});
 
 	it('swaps the users list for the update notice while the site is gated', () => {

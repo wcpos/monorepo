@@ -44,6 +44,18 @@ describe('usePaymentMethods', () => {
 		expect(result.current.unsupportedSchema).toBe(false);
 	});
 
+	it('exposes the envelope default_method, null when absent or not a string', () => {
+		for (const [fields, expected] of [
+			[{ default_method: 'pos_card' }, 'pos_card'],
+			[{}, null],
+			[{ default_method: 7 }, null],
+		] as const) {
+			paymentMethods = { schema: 1, contract: '1.3', methods: [cash], ...fields };
+			const { result } = renderHook(() => usePaymentMethods());
+			expect(result.current.defaultMethodId).toBe(expected);
+		}
+	});
+
 	it('returns an unloaded empty inventory when the envelope is missing', () => {
 		paymentMethods = undefined;
 
@@ -53,6 +65,7 @@ describe('usePaymentMethods', () => {
 			methods: [],
 			byId: new Map(),
 			contract: null,
+			defaultMethodId: null,
 			loaded: false,
 			unsupportedSchema: false,
 		});

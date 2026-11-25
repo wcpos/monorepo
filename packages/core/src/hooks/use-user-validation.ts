@@ -16,6 +16,7 @@ import {
 	getLogger,
 	isErrorReported,
 	markErrorReported,
+	redactSensitiveText,
 } from '@wcpos/utils/logger';
 import { ERROR_CATALOGUE, ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
@@ -29,15 +30,53 @@ import {
 } from '@wcpos/query/user-db';
 
 import { useAppState } from '../contexts/app-state';
+import { extractValidJSON } from '../screens/main/hooks/use-rest-http-client/extract-valid-json';
 import { useReportUpdateRequired } from './use-update-required';
 import { storeRequestFailureCode } from '../utils/store-request-failure-code';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
 
+/** Enough of a text cashier body to tell a PHP notice from an HTML page, never more. */
+const BODY_PREVIEW_CHARS = 120;
+
+function bodyPreview(body: string): string {
+	return redactSensitiveText(body).slice(0, BODY_PREVIEW_CHARS);
+}
+
 /** Mark an error as already logged, so the outer catch does not write a second row. */
 function reported<T>(error: T): T {
 	markErrorReported(error);
 	return error;
+}
+
+/** The cashier profile read for one login, sent with that login's own token. */
+export function cashierRequest(site: ReadonlySiteRecord, userId: number, accessToken: string) {
+	const pathApiUrl = deriveSyntheticPathBase(site.wcpos_api_url!);
+	const config: WcposRequestConfig = {
+		wcposPreamble: {
+			purpose: 'cashier',
+			accessToken,
+			wpJsonRoot: deriveSyntheticPathRoot(site.wp_api_url ?? pathApiUrl),
+			site: toPreambleSite(site),
+		},
+	};
+	// The REST client's v1 migration persists a base with no trailing slash (`…/wcpos/v2`).
+	return { endpoint: `${pathApiUrl.replace(/\/+$/, '')}/cashier/${userId}`, config };
+}
+
+/**
+ * Another plugin's text in front of the JSON leaves axios a string body (POS-2KN). Recover it
+ * the way the REST client does, but only accept the cashier itself: an unrelated object in the
+ * text must not validate.
+ */
+export function recoverCashierBody(raw: unknown, userId: number) {
+	if (typeof raw !== 'string' || !raw.includes('{')) return null;
+	const recovered = extractValidJSON(raw) as { id?: unknown } | null;
+	return recovered && typeof recovered === 'object' && !Array.isArray(recovered)
+		? recovered.id === userId
+			? recovered
+			: null
+		: null;
 }
 
 interface Props {
@@ -182,18 +221,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			 */
 			const fetchUserData = async () => {
 				try {
-					// Build the endpoint URL
-					const pathApiUrl = deriveSyntheticPathBase(apiUrl);
-					const pathRoot = deriveSyntheticPathRoot(wpApiUrl ?? pathApiUrl);
-					const endpoint = `${pathApiUrl}cashier/${userId}`;
-					const requestConfig: WcposRequestConfig = {
-						wcposPreamble: {
-							purpose: 'cashier',
-							accessToken,
-							wpJsonRoot: pathRoot,
-							site: toPreambleSite(site),
-						},
-					};
+					const { endpoint, config: requestConfig } = cashierRequest(site, userId, accessToken);
 
 					appLogger.debug('Validating user credentials', {
 						context: {
@@ -233,17 +261,31 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						throw reported(new Error(errorMsg));
 					}
 
-					const data = get(response, 'data', {});
+					const raw = get(response, 'data', {});
+					let data = raw;
+
+					const recovered = recoverCashierBody(raw, userId);
+					if (recovered) {
+						data = recovered;
+						appLogger.warn('Cashier response was text instead of JSON - recovered', {
+							code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
+							context: { userId, siteUrl, bodyPreview: bodyPreview(raw) },
+						});
+					}
 
 					// Check if data exists and has expected structure
 					if (!data || typeof data !== 'object') {
 						const errorMsg = 'Invalid response data';
+						const contentType = get(response, ['headers', 'content-type']);
 						appLogger.error('User validation response contains no valid data', {
 							code: ERROR_CODES.AUTH_UNEXPECTED,
 							context: {
 								userId,
 								siteUrl,
 								hasData: !!data,
+								dataType: typeof raw,
+								contentType: typeof contentType === 'string' ? contentType : undefined,
+								...(typeof raw === 'string' && { bodyPreview: bodyPreview(raw) }),
 							},
 						});
 						throw reported(new Error(errorMsg));

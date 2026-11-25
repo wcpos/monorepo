@@ -30,12 +30,44 @@ function currencyFormatter(locale: string, options: Intl.NumberFormatOptions) {
 }
 
 /**
+ * A negative amount reads with a true minus (U+2212) in every locale: Intl writes one for
+ * sv/nb/fi but an ASCII hyphen for en/de/fr. A negative that rounds to zero, which Intl signs
+ * ("-£0.00"), reads as zero. Thermal printers fold the minus back to a hyphen.
+ */
+export function formatMoney(
+	value: number,
+	currency: string,
+	locale?: string,
+	decimals?: number,
+	isSymbolEncodable?: (symbol: string) => boolean
+): string {
+	const format = (amount: number) =>
+		formatIntlMoney(amount, currency, locale, decimals, isSymbolEncodable);
+	if (!(value < 0) && !Object.is(value, -0)) return format(value);
+	const zero = format(0);
+	const positive = format(-value);
+	if (positive === zero) return zero;
+	const negative = format(value);
+	// The sign is the hyphen whose removal leaves the positive amount, never one in a currency
+	// label ("CUSTOM-USD -5.00"); where the locale adds marks with it, the first hyphen.
+	const without = (at: number) => negative.slice(0, at) + negative.slice(at + 1);
+	// UTF-16 offsets, as `slice` counts: a label may hold a character outside the BMP ("💰").
+	const hyphens: number[] = [];
+	for (let at = negative.indexOf('-'); at !== -1; at = negative.indexOf('-', at + 1))
+		hyphens.push(at);
+	const sign = hyphens.find((at) => without(at) === positive) ?? hyphens[0];
+	return sign === undefined
+		? negative
+		: `${negative.slice(0, sign)}\u2212${negative.slice(sign + 1)}`;
+}
+
+/**
  * narrowSymbol matches the server's wc_price() output, which always prints
  * the bare currency symbol ("42,84 £"). The default 'symbol' display falls
  * back to ISO codes for foreign currencies in many locales (es + GBP →
  * "42,84 GBP"), making client renders disagree with server-rendered PDFs.
  */
-export function formatMoney(
+function formatIntlMoney(
 	value: number,
 	currency: string,
 	locale?: string,

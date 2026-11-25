@@ -6,6 +6,7 @@ import { normalizeCheckpoint, type StoredOrderDocument, withOrderColumns } from 
 import { orderBrowserQueryKey } from '../../../sync-engine/src/scheduler/order-browser-scheduler-descriptor';
 import {
 	createOrdersSchedulerFetcher,
+	orderDocumentFromWooPayload,
 	type OrdersSchedulerCoverageRepository,
 } from '../../../sync-engine/src/scheduler/rx-scheduler-order-fetcher';
 import { compileQuery } from '../../src/query-state/query-state-translator';
@@ -30,7 +31,7 @@ const A = order(1, FROM - 30 * DAY, FROM + DAY);
 const B = order(2, FROM + 2 * DAY, TO + DAY);
 const C = order(3, FROM + 3 * DAY, FROM + 4 * DAY);
 
-async function downloadSales(orders: ReturnType<typeof order>[]) {
+async function downloadSales(orders: ReturnType<typeof order>[], saleDayCorrection = false) {
 	const state: QueryStateOf<'orders'> = {
 		search: '',
 		filters: {
@@ -40,7 +41,11 @@ async function downloadSales(orders: ReturnType<typeof order>[]) {
 		limit: Number.MAX_SAFE_INTEGER,
 		sort: { field: 'date_created_gmt', direction: 'desc' },
 	};
-	const { demand, read } = compileQuery('orders', state, { id: 'sales', storeScope: 'sales' });
+	const { demand, read } = compileQuery('orders', state, {
+		id: 'sales',
+		storeScope: 'sales',
+		saleDayCorrection,
+	});
 	const item = demand.find((entry) => entry.kind === 'orders-browse');
 	if (!item || item.kind !== 'orders-browse') throw new Error('Missing orders-browse demand');
 	const queryKey = orderBrowserQueryKey(item);
@@ -90,6 +95,8 @@ async function downloadSales(orders: ReturnType<typeof order>[]) {
 			const before = params.get('before');
 			const modifiedAfter = params.get('modified_after');
 			const status = params.get('status');
+			const saleAfter = params.get('pos_sale_day_after');
+			const saleBefore = params.get('pos_sale_day_before');
 			const excluded = new Set(
 				(params.get('exclude') ?? '').split(',').filter(Boolean).map(Number)
 			);
@@ -99,7 +106,13 @@ async function downloadSales(orders: ReturnType<typeof order>[]) {
 				.filter((entry) => {
 					const created = Date.parse(`${entry.date_created_gmt}Z`);
 					const modified = Date.parse(`${entry.date_modified_gmt}Z`);
+					const correction = entry.meta_data.find((meta) => meta.key === '_wcpos_sale_day');
+					const saleSeconds = correction
+						? Date.parse(JSON.parse(correction.value).at_gmt) / 1000
+						: NaN;
 					return (
+						(!saleAfter || saleSeconds >= Number(saleAfter)) &&
+						(!saleBefore || saleSeconds <= Number(saleBefore)) &&
 						(!status || status === 'any' || status.split(',').includes(entry.status)) &&
 						(!after || created > Date.parse(after)) &&
 						(!before || created < Date.parse(before)) &&
@@ -159,4 +172,43 @@ it('stores an order created in the Reports window but excludes it when paid afte
 
 	expect(documents.map((doc) => doc.uuid)).toEqual([uuidFor(B.id)]);
 	expect(counted).toHaveLength(0);
+});
+
+it('reads a resident sale entered on November 24 only on its corrected November 23', () => {
+	const entered = Date.parse('2026-11-24T10:00:00Z') / 1_000;
+	const corrected = order(4, entered, entered);
+	corrected.meta_data.push({
+		key: '_wcpos_sale_day',
+		value: JSON.stringify({ at_gmt: '2026-11-23T09:12:00Z', reason: 'Late entry' }),
+	});
+	const document = withOrderColumns(orderDocumentFromWooPayload(corrected));
+	for (const [day, expected] of [
+		['23', true],
+		['24', false],
+	] as const) {
+		const state: QueryStateOf<'orders'> = {
+			search: '',
+			filters: {
+				status: 'completed',
+				dateRange: { from: `2026-11-${day}T00:00:00`, to: `2026-11-${day}T23:59:59` },
+			},
+			limit: Number.MAX_SAFE_INTEGER,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+		};
+		const { read } = compileQuery('orders', state, { id: 'sales', storeScope: 'sales' });
+		expect(new Query(read.prefilter).test(document) && read.residual(document)).toBe(expected);
+	}
+});
+
+it('downloads a sale created after the range and counts it only through its corrected sale day', async () => {
+	const corrected = order(4, TO + DAY, TO + DAY);
+	corrected.meta_data.push({
+		key: '_wcpos_sale_day',
+		value: JSON.stringify({ at_gmt: `${gmt(FROM + DAY)}Z`, reason: 'Late entry' }),
+	});
+	const old = await downloadSales([corrected]);
+	expect(old.documents).toHaveLength(0);
+	const result = await downloadSales([corrected], true);
+	expect(result.documents.map((doc) => doc.uuid)).toEqual([uuidFor(4)]);
+	expect(result.counted.map((doc) => doc.uuid)).toEqual([uuidFor(4)]);
 });

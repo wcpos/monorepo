@@ -3,11 +3,12 @@ import { View } from 'react-native';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Text } from '@wcpos/components/text';
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { pickUnits } from '../checkout/checkout-mode';
 import { LedgerLegs } from '../checkout/tender/ledger-pane';
+import { storeSettledTender } from '../checkout/tender/store-settled';
 import { type TenderLineId, unitsMinor } from '../checkout/tender/tender-state';
 import { useLedgerView } from '../checkout/tender/use-ledger-view';
 import {
@@ -44,25 +45,30 @@ export function StilledCart({ order }: { order: EngineRecord<'orders'> }) {
 function StilledCartBody({ order }: { order: EngineRecord<'orders'> }) {
 	const t = useT();
 	const view = useLedgerView(order);
+	const payload = useRecordField(order, (record) => record.payload);
+	// No till record, but the store took the money (#3755): the Orders view's one row.
+	const storeTender = storeSettledTender(payload, view.rows.length, view.dp) ?? undefined;
 	const { split } = view;
 	// While Split is on the bill is the picker; the pane (the other column) reads the same picks.
-	const picker = split.splitOn
-		? {
-				picked: split.picked,
-				paid: split.paidUnits,
-				// What `units` more add after the paid ones: the cents ride on the last unit, as in the pane.
-				unitMinor: (key: TenderLineId, units: number) => {
-					const line = split.lines.find(({ id }) => String(id) === String(key));
-					const paid = split.paidUnits[key]?.units ?? 0;
-					return line
-						? unitsMinor(line.totalMinor, line.quantity, paid + units) -
-								unitsMinor(line.totalMinor, line.quantity, paid)
-						: 0;
-				},
-				format: view.format,
-				pick: (key: TenderLineId, units: number) => pickUnits(order.uuid, key, units),
-			}
-		: undefined;
+	// A returned line in the sale leaves the bill as text (`itemsPickable`).
+	const picker =
+		split.splitOn && split.pickable
+			? {
+					picked: split.picked,
+					paid: split.paidUnits,
+					// What `units` more add after the paid ones: the cents ride on the last unit, as in the pane.
+					unitMinor: (key: TenderLineId, units: number) => {
+						const line = split.lines.find(({ id }) => String(id) === String(key));
+						const paid = split.paidUnits[key]?.units ?? 0;
+						return line
+							? unitsMinor(line.totalMinor, line.quantity, paid + units) -
+									unitsMinor(line.totalMinor, line.quantity, paid)
+							: 0;
+					},
+					format: view.format,
+					pick: (key: TenderLineId, units: number) => pickUnits(order.uuid, key, units),
+				}
+			: undefined;
 	return (
 		<View className="flex-1">
 			<ErrorBoundary>
@@ -79,7 +85,7 @@ function StilledCartBody({ order }: { order: EngineRecord<'orders'> }) {
 								<Totals readOnly />
 								<View className="border-border gap-2 border-t p-2">
 									<Text className="font-semibold">{t('pos_checkout.payments_tab')}</Text>
-									<LedgerLegs view={view} format={view.format} closing />
+									<LedgerLegs view={view} format={view.format} closing storeTender={storeTender} />
 								</View>
 							</View>
 						}

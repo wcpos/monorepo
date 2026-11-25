@@ -310,6 +310,21 @@ describe('a checkout condition is unmet (roadmap#62)', () => {
 	});
 });
 
+it.each([
+	['-9.00', true],
+	['0.00', false],
+	['10.00', false],
+])('a sale totalling %s reports disabled: %s (#3652)', (total, disabled) => {
+	const previous = mockOrder.payload.total;
+	mockOrder.payload.total = total;
+	try {
+		render(<PayButton />);
+		expect((screen.getByTestId('checkout-button') as HTMLButtonElement).disabled).toBe(disabled);
+	} finally {
+		mockOrder.payload.total = previous;
+	}
+});
+
 it('registers its pay path as the checkout surface while mounted (roadmap#428)', async () => {
 	const { unmount } = render(<PayButton />);
 	await act(() => invokeSurface('pay'));

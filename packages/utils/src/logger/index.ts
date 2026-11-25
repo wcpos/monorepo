@@ -140,7 +140,7 @@ const REPEAT_IDENTITY_LIMIT = 16;
 const repeatStateByCollection = new WeakMap<object, Map<string, RepeatState>>();
 
 const SEARCH_CONTEXT_KEY =
-	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|movementType|endpoint|status|customerId|errorCode|field|paymentId|registerId|sessionId|movementId|voids|closureId|previousRegisterId|approvedBy|readerId|reason|previousQuantity|quantity|previousPrice|price)$/;
+	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|movementType|endpoint|status|customerId|errorCode|serverCode|field|paymentId|registerId|sessionId|movementId|voids|closureId|previousRegisterId|approvedBy|readerId|reason|previousQuantity|quantity|previousPrice|price)$/;
 
 function searchableContext(context: Record<string, any>): string {
 	return Object.entries(context)
@@ -854,7 +854,7 @@ const mainTransport = (props: any) => {
 		};
 
 		// Add secondary message (description in new format)
-		if (options.toast?.text2) {
+		if (options.toast?.text2 !== undefined) {
 			toastConfig.description = options.toast.text2;
 		}
 

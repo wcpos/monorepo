@@ -1,3 +1,5 @@
+import { tenderFigures } from './tender-figures';
+import { splitWith } from './tender-figures.test-utils';
 import {
 	activePlan,
 	appliedMinor,
@@ -427,4 +429,57 @@ it('loops item groups and keeps the group plan once it is paid', () => {
 	expect(legs.legs.at(-1)).toMatchObject({ minor: 600, state: 'now' });
 	expect(activePlan(plan, 3, 600)).toBe(plan);
 	expect(planLegs(plan, [...rows, ...rows, ...rows], 1300).thisPaymentMinor).toBe(700);
+});
+
+describe('a quick-cash tile (F45)', () => {
+	// The $45.00 watch picked, "+ amount" armed at $0.00, $104.00 to pay; the cashier taps $50.00.
+	const amount: TenderState = {
+		...initialTenderState,
+		view: 'amount',
+		methodId: 'pos_cash',
+		entryMinor: 10400,
+	};
+	const armed = tenderReducer(amount, { type: 'arm-extra' });
+	const figuresOf = (state: TenderState) =>
+		tenderFigures({
+			dp: 2,
+			balanceMinor: 10400,
+			rows: [],
+			method: null,
+			state,
+			split: splitWith({
+				lines: [{ id: 'l1', name: '', quantity: 1, totalMinor: 4500 }],
+				picked: { l1: 1 },
+			}),
+		});
+	it('switches + amount off and takes exactly its figure', () => {
+		expect(tenderReducer(armed, { type: 'quick-tender', minor: 5000 })).toMatchObject({
+			extraMinor: null,
+			entryMinor: 5000,
+			entryDirty: true,
+		});
+	});
+	it("the figures take the tile's figure, not picks plus it", () => {
+		expect(figuresOf(tenderReducer(armed, { type: 'quick-tender', minor: 5000 }))).toMatchObject({
+			entryMinor: 5000,
+			enteredLegMinor: 5000,
+			afterThisPaymentMinor: 5400,
+		});
+		// The old path: `set-entry` while armed writes the extra, so the entry is picks + $50.00.
+		expect(figuresOf(tenderReducer(armed, { type: 'set-entry', minor: 5000 }))).toMatchObject({
+			entryMinor: 9500,
+			enteredLegMinor: 9500,
+			afterThisPaymentMinor: 900,
+		});
+	});
+	it('clamps like set-entry', () => {
+		const over = tenderReducer(armed, { type: 'quick-tender', minor: MAX_TENDER_MINOR + 1 });
+		expect(over.entryMinor).toBe(MAX_TENDER_MINOR);
+		expect(tenderReducer(armed, { type: 'quick-tender', minor: -1 }).entryMinor).toBe(0);
+	});
+	it('with + amount off it is the same as set-entry', () => {
+		expect(tenderReducer(amount, { type: 'quick-tender', minor: 2000 })).toEqual(
+			tenderReducer(amount, { type: 'set-entry', minor: 2000 })
+		);
+	});
 });

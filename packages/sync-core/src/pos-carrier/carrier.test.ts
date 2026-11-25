@@ -33,6 +33,147 @@ const carrierFactories: [string, CarrierFactory][] = [
 ];
 
 describe.each(carrierFactories)('%s PosCarrier contract', (_name, createCarrier) => {
+	describe('sale-day correction', () => {
+		it.each(['2026-11-23T09:12:00', '2026-11-23T09:12:00Z'])(
+			'accepts the server date form and returns it with its Z: %s',
+			(at_gmt) => {
+				expect(
+					createCarrier().readSaleDay([
+						{ key: '_wcpos_sale_day', value: { at_gmt, reason: 'Late entry' } },
+					])?.atGmt
+				).toBe('2026-11-23T09:12:00Z');
+			}
+		);
+		it.each(['2026-11-23T09:12:00+00:00', '2026-11-23', '2026-99-23T09:12:00Z'])(
+			'rejects dates the screens cannot parse: %s',
+			(at_gmt) => {
+				expect(
+					createCarrier().readSaleDay([
+						{ key: '_wcpos_sale_day', value: { at_gmt, reason: 'Late entry' } },
+					])
+				).toBeNull();
+			}
+		);
+		it('reads the correction and protects its key', () => {
+			const value = JSON.stringify({
+				at_gmt: '2026-11-23T09:12:00Z',
+				reason: 'Late entry',
+				by: 12,
+				changed_at_gmt: '2026-11-24T10:20:00Z',
+			});
+			expect(createCarrier().readSaleDay([{ key: '_wcpos_sale_day', value }])).toEqual({
+				atGmt: '2026-11-23T09:12:00Z',
+				reason: 'Late entry',
+				by: 12,
+				changedAtGmt: '2026-11-24T10:20:00Z',
+			});
+			expect(POS_META_KEYS.saleDay).toBe('_wcpos_sale_day');
+			expect(PROTECTED_ORDER_META_KEYS).toContain('_wcpos_sale_day');
+		});
+		it.each(['2026-02-30T09:12:00Z', '2026-02-29T09:12:00Z'])(
+			'rejects a day the calendar does not have: %s',
+			(at_gmt) => {
+				expect(
+					createCarrier().readSaleDay([{ key: '_wcpos_sale_day', value: { at_gmt, reason: 'x' } }])
+				).toBeNull();
+			}
+		);
+		it('accepts 29 February in a leap year', () => {
+			expect(
+				createCarrier().readSaleDay([
+					{ key: '_wcpos_sale_day', value: { at_gmt: '2028-02-29T09:12:00Z', reason: 'x' } },
+				])?.atGmt
+			).toBe('2028-02-29T09:12:00Z');
+		});
+		it('reads the decoded object the server serves on a pull', () => {
+			expect(
+				createCarrier().readSaleDay([
+					{
+						key: '_wcpos_sale_day',
+						value: { at_gmt: '2026-11-23T09:12:00Z', reason: 'Late entry', by: 12 },
+					},
+				])
+			).toEqual({
+				atGmt: '2026-11-23T09:12:00Z',
+				reason: 'Late entry',
+				by: 12,
+				changedAtGmt: null,
+			});
+		});
+		it('defaults optional audit fields to null', () => {
+			expect(
+				createCarrier().readSaleDay([
+					{
+						key: '_wcpos_sale_day',
+						value: JSON.stringify({ at_gmt: '2026-11-23T09:12:00Z', reason: '' }),
+					},
+				])
+			).toEqual({ atGmt: '2026-11-23T09:12:00Z', reason: '', by: null, changedAtGmt: null });
+		});
+		it.each([undefined, [], [{ key: 'other', value: '{}' }]])(
+			'returns null for missing metadata: %j',
+			(meta) => {
+				expect(createCarrier().readSaleDay(meta)).toBeNull();
+			}
+		);
+		it.each([
+			'{',
+			'null',
+			'[]',
+			'42',
+			'"text"',
+			'{"reason":"Late"}',
+			'{"at_gmt":42,"reason":"Late"}',
+			'{"at_gmt":"invalid","reason":"Late"}',
+			'{"at_gmt":"2026-11-23T09:12:00Z"}',
+			'{"at_gmt":"2026-11-23T09:12:00Z","reason":42}',
+		])('ignores malformed corrections: %s', (value) => {
+			expect(createCarrier().readSaleDay([{ key: '_wcpos_sale_day', value }])).toBeNull();
+		});
+	});
+
+	describe('sale-day request', () => {
+		it.each(['', '2026-11-23T09:12:00Z'])(
+			'writes and reads a protected JSON-string request with from=%s',
+			(from) => {
+				const carrier = createCarrier();
+				const value = carrier.saleDayRequestRow('2026-11-22T09:12:00Z', 'Late entry', from);
+				expect(value).toBe(
+					JSON.stringify({ at_gmt: '2026-11-22T09:12:00Z', reason: 'Late entry', from })
+				);
+				expect(carrier.readSaleDayRequest([{ key: '_wcpos_sale_day_request', value }])).toEqual({
+					atGmt: '2026-11-22T09:12:00Z',
+					reason: 'Late entry',
+					from,
+				});
+				expect(POS_META_KEYS.saleDayRequest).toBe('_wcpos_sale_day_request');
+				expect(PROTECTED_ORDER_META_KEYS).toContain('_wcpos_sale_day_request');
+			}
+		);
+		it.each([undefined, [], [{ key: 'other', value: '{}' }]])(
+			'ignores absent requests %j',
+			(meta) => {
+				expect(createCarrier().readSaleDayRequest(meta)).toBeNull();
+			}
+		);
+		it.each([
+			{ at_gmt: '2026-11-22T09:12:00Z', reason: 'x', from: '' },
+			'{',
+			'null',
+			'[]',
+			'{"at_gmt":"2026-02-30T09:12:00Z","reason":"x","from":""}',
+			'{"at_gmt":"2026-11-22","reason":"x","from":""}',
+			'{"at_gmt":"2026-11-22T09:12:00+00:00","reason":"x","from":""}',
+			'{"at_gmt":"2026-11-22T09:12:00Z","reason":3,"from":""}',
+			'{"at_gmt":"2026-11-22T09:12:00Z","reason":"x"}',
+			'{"at_gmt":"2026-11-22T09:12:00Z","reason":"x","from":3}',
+		])('rejects malformed or non-string requests %j', (value) => {
+			expect(
+				createCarrier().readSaleDayRequest([{ key: '_wcpos_sale_day_request', value }])
+			).toBeNull();
+		});
+	});
+
 	describe('VAT exemption metadata', () => {
 		it.each([
 			['yes', true],

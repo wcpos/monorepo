@@ -649,3 +649,24 @@ it.each([false, true])(
 		);
 	}
 );
+
+// #3755. Revert: drop the storeSettledTender fallback in receipt-stage.tsx.
+it('a paid order the store took with no till record shows the total and the gateway title', () => {
+	const original = mockOrder.payload;
+	mockOrder.payload = {
+		total: '45.00',
+		currency_symbol: '$',
+		status: 'processing',
+		date_paid_gmt: '2026-11-23T03:30:00',
+		payment_method: 'cod',
+		payment_method_title: 'Cash on delivery',
+		meta_data: [],
+	} as never;
+	try {
+		render(<ReceiptStage orderUuid="paid" compact={false} />);
+		expect(screen.getByTestId('checkout-paid-headline').textContent).toBe('Paid $45.00');
+		expect(screen.getByTestId('receipt-paid-with').textContent).toBe('Cash on delivery');
+	} finally {
+		mockOrder.payload = original;
+	}
+});

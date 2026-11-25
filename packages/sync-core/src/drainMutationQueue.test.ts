@@ -10,8 +10,10 @@ import {
 } from './recordPushAdapter';
 import { drainMutationQueue } from './drainMutationQueue';
 import { createFakeWriteServer } from './fakeWriteServer';
+import { POS_META_KEYS } from './pos-carrier/carrier';
 
 import type { RecordMutation } from './recordMutation';
+import type { QueuedMutation } from './recordMutationQueue';
 
 const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 	mutationId: 'm1',
@@ -1362,6 +1364,34 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		expect(events.filter((e) => e.type === 'queue.write.conflict-transition')).toHaveLength(1); // ONE event, at transition
 	});
 
+	it('the conflict-transition event names the paths the server says moved, and omits the field when it sent none', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'm-named' }),
+			mut({ mutationId: 'm-bare', recordId: 'other' })
+		);
+		const events: SyncEvent[] = [];
+		await drainMutationQueue({
+			queue: q,
+			push: async (m) =>
+				m.mutationId === 'm-named'
+					? {
+							...conflict(m),
+							conflict: {
+								current: { id: 1 },
+								currentRevision: 'r1',
+								differs: ['customer_note', 'meta_data.x'],
+							},
+						}
+					: conflict(m),
+			observe: (e) => events.push(e),
+		});
+		const transitions = events.filter((e) => e.type === 'queue.write.conflict-transition');
+		expect(transitions.map((e) => e.fields)).toEqual([
+			{ recordId: expect.any(String), mutationId: 'm-named', differs: 'customer_note,meta_data.x' },
+			{ recordId: 'other', mutationId: 'm-bare' },
+		]);
+	});
+
 	it('holds later pending mutations for a record while one of its mutations is conflicted', async () => {
 		const q = await queueWith(mut({ mutationId: 'm-first', queuedAt: '..1' }));
 		const push = vi.fn(async (m: RecordMutation) =>
@@ -1587,6 +1617,83 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 				data,
 			}),
 		]);
+	});
+
+	describe('a closed order’s reopen_required refusal (Sentry POS-338)', () => {
+		const roundingFee = {
+			name: 'Cash rounding',
+			total: '0.02',
+			meta_data: [{ key: POS_META_KEYS.posData, value: JSON.stringify({ rounding: true }) }],
+		};
+		const refuseReopen = (orderStatus: string) => (mutation: RecordMutation) =>
+			pushRecordMutation({
+				mutation,
+				resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+				fetcher: async () =>
+					jsonResponse(422, {
+						code: 'reopen_required',
+						message: 'Reopen the order before changing its lines.',
+						data: { status: 422, order_status: orderStatus },
+					}),
+			});
+		const storedKeys = [
+			'baseRevision',
+			'collectionName',
+			'mutationId',
+			'operation',
+			'origin',
+			'payload',
+			'queuedAt',
+			'recordId',
+			'rejectedAt',
+			'rejectedMessage',
+			'rejectedReason',
+			'rejectedStatus',
+			'seq',
+			'status',
+		];
+
+		it('flags the push.rejected emit as closed with the rounding fee amount; the stored row is unchanged', async () => {
+			const q = await queueWith(
+				mut({
+					mutationId: 'm-closed',
+					collectionName: 'orders',
+					payload: { id: 'rec-A', fee_lines: [roundingFee] },
+				})
+			);
+			const events: SyncEvent[] = [];
+			await drainMutationQueue({
+				queue: q,
+				push: refuseReopen('completed'),
+				observe: (e) => events.push(e),
+			});
+			expect(events.find((e) => e.type === 'push.rejected')?.fields).toMatchObject({
+				status: 422,
+				reason: 'reopen_required',
+				orderClosed: true,
+				roundingFeeAmount: '0.02',
+			});
+			const [row] = await q.all();
+			expect(row).toMatchObject({ status: 'rejected', rejectedReason: 'reopen_required' });
+			expect(Object.keys(row).sort()).toEqual(storedKeys);
+		});
+
+		it('leaves an open order’s refusal unflagged, with no rounding fee amount', async () => {
+			const q = await queueWith(mut({ mutationId: 'm-open', collectionName: 'orders' }));
+			const events: SyncEvent[] = [];
+			await drainMutationQueue({
+				queue: q,
+				push: refuseReopen('pending'),
+				observe: (e) => events.push(e),
+			});
+			const fields = events.find((e) => e.type === 'push.rejected')?.fields;
+			expect(fields).toMatchObject({ status: 422, reason: 'reopen_required' });
+			expect(fields).not.toHaveProperty('orderClosed');
+			expect(fields).not.toHaveProperty('roundingFeeAmount');
+			const [row] = await q.all();
+			expect(row).toMatchObject({ status: 'rejected' });
+			expect(Object.keys(row).sort()).toEqual(storedKeys);
+		});
 	});
 
 	it('writes the server verdict ONTO the dead-lettered row so the recovery surface can say why (#832)', async () => {
@@ -1851,6 +1958,300 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 			const survivor = (await a.all()).find((m) => m.mutationId === 'm-slow');
 			expect(survivor?.claimedBy).toBe('window-B');
 		});
+	});
+});
+
+describe('POS-2PN: a pushed-before row is re-sent byte-identical', () => {
+	it('U1: a lost-ack retry is neither re-stamped nor re-prepared', async () => {
+		const q = await queueWith(mut({ baseRevision: 'r0', payload: { id: 'rec-A', note: 'a' } }));
+		let clock = 100_000;
+		let revision = 'r1';
+		let marker = 0;
+		const sent: RecordMutation[] = [];
+		const prepareOutbound = vi.fn(async (m: QueuedMutation) => ({
+			...m,
+			payload: { ...m.payload, marker: (marker += 1) },
+		}));
+		const input = {
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			currentRevision: async () => revision,
+			prepareOutbound,
+			push: async (m: RecordMutation) => {
+				sent.push(m);
+				if (sent.length === 1) throw new TypeError('network dropped after server applied');
+				return ok(m);
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ failed: 1 });
+		revision = 'r2';
+		clock += 120_000;
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1 });
+		expect(sent).toHaveLength(2);
+		expect(sent[0].baseRevision).toBe('r1');
+		expect(sent[1].baseRevision).toEqual(sent[0].baseRevision);
+		expect(sent[1].payload).toEqual(sent[0].payload);
+		expect(prepareOutbound).toHaveBeenCalledTimes(1);
+	});
+
+	it('U2: a failed ack after a 409 auto-recover backs off the re-push it acknowledged', async () => {
+		const q = await queueWith(mut({ baseRevision: 'r1' }));
+		let clock = 100_000;
+		let ackFailures = 1;
+		const sent: RecordMutation[] = [];
+		const input = {
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			currentRevision: async () => 'r1',
+			autoRecoverConflict: () => true,
+			push: async (m: RecordMutation): Promise<PushResult> => {
+				sent.push(m);
+				if (sent.length > 1) return ok(m);
+				return {
+					...conflict(m),
+					currentRevision: 'r2',
+					conflict: { current: { id: 1 }, currentRevision: 'r2' },
+				};
+			},
+			applyAck: async () => {
+				if (ackFailures > 0) {
+					ackFailures -= 1;
+					throw new Error('ack write failed');
+				}
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 0, failed: 1 });
+		clock += 120_000;
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, failed: 0 });
+		expect(sent).toHaveLength(3);
+		expect(sent[2].baseRevision).toBe('r2');
+		expect({ base: sent[2].baseRevision, payload: sent[2].payload }).toEqual({
+			base: sent[1].baseRevision,
+			payload: sent[1].payload,
+		});
+		expect(await q.all()).toEqual([]);
+	});
+
+	it('U4: a failed graft skips its record this drain, leaves it never-pushed, and other records drain', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'mA', recordId: 'rec-A', payload: { id: 'rec-A' } }),
+			mut({ mutationId: 'mB', recordId: 'rec-B', payload: { id: 'rec-B' } })
+		);
+		let calls = 0;
+		const sent: RecordMutation[] = [];
+		const input = {
+			queue: q,
+			now: () => 100_000,
+			prepareOutbound: async (m: QueuedMutation) => {
+				calls += 1;
+				if (calls === 1) throw new Error('resident read failed');
+				return { ...m, payload: { ...m.payload, grafted: true } };
+			},
+			push: async (m: RecordMutation) => {
+				sent.push(m);
+				return ok(m);
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, failed: 1 });
+		expect(sent.map((m) => m.mutationId)).toEqual(['mB']);
+		const [rowA] = await q.all();
+		expect(rowA).toMatchObject({ mutationId: 'mA', status: 'pending' });
+		expect(rowA.attempts ?? 0).toBe(0);
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, failed: 0 });
+		expect(sent.map((m) => m.mutationId)).toEqual(['mB', 'mA']);
+		expect(sent[1].payload).toEqual({ id: 'rec-A', grafted: true });
+	});
+
+	const lostAnswerDrains = async (firstPush: (m: RecordMutation) => PushResult) => {
+		const q = await queueWith(mut({ baseRevision: 'r1' }));
+		let clock = 100_000;
+		let controller = new AbortController();
+		const sent: RecordMutation[] = [];
+		const input = () => ({
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			signal: controller.signal,
+			currentRevision: async () => 'r1',
+			refreshRevision: async () => 'r2',
+			autoRecoverConflict: () => true,
+			push: async (m: RecordMutation): Promise<PushResult> => {
+				sent.push(m);
+				if (sent.length === 1) return firstPush(m);
+				if (sent.length === 2) {
+					controller.abort();
+					throw new TypeError('applied, answer lost');
+				}
+				return ok(m);
+			},
+		});
+		await drainMutationQueue(input());
+		controller = new AbortController();
+		clock += 600_000;
+		expect(await drainMutationQueue(input())).toMatchObject({ pushed: 1 });
+		expect(sent.map((m) => m.baseRevision)).toEqual(['r1', 'r2', 'r2']);
+		expect({ base: sent[2].baseRevision, payload: sent[2].payload }).toEqual({
+			base: sent[1].baseRevision,
+			payload: sent[1].payload,
+		});
+		expect(await q.all()).toEqual([]);
+	};
+
+	it('U5: a 428 re-push is persisted before it is sent', async () => {
+		await lostAnswerDrains(() => {
+			throw Object.assign(new Error('precondition required'), { status: 428 });
+		});
+	});
+
+	it('U6: a 409 auto-recover re-push is persisted before it is sent', async () => {
+		await lostAnswerDrains((m) => ({
+			...conflict(m),
+			currentRevision: 'r2',
+			conflict: { current: { id: 1 }, currentRevision: 'r2' },
+		}));
+	});
+
+	// A product (no auto-recover) whose first push failed retryably, then the record moved.
+	const frozenProductDrains = async (opts: {
+		residentAfter: string;
+		serverAfter: string;
+		serverAfterRestamp?: string;
+		reported409Revision?: string;
+	}) => {
+		const q = await queueWith(mut({ baseRevision: 'r1' }));
+		let clock = 100_000;
+		let serverRevision = 'r1';
+		let residentRevision = 'r1';
+		const sent: RecordMutation[] = [];
+		const storedAtPush: (string | null | undefined)[] = [];
+		const input = {
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			currentRevision: async () => residentRevision,
+			push: async (m: RecordMutation): Promise<PushResult> => {
+				sent.push(m);
+				storedAtPush.push((await q.all())[0]?.baseRevision);
+				if (sent.length === 1) throw Object.assign(new Error('bad gateway'), { status: 503 });
+				const reported = sent.length === 2 ? opts.reported409Revision : undefined;
+				if (m.baseRevision !== serverRevision || reported) {
+					const current = reported ?? serverRevision;
+					if (opts.serverAfterRestamp) serverRevision = opts.serverAfterRestamp;
+					return {
+						...conflict(m),
+						currentRevision: current,
+						conflict: { current: { id: 1 }, currentRevision: current },
+					};
+				}
+				return ok(m);
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ failed: 1 });
+		serverRevision = opts.serverAfter;
+		residentRevision = opts.residentAfter;
+		clock += 120_000;
+		const second = await drainMutationQueue(input);
+		return { q, sent, storedAtPush, second };
+	};
+
+	it('F1a: a frozen product row whose record moved re-stamps once from the resident on 409 and acks', async () => {
+		const { q, sent, storedAtPush, second } = await frozenProductDrains({
+			residentAfter: 'r2',
+			serverAfter: 'r2',
+		});
+		expect(second).toMatchObject({ pushed: 1, conflicts: [] });
+		expect(sent.map((m) => m.baseRevision)).toEqual(['r1', 'r1', 'r2']);
+		expect(storedAtPush[2]).toBe('r2'); // saved before it was sent
+		expect(await q.all()).toEqual([]);
+	});
+
+	it('F1b: a second 409 on the re-stamped push parks conflicted, no further re-stamp', async () => {
+		const { q, sent, second } = await frozenProductDrains({
+			residentAfter: 'r2',
+			serverAfter: 'r2',
+			serverAfterRestamp: 'r3',
+		});
+		expect(second.conflicts).toHaveLength(1);
+		expect(second.pushed).toBe(0);
+		expect(sent.map((m) => m.baseRevision)).toEqual(['r1', 'r1', 'r2']);
+		expect((await q.all())[0]).toMatchObject({ status: 'conflicted', conflictRevision: 'r3' });
+	});
+
+	it('F1c: a 409 whose currentRevision equals the base sent parks as today', async () => {
+		const { q, sent, second } = await frozenProductDrains({
+			residentAfter: 'r2',
+			serverAfter: 'r2',
+			reported409Revision: 'r1',
+		});
+		expect(second.conflicts).toHaveLength(1);
+		expect(sent).toHaveLength(2);
+		expect((await q.all())[0]).toMatchObject({ status: 'conflicted' });
+	});
+
+	it('F1d: a 409 before the pull landed (resident unmoved) parks as today, no overwrite', async () => {
+		const { q, sent, second } = await frozenProductDrains({
+			residentAfter: 'r1',
+			serverAfter: 'r2',
+		});
+		expect(second.conflicts).toHaveLength(1);
+		expect(sent).toHaveLength(2);
+		expect((await q.all())[0]).toMatchObject({ status: 'conflicted', conflictRevision: 'r2' });
+	});
+
+	it('F2: a throw re-preparing the 409 re-push keeps the stored envelope; the next drain recovers', async () => {
+		const q = await queueWith(
+			mut({ collectionName: 'orders', baseRevision: 'r1', payload: { id: 'rec-A', lines: 'v0' } })
+		);
+		let clock = 100_000;
+		let residentLines = 'graft-1';
+		let prepareCalls = 0;
+		const reconcile = vi.fn(async () => {
+			residentLines = 'graft-2'; // the resident learned the server's line identity
+		});
+		const sent: RecordMutation[] = [];
+		const input = {
+			queue: q,
+			now: () => clock,
+			backoff: NO_JITTER_BACKOFF,
+			currentRevision: async () => 'r1',
+			autoRecoverConflict: () => true,
+			reconcileConflict: reconcile,
+			prepareOutbound: async (m: QueuedMutation) => {
+				prepareCalls += 1;
+				if (prepareCalls === 2) throw new Error('resident read failed');
+				return { ...m, payload: { ...m.payload, lines: residentLines } };
+			},
+			push: async (m: RecordMutation): Promise<PushResult> => {
+				sent.push(m);
+				if (m.baseRevision !== 'r2') {
+					return {
+						...conflict(m),
+						currentRevision: 'r2',
+						conflict: { current: { id: 1 }, currentRevision: 'r2' },
+					};
+				}
+				return ok(m);
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 0, failed: 1 });
+		const [stored] = await q.all();
+		expect(stored).toMatchObject({
+			status: 'pending',
+			attempts: 1,
+			baseRevision: 'r1',
+			payload: { id: 'rec-A', lines: 'graft-1' },
+		});
+		clock += 120_000;
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, conflicts: [] });
+		expect(sent.map((m) => [m.baseRevision, m.payload.lines])).toEqual([
+			['r1', 'graft-1'],
+			['r1', 'graft-1'],
+			['r2', 'graft-2'],
+		]);
+		expect(reconcile).toHaveBeenCalledTimes(2);
+		expect(await q.all()).toEqual([]);
 	});
 });
 

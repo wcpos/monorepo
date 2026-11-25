@@ -167,6 +167,26 @@ it('refused credentials/capability show an error without closing', async () => {
 	expect(patch).not.toHaveBeenCalled();
 	expect(closeSession).not.toHaveBeenCalled();
 });
+it.each([
+	{ status: 429, data: { code: 'wcpos_approval_locked' } },
+	{ status: 429, data: {} },
+])('says the approving account is locked on %j', async (response) => {
+	post.mockRejectedValue({ response });
+	render(<ApproveSheet {...props} />);
+	fill();
+	const locked = 'Too many wrong passwords. This account is locked for 15 minutes.';
+	await waitFor(() => expect(screen.getByTestId('approve-error').textContent).toBe(locked));
+	expect(Toast.show).toHaveBeenCalledWith({ type: 'error', title: locked });
+	expect(closeSession).not.toHaveBeenCalled();
+});
+it('keeps the generic line for any other failure', async () => {
+	post.mockRejectedValue({ response: { status: 500, data: { code: 'internal_server_error' } } });
+	render(<ApproveSheet {...props} />);
+	fill();
+	await waitFor(() =>
+		expect(screen.getByTestId('approve-error').textContent).toBe('Approval failed — try again')
+	);
+});
 it('approves on the server, persists the approved count, then closes without a token', async () => {
 	post.mockResolvedValue({ data: { approved_by: 42, approved_counted: props.counted } });
 	render(<ApproveSheet {...props} />);

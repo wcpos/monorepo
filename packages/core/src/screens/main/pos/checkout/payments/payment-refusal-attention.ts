@@ -2,14 +2,14 @@ import { recordPaymentAttention, type StoreLocalDatabase } from '@wcpos/query/st
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
-import type { PaymentRowRefusal } from '@wcpos/sync-core';
+import type { OrderClosedRefusal, PaymentRowRefusal } from '@wcpos/sync-core';
 
 import type { useT } from '../../../../../contexts/translations';
 
 type RefusalFacts = {
 	row: PaymentRow;
 	order: OrderPaymentSummary | null;
-	reason: PaymentRowRefusal;
+	reason: PaymentRowRefusal | OrderClosedRefusal;
 	methodTitle: string;
 	orderUuid: string;
 	orderId: number | null;
@@ -27,14 +27,16 @@ function paymentRefusalAttention(t: ReturnType<typeof useT>, facts: RefusalFacts
 	const number = facts.orderNumber || facts.orderUuid.slice(0, 8);
 	const values = { number, amount: row.amount, method: facts.methodTitle };
 	const message =
-		reason === 'order_already_paid'
-			? t('payments.refusal.already_paid', values)
-			: summary?.balance
-				? t('payments.refusal.exceeds_balance_with_balance', {
-						...values,
-						balance: summary.balance,
-					})
-				: t('payments.refusal.exceeds_balance', values);
+		reason === 'order_closed'
+			? t('payments.refusal.order_closed', values)
+			: reason === 'order_already_paid'
+				? t('payments.refusal.already_paid', values)
+				: summary?.balance
+					? t('payments.refusal.exceeds_balance_with_balance', {
+							...values,
+							balance: summary.balance,
+						})
+					: t('payments.refusal.exceeds_balance', values);
 	return [
 		message,
 		{
@@ -42,9 +44,11 @@ function paymentRefusalAttention(t: ReturnType<typeof useT>, facts: RefusalFacts
 			// online needs a refund, an over-payment needs the store's balance taken
 			// instead. Neither is "payment handling hit an unexpected problem".
 			code:
-				reason === 'order_already_paid'
-					? ERROR_CODES.PAYMENT_ALREADY_PAID_ONLINE
-					: ERROR_CODES.PAYMENT_EXCEEDS_BALANCE,
+				reason === 'order_closed'
+					? ERROR_CODES.PAYMENT_ORDER_CLOSED
+					: reason === 'order_already_paid'
+						? ERROR_CODES.PAYMENT_ALREADY_PAID_ONLINE
+						: ERROR_CODES.PAYMENT_EXCEEDS_BALANCE,
 			showToast: true,
 			terminal: { operationType: 'sync.record', outcome: 'failed', operationId: row.id },
 			context: {

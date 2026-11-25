@@ -19,6 +19,10 @@ jest.mock('react-native-reanimated', () => {
 		__esModule: true,
 		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: jest.fn() },
+		ReduceMotion: { System: 'system' },
+		useSharedValue: (value: unknown) => jest.requireActual('react').useRef({ value }).current,
+		useAnimatedStyle: () => ({}),
+		withTiming: (value: unknown) => value,
 	};
 	return new Proxy(mod, { get: (target, key) => target[key] ?? animation });
 });
@@ -108,6 +112,9 @@ it('rests as the formatted price and opens on a press, with every key named', as
 it('seven rows: display, quick keys, three of digits, separator 0 ⌫, ✓; no quick row without discounts', async () => {
 	await open();
 	expect(panelNode()!.children).toHaveLength(7);
+	// Unsigned, as every keypad but the cart line's: no Return key, ✓ across the panel.
+	expect(screen.queryByTestId('keypad-key-sign')).toBeNull();
+	expect(screen.getByTestId('keypad-key-done')).toHaveStyle({ width: '192px' });
 	await press('keypad-key-done');
 	document.body.innerHTML = '';
 	await open({ discounts: [] });

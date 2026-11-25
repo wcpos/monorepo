@@ -41,6 +41,9 @@ jest.mock('react-native-reanimated', () => {
 		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: () => 'ease' },
 		ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
+		useSharedValue: (value: unknown) => jest.requireActual('react').useRef({ value }).current,
+		useAnimatedStyle: () => ({}),
+		withTiming: (value: unknown) => value,
 		...Object.fromEntries(
 			[
 				'FadeIn',

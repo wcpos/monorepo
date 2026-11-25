@@ -79,6 +79,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ debug: jest.fn(), info: jest.fn(), error: jest.fn(), warn: jest.fn() }),
 	getDatabaseEpoch: () => 0,
+	redactSensitiveText: jest.requireActual('@wcpos/utils/logger').redactSensitiveText,
 }));
 jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
@@ -139,7 +140,9 @@ describe('useRestHttpClient methods', () => {
 	it('keeps the host identity on mini-app proxy calls', async () => {
 		mockSite.use_instance_header = true;
 		jest.requireMock('@wcpos/utils/get-instance-id').getInstanceId.mockResolvedValue('host');
-		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+		const { result } = renderHook(() =>
+			useHostCapabilities(jest.fn(), { methods: ['GET'], paths: ['/wcpos/v1/'], queryKeys: [] })
+		);
 		await result.current['http.proxy']({
 			path: '/wcpos/v1/orders',
 			headers: { 'x-Wcpos-Instance': 'forged' },

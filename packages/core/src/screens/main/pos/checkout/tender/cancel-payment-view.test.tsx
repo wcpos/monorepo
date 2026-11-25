@@ -22,19 +22,31 @@ jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string, vars?: Record<string, unknown>) =>
 		vars ? `${key} ${JSON.stringify(vars)}` : key,
 }));
+let mockPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({
+	...jest.requireActual('@wcpos/components/lib/device'),
+	useIsPhone: () => mockPhone,
+}));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
 		testID,
 		disabled,
 		loading,
+		className,
 	}: {
 		children?: React.ReactNode;
 		testID?: string;
 		disabled?: boolean;
 		loading?: boolean;
+		className?: string;
 	}) => (
-		<button data-testid={testID} data-loading={loading ? 'true' : undefined} disabled={!!disabled}>
+		<button
+			data-testid={testID}
+			data-classes={className}
+			data-loading={loading ? 'true' : undefined}
+			disabled={!!disabled}
+		>
 			{children}
 		</button>
 	),
@@ -46,7 +58,9 @@ jest.mock('@wcpos/components/text', () => ({
 	),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	HStack: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+		<div data-classes={className}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -148,4 +162,17 @@ it('lists only R+ on a corrected ledger, as a refund', () => {
 	expect(screen.getByTestId('checkout-cancel-leg-rplus').textContent).toContain('refund_on_method');
 	expect(screen.queryByTestId('checkout-cancel-leg-rminus')).toBeNull();
 	expect(screen.queryByTestId('checkout-cancel-leg-o')).toBeNull();
+});
+
+// #3654: on a phone the buttons stack full width, Keep taking payment first; elsewhere they sit side by side.
+it.each([true, false])('on a phone (%s) the buttons stack full width', (phone) => {
+	mockPhone = phone;
+	render(<CancelPaymentView flow={flow([], [])} format={format} />);
+	const keep = screen.getByTestId('checkout-cancel-keep-going');
+	const confirm = screen.getByTestId('checkout-cancel-confirm');
+	const classes = (el: Element | null) => el?.getAttribute('data-classes')?.split(' ') ?? [];
+	expect(classes(keep.parentElement).includes('flex-col')).toBe(phone);
+	expect(classes(keep).includes('w-full') && classes(confirm).includes('w-full')).toBe(phone);
+	expect(keep.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	mockPhone = false;
 });

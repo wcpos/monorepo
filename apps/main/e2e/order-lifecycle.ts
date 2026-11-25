@@ -37,6 +37,7 @@ import {
 	storeRequestOptions,
 } from './fixtures';
 import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './probe-credential';
+import { trashOrdersAsWriter } from './search-probe';
 
 /** POST target the app uses to persist an order. */
 export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
@@ -796,6 +797,12 @@ export function expectOrderPaid(order: ServerOrder): void {
 /** Statuses that count as "this order is cleaned up". */
 const CLEANED_UP = new Set(['trash', 'cancelled', 'wc-cancelled']);
 
+/** True for the push surface's 409 refusing an update whose `baseRevision` is outdated. */
+export function isStaleRevisionConflict(status: number, body: string): boolean {
+	if (status !== 409) return false;
+	return /woo_rxdb_sync_conflict|baseRevision is stale/.test(body);
+}
+
 /**
  * Best-effort teardown for an order this spec created.
  *
@@ -815,7 +822,8 @@ export async function trashOrder(
 	request: APIRequestContext,
 	testInfo: TestInfo,
 	authorization: StoreAuthorization | null,
-	order: TrackedOrder
+	order: TrackedOrder,
+	trashAsWriter: typeof trashOrdersAsWriter = trashOrdersAsWriter
 ): Promise<boolean> {
 	console.log(`[e2e-cleanup] created order ${order.id} (${order.label ?? 'unlabelled'})`);
 	await testInfo
@@ -838,7 +846,8 @@ export async function trashOrder(
 	// after its retries, we do not know whose order this is, and on a shared live
 	// store the worse outcome is modifying someone else's record — a leak is
 	// recoverable from the id printed above, a wrong write is not.
-	if (order.label && current?.customer_note !== order.label) {
+	const ownershipProven = (current: ServerOrder | null): boolean => {
+		if (!order.label || current?.customer_note === order.label) return true;
 		console.warn(
 			`[e2e-cleanup] SKIPPING order ${order.id}: ownership not verified ` +
 				`(${current ? "note does not match this run's label" : 'readback failed'}). ` +
@@ -846,14 +855,15 @@ export async function trashOrder(
 				`Prune by hand using the id above.`
 		);
 		return false;
-	}
+	};
+	if (!ownershipProven(current)) return false;
 
 	const attempts: string[] = [];
-	for (const status of ['trash', 'cancelled']) {
+	const postStatus = (status: string, current: ServerOrder | null): Promise<boolean | 'stale'> => {
 		// The write surface validates this strictly: a bare uuid in the body, and the
 		// Idempotency-Key header must mirror it exactly (ADR 0011) or it answers 422.
 		const mutationId = randomUUID();
-		const applied = await request
+		return request
 			.post(`${storeUrl}/wp-json/wcpos/v2/push/orders`, {
 				headers: { ...headers, 'Idempotency-Key': mutationId },
 				params,
@@ -867,11 +877,11 @@ export async function trashOrder(
 				},
 				failOnStatusCode: false,
 			})
-			.then(async (response) => {
+			.then(async (response): Promise<boolean | 'stale'> => {
 				const body = await response.text().catch(() => '');
 				if (!response.ok()) {
 					attempts.push(`${status}: HTTP ${response.status()} ${body.slice(0, 200)}`);
-					return false;
+					return isStaleRevisionConflict(response.status(), body) ? 'stale' : false;
 				}
 				// A 2xx is not proof, and neither is silence. Only a status the SERVER
 				// reported counts — defaulting to the status we asked for would report
@@ -901,9 +911,19 @@ export async function trashOrder(
 				attempts.push(`${status}: ${error instanceof Error ? error.message : String(error)}`);
 				return false;
 			});
+	};
 
-		if (applied) {
+	for (const status of ['trash', 'cancelled']) {
+		let applied = await postStatus(status, current);
+		if (applied === 'stale') {
+			// The revision read above went stale (#3657): re-read, re-prove ownership, retry once.
+			const fresh = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
+			if (!ownershipProven(fresh)) return false;
+			applied = await postStatus(status, fresh);
+		}
+		if (applied === true) {
 			console.log(`[e2e-cleanup] order ${order.id} -> ${status}`);
+			if (status === 'cancelled') await trashAsWriter(request, storeUrl, [order.id]);
 			return true;
 		}
 	}
