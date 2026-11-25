@@ -261,9 +261,10 @@ function LedgerLeg({
 	const title = titleOf(row.method_id);
 	// The original of a tender correction keeps its leg under a Corrected badge; its R+ names it.
 	const corrected = correctionOf(row, view.rows) !== null;
-	const original = row.corrects
-		? view.rows.find(({ id }) => samePaymentId(id, row.corrects ?? ''))
-		: undefined;
+	const original =
+		typeof row.corrects === 'string' && row.corrects
+			? view.rows.find(({ id }) => samePaymentId(id, row.corrects ?? ''))
+			: undefined;
 	// Only cash carries a tendered figure, and only then is change worth a line.
 	const tendered =
 		row.kind === 'cash' && row.tendered

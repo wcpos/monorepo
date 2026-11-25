@@ -328,6 +328,12 @@ describe('countedLegs (#3651): a correction stands in its original’s ledger pl
 		expect(ids(countedLegs([a, leg, orphan], 2))).toEqual(['orphan']);
 	});
 
+	it('keeps its own place for a `corrects` that is not a string, and does not throw', () => {
+		const odd = row({ id: 'odd', corrects: 5 as unknown as string });
+		expect(ids(countedLegs([a, leg, odd], 2))).toEqual(['odd']);
+		expect(ids(countedLegs([a, leg, odd], 0, 2))).toEqual(['a', 'leg']);
+	});
+
 	it('returns for two rows that correct each other', () => {
 		const x = row({ id: 'x', corrects: 'y' });
 		const y = row({ id: 'y', corrects: 'x' });

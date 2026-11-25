@@ -39,7 +39,10 @@ export function countedLegs<T extends PaymentRow>(
 ): T[] {
 	const place = (index: number): number => {
 		const target = rows[index].corrects;
-		const earlier = target ? rows.findIndex((row) => samePaymentId(row.id, target)) : -1;
+		const earlier =
+			typeof target === 'string' && target
+				? rows.findIndex((row) => samePaymentId(row.id, target))
+				: -1;
 		return earlier >= 0 && earlier < index ? place(earlier) : index;
 	};
 	const counted = new Set(effectiveRows(rows).filter(countsTowardPaid));

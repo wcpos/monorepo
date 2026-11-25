@@ -228,7 +228,7 @@ it.each([tenders, Object.values(tenders)])(
 		const label = createTestT()('register.expected_in_drawer');
 		const at = lines.findIndex((line) => line.startsWith(label));
 		const signed = (line: string) =>
-			Number(/−?\$[\d.]+$/.exec(line)?.[0].replace('−', '-').replace('$', '') ?? 0);
+			Number(/−?\$[\d.]+$/.exec(line)?.[0].replace('−', '-').replaceAll('$', '') ?? 0);
 		expect(lines.slice(0, at).reduce((sum, line) => sum + signed(line), 0)).toBe(90);
 		expect(signed(lines[at])).toBe(90);
 	}

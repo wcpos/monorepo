@@ -332,3 +332,12 @@ it('#3651: a leg is titled by the held method when no tile has it', () => {
 	expect(document.body.textContent).not.toContain('example_terminal');
 	expect(document.body.textContent).not.toContain('pos_cash');
 });
+// #3651: a malformed ledger row whose `corrects` is not a string renders as a plain leg.
+it('#3651: renders a leg whose `corrects` is a number instead of crashing the pane', () => {
+	const odd = { ...row, id: 'r-odd', method_id: 'cheque', corrects: 5 as unknown as string };
+	render(<LedgerLegs view={{ ...view, rows: [row, odd] as PaymentRow[] }} format={format} />);
+	const leg = within(screen.getByTestId('checkout-leg-r-odd'));
+	expect(leg.getByText('cheque')).toBeTruthy();
+	expect(leg.getByText('£10')).toBeTruthy();
+	expect(screen.queryByTestId('checkout-leg-corrected-from-r-odd')).toBeNull();
+});
