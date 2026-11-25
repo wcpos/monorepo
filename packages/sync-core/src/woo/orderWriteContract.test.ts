@@ -184,3 +184,17 @@ describe('the order wire (ADR 0040)', () => {
 		expect(orderChangesAssertIntent({ status: 'on-hold' }, { status: 'pending' })).toBe(true);
 	});
 });
+
+it('never asserts the sale-day fact, but sends its request', () => {
+	const fact = { key: '_wcpos_sale_day', value: { at_gmt: '2026-11-23T09:12:00Z', reason: 'Old' } };
+	const request = {
+		key: '_wcpos_sale_day_request',
+		value: '{"at_gmt":"2026-11-22T09:12:00Z","reason":"New","from":"2026-11-23T09:12:00Z"}',
+	};
+	expect(SERVER_OWNED_ORDER_META_KEYS).toContain('_wcpos_sale_day');
+	expect(toOrderWirePayload({ meta_data: [fact, request] })).toEqual({ meta_data: [request] });
+	expect(orderChangesAssertIntent({ meta_data: [fact] }, { meta_data: [] })).toBe(false);
+	expect(orderChangesAssertIntent({ meta_data: [fact, request] }, { meta_data: [fact] })).toBe(
+		true
+	);
+});

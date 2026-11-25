@@ -4,17 +4,20 @@ import { Toast } from '@wcpos/components/toast';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { BridgeError, type BridgeHandlers } from '../bridge/types';
+import { type MiniAppProxyScope } from '../catalog';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 const ALLOWED_REST_PREFIXES = ['/wcpos/v1/', '/wc/v3/', '/wp/v2/'];
 const MAX_RESPONSE_LENGTH = 1024 * 1024;
-// The host owns authentication; a page may never set or override these.
-const BLOCKED_REQUEST_HEADERS = ['authorization', 'cookie', 'x-wcpos', 'host', 'x-wcpos-instance'];
+// The host owns authentication, the store and the method, so only these content headers pass.
+const ALLOWED_REQUEST_HEADERS = ['accept', 'content-type', 'if-match', 'if-none-match'];
 
 // Validated after percent-decoding, not by prefix alone: a page holding the proxy must not be
 // able to walk out of the allowed REST namespaces with dot segments or delimiters, encoded or not.
 // '&' is a delimiter too: on plain-permalink sites the path rides inside `?rest_route=`, and a
 // second `rest_route=` after an '&' would win.
+// The client's URL parser strips tab and newline before resolving dot segments, so a `.<tab>.`
+// segment would otherwise become `..`.
 function isAllowedRestPath(path: unknown): path is string {
 	if (typeof path !== 'string' || !path.startsWith('/')) return false;
 	let decoded: string;
@@ -24,6 +27,7 @@ function isAllowedRestPath(path: unknown): path is string {
 		return false;
 	}
 	const clean = (value: string) =>
+		!/[\u0000- \u007f]/.test(value) &&
 		!/[\\?#&]/.test(value) &&
 		!value.includes('//') &&
 		!value.split('/').some((segment) => segment === '.' || segment === '..');
@@ -40,7 +44,10 @@ function isHttpResponseError(
 	);
 }
 
-export function useHostCapabilities(onClose: (result: string) => void): BridgeHandlers {
+export function useHostCapabilities(
+	onClose: (result: string) => void,
+	scope: MiniAppProxyScope | undefined
+): BridgeHandlers {
 	const http = useRestHttpClient();
 
 	return React.useMemo(
@@ -50,6 +57,32 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				if (!isAllowedRestPath(path)) {
 					throw new BridgeError('bad_request', 'Path is not an allowed store REST endpoint');
 				}
+				if (!scope) {
+					throw new BridgeError('capability_denied', 'This mini-app has no store REST scope');
+				}
+				const verb = typeof method === 'string' ? method.toUpperCase() : 'GET';
+				if (!scope.methods.includes(verb)) {
+					throw new BridgeError('capability_denied', "Method is outside this mini-app's scope");
+				}
+				if ((verb === 'GET' || verb === 'HEAD') && body !== undefined && body !== null) {
+					throw new BridgeError('bad_request', 'GET and HEAD requests take no body');
+				}
+				const decoded = decodeURIComponent(path);
+				if (
+					!scope.paths.some((p) => path === p.slice(0, -1) || path.startsWith(p)) ||
+					!scope.paths.some((p) => decoded === p.slice(0, -1) || decoded.startsWith(p))
+				) {
+					throw new BridgeError('capability_denied', "Path is outside this mini-app's scope");
+				}
+				// The store's PHP turns '.' and spaces in query keys into '_', so only plain keys are passed.
+				if (query && typeof query === 'object' && !Array.isArray(query)) {
+					if (Object.keys(query).some((key) => !/^[A-Za-z0-9_-]+$/.test(key))) {
+						throw new BridgeError('bad_request', 'Query key is not allowed');
+					}
+					if (Object.keys(query).some((key) => !scope.queryKeys.includes(key))) {
+						throw new BridgeError('bad_request', "Query key is outside this mini-app's scope");
+					}
+				}
 				if (
 					query &&
 					typeof query === 'object' &&
@@ -58,6 +91,14 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				) {
 					throw new BridgeError('bad_request', 'Query must not override rest_route');
 				}
+				if (
+					query &&
+					typeof query === 'object' &&
+					!Array.isArray(query) &&
+					Object.keys(query).includes('_method')
+				) {
+					throw new BridgeError('bad_request', 'Query must not override the method');
+				}
 				const search = new URLSearchParams();
 				if (query && typeof query === 'object' && !Array.isArray(query)) {
 					for (const [key, value] of Object.entries(query)) search.set(key, String(value));
@@ -65,13 +106,13 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				const requestHeaders = Object.fromEntries(
 					Object.entries(headers && typeof headers === 'object' ? headers : {}).filter(
 						([key, value]) =>
-							typeof value === 'string' && !BLOCKED_REQUEST_HEADERS.includes(key.toLowerCase())
+							typeof value === 'string' && ALLOWED_REQUEST_HEADERS.includes(key.toLowerCase())
 					)
 				);
 				let response: { status: number; headers?: Record<string, unknown>; data: unknown };
 				try {
 					response = (await http.request({
-						method: typeof method === 'string' ? method.toUpperCase() : 'GET',
+						method: verb,
 						url: `${path}${search.toString() ? `?${search}` : ''}`,
 						data: body,
 						headers: requestHeaders,
@@ -116,6 +157,6 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				return {};
 			},
 		}),
-		[http, onClose]
+		[http, onClose, scope]
 	);
 }
