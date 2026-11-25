@@ -1613,6 +1613,20 @@ describe('PaymentWebview pay link host', () => {
 		expect(setFrameStatus).not.toHaveBeenCalledWith('ready');
 	});
 
+	it('a pay link on another host is never prepared, so no sale is committed for it', () => {
+		renderFrame('https://pay.elsewhere.example/wcpos-checkout/order-pay/42');
+		expect(jest.mocked(usePayPagePreparation)).toHaveBeenLastCalledWith(
+			expect.objectContaining({ rawPaymentURL: undefined })
+		);
+
+		renderFrame('https://shop.example.com/wcpos-checkout/order-pay/42');
+		expect(jest.mocked(usePayPagePreparation)).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				rawPaymentURL: 'https://shop.example.com/wcpos-checkout/order-pay/42',
+			})
+		);
+	});
+
 	it('a www twin of the site still loads', () => {
 		renderFrame('https://www.shop.example.com/wcpos-checkout/order-pay/42');
 		expect(webViewMounts).toBe(1);

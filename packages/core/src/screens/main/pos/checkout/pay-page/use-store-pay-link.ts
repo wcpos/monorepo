@@ -19,8 +19,13 @@ export function useStorePayLink(paymentURL: string | null | undefined): boolean 
 	const foreign = !!paymentURL && !usable;
 	React.useEffect(() => {
 		if (!foreign) return;
-		// The host only: the full link carries the order key.
-		const payLinkHost = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(String(paymentURL))?.[1] ?? null;
+		// The host only (URL.host never carries userinfo): the full link carries the order key.
+		let payLinkHost: string | null;
+		try {
+			payLinkHost = new URL(String(paymentURL)).host;
+		} catch {
+			payLinkHost = null;
+		}
 		payLinkLogger.error('The order’s pay link is not on the store’s own host', {
 			code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 			context: { payLinkHost, storeURL },

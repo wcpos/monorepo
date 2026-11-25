@@ -121,6 +121,8 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const paymentURL = orderData.links?.payment?.[0]?.href;
 	const payLinkUsable = useStorePayLink(mode === 'webview' ? paymentURL : null);
 	const paymentLinkMissing = mode === 'webview' && !payLinkUsable;
+	// A link that exists but is not on the store's host gets its own notice; the gating is the same.
+	const paymentLinkForeign = mode === 'webview' && !!paymentURL && !payLinkUsable;
 	// Scoped to the legacy webview path — contract checkout posts nothing into a
 	// frame, so it has nothing to wait for. When the link is missing no frame is
 	// rendered at all, and `paymentLinkMissing` is already the reason shown.
@@ -188,7 +190,13 @@ function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 						) : null}
 						{mode === 'webview' && !gatewayError && !showStockRejection ? (
 							<PayFrameNotice
-								status={paymentLinkMissing ? 'link-missing' : frameStatus}
+								status={
+									paymentLinkForeign
+										? 'link-foreign'
+										: paymentLinkMissing
+											? 'link-missing'
+											: frameStatus
+								}
 								onRetry={frameGate.retry}
 								testID="checkout-payment-form-unavailable"
 							/>

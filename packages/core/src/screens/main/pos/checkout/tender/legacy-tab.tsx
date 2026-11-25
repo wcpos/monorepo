@@ -36,7 +36,9 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	const t = useT();
 	const amountToPay = useAmountToPay(order);
 	const paymentURL = useRecordField(order, (record) => record.payload.links?.payment?.[0]?.href);
-	const payLinkUsable = useStorePayLink(paymentURL);
+	// Only the screen that offers the pay page checks (and logs) its link.
+	const offersPayPage = !flow.hasLiveLeg && flow.legacyMethods.length > 0;
+	const payLinkUsable = useStorePayLink(offersPayPage ? paymentURL : null);
 	const { handleStockRejection, settledOrderStatuses, gatewayResolved, gatewayError, refetch } =
 		useCheckoutSession(order);
 	const frameGate = usePayFrameGate();
@@ -106,7 +108,7 @@ export function LegacyTab({ flow, order, receiptHost }: Props) {
 	if (!payLinkUsable) {
 		return (
 			<PayFrameNotice
-				status="link-missing"
+				status={paymentURL ? 'link-foreign' : 'link-missing'}
 				className="m-4"
 				testID="checkout-payment-form-unavailable"
 			/>

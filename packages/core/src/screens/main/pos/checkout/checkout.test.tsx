@@ -386,12 +386,33 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 			paymentURL: 'https://pay.elsewhere.example/wcpos-checkout/order-pay/42',
 		});
 
-		expect(screen.getByText('pos_checkout.payment_form_unavailable')).toBeTruthy();
+		expect(screen.getByText('pos_checkout.payment_page_other_domain')).toBeTruthy();
+		expect(screen.queryByText('pos_checkout.payment_form_unavailable')).toBeNull();
 		expect(button.disabled).toBe(true);
 		// The mapped logger mock, as the hook imports it (requireMock would build a separate automock).
 		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).error).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({ code: 'CHECKOUT101' })
+		);
+	});
+
+	it('a missing pay link keeps the missing-link notice, not the other-domain one', () => {
+		const button = renderCheckout({ mode: 'webview', paymentURL: '' });
+
+		expect(screen.getByText('pos_checkout.payment_form_unavailable')).toBeTruthy();
+		expect(screen.queryByText('pos_checkout.payment_page_other_domain')).toBeNull();
+		expect(button.disabled).toBe(true);
+	});
+
+	it('logs the foreign host without its userinfo', () => {
+		renderCheckout({ mode: 'webview', paymentURL: 'https://user:pw@evil.example/pay' });
+
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).error).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				code: 'CHECKOUT101',
+				context: expect.objectContaining({ payLinkHost: 'evil.example' }),
+			})
 		);
 	});
 

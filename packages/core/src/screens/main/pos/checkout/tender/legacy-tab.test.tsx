@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { PaymentWebview, type PaymentWebviewProps } from '../components/payment-webview';
 import { LegacyTab } from './legacy-tab';
 
@@ -187,13 +189,25 @@ it('the frame slot holds the pane height before the pay page mounts, so Process 
 	expect(slot.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-it('a pay link on another host is no usable link: the missing-link notice shows and no frame mounts', () => {
+it('a pay link on another host is no usable link: the other-domain notice shows and no frame mounts', () => {
 	const view = render(
 		<LegacyTab order={makeOrder(true, 'https://pay.elsewhere.example/pay')} flow={flow} />
 	);
 	expect(PaymentWebview).not.toHaveBeenCalled();
 	expect(view.getByTestId('checkout-payment-form-unavailable').textContent).toContain(
-		en['pos_checkout.payment_form_unavailable']
+		en['pos_checkout.payment_page_other_domain']
+	);
+});
+
+it('the split screen offers no pay page, so a foreign link there logs nothing', () => {
+	const splitFlow = { ...(flow as object), hasLiveLeg: true } as never;
+	render(
+		<LegacyTab order={makeOrder(true, 'https://pay.elsewhere.example/pay')} flow={splitFlow} />
+	);
+	// The mapped logger mock, as useStorePayLink imports it.
+	expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).error).not.toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'CHECKOUT101' })
 	);
 });
 
