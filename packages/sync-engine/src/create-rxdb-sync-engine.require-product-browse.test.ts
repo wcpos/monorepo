@@ -336,6 +336,18 @@ describe('require() for the products browse window', () => {
 				}),
 			})
 		);
+		// The successor's started and fetched events name their lane too.
+		for (const type of ['coverage.require.started', 'coverage.require.outcome']) {
+			expect(harness.diagnostics).toContainEqual(
+				expect.objectContaining({
+					type,
+					fields: expect.objectContaining({
+						requirementId: 'browse-released-successor',
+						lane: 'durable',
+					}),
+				})
+			);
+		}
 
 		await engine.dispose();
 	});

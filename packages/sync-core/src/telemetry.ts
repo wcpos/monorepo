@@ -211,6 +211,7 @@ export type SyncEventFieldsByType = {
 	'coverage.require.outcome': {
 		readonly requirementId?: string;
 		readonly kind?: string;
+		readonly lane?: string;
 		readonly action?: string;
 		readonly documents: number;
 		readonly requests: number;

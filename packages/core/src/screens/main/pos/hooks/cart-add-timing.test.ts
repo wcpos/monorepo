@@ -179,6 +179,7 @@ describe('cart add handler-to-commit timing', () => {
 			const first = beginCartAddTiming('overlap-marks', 42, 0, 100);
 			const second = beginCartAddTiming('overlap-marks', 42, 0, 110);
 			expect(getCartAddTiming().status).toBe('overlap');
+			jest.mocked(performance.now).mockClear();
 			markCartAddTiming('birthRead', second);
 			expect(performance.now).not.toHaveBeenCalled();
 			cancelCartAddTiming(first);
