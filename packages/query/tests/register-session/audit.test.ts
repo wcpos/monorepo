@@ -49,7 +49,7 @@ it('logs a set-aside session at warn with the cashier and the unsent movement co
 	recordRegisterFact({ kind: 'session-set-aside', ...input, unsentMovements: 2 });
 	expect(logger.warn).toHaveBeenCalledWith('Register session set aside', {
 		actor,
-		terminal: { operationId: 's' },
+		terminal: attempt,
 		context: {
 			type: 'register.session-set-aside',
 			sessionId: 's',
@@ -170,7 +170,7 @@ const cases: {
 	{
 		fact: { kind: 'session-set-aside', ...human, unsentMovements: 2 },
 		type: 'register.session-set-aside',
-		identity: 'sessionid',
+		identity: 'fresh',
 		human: true,
 	},
 	{

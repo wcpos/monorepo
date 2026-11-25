@@ -95,7 +95,6 @@ function identity(fact: RegisterFact): LoggerOptions['terminal'] {
 			return undefined;
 		case 'session-opened':
 		case 'session-pruned':
-		case 'session-set-aside':
 			id = fact.sessionId;
 			break;
 		case 'session-closed':

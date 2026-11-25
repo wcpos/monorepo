@@ -2439,7 +2439,7 @@
 	"health.logs.event_description.register_session_opened": "A register session was started and the opening float recorded.",
 	"health.logs.event_description.register_session_pruned": "An old register session and its cash movements were cleared from this device.",
 	"health.logs.event_description.register_session_refresh_failed": "The register session could not be brought up to date with your store.",
-	"health.logs.event_description.register_session_set_aside": "The store no longer had this register session, so it was kept on this device as history and the register cleared. Any cash movements it had not sent stay on this device and are not sent again.",
+	"health.logs.event_description.register_session_set_aside": "The store no longer had this register session, so it was kept on this device as history and the register cleared. Any cash movements it had not sent stay on this device.",
 	"health.logs.event_description.register_switched": "This device was moved from one register to another.",
 	"health.logs.event_description.register_unbound": "This device is no longer linked to a register, so its sales do not record where they were taken.",
 	"health.logs.event_description.register_upload_refused": "Your store refused a session or closure this device sent, so the register and your store no longer agree.",

@@ -1292,7 +1292,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Set aside a register session the store no longer has',
 		descriptionKey: 'health.logs.event_description.register_session_set_aside',
 		description:
-			'The store no longer had this register session, so it was kept on this device as history and the register cleared. Any cash movements it had not sent stay on this device and are not sent again.',
+			'The store no longer had this register session, so it was kept on this device as history and the register cleared. Any cash movements it had not sent stay on this device.',
 		introducedIn: '2.0.0',
 	},
 	'register.switched': {

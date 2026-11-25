@@ -883,7 +883,7 @@
 		"type": "register.session-set-aside",
 		"domain": "REGISTER",
 		"label": "Set aside a register session the store no longer has",
-		"description": "The store no longer had this register session, so it was kept on this device as history and the register cleared. Any cash movements it had not sent stay on this device and are not sent again.",
+		"description": "The store no longer had this register session, so it was kept on this device as history and the register cleared. Any cash movements it had not sent stay on this device.",
 		"introducedIn": "2.0.0"
 	},
 	{
