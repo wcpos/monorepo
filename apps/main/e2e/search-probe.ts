@@ -1448,7 +1448,7 @@ export async function deleteOrderRefundsAsWriter(
 	}
 	if (writer === null) {
 		result.skipped = refundIds.length;
-		log.info(
+		console.log(
 			`[refund-delete] no writer credential; ${refundIds.length} refund(s) left on order ${orderId}`
 		);
 		return result;
@@ -1476,7 +1476,7 @@ export async function deleteOrderRefundsAsWriter(
 		result.failed += 1;
 		log.warn(`[refund-delete] refund ${id} of order ${orderId} not deleted: ${failure}`);
 	}
-	log.info(
+	console.log(
 		`[refund-delete] deleted=${result.deleted} failed=${result.failed} skipped=${result.skipped}`
 	);
 	return result;
