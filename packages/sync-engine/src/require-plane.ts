@@ -207,6 +207,8 @@ export type OrderBrowseDimensions = {
 	 * Used by Reports, which count on the sale moment.
 	 */
 	modifiedAfterSeconds?: number;
+	/** Server advertises corrected sale-day range filtering for this sales demand. */
+	saleDayCorrection?: boolean;
 	/** Supported orders orderby values. Both orderby and order, or neither. */
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';

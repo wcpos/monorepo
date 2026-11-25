@@ -15,6 +15,25 @@ import {
 import type { OrderBrowseDimensions } from '../require-plane';
 
 describe('orderBrowserQueryKey', () => {
+	it('round-trips the sale-day capability as a distinct demand lane', () => {
+		const dims = {
+			afterSeconds: 100,
+			beforeSeconds: 200,
+			modifiedAfterSeconds: 100,
+			limit: 'all',
+		} as const;
+		const key = orderBrowserQueryKey({ ...dims, saleDayCorrection: true });
+		expect(key).toBe(
+			'orders:browser:status=all:after=100:before=200:modified_after=100:sale_day=1:search=:limit=all'
+		);
+		const descriptor = parseOrderBrowserSchedulerDescriptor(key)!.descriptor!;
+		expect(descriptor.saleDayCorrection).toBe(true);
+		expect(orderBrowseWindowQueryKey(orderBrowseWindowFields(descriptor))).toBe(key);
+		expect(orderBrowserQueryKey({ ...dims, saleDayCorrection: false })).toBe(
+			orderBrowserQueryKey(dims)
+		);
+	});
+
 	it('round-trips a ranged modified_after window through descriptor fields', () => {
 		const queryKey = orderBrowserQueryKey({
 			afterSeconds: 100,
