@@ -90,6 +90,7 @@ import type {
 	BarcodeSelectorsReader,
 } from '../materialization/barcode-selectors';
 import type { LocalCoverage } from '../local-coverage/local-coverage';
+import type { RefundHistoryCheckpointStore } from '../scheduler/rx-scheduler-refund-fetcher';
 import type { RxDatabase } from 'rxdb';
 import type { SyncCollectionName } from '../collections/engine-collections';
 
@@ -187,6 +188,8 @@ type MaintenanceLaneDeps = {
 	censusTotals: () => Promise<CensusTotals>;
 	customerCensusTotal: () => Promise<CensusTotal | null>;
 	productTrickleStateFor: (scopeId: string) => ProductTrickleStateStore;
+	/** The scope's refund history walk checkpoint (#3340); absent means every history walk is full. */
+	refundHistoryCheckpointFor?: (scopeId: string) => RefundHistoryCheckpointStore;
 	productCensusTotal: () => Promise<CensusTotal | null>;
 	/** The host's authored default product sort — see RxdbSyncEnginePorts. */
 	defaultProductBrowseSort?: {
@@ -566,6 +569,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			coverage,
 			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 			...(deps.exactSkuLeg !== undefined ? { exactSkuLeg: deps.exactSkuLeg } : {}),
+			...(deps.refundHistoryCheckpointFor !== undefined
+				? { refundHistoryCheckpoint: deps.refundHistoryCheckpointFor(_scopeId) }
+				: {}),
 			baseUrl: deps.syncBaseUrl,
 			ownerId: deps.ownerId(),
 			censusFreshForMs: deps.censusFreshForMs,

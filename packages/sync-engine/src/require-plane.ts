@@ -100,6 +100,7 @@ import type { EngineSourceFetcher } from './change-signal/change-signal-source';
 import type { RxCollection, RxDatabase } from 'rxdb';
 import type { LocalCoverage } from './local-coverage/local-coverage';
 import type { BarcodeSelectors, BarcodeSelectorsReader } from './materialization/barcode-selectors';
+import type { RefundHistoryCheckpointStore } from './scheduler/rx-scheduler-refund-fetcher';
 
 const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
 
@@ -310,6 +311,8 @@ export type RequirePlaneDeps = {
 	/** The per-scope barcode carriers a demand pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	exactSkuLeg?: () => boolean;
+	/** The scope's refund history walk checkpoint (#3340); absent means every history walk is full. */
+	refundHistoryCheckpointFor?: (scopeId: string) => RefundHistoryCheckpointStore;
 };
 
 /** Rows a `search` requirement walks to when the declarer names no limit. */
@@ -924,6 +927,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					ownerId: (schedulerOwnerId ??= mintSchedulerOwnerId('require-plane', webCryptoUuid)),
 					...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 					...(deps.exactSkuLeg !== undefined ? { exactSkuLeg: deps.exactSkuLeg } : {}),
+					...(deps.refundHistoryCheckpointFor !== undefined
+						? { refundHistoryCheckpoint: deps.refundHistoryCheckpointFor(bound.scopeId) }
+						: {}),
 					fetcher: schedulerFetcher,
 					diagnostics: deps.diagnostics,
 					...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),

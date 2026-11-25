@@ -114,6 +114,10 @@ import {
 import { PRODUCT_TRICKLE_STATE_KEY } from './maintenance/product-trickle';
 import { purgeMisfiledVariationProducts } from './maintenance/purge-misfiled-variation-products';
 import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
+import {
+	REFUND_HISTORY_CHECKPOINT_KEY,
+	type RefundHistoryCheckpointStore,
+} from './scheduler/rx-scheduler-refund-fetcher';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
@@ -1147,6 +1151,11 @@ export function createRxdbSyncEngine(
 	};
 	const removeCheckpoint = (scopeId: string, collection: SyncCollectionName): Promise<void> =>
 		removeBlob(scopeId, checkpointKeyFor(collection));
+	const refundHistoryCheckpointFor = (scopeId: string): RefundHistoryCheckpointStore => ({
+		get: () => readBlob(scopeId, REFUND_HISTORY_CHECKPOINT_KEY),
+		set: (value) => writeBlob(scopeId, REFUND_HISTORY_CHECKPOINT_KEY, value),
+		remove: () => removeBlob(scopeId, REFUND_HISTORY_CHECKPOINT_KEY),
+	});
 
 	// Invariant 2: reset clears only per-COLLECTION checkpoint, trickle, manifest,
 	// scheduler-task, and coverage state. The shared change-signal cursor stays:
@@ -1163,6 +1172,12 @@ export function createRxdbSyncEngine(
 	manager.registerCursorInvalidator('products', (scopeId) =>
 		removeBlob(scopeId, PRODUCT_TRICKLE_STATE_KEY)
 	);
+	// Orders too: the orders reset cascade drops unstamped refunds, which only a full walk refills.
+	for (const collection of ['refunds', 'orders'] as const) {
+		manager.registerCursorInvalidator(collection, (scopeId) =>
+			removeBlob(scopeId, REFUND_HISTORY_CHECKPOINT_KEY)
+		);
+	}
 	for (const collection of ['products', 'variations'] as const) {
 		manager.registerCursorInvalidator(collection, (scopeId) =>
 			removeBlob(scopeId, VARIATION_PREFETCH_STATE_KEY)
@@ -1600,6 +1615,7 @@ export function createRxdbSyncEngine(
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
 		barcodeSelectorsFor,
 		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
+		refundHistoryCheckpointFor,
 		fetcher: (url, init) => transport.request(url, init, { lane: 'require' }),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
@@ -1714,6 +1730,7 @@ export function createRxdbSyncEngine(
 			get: (key) => readBlob(scopeId, key),
 			set: (key, value) => writeBlob(scopeId, key, value),
 		}),
+		refundHistoryCheckpointFor,
 		productCensusTotal: async () => (await censusPublisher.totals()).products,
 		variationPrefetchStateFor: (scopeId) => ({
 			get: (key) => readBlob(scopeId, key),
