@@ -17,6 +17,7 @@ const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-hand
 
 const mockSales = fakeQueryHandle({}, 'sales');
 const mockRefunds = fakeQueryHandle({}, 'refunds');
+let mockQuiet = false;
 const mockStores = new BehaviorSubject<{ id: number; name: string }[]>([]);
 const mockState = {
 	store: { id: 9 } as object | undefined,
@@ -47,7 +48,11 @@ jest.mock('../context', () => ({
 		timezone: 'UTC',
 		storeId: 9,
 	}),
-	useReportsHandles: () => ({ handle: mockSales, refundsHandle: mockRefunds }),
+	useReportsHandles: () => ({
+		handle: mockSales,
+		refundsHandle: mockRefunds,
+		quietRefresh: mockQuiet,
+	}),
 }));
 jest.mock('../use-report-formats', () => ({
 	useReportFormats: () => ({ store: mockState.store }),
@@ -136,7 +141,8 @@ beforeEach(() => {
 	mockState.filters = { register: 'r', store: '9' };
 	mockState.names = { r: 'Front' };
 	mockStores.next([]);
-	mockSales.set({ ready: true, laneProgress: null });
+	mockSales.set({ ready: true, laneProgress: null, laneComplete: false });
+	mockQuiet = false;
 	mockRefunds.set({ ready: true, laneProgress: null });
 	Object.assign(mockDoc, {
 		templatesReady: true,
@@ -263,6 +269,28 @@ it('Print waits for the lane, then stops waiting when the range is complete', ()
 	act(() => mockSales.set({ laneProgress: null }));
 	expect(result.current.waiting).toBeNull();
 });
+
+// A timer re-reading a sales day that was already whole holds the whole period: no wait.
+it.each([
+	[false, true, true, true],
+	[false, false, true, true],
+	[true, true, true, false],
+	[true, false, true, true],
+	[true, true, false, false],
+	[false, false, false, false],
+] as const)(
+	'quiet %s, whole %s, progress %s: Print waits %s',
+	(quiet, complete, progress, waits) => {
+		mockQuiet = quiet;
+		mockSales.set({
+			laneComplete: complete,
+			laneProgress: progress ? { downloaded: 1, total: 2 } : null,
+		});
+		expect(print().result.current.waiting).toBe(
+			waits ? 'Still loading orders for this range' : null
+		);
+	}
+);
 
 // A failure must be visible and recover on the next press; a document error shows meanwhile.
 it('shows false and thrown print failures, clears them on success, and shows a document error', async () => {
