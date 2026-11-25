@@ -7,6 +7,19 @@ import * as C from './index';
 jest.mock('@rn-primitives/select', () =>
 	jest.requireActual('../dropdown-menu/sheet.test-utils').mockPrimitive(true)
 );
+const mockMultiContent = jest.fn();
+const mockMultiLayout: { current: (e: unknown) => void } = { current: () => {} };
+jest.mock('./select-multi', () => ({
+	SelectMultiRoot: ({ children }: { children: React.ReactNode }) => children,
+	SelectMultiTrigger: ({ onLayout }: { onLayout: (e: unknown) => void }) => {
+		mockMultiLayout.current = onLayout;
+		return null;
+	},
+	SelectMultiContent: (props: { style?: unknown }) => {
+		mockMultiContent(props.style);
+		return null;
+	},
+}));
 const mockFieldBox = jest.fn();
 jest.mock('../field-box', () => {
 	const actual = jest.requireActual('../field-box');
@@ -203,6 +216,31 @@ it.each([
 		} finally {
 			primitive.Content = Keep;
 			trigger.Trigger = KeepTrigger;
+			mockPlatform.OS = 'web';
+		}
+	}
+);
+
+// The multi-select's rows are the same flex-1 labels: at the bare 128-point fallback they truncate.
+it.each([
+	['ios', false, { minWidth: 240 }],
+	['ios', true, { width: 240 }],
+	['web', false, undefined],
+	['web', true, { width: 240 }],
+] as const)(
+	'the multi-select list on %s (matchWidth %s) is floored at its trigger',
+	(OS, matchWidth, style) => {
+		mockPlatform.OS = OS;
+		try {
+			render(
+				<C.Select multiple>
+					<C.SelectTrigger />
+					<C.SelectContent matchWidth={matchWidth} />
+				</C.Select>
+			);
+			act(() => mockMultiLayout.current({ nativeEvent: { layout: { width: 240 } } }));
+			expect(mockMultiContent.mock.calls.at(-1)![0]).toEqual(style);
+		} finally {
 			mockPlatform.OS = 'web';
 		}
 	}

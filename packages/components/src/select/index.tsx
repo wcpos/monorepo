@@ -246,7 +246,7 @@ function SelectContent({
 			<SelectMultiContent
 				className={className}
 				portalHost={portalHost}
-				style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
+				style={anchoredListWidth(triggerWidth, matchWidth, Platform.OS !== 'web')}
 				{...(rest as any)}
 			>
 				{children}
