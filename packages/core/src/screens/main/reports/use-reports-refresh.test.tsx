@@ -193,6 +193,26 @@ describe('useReportsRefresh', () => {
 		expect(sync).not.toHaveBeenCalled();
 	});
 
+	it('a range changed to today on an active screen starts the timer, and changed away stops it', async () => {
+		const { rerender } = renderHook(
+			({ cadence }: { cadence: ReportsRefreshCadence }) => useReportsRefresh(handle, () => cadence),
+			{ initialProps: { cadence: 'none' as ReportsRefreshCadence } }
+		);
+		const period = () =>
+			act(() => {
+				jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+			});
+		period();
+		expect(sync).not.toHaveBeenCalled();
+		rerender({ cadence: 'interval' });
+		period();
+		expect(sync).toHaveBeenCalledTimes(1);
+		await settle();
+		rerender({ cadence: 'none' });
+		period();
+		expect(sync).toHaveBeenCalledTimes(1);
+	});
+
 	it('keeps at most one pass in flight', async () => {
 		let resolve!: () => void;
 		sync.mockImplementation(

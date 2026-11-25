@@ -239,8 +239,10 @@ describe('manual order view refresh', () => {
 	});
 
 	it('re-walks a complete ranged orders window on a manual sync', async () => {
+		// The seeder dedupes on the wall clock: the harness clock must agree for the window to be fresh.
 		const harness = await createEngineHarness({
 			mode: 'manual',
+			startAtMs: Date.now(),
 			fetch: async () => Response.json([]),
 		});
 		try {

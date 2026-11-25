@@ -191,6 +191,7 @@ beforeEach(() => {
 	mockBinding = { registerId: 'r', registerName: 'Front' };
 	mockPhone = true;
 	mockRoute = {};
+	mockFocused = true;
 	mockClosureScope.mockClear();
 	mockSetParams.mockClear();
 	mockReadClosure.mockReset().mockResolvedValue({ toMutableJSON: () => mockLocalClosure });
@@ -524,6 +525,27 @@ describe('ReportsScreen query-state wiring', () => {
 		for (const sync of syncs) expect(sync).not.toHaveBeenCalled();
 	});
 
+	it('a range ending yesterday is not re-read when focus returns; today is', async () => {
+		const { rerender } = render(<ReportsScreen />);
+		await act(async () => {});
+		const refocus = async () => {
+			mockFocused = false;
+			rerender(<ReportsScreen />);
+			mockFocused = true;
+			rerender(<ReportsScreen />);
+			await act(async () => {});
+		};
+		const sales = jest.spyOn(screenHandles()[0], 'sync');
+		await refocus();
+		expect(sales).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByTestId('past-scope'));
+		await act(async () => {});
+		const syncs = [...mockHandles.values()].map((handle) => jest.spyOn(handle, 'sync'));
+		syncs.forEach((sync) => sync.mockClear());
+		await refocus();
+		for (const sync of syncs) expect(sync).not.toHaveBeenCalled();
+	});
+
 	it('a timer re-read of a whole, idle sales day reaches the provider as quiet', async () => {
 		render(<ReportsScreen />);
 		await act(async () => {});
@@ -723,11 +745,12 @@ const mockSetParams = jest.fn((params) => {
 	mockRoute = { ...mockRoute, ...params };
 });
 const mockOpenDrawer = jest.fn();
+let mockFocused = true;
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => mockRoute,
 	useRouter: () => ({ setParams: mockSetParams }),
 	useNavigation: () => ({ openDrawer: mockOpenDrawer, setParams: mockSetParams }),
-	useIsFocused: () => true,
+	useIsFocused: () => mockFocused,
 }));
 let mockPhone = true;
 jest.mock('@wcpos/components/lib/device', () => ({
