@@ -2683,6 +2683,28 @@ describe('#2016: retry and abandon keep the closure row', () => {
 			expect(postedIds()).toEqual([movement.id]);
 		});
 
+		it('(n) an interrupted set aside, served closed, stays set aside', async () => {
+			const { session, row } = await closure();
+			const movement = await add(session);
+			await movement.incrementalPatch({
+				sync_status: 'failed',
+				sync_error: 'wcpos_session_not_found',
+			});
+			http.post.mockRejectedValue(notFound);
+			await drain();
+			for (const doc of [movement, row]) await doc.incrementalPatch(marked);
+			expect(json(session)).toMatchObject({ sync_error: 'wcpos_session_not_found' });
+			const before = [movement, row].map((doc) => doc.getLatest().toJSON(true));
+			serve(session, 'closed');
+			await refresh();
+			await refresh();
+			expect([movement, row].map((doc) => doc.getLatest().toJSON(true))).toEqual(before);
+			expect(json(session)).toMatchObject({ status: 'closed' });
+			expect(emitted).toEqual([]);
+			await drain();
+			expect(http.post).not.toHaveBeenCalled();
+		});
+
 		it('(i) after an undo the store answers 404 again: Set aside marks all three again', async () => {
 			const { session, row, movement } = await setAside();
 			serve(session, 'open');
@@ -2722,6 +2744,17 @@ describe('#2016: retry and abandon keep the closure row', () => {
 			await refresh();
 			expect(target!.getLatest().voided_by).toBe(reversal.id);
 			expect(json(reversal)).toMatchObject({ sync_status: 'pending', voids: target!.id });
+		});
+
+		it('(o) a restored reversal leaves a target another reversal already voided', async () => {
+			const { session, movement, reversal, target } = await setAside(true);
+			const other = '0a7c1e52-4b8d-4f3e-9d61-5c2b8e7f1a90';
+			await target!.incrementalPatch({ voided_by: other });
+			serve(session, 'open');
+			await refresh();
+			expect(target!.getLatest().voided_by).toBe(other);
+			for (const doc of [movement, reversal])
+				expect(json(doc)).toMatchObject({ sync_status: 'pending', sync_error: null });
 		});
 
 		it('(l) M12: a set aside clears the register live copy', async () => {
