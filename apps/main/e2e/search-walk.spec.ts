@@ -13,9 +13,68 @@
  *   - clearing the box leaves at most the walk already in flight.
  * Store-agnostic by construction: the stub never depends on catalogue contents.
  */
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
-import { authenticatedTest as test, waitForCadenceStart, wcposRestRoute } from './fixtures';
+import {
+	authenticatedTest,
+	isRouteTeardownError,
+	STORE_REQUEST,
+	waitForCadenceStart,
+	wcposRestRoute,
+} from './fixtures';
+
+// dev-pro carries about 2,150 refunds in the app's 92-day history window. Paging them on every
+// pro boot held cadence.start or the quiet window past the 60 s budget (#3806). The walk never
+// reads refunds, so an empty index is the store state this test needs. The boot cost itself is a
+// product bug tracked in #3340 (search must not wait behind the refund history walk, and a second
+// walk pages only what changed). This stub is allowed only while #3340 is open and carries its own
+// acceptance tests; remove it when #3340 lands.
+async function installEmptyRefundHistory(page: Page): Promise<void> {
+	await page.route(
+		(url) => /^\/wcpos\/v2\/refunds\/?$/.test(wcposRestRoute(url.toString()) ?? ''),
+		async (route) => {
+			try {
+				const method = route.request().method();
+				if (method === 'OPTIONS') {
+					await route.fulfill({
+						status: 204,
+						headers: {
+							'access-control-allow-origin': '*',
+							'access-control-allow-headers': '*',
+							'access-control-allow-methods': 'GET, OPTIONS',
+						},
+					});
+					return;
+				}
+				if (method !== 'GET') {
+					await route.fallback();
+					return;
+				}
+				await route.fulfill({
+					status: 200,
+					headers: {
+						'content-type': 'application/json; charset=UTF-8',
+						'x-wp-total': '0',
+						'x-wp-totalpages': '0',
+						'access-control-allow-origin': '*',
+						'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages',
+					},
+					body: '[]',
+				});
+			} catch (error) {
+				if (!isRouteTeardownError(error)) throw error;
+			}
+		}
+	);
+}
+
+const test = authenticatedTest.extend({
+	page: async ({ page }, use) => {
+		await installEmptyRefundHistory(page);
+		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
+		await use(page);
+	},
+});
 
 const TERM = 'banana berry';
 const SERVER_ROWS = 240;
@@ -70,12 +129,19 @@ function syntheticProduct(template: Record<string, unknown>, index: number) {
 test.describe('Product search walk politeness', () => {
 	test('a search with more server hits than the window never repeats a request and stops after release', async ({
 		posPage: page,
-	}) => {
+	}, testInfo) => {
 		test.setTimeout(180_000);
 		const seen: SeenRequest[] = [];
 		let phase: SeenRequest['phase'] = 'typed';
 		let template: Record<string, unknown> | null = null;
 		const startedAt = Date.now();
+
+		const inFlight = new Map<string, number>();
+		page.on('request', (r) => {
+			if (STORE_REQUEST.test(r.url())) inFlight.set(r.url(), Date.now());
+		});
+		page.on('requestfinished', (r) => inFlight.delete(r.url()));
+		page.on('requestfailed', (r) => inFlight.delete(r.url()));
 
 		await page.route(
 			(url) => {
@@ -128,7 +194,17 @@ test.describe('Product search walk politeness', () => {
 		const searchInput = page.getByTestId('search-products').first();
 		await expect(searchInput).toBeVisible({ timeout: 30_000 });
 		// Type after the startup pulls drain: the serial require plane queues a search behind them.
-		await waitForCadenceStart(page);
+		try {
+			await waitForCadenceStart(page);
+		} catch (error) {
+			// Path only: the full URL's query can carry an authorization parameter.
+			const body =
+				[...inFlight]
+					.map(([url, at]) => `${Date.now() - at} ms  ${wcposRestRoute(url) ?? url}`)
+					.join('\n') || 'none';
+			await testInfo.attach('store-requests-in-flight', { body, contentType: 'text/plain' });
+			throw error;
+		}
 		await searchInput.fill(TERM);
 		await page.waitForTimeout(OBSERVE_MS);
 		phase = 'cleared';

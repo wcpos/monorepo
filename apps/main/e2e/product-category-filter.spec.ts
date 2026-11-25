@@ -1,7 +1,7 @@
 import { type APIRequestContext, expect, type Page } from '@playwright/test';
 
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
-import { authenticatedTest, getStoreUrl } from './fixtures';
+import { authenticatedTest, getStoreUrl, waitForRequirePlaneIdle } from './fixtures';
 import { resolveProbeOptions } from './probe-credential';
 import {
 	createSearchProbe,
@@ -425,8 +425,16 @@ test.describe('Product category filter', () => {
 				{ timeout: FILTERED_GRID_TIMEOUT_MS }
 			);
 		let filteredWindow!: ReturnType<typeof waitForFilteredWindow>;
+		// The require plane is serial, so a category request can queue behind a long
+		// background lane and leave after the 45 s window has closed (#3799). That queueing
+		// is a product bug tracked in #3340, whose own acceptance test (categories answer
+		// in under 2 s while the coupon plane pages 2,500+ rows) holds the app to it. Once
+		// #3340 lands, this wait is no longer needed for timing.
 		// Without a search, selecting the category issues the filtered request immediately.
-		if (!ownedNonMember) filteredWindow = waitForFilteredWindow();
+		if (!ownedNonMember) {
+			await waitForRequirePlaneIdle(page);
+			filteredWindow = waitForFilteredWindow();
+		}
 
 		// --- Apply the filter through the pill, addressing everything by testID. ---
 		await page.getByTestId('filter-pill-categories').click();
@@ -466,6 +474,7 @@ test.describe('Product category filter', () => {
 			// Search takes precedence over category browse on the wire. Prove the category
 			// excludes the owned product locally first, then observe the request triggered
 			// by clearing search; arming earlier would wait for a request that cannot exist.
+			await waitForRequirePlaneIdle(page);
 			filteredWindow = waitForFilteredWindow();
 			await productSearch.fill('');
 		}

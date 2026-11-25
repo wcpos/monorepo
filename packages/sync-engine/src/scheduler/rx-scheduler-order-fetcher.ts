@@ -51,6 +51,9 @@ type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Respons
 
 const SUPPORTED_ORDER_QUERY_KEY = 'orders:custom-pull';
 const MAX_STALLED_BATCHES = 3;
+// Corrected sales in one range are a handful. Past this many pages the store is not paging (or the
+// range is not one a report asks for): the pass fails, never a lane that calls itself complete without them.
+const SALE_DAY_MAX_PAGES = 100;
 const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
 /**
  * The per-PASS record budget for a ranged fetch-to-completion walk — a work bound, not a wall
@@ -189,6 +192,7 @@ function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => numb
 		afterSeconds: decision.descriptor.afterSeconds,
 		beforeSeconds: decision.descriptor.beforeSeconds,
 		modifiedAfterSeconds: decision.descriptor.modifiedAfterSeconds,
+		saleDayCorrection: decision.descriptor.saleDayCorrection,
 		orderby: decision.descriptor.orderby,
 		order: decision.descriptor.order,
 		complete: decision.descriptor.complete,
@@ -803,6 +807,14 @@ async function fetchBrowserOrderQuery(
 	// range routinely outlives the 5-minute freshness window. Throwing the cursor away because
 	// the lane went stale would restore exactly the never-converging re-download this fixes.
 	const previousResume = descriptor.complete ? await readRangedResumeState(input, task) : null;
+	// Run once per fresh walk (including a completed lane's re-walk), never on a resumed pass.
+	let saleDayPage =
+		descriptor.complete &&
+		descriptor.saleDayCorrection &&
+		descriptor.modifiedAfterSeconds !== undefined &&
+		previousResume === null
+			? 1
+			: 0;
 	let remainingTotal: number | null = null;
 	let firstRequestOfPhase = true;
 	// The cursor narrows the descriptor's own upper bound; it never widens it.
@@ -891,6 +903,15 @@ async function fetchBrowserOrderQuery(
 		query.set('orderby', descriptor.complete ? 'date' : (descriptor.orderby ?? 'id'));
 		query.set('order', descriptor.complete ? 'desc' : (descriptor.order ?? 'desc'));
 
+		if (saleDayPage > 0) {
+			query.delete('after');
+			query.delete('before');
+			query.delete('modified_after');
+			query.set('pos_sale_day_after', String(descriptor.afterSeconds));
+			query.set('pos_sale_day_before', String(descriptor.beforeSeconds));
+			query.set('page', String(saleDayPage));
+		}
+
 		const url = `${input.baseUrl}/orders?${query.toString()}`;
 		const requestedAt = pullRequestedAt();
 		const response = await httpGet(input, url, context);
@@ -900,7 +921,7 @@ async function fetchBrowserOrderQuery(
 
 		const totalPagesHeader = response.headers.get('X-WP-TotalPages');
 		const totalPages = Number(totalPagesHeader);
-		if (firstRequestOfPhase) {
+		if (saleDayPage === 0 && firstRequestOfPhase) {
 			// `X-WP-Total` for THIS pass's (already narrowed) window is the uncovered remainder;
 			// added to what earlier passes covered it gives the range total the progress line needs.
 			// A MISSING header must stay `null`, not become 0 — `Number(null)` is 0, and a zero
@@ -923,12 +944,15 @@ async function fetchBrowserOrderQuery(
 			requestCount === 0 && skipInResumePage > 0
 				? rawPayloads.slice(skipInResumePage)
 				: rawPayloads;
-		if (!payloads.every((payload) => honorsRequestedDimensions(payload, descriptor))) {
+		if (
+			saleDayPage === 0 &&
+			!payloads.every((payload) => honorsRequestedDimensions(payload, descriptor))
+		) {
 			dimensionsHonored = false;
 		}
 		const remaining = recordLimit - documentCount;
 		const kept = payloads.slice(0, remaining);
-		if (descriptor.complete && kept.length > 0) {
+		if (saleDayPage === 0 && descriptor.complete && kept.length > 0) {
 			const boundary = pageBoundary(kept);
 			if (boundary === null) {
 				throw new Error(
@@ -976,6 +1000,23 @@ async function fetchBrowserOrderQuery(
 			(await input.repository.upsertMany(applicable, { source: 'pull', requestedAt })) ??
 			applicable;
 		await recordOrderManifestRows(input, materialized, applied);
+		if (saleDayPage > 0) {
+			requestCount += 1;
+			// Share ingestion, but not coverage/progress or the creation cursor. A failure above
+			// leaves no cursor, so the next pass repeats this step from page one.
+			// A full last page is the last page too: the store refuses a page past the one it advertised.
+			const exhausted =
+				rawPayloads.length < descriptor.perPage ||
+				(totalPagesHeader !== null &&
+					Number.isSafeInteger(totalPages) &&
+					saleDayPage >= totalPages);
+			// The bound refuses only a page it would still have to ask for.
+			if (!exhausted && saleDayPage >= SALE_DAY_MAX_PAGES) {
+				throw new Error('Corrected sale-day orders did not end within the page bound');
+			}
+			saleDayPage = exhausted ? 0 : saleDayPage + 1;
+			continue;
+		}
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;

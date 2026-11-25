@@ -72,6 +72,7 @@ import {
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
 	refundBrowserQueryKey,
+	type RefundHistoryCheckpointStore,
 	refundParentQueryKey,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
@@ -207,6 +208,8 @@ export type OrderBrowseDimensions = {
 	 * Used by Reports, which count on the sale moment.
 	 */
 	modifiedAfterSeconds?: number;
+	/** Server advertises corrected sale-day range filtering for this sales demand. */
+	saleDayCorrection?: boolean;
 	/** Supported orders orderby values. Both orderby and order, or neither. */
 	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
@@ -310,6 +313,8 @@ export type RequirePlaneDeps = {
 	/** The per-scope barcode carriers a demand pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	exactSkuLeg?: () => boolean;
+	/** The scope's refund history walk checkpoint (#3340); absent means every history walk is full. */
+	refundHistoryCheckpointFor?: (scopeId: string) => RefundHistoryCheckpointStore;
 };
 
 /** Rows a `search` requirement walks to when the declarer names no limit. */
@@ -924,6 +929,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					ownerId: (schedulerOwnerId ??= mintSchedulerOwnerId('require-plane', webCryptoUuid)),
 					...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 					...(deps.exactSkuLeg !== undefined ? { exactSkuLeg: deps.exactSkuLeg } : {}),
+					...(deps.refundHistoryCheckpointFor !== undefined
+						? { refundHistoryCheckpoint: deps.refundHistoryCheckpointFor(bound.scopeId) }
+						: {}),
 					fetcher: schedulerFetcher,
 					diagnostics: deps.diagnostics,
 					...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
