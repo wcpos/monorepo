@@ -1,0 +1,216 @@
+/** @jest-environment jsdom */
+import type { AppStateStatus } from 'react-native';
+
+import { act, renderHook } from '@testing-library/react';
+
+import {
+	REPORTS_REFRESH_MS,
+	type ReportsRefreshCadence,
+	reportsRefreshCadence,
+	useReportsRefresh,
+} from './use-reports-refresh';
+
+let mockFocused = true;
+const mockListeners = new Set<(state: AppStateStatus) => void>();
+const mockAppState = {
+	currentState: 'active' as AppStateStatus,
+	addEventListener: jest.fn((_event: string, listener: (state: AppStateStatus) => void) => {
+		mockListeners.add(listener);
+		return { remove: () => mockListeners.delete(listener) };
+	}),
+};
+
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
+jest.mock('react-native', () => ({
+	get AppState() {
+		return mockAppState;
+	},
+}));
+
+const sync = jest.fn<Promise<void>, []>();
+const handle = { sync };
+
+function appState(state: AppStateStatus) {
+	act(() => {
+		mockAppState.currentState = state;
+		mockListeners.forEach((listener) => listener(state));
+	});
+}
+
+function render(cadence: ReportsRefreshCadence) {
+	return renderHook(() => useReportsRefresh(handle, cadence));
+}
+
+async function settle() {
+	await act(async () => {});
+}
+
+describe('reportsRefreshCadence', () => {
+	const today = {
+		from: new Date('2026-11-25T00:00:00Z'),
+		to: new Date('2026-11-25T23:59:59.999Z'),
+	};
+
+	it('gives a range inside today the interval', () => {
+		expect(reportsRefreshCadence({ from: today.from, to: today.to }, today)).toBe('interval');
+	});
+
+	it('gives a range from yesterday to the end of today focus re-reads only', () => {
+		const range = { from: new Date('2026-11-24T00:00:00Z'), to: today.to };
+		expect(reportsRefreshCadence(range, today)).toBe('focus');
+	});
+
+	it('gives a range ending yesterday no re-reads', () => {
+		const range = {
+			from: new Date('2026-11-24T00:00:00Z'),
+			to: new Date('2026-11-24T23:59:59.999Z'),
+		};
+		expect(reportsRefreshCadence(range, today)).toBe('none');
+	});
+});
+
+describe('useReportsRefresh', () => {
+	beforeEach(() => {
+		jest.useFakeTimers();
+		mockFocused = true;
+		mockAppState.currentState = 'active';
+		mockListeners.clear();
+		mockAppState.addEventListener.mockClear();
+		sync.mockReset().mockResolvedValue(undefined);
+	});
+
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	it('runs no pass at mount', () => {
+		render('interval');
+		expect(sync).not.toHaveBeenCalled();
+	});
+
+	it('runs one pass when focus returns after a blur', async () => {
+		const { rerender } = render('focus');
+		mockFocused = false;
+		rerender();
+		expect(sync).not.toHaveBeenCalled();
+		mockFocused = true;
+		rerender();
+		expect(sync).toHaveBeenCalledTimes(1);
+		await settle();
+		rerender();
+		expect(sync).toHaveBeenCalledTimes(1);
+	});
+
+	it('runs one pass when the app returns to active after the background', () => {
+		render('focus');
+		appState('background');
+		expect(sync).not.toHaveBeenCalled();
+		appState('active');
+		expect(sync).toHaveBeenCalledTimes(1);
+	});
+
+	it('with interval, runs a pass every 60 s while active and none while inactive', async () => {
+		const { rerender } = render('interval');
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+		});
+		expect(sync).toHaveBeenCalledTimes(1);
+		await settle();
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+		});
+		expect(sync).toHaveBeenCalledTimes(2);
+		await settle();
+		mockFocused = false;
+		rerender();
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS * 3);
+		});
+		expect(sync).toHaveBeenCalledTimes(2);
+		mockFocused = true;
+		rerender();
+		expect(sync).toHaveBeenCalledTimes(3);
+		await settle();
+		appState('background');
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS * 3);
+		});
+		expect(sync).toHaveBeenCalledTimes(3);
+	});
+
+	it('with focus, runs no pass after 60 s but one when focus returns', () => {
+		const { rerender } = render('focus');
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS * 2);
+		});
+		expect(sync).not.toHaveBeenCalled();
+		mockFocused = false;
+		rerender();
+		mockFocused = true;
+		rerender();
+		expect(sync).toHaveBeenCalledTimes(1);
+	});
+
+	it('with none, runs no pass on focus return or timer', () => {
+		const { rerender } = render('none');
+		mockFocused = false;
+		rerender();
+		mockFocused = true;
+		rerender();
+		appState('background');
+		appState('active');
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS * 3);
+		});
+		expect(sync).not.toHaveBeenCalled();
+	});
+
+	it('keeps at most one pass in flight', async () => {
+		let resolve!: () => void;
+		sync.mockImplementation(
+			() =>
+				new Promise<void>((done) => {
+					resolve = done;
+				})
+		);
+		render('interval');
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+		});
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+		});
+		expect(sync).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			resolve();
+		});
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+		});
+		expect(sync).toHaveBeenCalledTimes(2);
+	});
+
+	it('swallows a failed pass and keeps refreshing', async () => {
+		sync.mockRejectedValueOnce(new Error('offline'));
+		render('interval');
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+		});
+		await settle();
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+		});
+		expect(sync).toHaveBeenCalledTimes(2);
+	});
+
+	it('leaves no timer or listener after unmount', () => {
+		const { unmount } = render('interval');
+		unmount();
+		expect(jest.getTimerCount()).toBe(0);
+		expect(mockListeners.size).toBe(0);
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS * 3);
+		});
+		expect(sync).not.toHaveBeenCalled();
+	});
+});

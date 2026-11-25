@@ -238,7 +238,7 @@ describe('manual order view refresh', () => {
 		}
 	});
 
-	it('does not re-walk a complete ranged orders window', async () => {
+	it('re-walks a complete ranged orders window on a manual sync', async () => {
 		const harness = await createEngineHarness({
 			mode: 'manual',
 			fetch: async () => Response.json([]),
@@ -259,8 +259,8 @@ describe('manual order view refresh', () => {
 			expect(
 				harness.requests
 					.slice(before)
-					.filter(({ url }) => new URL(url).searchParams.get('after') === after)
-			).toHaveLength(0);
+					.filter(({ url }) => new URL(url).searchParams.get('after') === after).length
+			).toBeGreaterThan(0);
 			handle.release();
 		} finally {
 			await harness.dispose();

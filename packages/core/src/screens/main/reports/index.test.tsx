@@ -669,6 +669,7 @@ jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => mockRoute,
 	useRouter: () => ({ setParams: mockSetParams }),
 	useNavigation: () => ({ openDrawer: mockOpenDrawer, setParams: mockSetParams }),
+	useIsFocused: () => true,
 }));
 let mockPhone = true;
 jest.mock('@wcpos/components/lib/device', () => ({
