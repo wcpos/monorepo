@@ -137,7 +137,7 @@
 		"zxing-wasm": "3.1.6"
 	},
 	"devDependencies": {
-		"@testing-library/jest-dom": "^7.0.1",
+		"@testing-library/jest-dom": "^8.0.0",
 		"@testing-library/react": "^16.3.3",
 		"@types/jest": "^30.0.0",
 		"@types/lodash": "^4.17.27",

@@ -59,6 +59,6 @@
 		"jest-environment-jsdom": "^30.5.2",
 		"mingo": "7.2.7",
 		"ts-jest": "29.4.15",
-		"z-schema": "12.5.0"
+		"z-schema": "12.8.0"
 	}
 }
