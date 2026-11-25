@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
-import { mockPhone, mockRoot } from '../dropdown-menu/sheet.test-utils';
+import { mockPhone, mockPlatform, mockRoot } from '../dropdown-menu/sheet.test-utils';
 import * as C from './index';
 jest.mock('@rn-primitives/select', () =>
 	jest.requireActual('../dropdown-menu/sheet.test-utils').mockPrimitive(true)
@@ -157,5 +157,53 @@ it.each([
 			/>
 		);
 		expect(mockFieldBox).toHaveBeenLastCalledWith(state);
+	}
+);
+
+// A native list with no width floor is a blank strip: its rows' labels are flex-1 and lend it none.
+it.each([
+	['ios', false, { minWidth: 240 }, false],
+	['ios', true, { width: 240 }, false],
+	['web', false, undefined, true],
+] as const)(
+	'the anchored list on %s (matchWidth %s) is floored at its trigger',
+	(OS, matchWidth, style, cssFloor) => {
+		mockPhone.current = false;
+		mockPlatform.OS = OS;
+		const primitive = jest.requireMock('@rn-primitives/select');
+		const Keep = primitive.Content;
+		const seen = jest.fn();
+		function ContentSpy(props: { style?: unknown; className?: string }) {
+			seen(props.style, props.className);
+			return null;
+		}
+		primitive.Content = ContentSpy;
+		const trigger = jest.requireMock('./trigger');
+		const KeepTrigger = trigger.Trigger;
+		let layout: (e: unknown) => void = () => {};
+		function TriggerSpy(props: { onLayout: (e: unknown) => void }) {
+			layout = props.onLayout;
+			return null;
+		}
+		trigger.Trigger = TriggerSpy;
+		try {
+			render(
+				<C.Select>
+					<C.SelectTrigger testID="trigger" />
+					<C.SelectContent inline matchWidth={matchWidth}>
+						<C.SelectItem value="a" label="A" />
+					</C.SelectContent>
+				</C.Select>
+			);
+			act(() => layout({ nativeEvent: { layout: { width: 240 } } }));
+			const [lastStyle, className] = seen.mock.calls.at(-1)!;
+			expect(lastStyle).toEqual(style);
+			expect(className.includes('min-w-(--radix-select-trigger-width)')).toBe(cssFloor);
+			expect(className.includes('min-w-32')).toBe(OS === 'ios' && !matchWidth);
+		} finally {
+			primitive.Content = Keep;
+			trigger.Trigger = KeepTrigger;
+			mockPlatform.OS = 'web';
+		}
 	}
 );
