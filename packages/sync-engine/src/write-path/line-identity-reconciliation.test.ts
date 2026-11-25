@@ -198,3 +198,63 @@ it.each([true, false])(
 		}
 	}
 );
+
+it('pending successor takes the store sale-day fact and keeps the queued request', async () => {
+	const { engine } = await createEngineHarness({ mode: 'manual' });
+	try {
+		await engine.ready;
+		const db = engine.active()!.database;
+		const facet = writeFacetFor('orders')!;
+		const fact = (at_gmt: string) => ({
+			key: '_wcpos_sale_day',
+			value: { at_gmt, reason: 'Late entry', by: 7, changed_at_gmt: '2026-11-24T10:20:00Z' },
+		});
+		const request = {
+			key: '_wcpos_sale_day_request',
+			value: '{"at_gmt":"2026-11-22T09:12:00Z","reason":"Again","from":"2026-11-23T09:12:00Z"}',
+		};
+		await facet.upsertServerDocument(
+			db,
+			facet.documentFromServerPayload({
+				...truth,
+				customer_note: 'successor',
+				meta_data: [...meta_data, fact('2026-11-24T09:12:00Z'), request],
+			})
+		);
+		await engine.write({
+			collection: 'orders',
+			operation: 'update',
+			recordId: UUID,
+			payload: { customer_note: 'successor' },
+		});
+		// A whole document: the store's fact replaces the resident's; it never carries a request.
+		const server = {
+			...truth,
+			total: '0.00',
+			currency: 'USD',
+			status: 'completed',
+			date_paid: null,
+			payment_method: '',
+			customer_note: 'old note',
+			meta_data: [...meta_data, fact('2026-11-23T09:12:00Z')],
+		};
+		await facet.reconcile(db, {
+			recordId: UUID,
+			remoteId: remoteId(900),
+			currentRevision: 'r2',
+			mutation: { mutationId: 'previous', operation: 'update', recordId: UUID },
+			document: server,
+			identityDocument: server,
+		});
+		const meta = (await db.collections.orders.findOne(UUID).exec())!.toJSON().payload.meta_data as {
+			key: string;
+			value: unknown;
+		}[];
+		expect(meta.filter((entry) => entry.key === '_wcpos_sale_day')).toEqual([
+			fact('2026-11-23T09:12:00Z'),
+		]);
+		expect(meta.filter((entry) => entry.key === '_wcpos_sale_day_request')).toEqual([request]);
+	} finally {
+		await engine.dispose();
+	}
+});

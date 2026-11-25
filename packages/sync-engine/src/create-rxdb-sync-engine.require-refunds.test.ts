@@ -13,6 +13,7 @@ import { createLocalCoverage } from './local-coverage/local-coverage';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 import type { LocalRefundDocument } from './collections/refund-schema';
+import type { EngineStringStore } from './create-rxdb-sync-engine';
 
 let sequence = 0;
 afterEach(async () => {
@@ -27,7 +28,10 @@ const row = (id: number) => ({
 	reason: '',
 	meta_data: [{ key: '_wcpos_session', value: 'B' }],
 });
-async function harness(respond?: (url: URL) => Response | Promise<Response>) {
+async function harness(
+	respond?: (url: URL) => Response | Promise<Response>,
+	options?: { storeId?: number; checkpoints?: EngineStringStore }
+) {
 	const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 	setPremiumFlag();
 	const requests: URL[] = [];
@@ -38,9 +42,10 @@ async function harness(respond?: (url: URL) => Response | Promise<Response>) {
 		site: 'https://refunds.example.test',
 		identity: {
 			site: 'https://refunds.example.test',
-			storeId: 3,
+			storeId: options?.storeId ?? 3,
 			cashierId: `refunds-${++sequence}`,
 		},
+		...(options?.checkpoints ? { checkpoints: options.checkpoints } : {}),
 		startAtMs: Date.parse('2026-09-16T00:00:00Z'),
 		fetch: async (url) => {
 			const parsed = new URL(url);
@@ -785,5 +790,113 @@ describe('refund browse requirements', () => {
 		b.release();
 		expect(a.queryKey).toBe(b.queryKey);
 		expect(h.requests).toHaveLength(1);
+	});
+});
+
+describe('refund history checkpoint (#3340)', () => {
+	const serverRows = () =>
+		Array.from({ length: 250 }, (_, i) => ({
+			...row(i + 1),
+			date_created_gmt: '2026-08-01T00:00:00',
+		}));
+	const serverResponder = (rows: ReturnType<typeof row>[]) => (url: URL) => {
+		const after = url.searchParams.get('after');
+		const parentId = url.searchParams.get('parent');
+		const perPage = Number(url.searchParams.get('per_page'));
+		const page = Number(url.searchParams.get('page'));
+		const matched = rows
+			.filter((r) => after === null || r.date_created_gmt > after)
+			.filter((r) => parentId === null || String(r.parent_id) === parentId)
+			.sort((a, b) => a.id - b.id);
+		return Response.json(matched.slice((page - 1) * perPage, page * perPage), {
+			headers: { 'X-WP-TotalPages': String(Math.max(1, Math.ceil(matched.length / perPage))) },
+		});
+	};
+	const history = (urls: URL[]) => urls.filter((url) => url.searchParams.has('after'));
+	const afters = (urls: URL[]) => history(urls).map((url) => url.searchParams.get('after'));
+	const checkpointDoc = async (h: Awaited<ReturnType<typeof harness>>) =>
+		(await h.engine.whenActive()).database.collections.engineKv
+			.findOne('refund-history:checkpoint')
+			.exec();
+	// Money check (desk, 25 Nov): a delta completion neither evicts nor alters an earlier refund.
+	const expectEarlierRefundsKept = async (h: Awaited<ReturnType<typeof harness>>) => {
+		const refunds = await readRefunds(h);
+		expect(refunds.filter((doc) => doc.payload.id <= 250)).toHaveLength(250);
+		expect(refunds.find((doc) => doc.payload.id === 17)?.payload.amount).toBe('20.0000');
+	};
+
+	// Revert passing refundHistoryCheckpointFor to createRequirePlane: the second refresh walks 3 pages.
+	it('E1: keeps the checkpoint in engineKv, and the second refresh is one GET', async () => {
+		const h = await harness(serverResponder(serverRows()));
+		await refresh(h);
+		expect(new Set(afters(h.requests))).toEqual(new Set(['2026-06-16T00:00:00']));
+		expect(history(h.requests).map((url) => url.searchParams.get('page'))).toEqual(['1', '2', '3']);
+		const doc = await checkpointDoc(h);
+		expect(JSON.parse((doc!.toJSON() as { value: string }).value)).toMatchObject({
+			lastWalkStartedAtMs: Date.parse('2026-09-16T00:00:00Z'),
+		});
+		h.clock.advance(31 * 60_000);
+		const before = h.requests.length;
+		await refresh(h);
+		expect(h.requests.slice(before)).toHaveLength(1);
+		expect(afters(h.requests.slice(before))).toEqual(['2026-09-15T00:00:00']);
+		await expectEarlierRefundsKept(h);
+	});
+
+	// Revert passing the port from the maintenance drain: the tick walks 3 pages.
+	it('E2: the 30-min maintenance tick is one GET', async () => {
+		const h = await harness(serverResponder(serverRows()));
+		await refresh(h);
+		h.clock.advance(31 * 60_000);
+		const before = h.requests.length;
+		await h.engine.sync('reference-seed');
+		await h.engine.sync('scheduler-drain');
+		expect(afters(h.requests.slice(before))).toEqual(['2026-09-15T00:00:00']);
+		await expectEarlierRefundsKept(h);
+	});
+
+	// Revert refundHistoryCheckpointFor to ignore its scopeId: store 4 walks delta from store 3's blob.
+	it('E3: a store switch walks full', async () => {
+		const kv = new Map<string, string>();
+		const checkpoints: EngineStringStore = {
+			get: async (key) => kv.get(key) ?? null,
+			set: async (key, value) => {
+				kv.set(key, value);
+			},
+			remove: async (key) => {
+				kv.delete(key);
+			},
+		};
+		const keys = () => [...kv.keys()].filter((key) => key.endsWith(':refund-history:checkpoint'));
+		const a = await harness(serverResponder(serverRows()), { checkpoints });
+		await refresh(a);
+		expect(keys()).toHaveLength(1);
+		const b = await harness(serverResponder(serverRows()), { storeId: 4, checkpoints });
+		await refresh(b);
+		expect(afters(b.requests)).toEqual(Array(3).fill('2026-06-16T00:00:00'));
+		expect(keys()).toHaveLength(2);
+	});
+
+	// Revert 'refunds' in the invalidator loop: the walk after Clear & Sync is a delta.
+	it('E4: a refunds reset clears the checkpoint', async () => {
+		const h = await harness(serverResponder(serverRows()));
+		await refresh(h);
+		h.clock.advance(31 * 60_000);
+		const before = h.requests.length;
+		await h.engine.scope.resetCollection('refunds');
+		expect(await checkpointDoc(h)).toBeNull();
+		await refresh(h);
+		expect(afters(h.requests.slice(before))[0]).toBe('2026-06-16T00:31:00');
+	});
+
+	// Revert 'orders' in the invalidator loop: the forced refresh after the cascade is a delta.
+	it('E5: an orders reset clears the checkpoint before its forced history refresh', async () => {
+		const h = await harness(serverResponder(serverRows()));
+		await refresh(h);
+		h.clock.advance(31 * 60_000);
+		const before = h.requests.length;
+		await h.engine.scope.resetCollection('orders');
+		await vi.waitFor(() => expect(afters(h.requests.slice(before)).length).toBeGreaterThan(0));
+		expect(afters(h.requests.slice(before))[0]).toBe('2026-06-16T00:31:00');
 	});
 });

@@ -40,7 +40,10 @@ import {
 	createReferenceCollectionFetcher,
 	TAG_REFERENCE_CONFIG,
 } from './rx-scheduler-reference-fetcher';
-import { createRefundsSchedulerFetcher } from './rx-scheduler-refund-fetcher';
+import {
+	createRefundsSchedulerFetcher,
+	type RefundHistoryCheckpointStore,
+} from './rx-scheduler-refund-fetcher';
 import { parseRefundLaneQueryKey } from './refund-lane-descriptor';
 import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
@@ -332,6 +335,8 @@ export type RunEngineSchedulerDrainInput = {
 	 */
 	barcodeSelectors?: BarcodeSelectorsReader;
 	exactSkuLeg?: () => boolean;
+	/** The scope's refund history walk checkpoint (#3340); absent means every history walk is full. */
+	refundHistoryCheckpoint?: RefundHistoryCheckpointStore;
 };
 
 export type RunEngineSchedulerTaskInput = Pick<
@@ -366,6 +371,7 @@ function createEngineSchedulerFetcherRegistry(
 		| 'refreshBrowseWindowKey'
 		| 'barcodeSelectors'
 		| 'exactSkuLeg'
+		| 'refundHistoryCheckpoint'
 	>,
 	/**
 	 * How a query-total cache refusal recovers. A DRAIN tick holds claims on
@@ -452,6 +458,9 @@ function createEngineSchedulerFetcherRegistry(
 			fetcher: createRefundsSchedulerFetcher({
 				scope: input.scope,
 				...shared,
+				...(input.refundHistoryCheckpoint !== undefined
+					? { historyCheckpoint: input.refundHistoryCheckpoint }
+					: {}),
 				repository: collectionSchedulerRepository(db.refunds),
 				heldParentIds: async (ids) => {
 					const parents = await db.orders

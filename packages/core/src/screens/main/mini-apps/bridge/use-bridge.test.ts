@@ -11,12 +11,16 @@ jest.mock('uuid', () => ({ v4: () => 'generated-id' }));
 
 const origin = 'https://mini-app.example';
 
-function setup(handlers: Record<string, (payload: Record<string, unknown>) => Promise<object>>) {
+function setup(
+	handlers: Record<string, (payload: Record<string, unknown>) => Promise<object>>,
+	pin = origin
+) {
 	const postMessage = jest.fn();
 	const ref = { current: { postMessage } } as unknown as React.RefObject<WebViewHandle>;
-	const hook = renderHook(() => useBridge(ref, origin, handlers));
-	const receive = (data: unknown, url = `${origin}/index.html`) =>
-		hook.result.current.onMessage({ nativeEvent: { data, url } });
+	const hook = renderHook(() => useBridge(ref, pin, handlers));
+	// null sends a message that carries no sender URL at all.
+	const receive = (data: unknown, url: string | null = `${pin}/index.html`) =>
+		hook.result.current.onMessage({ nativeEvent: url === null ? { data } : { data, url } });
 	const handshake = () =>
 		act(async () => receive({ wcpos: 1, id: 'ready-1', action: 'app.ready', payload: {} }));
 
@@ -46,6 +50,38 @@ describe('useBridge', () => {
 
 		expect(handler).not.toHaveBeenCalled();
 		expect(postMessage).not.toHaveBeenCalled();
+	});
+
+	it('a message without a sender URL is dropped when pinned', async () => {
+		const { postMessage, receive, result } = setup(READY_HANDLER);
+
+		await act(async () => {
+			await receive(envelope({ action: 'app.ready' }), null);
+		});
+
+		expect(result.current.ready).toBe(false);
+		expect(postMessage).not.toHaveBeenCalled();
+	});
+
+	it('a message from another jsDelivr path is dropped', async () => {
+		const pin = `${origin}/gh/wcpos/mini-apps@1`;
+		const handler = jest.fn(async () => ({}));
+		const bridge = setup({ ...READY_HANDLER, 'test.action': handler }, pin);
+
+		for (const url of [
+			`${origin}/gh/someone/else@1/index.html`,
+			`${origin}/gh/wcpos/mini-apps@10/index.html`,
+		]) {
+			await act(async () => bridge.receive(envelope({ action: 'app.ready' }), url));
+		}
+		expect(bridge.result.current.ready).toBe(false);
+		expect(bridge.postMessage).not.toHaveBeenCalled();
+
+		// The mini-app's own pages, and the web frame (which reports only its origin), still speak.
+		await bridge.handshake();
+		await act(async () => bridge.receive(envelope(), origin));
+		expect(bridge.result.current.ready).toBe(true);
+		expect(handler).toHaveBeenCalledTimes(1);
 	});
 
 	it('answers unsupported protocol versions', async () => {

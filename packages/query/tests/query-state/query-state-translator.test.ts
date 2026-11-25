@@ -1568,3 +1568,26 @@ it('reads a corrected sale on November 23 only, while Orders keeps November 24',
 		'2026-11-24T10:00:00'
 	);
 });
+
+it.each(['sales', 'pos'] as const)(
+	'gates corrected sale-day demand on capability and sales scope (%s)',
+	(storeScope) => {
+		const state = {
+			search: '',
+			filters: { dateRange: { from: '2026-11-23T00:00:00Z', to: '2026-11-23T23:59:59Z' } },
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		} as const;
+		for (const saleDayCorrection of [false, true]) {
+			const compiled = compileQuery('orders', state, {
+				id: 'report',
+				storeScope,
+				saleDayCorrection,
+			});
+			const demand = compiled.demand[0];
+			if (storeScope === 'sales' && saleDayCorrection) {
+				expect(demand).toMatchObject({ saleDayCorrection: true, modifiedAfterSeconds: 1795392000 });
+			} else expect(demand).not.toHaveProperty('saleDayCorrection');
+		}
+	}
+);

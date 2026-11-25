@@ -725,6 +725,40 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it('Try again while the first send is still running says it is still sending, never unanswered (POS-34W)', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('in_flight'), { reason: 'in_flight' })
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.commands.retryCommand());
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.payment_still_sending',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_unanswered',
+			expect.anything()
+		);
+		expect(mockError).not.toHaveBeenCalled();
+	});
+
+	it('Try again refused for another reason is still reported as unanswered, not still sending (POS-34W)', async () => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('revision_unavailable'), {
+				reason: 'revision_unavailable',
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.commands.retryCommand());
+		expect(mockInfo).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_still_sending',
+			expect.anything()
+		);
+		expect(mockError).toHaveBeenCalledWith('pos_checkout.payment_unanswered', expect.anything());
+	});
+
 	it('Try again refused with invalid fields names them on the unanswered log, never their values (POS-357)', async () => {
 		mockResend.mockRejectedValueOnce(
 			Object.assign(new Error('write-rejected'), {

@@ -14,7 +14,52 @@ import { wooGmtDate } from './woo-gmt-date';
 import type { LocalRefundDocument, WooRefundPayload } from '../collections/refund-schema';
 import type { SchedulerFetcher } from './replication-policy';
 
+/** engineKv key of the refund history walk checkpoint (#3340). Cleared by refunds and orders resets. */
+export const REFUND_HISTORY_CHECKPOINT_KEY = 'refund-history:checkpoint';
+/** Created-date overlap behind the last walk start: covers clock skew between till and server,
+ * and re-fetches edits to refunds created in the last day (desk ruling, #3340). */
+export const REFUND_HISTORY_DELTA_OVERLAP_MS = 24 * 3_600_000;
+/** A full 92-day walk at most this long after the previous one: the bound within which an edit
+ * to an older refund is seen (desk ruling, #3340). */
+export const REFUND_HISTORY_FULL_WALK_EVERY_MS = 24 * 3_600_000;
+export type RefundHistoryCheckpointStore = {
+	get(): Promise<string | null>;
+	set(value: string): Promise<void>;
+	remove(): Promise<void>;
+};
+type RefundHistoryCheckpoint = { lastWalkStartedAtMs: number; lastFullWalkStartedAtMs: number };
+
+/** Null means "walk full": an absent, unreadable or impossible blob (a clock that moved back). */
+function decodeRefundHistoryCheckpoint(
+	raw: string | null,
+	nowMs: number
+): RefundHistoryCheckpoint | null {
+	if (raw === null) return null;
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch {
+		return null;
+	}
+	const { v, lastWalkStartedAtMs, lastFullWalkStartedAtMs } = (parsed ?? {}) as Record<
+		string,
+		unknown
+	>;
+	if (
+		v !== 1 ||
+		typeof lastWalkStartedAtMs !== 'number' ||
+		typeof lastFullWalkStartedAtMs !== 'number' ||
+		!Number.isFinite(lastWalkStartedAtMs) ||
+		!Number.isFinite(lastFullWalkStartedAtMs) ||
+		!(lastFullWalkStartedAtMs <= lastWalkStartedAtMs && lastWalkStartedAtMs <= nowMs)
+	)
+		return null;
+	return { lastWalkStartedAtMs, lastFullWalkStartedAtMs };
+}
+
 export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDocument> & {
+	/** Persisted history walk checkpoint (#3340); absent means every history walk is full. */
+	historyCheckpoint?: RefundHistoryCheckpointStore;
 	coverageRepository?: CollectionSchedulerInput<LocalRefundDocument>['coverageRepository'] &
 		Pick<
 			import('./rx-scheduler-order-fetcher').OrdersSchedulerCoverageRepository,
@@ -69,7 +114,19 @@ export function createRefundsSchedulerFetcher(
 	input: RefundSchedulerFetcherInput
 ): SchedulerFetcher {
 	const browse = createRefundBrowseSchedulerFetcher(input);
-	const walks = new Map<string, { page: number; perPage: number; after: string; ids: string[] }>();
+	const walks = new Map<
+		string,
+		{
+			page: number;
+			perPage: number;
+			after: string;
+			ids: string[];
+			startedAtMs: number;
+			failed: boolean;
+			lastFullWalkStartedAtMs: number; // this walk's start when it is full
+		}
+	>();
+	const checkpoint = input.historyCheckpoint;
 	return async (task, context) => {
 		if (task.queryKey.startsWith('refunds:browser:')) return browse(task, context);
 		const lane = parseRefundLaneQueryKey(task.queryKey);
@@ -83,14 +140,33 @@ export function createRefundsSchedulerFetcher(
 		) {
 			throw new Error(`Unsupported refund scheduler task: ${task.queryKey}`);
 		}
-		const walk = walks.get(task.id) ?? {
-			page: 1,
-			perPage: Math.min(task.limit, WOO_REST_MAX_PER_PAGE),
-			ids: [],
-			after: wooGmtDate(
-				Math.floor(((input.nowMs?.() ?? Date.now()) - HISTORY_DAYS * 86400000) / 1000)
-			),
-		};
+		const historyCheckpoint = lane.kind === 'history' ? checkpoint : undefined;
+		let walk = walks.get(task.id);
+		if (!walk) {
+			const startedAtMs = input.nowMs?.() ?? Date.now();
+			const windowStartMs = startedAtMs - HISTORY_DAYS * 86400000;
+			const last = historyCheckpoint
+				? decodeRefundHistoryCheckpoint(await historyCheckpoint.get(), startedAtMs)
+				: null;
+			// Delta only while a full walk started less than a day ago; otherwise walk the window.
+			const delta =
+				last !== null &&
+				startedAtMs - last.lastFullWalkStartedAtMs < REFUND_HISTORY_FULL_WALK_EVERY_MS
+					? last
+					: null;
+			const afterMs = delta
+				? Math.max(windowStartMs, delta.lastWalkStartedAtMs - REFUND_HISTORY_DELTA_OVERLAP_MS)
+				: windowStartMs;
+			walk = {
+				page: 1,
+				perPage: Math.min(task.limit, WOO_REST_MAX_PER_PAGE),
+				ids: [],
+				after: wooGmtDate(Math.floor(afterMs / 1000)),
+				startedAtMs,
+				failed: false,
+				lastFullWalkStartedAtMs: delta?.lastFullWalkStartedAtMs ?? startedAtMs,
+			};
+		}
 		const query = new URLSearchParams({
 			...(lane.kind === 'history' ? { after: walk.after } : { parent: lane.parentRemoteId }),
 			dates_are_gmt: '1',
@@ -99,24 +175,45 @@ export function createRefundsSchedulerFetcher(
 			per_page: String(walk.perPage),
 			page: String(walk.page),
 		});
-		const response = await httpGet(input, `${input.baseUrl}/refunds?${query}`, context);
-		if (!response.ok) throw new Error(`Woo REST refunds request failed: ${response.status}`);
-		const rows = (await response.json()) as WooRefundPayload[];
-		const applied = await admitRefundPage(input, rows);
-		const pageIds = applied.map((document) => document.uuid);
-		walk.ids.push(...pageIds);
-		// WooCommerce always sends the page count; a short page is the end only when it does not.
-		const totalPages = Number(response.headers.get('X-WP-TotalPages'));
-		const completed = totalPages > 0 ? walk.page >= totalPages : rows.length < walk.perPage;
-		await recordCoverage(
-			'refunds',
-			input,
-			task,
-			pageIds,
-			completed,
-			undefined,
-			completed ? walk.ids : undefined
-		);
+		let applied: readonly LocalRefundDocument[];
+		let completed: boolean;
+		try {
+			const response = await httpGet(input, `${input.baseUrl}/refunds?${query}`, context);
+			if (!response.ok) throw new Error(`Woo REST refunds request failed: ${response.status}`);
+			const rows = (await response.json()) as WooRefundPayload[];
+			applied = await admitRefundPage(input, rows);
+			const pageIds = applied.map((document) => document.uuid);
+			walk.ids.push(...pageIds);
+			// WooCommerce always sends the page count; a short page is the end only when it does not.
+			const totalPages = Number(response.headers.get('X-WP-TotalPages'));
+			completed = totalPages > 0 ? walk.page >= totalPages : rows.length < walk.perPage;
+			await recordCoverage(
+				'refunds',
+				input,
+				task,
+				pageIds,
+				completed,
+				undefined,
+				completed ? walk.ids : undefined
+			);
+		} catch (error) {
+			// A failed walk never writes the checkpoint, so the walk after it is full (#3340).
+			if (historyCheckpoint) {
+				walk.failed = true;
+				walks.set(task.id, walk);
+				await historyCheckpoint.remove();
+			}
+			throw error;
+		}
+		if (completed && historyCheckpoint && !walk.failed) {
+			await historyCheckpoint.set(
+				JSON.stringify({
+					v: 1,
+					lastWalkStartedAtMs: walk.startedAtMs,
+					lastFullWalkStartedAtMs: walk.lastFullWalkStartedAtMs,
+				})
+			);
+		}
 		if (completed) walks.delete(task.id);
 		else {
 			walk.page += 1;

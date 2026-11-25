@@ -88,6 +88,7 @@ export const SERVER_OWNED_ORDER_META_KEYS: readonly string[] = [
 	'_wcpos_completed_at',
 	'_wcpos_completions',
 	'_wcpos_sale_day_at',
+	'_wcpos_sale_day',
 	'_wcpos_fiscal_pending',
 	'_wcpos_gateway_attempts',
 	'_wcpos_awaiting_customer',
