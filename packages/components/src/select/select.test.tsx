@@ -275,16 +275,28 @@ it("a caller's style on the single-select list keeps the trigger floor", () => {
 		return null;
 	}
 	primitive.Content = ContentSpy;
+	const trigger = jest.requireMock('./trigger');
+	const KeepTrigger = trigger.Trigger;
+	let layout: (e: unknown) => void = () => {};
+	function TriggerSpy(props: { onLayout: (e: unknown) => void }) {
+		layout = props.onLayout;
+		return null;
+	}
+	trigger.Trigger = TriggerSpy;
 	try {
 		render(
-			<C.SelectContent inline style={{ maxHeight: 300 }}>
-				<C.SelectItem value="a" label="A" />
-			</C.SelectContent>
+			<C.Select>
+				<C.SelectTrigger />
+				<C.SelectContent inline style={{ maxHeight: 300 }}>
+					<C.SelectItem value="a" label="A" />
+				</C.SelectContent>
+			</C.Select>
 		);
-		// No trigger is measured here: the caller's style passes through beside the empty floor.
-		expect(seen.mock.calls.at(-1)![0]).toEqual([undefined, { maxHeight: 300 }]);
+		act(() => layout({ nativeEvent: { layout: { width: 240 } } }));
+		expect(seen.mock.calls.at(-1)![0]).toEqual([{ minWidth: 240 }, { maxHeight: 300 }]);
 	} finally {
 		primitive.Content = Keep;
+		trigger.Trigger = KeepTrigger;
 		mockPlatform.OS = 'web';
 	}
 });
