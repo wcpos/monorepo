@@ -279,7 +279,9 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 		minor: toMinor(row.amount, flow.dp),
 		state: 'done',
 		title:
-			flow.tiles.find((item) => item.method.id === row.method_id)?.method.title ?? row.method_id,
+			flow.byId?.get(row.method_id)?.title ??
+			flow.tiles.find((item) => item.method.id === row.method_id)?.method.title ??
+			row.method_id,
 	});
 	const setPlan = (next: NonNullable<typeof plan>) =>
 		flow.commands.dispatch({ type: 'set-plan', plan: next, balanceMinor: flow.balanceMinor });

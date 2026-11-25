@@ -164,6 +164,30 @@ it('lists only R+ on a corrected ledger, as a refund', () => {
 	expect(screen.queryByTestId('checkout-cancel-leg-o')).toBeNull();
 });
 
+// #3651: the tiles leave webview methods out, so a leg's title comes from the held methods first.
+it('#3651: a leg is titled by the held method when no tile has it', () => {
+	const terminal = row('t', {
+		status: 'captured',
+		kind: 'card',
+		capture_mode: 'server',
+		method_id: 'example_terminal',
+	});
+	const cheque = row('cheque', { status: 'pending', kind: 'card', capture_mode: 'manual' });
+	const byId = new Map([
+		['example_terminal', { id: 'example_terminal', title: 'Example terminal' }],
+	]);
+	render(
+		<CancelPaymentView
+			flow={{ ...flow([terminal, cheque], [terminal]), byId } as never}
+			format={format}
+		/>
+	);
+	const first = screen.getByTestId('checkout-cancel-leg-t').textContent;
+	expect(first).toContain('Example terminal');
+	expect(first).not.toContain('example_terminal');
+	expect(screen.getByTestId('checkout-cancel-leg-cheque').textContent).toContain('cheque');
+});
+
 // #3654: on a phone the buttons stack full width, Keep taking payment first; elsewhere they sit side by side.
 it.each([true, false])('on a phone (%s) the buttons stack full width', (phone) => {
 	mockPhone = phone;

@@ -41,6 +41,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 					{legs.map((row) => {
 						const amount = format(toMinor(row.amount, flow.dp));
 						const title =
+							flow.byId?.get(row.method_id)?.title ??
 							flow.tiles.find(({ method }) => method.id === row.method_id)?.method.title ??
 							row.method_id;
 						// The same rule `voidPayments` applies: a captured card leg, or a captured

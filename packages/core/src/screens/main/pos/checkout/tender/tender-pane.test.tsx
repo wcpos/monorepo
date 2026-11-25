@@ -1478,6 +1478,22 @@ describe('split V1: the pane builds each payment', () => {
 		expect(screen.getByTestId('checkout-helpers')).toBeTruthy();
 	});
 
+	it('#3651: a leg is titled by the held method when no tile has it', () => {
+		const rows = [
+			row('a', '23.00'),
+			row('b', '15.00', 'example_terminal'),
+			row('c', '20.00', 'cheque'),
+		];
+		const byId = new Map([
+			['example_terminal', { ...method, id: 'example_terminal', title: 'Example terminal' }],
+		]);
+		const over = { rows, byId, paidMinor: 5800, balanceMinor: 12450 };
+		render(<TenderPane flow={splitFlow(over, { doneOpen: true })} format={String} />);
+		expect(text('checkout-plan-payment-1')).toContain('Example terminal · 1500');
+		expect(text('checkout-plan-payment-2')).toContain('cheque · 2000');
+		expect(document.body.textContent).not.toContain('example_terminal');
+	});
+
 	it('runs of equal payments to come read Then n × amount', () => {
 		const flow = splitFlow({
 			plan: { kind: 'even', ways: 3, from: 0 },
