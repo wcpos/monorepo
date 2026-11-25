@@ -256,7 +256,8 @@ function LedgerLeg({
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const time = row.events?.[0]?.t;
-	const titleOf = (id: string) => view.tiles.find(({ method }) => method.id === id)?.method.title;
+	const titleOf = (id: string) =>
+		view.byId?.get(id)?.title ?? view.tiles.find(({ method }) => method.id === id)?.method.title;
 	const title = titleOf(row.method_id);
 	// The original of a tender correction keeps its leg under a Corrected badge; its R+ names it.
 	const corrected = correctionOf(row, view.rows) !== null;

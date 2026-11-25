@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { render, screen, within } from '@testing-library/react';
 
-import type { PaymentRow } from '@wcpos/order-math';
+import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import { BalanceHeadline, LedgerLegs, LedgerLines } from './ledger-pane';
 import { splitWith } from './tender-figures.test-utils';
@@ -290,4 +290,45 @@ it('tags an unverified R+ Recorded manually, and neither a plain R+ nor an ordin
 	);
 	for (const id of ['r-plain', 'cash'])
 		expect(screen.queryByTestId(`checkout-leg-recorded-manually-${id}`)).toBeNull();
+});
+// #3651: the tiles leave webview methods out, so a leg's title comes from the held methods.
+it('#3651: a leg is titled by the held method when no tile has it', () => {
+	const original = { ...row, id: 'o-cash', method_id: 'pos_cash' };
+	const minus = {
+		...original,
+		id: 'r-minus',
+		amount: '-10',
+		entry: 'tender_correction',
+		reverses: 'o-cash',
+	};
+	const plus = {
+		...row,
+		id: 'r-plus',
+		method_id: 'example_terminal',
+		kind: 'card',
+		corrects: 'o-cash',
+	};
+	const unheld = { ...row, id: 'r-unheld', method_id: 'cheque' };
+	const byId = new Map(
+		[
+			{ id: 'example_terminal', title: 'Example terminal' },
+			{ id: 'pos_cash', title: 'Cash' },
+		].map((method) => [method.id, method as PaymentMethodDescriptor])
+	);
+	render(
+		<LedgerLegs
+			view={{ ...view, tiles: [], byId, rows: [original, minus, plus, unheld] as PaymentRow[] }}
+			format={format}
+		/>
+	);
+	expect(
+		within(screen.getByTestId('checkout-leg-r-plus')).getByText('Example terminal')
+	).toBeTruthy();
+	expect(within(screen.getByTestId('checkout-leg-o-cash')).getByText('Cash')).toBeTruthy();
+	expect(screen.getByTestId('checkout-leg-corrected-from-r-plus').textContent).toBe(
+		'Corrected from Cash'
+	);
+	expect(within(screen.getByTestId('checkout-leg-r-unheld')).getByText('cheque')).toBeTruthy();
+	expect(document.body.textContent).not.toContain('example_terminal');
+	expect(document.body.textContent).not.toContain('pos_cash');
 });
