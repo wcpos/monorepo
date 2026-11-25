@@ -11,9 +11,9 @@ export function usePrinterOptions() {
 	return React.useMemo(
 		() => ({
 			languages: [
-				{ value: 'esc-pos', label: 'ESC/POS' },
-				{ value: 'star-prnt', label: 'StarPRNT' },
-				{ value: 'star-line', label: 'Star Line Mode' },
+				{ value: 'esc-pos', label: t('settings.printer_language_esc_pos') },
+				{ value: 'star-prnt', label: t('settings.printer_language_star_prnt') },
+				{ value: 'star-line', label: t('settings.printer_language_star_line') },
 			],
 			columns: [
 				{ value: '32', label: t('settings.setup_width_32') },

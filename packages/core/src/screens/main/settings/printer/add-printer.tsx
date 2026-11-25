@@ -110,8 +110,8 @@ function EditPrinterDialog({
 	const genericAllowed = genericVendorAllowed(connectionType, address);
 	const vendorOptions: VendorOption[] = React.useMemo(() => {
 		const base: VendorOption[] = [
-			{ value: 'epson', label: 'Epson' },
-			{ value: 'star', label: 'Star Micronics' },
+			{ value: 'epson', label: t('settings.printer_vendor_epson') },
+			{ value: 'star', label: t('settings.printer_vendor_star') },
 		];
 		if (genericAllowed) {
 			base.push({ value: 'generic', label: t('settings.printer_vendor_generic') });

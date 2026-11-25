@@ -157,8 +157,8 @@ export function PrinterSetupDialog({
 	// The printer itself is busy only while a page prints or the profile saves; scanning must not block a tap.
 	const printerBusy = bleScanning || phase === 'printing' || phase === 'saving';
 	const vendors = [
-		{ value: 'epson' as const, label: 'Epson' },
-		{ value: 'star' as const, label: 'Star Micronics' },
+		{ value: 'epson' as const, label: t('settings.printer_vendor_epson') },
+		{ value: 'star' as const, label: t('settings.printer_vendor_star') },
 		// Native SDK Bluetooth and USB have no generic transport; BLE/SPP lanes are plain ESC/POS.
 		...(native && !genericVendorAllowed(draft.connectionType, draft.address)
 			? []

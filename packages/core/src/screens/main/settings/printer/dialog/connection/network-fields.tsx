@@ -105,7 +105,11 @@ export function NetworkFields({
 							control={form.control}
 							name="address"
 							render={({ field }) => (
-								<FormInput testID="add-printer-ip-input" placeholder="192.168.1.100" {...field} />
+								<FormInput
+									testID="add-printer-ip-input"
+									placeholder={t('settings.printer_address_placeholder')}
+									{...field}
+								/>
 							)}
 						/>
 					</VStack>
