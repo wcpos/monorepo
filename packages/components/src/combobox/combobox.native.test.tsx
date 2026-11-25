@@ -63,6 +63,10 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('react-native-reanimated', () => ({
 	Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 	Easing: { bezier: () => (value: number) => value },
+	ReduceMotion: { System: 'system' },
+	useSharedValue: (value: unknown) => jest.requireActual('react').useRef({ value }).current,
+	useAnimatedStyle: () => ({}),
+	withTiming: (value: unknown) => value,
 	__esModule: true,
 	default: {
 		View: ({ children, ...props }: any) => <div {...props}>{children}</div>,
