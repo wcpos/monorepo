@@ -921,7 +921,7 @@ jobs:
 
           issues=$(gh issue list --label "$label" --state open --json number --limit 1)
           issue=$(jq -r '.[0].number // empty' <<<"$issues")
-          if [ "$GATE_RESULT" = "failure" ] || [ "$E2E_RESULT" = "failure" ]; then
+          if [ "$GATE_RESULT" = "failure" ] || [ "$E2E_RESULT" = "failure" ] || [ "$COLD_START_RESULT" = "failure" ]; then
             if [ -z "$issue" ]; then
               gh label create "$label" --color B60205 --description "Main production verification is red" || true
               gh issue create --title "main is red: production verification failed at $short_sha" --label "$label" --body "Verification failed for $SHA ($RUN_URL). Fix forward on main; this issue closes itself on the next green." >/dev/null

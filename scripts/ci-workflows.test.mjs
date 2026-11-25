@@ -605,6 +605,15 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 		const coldFailed = run({ gate: 'failure', cold: 'failure', issues: '[]', superseded: 'true' });
 		assert.equal(coldFailed.result.status, 0, coldFailed.result.stderr);
 		assert.match(coldFailed.trace, /issue create/);
+		// Setup-superseded (gate green) with a failed cold-start: refresh the issue, never close it.
+		const coldRed = run({
+			gate: 'success',
+			cold: 'failure',
+			issues: '[{"number":42}]',
+			superseded: 'true',
+		});
+		assert.match(coldRed.trace, /issue comment 42/);
+		assert.doesNotMatch(coldRed.trace, /^issue close /m);
 		// A main push coalesced into a newer head: a green gate must not close the issue.
 		const coalesced = run({ gate: 'success', issues: '[{"number":42}]', superseded: 'true' });
 		assert.equal(coalesced.result.status, 0, coalesced.result.stdout + coalesced.result.stderr);
