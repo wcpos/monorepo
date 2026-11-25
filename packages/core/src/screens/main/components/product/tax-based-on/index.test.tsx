@@ -22,6 +22,10 @@ jest.mock('react-native-reanimated', () => {
 		default: { View: () => null },
 		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: jest.fn() },
+		ReduceMotion: { System: 'system' },
+		useSharedValue: (value: unknown) => jest.requireActual('react').useRef({ value }).current,
+		useAnimatedStyle: () => ({}),
+		withTiming: (value: unknown) => value,
 		...Object.fromEntries(
 			'FadeIn FadeOut SlideInLeft SlideOutLeft SlideInRight SlideOutRight SlideInDown SlideOutDown'
 				.split(' ')

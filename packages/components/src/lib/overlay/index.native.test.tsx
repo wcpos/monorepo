@@ -65,6 +65,7 @@ jest.mock('react-native-reanimated', () => {
 		},
 		Keyframe: jest.fn(() => ({ duration: jest.fn() })),
 		Easing: { bezier: () => (value: number) => value },
+		ReduceMotion: { System: 'system' },
 		...Object.fromEntries(
 			[
 				'FadeIn',
@@ -194,9 +195,9 @@ it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 		);
 		const panel = mockAnimatedViews.at(-1)!;
 		expect(panel.pointerEvents).toBe('box-none');
-		expect(panel.entering).toBe(OVERLAY_MOTION[presentation].entering);
+		// The entrance is an animated style, not `entering` (#3678).
+		expect(panel.entering).toBeUndefined();
 		expect(panel.exiting).toBe(OVERLAY_MOTION[presentation].exiting);
-		expect((panel.entering as { easing: jest.Mock }).easing).toHaveBeenCalledWith(EASE);
 		// A fade leaves on the shared ease; a surface that slides away speeds up into its edge.
 		expect((panel.exiting as { easing: jest.Mock }).easing).toHaveBeenCalledWith(
 			presentation === 'center' ? EASE : EASE_EXIT

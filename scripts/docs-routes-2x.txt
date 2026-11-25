@@ -80,6 +80,7 @@
 /error-codes/PAYMENT221
 /error-codes/PAYMENT301
 /error-codes/PAYMENT311
+/error-codes/PAYMENT312
 /error-codes/PAYMENT401
 /error-codes/PAYMENT501
 /error-codes/PAYMENT511
