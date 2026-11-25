@@ -445,6 +445,12 @@ it.each(['unpaid', 'no cashier'])('omits Paid on for %s', (kind) => {
 	mount();
 	expect(screen.queryByTestId('order-row-paid_on')).toBeNull();
 });
+it('omits Paid on, and still renders the tab, when the paid date does not parse', () => {
+	payload.date_paid_gmt = '0000-00-00T00:00:00';
+	mount();
+	expect(screen.queryByTestId('order-row-paid_on')).toBeNull();
+	expect(screen.getByTestId('order-edit-update-status')).toBeTruthy();
+});
 it.each(['pending', 'pos-open', 'on-hold', 'cancelled'])(
 	'omits Paid on for a sale reopened or awaiting payment (%s), even with a paid date',
 	(status) => {

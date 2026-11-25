@@ -295,17 +295,16 @@ function EditOrderFormFields({ order }: Props) {
 		});
 	}
 
-	function moveSaleDay(atGmt: string, reason: string, success: string) {
-		return sendIntent(() => {
+	async function moveSaleDay(atGmt: string, reason: string, success: string) {
+		// The `from` the request was written with, read on the order the write landed on.
+		let from = '';
+		const result = await sendIntent(() => {
 			const key = POS_META_KEYS.saleDayRequest;
 			let request = '';
 			return {
 				write: (payload) => {
-					request = wooMetaCarrier.saleDayRequestRow(
-						atGmt,
-						reason,
-						wooMetaCarrier.readSaleDay(payload.meta_data)?.atGmt ?? ''
-					);
+					from = wooMetaCarrier.readSaleDay(payload.meta_data)?.atGmt ?? '';
+					request = wooMetaCarrier.saleDayRequestRow(atGmt, reason, from);
 					return { meta_data: withMetaRow(payload.meta_data, key, request) };
 				},
 				revert: (payload) =>
@@ -321,6 +320,7 @@ function EditOrderFormFields({ order }: Props) {
 				context: { atGmt },
 			};
 		});
+		return result === 'refused' ? { refused: from } : result;
 	}
 
 	/**

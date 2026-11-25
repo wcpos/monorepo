@@ -38,7 +38,7 @@ type Props = {
 		atGmt: string,
 		reason: string,
 		success: string
-	) => Promise<'applied' | 'refused' | 'pending' | undefined>;
+	) => Promise<'applied' | 'pending' | { refused: string } | undefined>;
 };
 
 /** A UTC instant in the server's form, never later than this second. */
@@ -49,7 +49,10 @@ const notAfterNow = (time: number) =>
 
 export function PaidOn(props: Props) {
 	// Suppress the creation-date fallback: this fact exists only when money was taken at the POS.
-	const rungUp = rungUpMomentOf({ ...props.payload, date_created_gmt: undefined });
+	const paidAt = rungUpMomentOf({ ...props.payload, date_created_gmt: undefined });
+	// A paid date that does not parse (a store's `0000-00-00`) is no moment to move: no row, and the tab still opens.
+	const rungUp =
+		paidAt && Number.isFinite(convertUTCStringToLocalDate(paidAt).getTime()) ? paidAt : undefined;
 	// The store corrects a standing sale only: an order awaiting payment again has none.
 	const open = ['pos-open', 'pos-partial', 'pending', 'on-hold', 'failed', 'cancelled'].includes(
 		props.payload.status ?? ''
@@ -124,7 +127,8 @@ function PaidOnRow({ payload, busy, onMove, rungUp }: Props & { rungUp: string }
 			t('orders.sale_moved_to_day', { day: dayLabel(day, true) })
 		);
 		if (result) setEditing(false);
-		if (result === 'refused') setAnswered(`${atGmt}|${correction?.atGmt ?? ''}`);
+		// Against the request as it was written: its `from` is read at write time, on the order then.
+		if (typeof result === 'object') setAnswered(`${atGmt}|${result.refused}`);
 	});
 	const verb = (
 		<PropertyVerb
