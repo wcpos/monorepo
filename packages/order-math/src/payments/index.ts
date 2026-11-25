@@ -21,9 +21,15 @@ export {
 	countsTowardPaid,
 	derive,
 	effectiveRows,
+	hasUnverifiedMoney,
 	isCompletingStatus,
 } from './derive';
-export { correctionOf, isTenderCorrectable, tenderCorrectionTargets } from './tender-correction';
+export {
+	correctionOf,
+	isPlainManualMethod,
+	isTenderCorrectable,
+	tenderCorrectionTargets,
+} from './tender-correction';
 export {
 	readLedger,
 	withLedger,

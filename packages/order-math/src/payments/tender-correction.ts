@@ -39,9 +39,10 @@ export function correctionOf(row: PaymentRow, rows: readonly PaymentRow[]): Paym
 }
 
 /**
- * The manual methods the store would accept as a target for `row` (`method_invalid`,
- * `same_method`, `off_rounding_increment`). The amount is never re-rounded: a cash target on a
- * 0.05 increment is offered only when the amount is already a whole multiple of it.
+ * The POS-enabled methods the store would accept as a target for `row` (#3651: any of them but a
+ * stored-value one; `method_invalid`, `same_method`, `off_rounding_increment`). The amount is never
+ * re-rounded: a target on a 0.05 increment is offered only when the amount is already a whole
+ * multiple of it.
  */
 export function tenderCorrectionTargets(
 	row: PaymentRow,
@@ -50,14 +51,20 @@ export function tenderCorrectionTargets(
 ): PaymentMethodDescriptor[] {
 	const amountMinor = toMinor(row.amount, dp);
 	return methods.filter((method) => {
-		const manual = method.capture.modes?.some(
-			({ mode, provider }) => mode === 'manual' && !provider
-		);
-		if (!method.pos_enabled || !manual || method.capture.provider) return false;
+		if (!method.pos_enabled || method.kind === 'stored_value') return false;
 		if (method.id === row.method_id) return false;
 		const increment = method.defaults?.rounding?.increment;
 		if (!increment) return true;
 		const incrementMinor = toMinor(increment, dp);
 		return incrementMinor > 0 && amountMinor % incrementMinor === 0;
 	});
+}
+
+/**
+ * Whether the store records a correction to `method` as plain manual money (#3651): no provider and
+ * a manual capture mode. Any other target's R+ carries `unverified: true`. The mode's own provider
+ * is not looked at: that is the server's rule.
+ */
+export function isPlainManualMethod(method: PaymentMethodDescriptor): boolean {
+	return !method.capture.provider && !!method.capture.modes?.some(({ mode }) => mode === 'manual');
 }

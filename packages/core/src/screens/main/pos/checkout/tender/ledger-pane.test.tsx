@@ -267,3 +267,27 @@ it('draws no Change tender by default, and a corrected pair as Corrected with no
 		'Corrected from cash'
 	);
 });
+// #3651: an R+ the store recorded by hand against a provider method says so.
+it('tags an unverified R+ Recorded manually, and neither a plain R+ nor an ordinary row', () => {
+	const unverified = {
+		...row,
+		id: 'r-gateway',
+		method_id: 'stripe',
+		kind: 'card',
+		entry: 'tender_correction',
+		corrects: 'card',
+		unverified: true,
+	};
+	const plain = { ...row, id: 'r-plain', method_id: 'cheque', corrects: 'cash' };
+	render(
+		<LedgerLegs
+			view={{ ...view, rows: [row, unverified, plain] as PaymentRow[] }}
+			format={format}
+		/>
+	);
+	expect(screen.getByTestId('checkout-leg-recorded-manually-r-gateway').textContent).toBe(
+		'Recorded manually'
+	);
+	for (const id of ['r-plain', 'cash'])
+		expect(screen.queryByTestId(`checkout-leg-recorded-manually-${id}`)).toBeNull();
+});

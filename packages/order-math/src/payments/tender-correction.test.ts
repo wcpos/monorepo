@@ -7,7 +7,12 @@ import {
 	netRefundable,
 } from './derive';
 import { partitionVoidableRows, withLedger } from './ledger';
-import { correctionOf, isTenderCorrectable, tenderCorrectionTargets } from './tender-correction';
+import {
+	correctionOf,
+	isPlainManualMethod,
+	isTenderCorrectable,
+	tenderCorrectionTargets,
+} from './tender-correction';
 
 import type { MetaDataEntry } from './ledger';
 import type { PaymentMethodDescriptor, PaymentRow } from './types';
@@ -206,27 +211,58 @@ describe('tenderCorrectionTargets', () => {
 			open_drawer: false,
 		},
 	});
-	it('offers enabled manual methods other than the row’s own, never re-rounding', () => {
+	const stripe = method('stripe', {
+		capture: {
+			mode: 'device',
+			provider: 'stripe',
+			hardware: null,
+			webview_available: false,
+			modes: [{ mode: 'device', provider: 'stripe', hardware: null }],
+		},
+	});
+	it('offers enabled methods other than the row’s own and stored value, never re-rounding', () => {
 		const methods = [
 			method('pos_card'),
 			cash05,
 			method('pos_cheque'),
 			method('pos_off', { pos_enabled: false }),
-			method('stripe', {
-				capture: {
-					mode: 'device',
-					provider: 'stripe',
-					hardware: null,
-					webview_available: false,
-					modes: [{ mode: 'device', provider: 'stripe', hardware: null }],
-				},
+			stripe,
+			method('gift_card', { kind: 'stored_value' }),
+			method('stripe05', {
+				capture: stripe.capture,
+				defaults: cash05.defaults,
 			}),
 		];
 		expect(tenderCorrectionTargets(original, methods, 2).map(({ id }) => id)).toEqual([
 			'pos_cash',
 			'pos_cheque',
+			'stripe',
+			'stripe05',
 		]);
 		const odd = row({ amount: '10.03' });
-		expect(tenderCorrectionTargets(odd, methods, 2).map(({ id }) => id)).toEqual(['pos_cheque']);
+		expect(tenderCorrectionTargets(odd, methods, 2).map(({ id }) => id)).toEqual([
+			'pos_cheque',
+			'stripe',
+		]);
+	});
+});
+
+describe('isPlainManualMethod (#3651)', () => {
+	it('is true only for a method with no provider and a manual mode', () => {
+		expect(isPlainManualMethod(method('pos_cheque'))).toBe(true);
+		const providerManual = method('stripe_manual', {
+			capture: {
+				mode: 'manual',
+				provider: 'stripe',
+				hardware: null,
+				webview_available: false,
+				modes: [{ mode: 'manual', provider: null, hardware: null }],
+			},
+		});
+		expect(isPlainManualMethod(providerManual)).toBe(false);
+		const noModes = method('pos_other', {
+			capture: { mode: 'manual', provider: null, hardware: null, webview_available: false },
+		});
+		expect(isPlainManualMethod(noModes)).toBe(false);
 	});
 });

@@ -22,6 +22,8 @@ test('public value surface is exactly the spec', () => {
 		'hasRefundableMoney',
 		'hasSaleProvenance',
 		'hasSaleTime',
+		// Added 2026-11-25 (#3651): hand-recorded provider money is never refunded through the provider.
+		'hasUnverifiedMoney',
 		'isActiveCouponLine',
 		'isActiveFeeLine',
 		'isActiveLineItem',
@@ -36,6 +38,8 @@ test('public value surface is exactly the spec', () => {
 		'isInMotionPaymentStatus',
 		'isLivePaymentStatus',
 		'isOfflineDeviceAuthorization',
+		// Added 2026-11-25 (#3651): a correction to anything else is recorded `unverified`.
+		'isPlainManualMethod',
 		'isSettledPaymentRow',
 		'isTenderCorrectable',
 		'mintDevicePayment',

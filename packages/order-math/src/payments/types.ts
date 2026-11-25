@@ -199,6 +199,9 @@ export interface PaymentRow {
 	entry?: 'tender_correction' | (string & {});
 	reverses?: string;
 	corrects?: string;
+	// #3651: an R+ to a method that is not plain manual is `unverified`, permanently.
+	unverified?: boolean;
+	reference?: string;
 	[extra: string]: unknown;
 }
 

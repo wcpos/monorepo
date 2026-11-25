@@ -48,6 +48,16 @@ export function hasRefundableMoney(rows: readonly PaymentRow[]): boolean {
 	return rows.some((row) => countsTowardPaid(row) && availableForRefund(row, rows) > 0);
 }
 
+/**
+ * Whether a paid row the store marked `unverified` (#3651: money recorded by hand against a
+ * provider method) still has refundable money. Such money is never refunded through the provider.
+ */
+export function hasUnverifiedMoney(rows: readonly PaymentRow[]): boolean {
+	return rows.some(
+		(row) => row.unverified === true && countsTowardPaid(row) && availableForRefund(row, rows) > 0
+	);
+}
+
 /** Bound by order remainder and captured money. A ledger allocation is written inside its Woo refund,
  * so pending ones are in Woo's history too; only manual refunds have no allocation. */
 export function netRefundable(

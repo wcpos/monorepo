@@ -61,6 +61,17 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</button>
 	),
 }));
+jest.mock('@wcpos/components/input', () => ({
+	Input: ({
+		testID,
+		value,
+		onChangeText,
+	}: {
+		testID: string;
+		value: string;
+		onChangeText: (next: string) => void;
+	}) => <input data-testid={testID} value={value} onChange={(e) => onChangeText(e.target.value)} />,
+}));
 jest.mock('@wcpos/components/radio-group', () => {
 	const ReactActual = jest.requireActual('react');
 	const Pick = ReactActual.createContext(() => undefined);
@@ -190,7 +201,7 @@ describe('PaymentSection change tender (#3647 test 10)', () => {
 		['storage degraded (canChangeTender false)', { canChangeTender: false }, () => undefined],
 		['no capability', { canChangeTender: true }, () => (mockCapable = false)],
 		['offline', { canChangeTender: true }, () => (mockStatus = 'online-website-unavailable')],
-		['no target method', { canChangeTender: true }, () => (mockMethods = [card, cash, terminal])],
+		['no target method', { canChangeTender: true }, () => (mockMethods = [card, cash])],
 		[
 			'a provider row',
 			{ canChangeTender: true },
@@ -207,7 +218,8 @@ describe('PaymentSection change tender (#3647 test 10)', () => {
 		fireEvent.click(changeTender()!);
 		expect(screen.getByTestId('change-tender-sheet').textContent).toContain('Card $7.73');
 		expect(screen.getByTestId('change-tender-method-pos_cheque')).toBeTruthy();
-		for (const id of ['pos_card', 'pos_cash', 'stripe_terminal'])
+		expect(screen.getByTestId('change-tender-method-stripe_terminal')).toBeTruthy();
+		for (const id of ['pos_card', 'pos_cash'])
 			expect(screen.queryByTestId(`change-tender-method-${id}`)).toBeNull();
 		expect(screen.getByTestId('change-tender-confirm').hasAttribute('disabled')).toBe(true);
 
@@ -218,6 +230,78 @@ describe('PaymentSection change tender (#3647 test 10)', () => {
 		expect(mockCorrect).toHaveBeenCalledWith(order, 'orig', { id: 'pos_cheque', title: 'Cheque' });
 		await waitFor(() => expect(screen.queryByTestId('change-tender-sheet')).toBeNull());
 		expect(screen.queryByTestId('change-tender-sheet')).toBeNull();
+	});
+
+	describe('#3651: a provider target takes an optional reference', () => {
+		const reference = () => screen.queryByTestId('change-tender-reference') as HTMLInputElement;
+		const pick = (id: string) => fireEvent.click(screen.getByTestId(`change-tender-method-${id}`));
+		const type = (text: string) => fireEvent.change(reference(), { target: { value: text } });
+		const confirmed = () => mockCorrect.mock.calls[0][2] as Record<string, unknown>;
+		const openSheet = () => {
+			render(<PaymentSection order={order} canChangeTender />);
+			fireEvent.click(changeTender()!);
+		};
+
+		it('shows the field for the terminal and not for cheque', () => {
+			openSheet();
+			expect(reference()).toBeNull();
+			pick('stripe_terminal');
+			expect(reference()).toBeTruthy();
+			pick('pos_cheque');
+			expect(reference()).toBeNull();
+		});
+
+		it('passes the typed reference trimmed', () => {
+			openSheet();
+			pick('stripe_terminal');
+			type('  AUTH-7731  ');
+			fireEvent.click(screen.getByTestId('change-tender-confirm'));
+			expect(mockCorrect).toHaveBeenCalledWith(order, 'orig', {
+				id: 'stripe_terminal',
+				title: 'Terminal',
+				reference: 'AUTH-7731',
+			});
+		});
+
+		it.each(['', '   '])('passes no reference property for %j', (text) => {
+			openSheet();
+			pick('stripe_terminal');
+			type(text);
+			fireEvent.click(screen.getByTestId('change-tender-confirm'));
+			expect(Object.keys(confirmed())).toEqual(['id', 'title']);
+		});
+
+		it('picking cheque after typing drops the reference; back on the terminal it is empty', () => {
+			openSheet();
+			pick('stripe_terminal');
+			type('AUTH-7731');
+			pick('pos_cheque');
+			pick('stripe_terminal');
+			expect(reference().value).toBe('');
+			type('AUTH-7731');
+			pick('pos_cheque');
+			fireEvent.click(screen.getByTestId('change-tender-confirm'));
+			expect(Object.keys(confirmed())).toEqual(['id', 'title']);
+			expect(confirmed().id).toBe('pos_cheque');
+		});
+
+		it('a reopened sheet shows an empty field', async () => {
+			openSheet();
+			pick('stripe_terminal');
+			type('AUTH-7731');
+			fireEvent.click(screen.getByTestId('change-tender-confirm'));
+			await waitFor(() => expect(screen.queryByTestId('change-tender-sheet')).toBeNull());
+			fireEvent.click(changeTender()!);
+			pick('stripe_terminal');
+			expect(reference().value).toBe('');
+		});
+
+		it('never lists a stored-value method', () => {
+			mockMethods = [...mockMethods, method('gift_card', { kind: 'stored_value' })];
+			openSheet();
+			expect(screen.getByTestId('change-tender-method-stripe_terminal')).toBeTruthy();
+			expect(screen.queryByTestId('change-tender-method-gift_card')).toBeNull();
+		});
 	});
 
 	it('E5: an unconfirmed outcome closes the sheet; a refusal keeps it open', async () => {

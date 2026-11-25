@@ -7,6 +7,7 @@ import {
 	availableForRefund,
 	derive,
 	hasRefundableMoney,
+	hasUnverifiedMoney,
 	netRefundable,
 } from './derive';
 
@@ -477,6 +478,31 @@ describe('refund availability', () => {
 			refunds: [{ id: 1, amount: '2', status: 'succeeded', provider_ref: null }],
 		});
 		expect(availableForRefund(payment)).toBe(0);
+	});
+});
+
+describe('hasUnverifiedMoney (#3651)', () => {
+	const unverified = row({ id: 'rplus', amount: '10.00', unverified: true });
+
+	it('is true for a captured unverified row with money left', () => {
+		expect(hasUnverifiedMoney([unverified])).toBe(true);
+	});
+
+	it.each<[string, PaymentRow[]]>([
+		['verified', [row({ id: 'rplus', amount: '10.00' })]],
+		['reversed', [unverified, row({ id: 'rminus', amount: '-10.00', reverses: 'rplus' })]],
+		[
+			'fully refunded',
+			[
+				row({
+					...unverified,
+					refunds: [{ id: 1, amount: '10.00', status: 'succeeded', provider_ref: null }],
+				}),
+			],
+		],
+		['not counting toward paid', [row({ ...unverified, status: 'voided' })]],
+	])('is false when %s', (_case, rows) => {
+		expect(hasUnverifiedMoney(rows)).toBe(false);
 	});
 });
 

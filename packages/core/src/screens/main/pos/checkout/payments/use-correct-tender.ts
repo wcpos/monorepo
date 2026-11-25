@@ -59,7 +59,7 @@ export function correctionFailureMessage(
 export function useCorrectTender(): (
 	order: EngineRecord<'orders'>,
 	paymentId: string,
-	method: { id: string; title: string }
+	method: { id: string; title: string; reference?: string }
 ) => Promise<'done' | 'refused' | 'unconfirmed'> {
 	const t = useT();
 	const http = useRestHttpClient();
@@ -85,6 +85,10 @@ export function useCorrectTender(): (
 			try {
 				const response = await post(`orders/${orderId}/payments/${paymentId}/correct`, {
 					method_id: method.id,
+					// #3651: an optional reference for a target that is not plain manual.
+					...(typeof method.reference === 'string' && method.reference !== ''
+						? { reference: method.reference }
+						: {}),
 				});
 				const answer = response.data as { payment: PaymentRow; order: OrderPaymentSummary };
 				// The store has changed the money: a failed mirror stays journaled and the pull fixes it.

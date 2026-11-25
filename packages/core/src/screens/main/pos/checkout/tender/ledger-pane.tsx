@@ -316,6 +316,11 @@ function LedgerLeg({
 					})}
 				</Text>
 			) : null}
+			{row.unverified === true ? (
+				<Text variant="help" testID={`checkout-leg-recorded-manually-${row.id}`}>
+					{t('orders.change_tender_recorded_manually')}
+				</Text>
+			) : null}
 			{time ? (
 				<Text variant="help" tabular>
 					{formatDate(new Date(time), 'p')}

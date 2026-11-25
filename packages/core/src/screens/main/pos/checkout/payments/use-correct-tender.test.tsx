@@ -102,6 +102,21 @@ describe('useCorrectTender (test 8)', () => {
 		expect(mockLog.success).toHaveBeenCalledWith('Payment changed to Cash', expect.anything());
 	});
 
+	it('#3651: posts a reference only when one is given', async () => {
+		mockPost.mockResolvedValue({ data: { payment: { id: 'r-plus' }, order: {} } });
+		const terminal = { id: 'stripe_terminal', title: 'Terminal' };
+		const { result } = renderHook(() => useCorrectTender());
+		await act(async () => {
+			await result.current(order(42), 'leg-1', { ...terminal, reference: 'AUTH-7731' });
+			await result.current(order(42), 'leg-1', terminal);
+			await result.current(order(42), 'leg-1', { ...terminal, reference: '' });
+		});
+		const bodies = mockPost.mock.calls.map(([, body]) => body);
+		expect(bodies).toHaveLength(3);
+		expect(bodies[0]).toEqual({ method_id: 'stripe_terminal', reference: 'AUTH-7731' });
+		for (const body of bodies.slice(1)) expect(Object.keys(body)).toEqual(['method_id']);
+	});
+
 	it('B3: after the answer and before any pull, the local ledger holds no R+ and paid is unchanged', async () => {
 		const leg = { id: 'leg-1', status: 'captured', amount: '10.00', method_id: 'pos_cash' };
 		const rplus = { ...leg, id: 'r-plus', method_id: 'pos_card', corrects: 'leg-1' };
