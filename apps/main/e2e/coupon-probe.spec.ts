@@ -16,7 +16,7 @@ test.describe('coupon-probe orphan selection', () => {
 	const fresh = new Date(now - 60_000).toISOString().slice(0, 19);
 	const probe = (id: number, created: string, extra: Record<string, unknown> = {}) => ({
 		id,
-		code: `${PROBE_COUPON_CODE_LEAD}7mvzuoonj7430cb8c`,
+		code: `${PROBE_COUPON_CODE_LEAD}0mi3k2v1a9f3c2b1d0e4a`,
 		description: `${PROBE_COUPON_DESCRIPTION_LEAD} checkout probe (safe to delete)`,
 		date_created_gmt: created,
 		...extra,

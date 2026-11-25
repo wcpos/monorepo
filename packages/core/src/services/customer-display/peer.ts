@@ -43,8 +43,13 @@ export function createOfferer(iceServers: IceServer[] = DEFAULT_ICE_SERVERS): Of
 		connection.close();
 		close();
 	};
-	channel.onopen = () => open();
-	channel.onmessage = (event) => message(String(event.data));
+	// Browsers already drop these once closed; the guard keeps web and native alike.
+	channel.onopen = () => {
+		if (!closed) open();
+	};
+	channel.onmessage = (event) => {
+		if (!closed) message(String(event.data));
+	};
 	channel.onclose = closePeer;
 	channel.onerror = closePeer;
 	connection.addEventListener('connectionstatechange', () => {

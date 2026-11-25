@@ -59,8 +59,13 @@ export function createOfferer(iceServers: IceServer[] = DEFAULT_ICE_SERVERS): Of
 			close();
 		}
 	};
-	channel.onopen = () => open();
-	channel.onmessage = (event) => message(String(event.data));
+	// close() leaves the JS listeners on until the native `closed` event, so queued events still land.
+	channel.onopen = () => {
+		if (!closed) open();
+	};
+	channel.onmessage = (event) => {
+		if (!closed) message(String(event.data));
+	};
 	channel.onclose = notifyClose;
 	channel.onerror = notifyClose;
 	connection.addEventListener('connectionstatechange', () => {

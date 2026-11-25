@@ -43,8 +43,21 @@ function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
 	);
 }
 
-/** Decode one inbound frame message. Session expiry is read first; a refusal before receipt. */
-export function readPayPageMessage(data: unknown): PayPageMessage {
+/** The order on screen: its server id and the uuid this till stamped on it. */
+export type PayPageOrder = { orderId: number | undefined; uuid: string };
+
+/** The snapshot carries this order's id, and every pos uuid stamp on it is this order's uuid. */
+const namesOrder = (snapshot: OrderSnapshot, expected: PayPageOrder) =>
+	snapshot.id === expected.orderId &&
+	(snapshot.meta_data as ({ key?: unknown; value?: unknown } | null)[]).every(
+		(meta) => meta?.key !== '_woocommerce_pos_uuid' || meta.value === expected.uuid
+	);
+
+/**
+ * Decode one inbound frame message. Session expiry is read first; a refusal before receipt.
+ * A snapshot naming another order is unreadable, and server truth decides the sale.
+ */
+export function readPayPageMessage(data: unknown, expected: PayPageOrder): PayPageMessage {
 	const message = data as { action?: unknown; payload?: unknown; orderId?: unknown } | null;
 	const action = message?.action;
 	if (action === 'wcpos-session-expired') {
@@ -61,7 +74,7 @@ export function readPayPageMessage(data: unknown): PayPageMessage {
 		};
 	}
 	if (action === 'wcpos-payment-received') {
-		return isOrderSnapshot(payload)
+		return isOrderSnapshot(payload) && namesOrder(payload, expected)
 			? { kind: 'received', snapshot: payload }
 			: { kind: 'received-unreadable' };
 	}

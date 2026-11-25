@@ -944,6 +944,16 @@ it('#3753: a movement refused for a vanished session offers Set aside, not Retry
 	expect(retryMovement).not.toHaveBeenCalled();
 });
 
+it('#3753: an open session the store answered 404 for offers Set aside and no Retry', async () => {
+	currentSession = { id: 'session', status: 'open', opened_at_gmt: '2026-10-28T13:05:00Z' };
+	mockUnreachable = true;
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-panel-retry-close')).toBeNull();
+	expect(screen.queryByTestId('register-panel-retry-refused')).toBeNull();
+	await act(async () => fireEvent.click(screen.getByTestId('register-panel-set-aside')));
+	expect(mockSetAside).toHaveBeenCalledTimes(1);
+});
+
 // Revert: leave the disabled closure control unexplained for blind cashiers.
 it('explains the closure restriction only while blind counting is enabled', () => {
 	blind = true;

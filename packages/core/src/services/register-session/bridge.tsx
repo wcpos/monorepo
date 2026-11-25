@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { debounceTime, filter } from 'rxjs';
 
+import { Toast } from '@wcpos/components/toast';
 import { useQueryRuntime } from '@wcpos/query';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getLogger } from '@wcpos/utils/logger';
@@ -14,10 +15,12 @@ import {
 	observeRegisterSessionAvailability,
 	runRegisterSessionCycle,
 	sessionRefreshRequests,
+	sessionRestored,
 } from '@wcpos/query/register-session';
 
 import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
+import { useT } from '../../contexts/translations';
 import { useStoreDay } from '../../hooks/use-store-day';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import { useRegisterBinding } from '../register/use-register-binding';
@@ -37,6 +40,14 @@ export function RegisterSessionBridge() {
 	const http = useRestHttpClient();
 	const { registerId, registerName } = useRegisterBinding();
 	const { timezone } = useStoreDay();
+	const t = useT();
+	// A set-aside session the store serves again is undone (#3753): one plain line for this till.
+	React.useEffect(() => {
+		const restored = sessionRestored
+			.pipe(filter((event) => event.registerId === registerId))
+			.subscribe(() => Toast.show({ title: t('register.session_restored') }));
+		return () => restored.unsubscribe();
+	}, [registerId, t]);
 	// What a manual close passes `closeRegister`; a recovered close needs no cashier input.
 	const closeRef = React.useRef({ site, credentials: wpCredentials, timezone, registerName });
 	React.useEffect(() => {

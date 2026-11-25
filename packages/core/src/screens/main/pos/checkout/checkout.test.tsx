@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { Checkout } from './checkout';
 
 import type { PaymentFrameStatus } from './pay-page/use-pay-frame-gate';
@@ -162,6 +164,11 @@ jest.mock('@wcpos/components/vstack', () => ({
 
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
+}));
+
+// The store the pay links are checked against (shop.example.com, as PAYMENT_URL).
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ site: { wcpos_api_url: 'https://shop.example.com/wp-json/wcpos/v2/' } }),
 }));
 
 describe('Checkout', () => {
@@ -371,6 +378,42 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(screen.getByText('pos_checkout.gateway_catalog_unavailable')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('checkout-gateway-catalog-retry'));
 		expect(refetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('treats a pay link on another host as no link: the notice shows and Process Payment stays off', () => {
+		const button = renderCheckout({
+			mode: 'webview',
+			paymentURL: 'https://pay.elsewhere.example/wcpos-checkout/order-pay/42',
+		});
+
+		expect(screen.getByText('pos_checkout.payment_page_other_domain')).toBeTruthy();
+		expect(screen.queryByText('pos_checkout.payment_form_unavailable')).toBeNull();
+		expect(button.disabled).toBe(true);
+		// The mapped logger mock, as the hook imports it (requireMock would build a separate automock).
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).error).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ code: 'CHECKOUT101' })
+		);
+	});
+
+	it('a missing pay link keeps the missing-link notice, not the other-domain one', () => {
+		const button = renderCheckout({ mode: 'webview', paymentURL: '' });
+
+		expect(screen.getByText('pos_checkout.payment_form_unavailable')).toBeTruthy();
+		expect(screen.queryByText('pos_checkout.payment_page_other_domain')).toBeNull();
+		expect(button.disabled).toBe(true);
+	});
+
+	it('logs the foreign host without its userinfo', () => {
+		renderCheckout({ mode: 'webview', paymentURL: 'https://user:pw@evil.example/pay' });
+
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).error).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				code: 'CHECKOUT101',
+				context: expect.objectContaining({ payLinkHost: 'evil.example' }),
+			})
+		);
 	});
 
 	it('disables Process Payment while the payment frame is still loading, and enables it on the load signal', () => {

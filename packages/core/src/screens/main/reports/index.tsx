@@ -55,6 +55,7 @@ import {
 	useQueryStateActions,
 } from '../../../query';
 import { clampClosureScope, type ClosureScope, useLocalClosure } from './closures/use-closure-rows';
+import { reportsRefreshCadence, useReportsRefresh } from './use-reports-refresh';
 
 import type { FiltersOf, QueryStateOf } from '../../../query';
 
@@ -153,6 +154,15 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
 	const { store, site } = useAppState();
 	const range = state.filters.dateRange;
+	// Only the sales handle is re-read; the comparison and refunds handles read once per mount.
+	const refreshRange = {
+		from: range?.from ? convertUTCStringToLocalDate(range.from) : undefined,
+		to: range?.to ? convertUTCStringToLocalDate(range.to) : undefined,
+	};
+	// Read again when a timer pass runs: nothing re-renders this screen at the store's midnight.
+	const quietRefresh = useReportsRefresh(handle, () =>
+		reportsRefreshCadence(refreshRange, presets().today)
+	);
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
 			value ? convertUTCStringToLocalDate(value) : fallback,
@@ -265,6 +275,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 							handle={handle}
 							comparisonHandle={comparisonHandle}
 							refundsHandle={refundsHandle}
+							quietRefresh={quietRefresh}
 						>
 							<ErrorBoundary
 								FallbackComponent={() => <Reports date={date} header={strip} />}

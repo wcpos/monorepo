@@ -1,3 +1,5 @@
+import { Subject } from 'rxjs';
+
 import { hasPendingLocalWork } from '@wcpos/sync-engine';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
@@ -185,6 +187,9 @@ export const synced = {
 	sync_next_at: null,
 	sync_error: null,
 } as const;
+const pending = { ...synced, sync_status: 'pending' } as const;
+/** A set-aside session the store served again as open or counting was undone (#3753). */
+export const sessionRestored = new Subject<{ sessionId: string; registerId: string }>();
 const due = (row: { sync_status: string; sync_next_at?: number | null }) =>
 	row.sync_status === 'pending' && (!row.sync_next_at || row.sync_next_at <= Date.now());
 /**
@@ -201,6 +206,8 @@ async function acknowledge(
 	sentAt?: string | null
 ) {
 	await doc.incrementalModify((local) => {
+		// A set aside made while this request was in flight wins over its reply (#3753).
+		if (local.sync_error === SESSION_SET_ASIDE) return local;
 		const outstanding =
 			local.pending_status && (sentAt === undefined || local.status_at !== sentAt);
 		const incoming = {
@@ -309,15 +316,20 @@ async function drain({ sessions, movements, closures, userDB, siteUuid, orders, 
 				}
 			}
 			if (statusTransition && body?.code === 'wcpos_override_refused') {
-				await (doc as RegisterSessionDocument).incrementalPatch({
-					status: 'counting',
-					pending_status: null,
-					...synced,
-					approval_required: true,
-					approved_counted: null,
-					sync_error: 'wcpos_override_refused',
-					closed_at_gmt: null,
-				});
+				await (doc as RegisterSessionDocument).incrementalModify((local) =>
+					local.sync_error === SESSION_SET_ASIDE
+						? local
+						: {
+								...local,
+								status: 'counting',
+								pending_status: null,
+								...synced,
+								approval_required: true,
+								approved_counted: null,
+								sync_error: 'wcpos_override_refused',
+								closed_at_gmt: null,
+							}
+				);
 				// A refused override is recovered, not failed — the count is intact and the session is
 				// back at counting — but repeated failed overrides on a short till are exactly the
 				// pattern worth seeing, and this branch left no record of them whatsoever.
@@ -671,6 +683,13 @@ export async function adoptSessionRow(
 	// `closure_id` with `server_status` unchanged, and the server's row is its recovery.
 	if (local?.server_status === 'closed' && local.status === 'closed' && row.status !== 'closed')
 		return;
+	// The store's answer wins over a set aside (#3753): served closed, it stands unchanged.
+	if (row.status === 'closed' && local?.sync_error === SESSION_SET_ASIDE) return;
+	const restored =
+		!!local &&
+		row.status !== 'closed' &&
+		(await restoreSetAside(sessions.database as unknown as RegisterStoreDatabase, row.id));
+	let emit = false;
 	const adopted = {
 		...row,
 		...synced,
@@ -693,12 +712,53 @@ export async function adoptSessionRow(
 		sessions,
 		row.id,
 		(current) => {
+			emit = false;
+			if (current.sync_status === 'pending') return current;
+			if (row.status === 'closed' && current.sync_error === SESSION_SET_ASIDE) return current;
+			emit = restored || current.sync_error === SESSION_SET_ASIDE;
 			const incoming = { ...adopted };
 			if (current.counted_float != null && incoming.counted_float === null)
 				delete incoming.counted_float;
 			if (noCount(incoming.counted)) delete incoming.counted;
-			return current.sync_status === 'pending' ? current : { ...current, ...incoming };
+			return { ...current, ...incoming };
 		},
 		() => adopted
 	);
+	if (emit) sessionRestored.next({ sessionId: row.id, registerId: row.register_id });
+}
+
+/**
+ * Undo a set aside the store overrules (#3753), each row by its own marker and every step safe to
+ * repeat, so a refresh finishes an interrupted set aside or undo: movements back in the outbox as
+ * they were, pending reversals' claims (as `retryMovement`), then the closure as a refused close.
+ * The caller's session write is the commit point. Returns whether a movement or closure came back.
+ */
+async function restoreSetAside(database: RegisterStoreDatabase, sessionId: string) {
+	const { cash_movements: movements, closures } = registerCollections(database);
+	const marked = await movements
+		.find({ selector: { session_id: sessionId, sync_error: SESSION_SET_ASIDE } })
+		.exec();
+	marked.sort((a, b) => a.created_at_gmt.localeCompare(b.created_at_gmt));
+	for (const row of marked) await row.incrementalPatch(pending);
+	// Over every pending reversal, not only those above: a crash before its claim is repaired here.
+	const queued = await movements
+		.find({ selector: { session_id: sessionId, sync_status: 'pending' } })
+		.exec();
+	for (const row of queued.filter((entry) => entry.voids)) {
+		const target = await movements.findOne(row.voids!).exec();
+		if (target && !target.voided_by)
+			await target.incrementalModify((doc) => {
+				doc.voided_by ??= row.id;
+				return doc;
+			});
+	}
+	const closure = await closures.findOne(sessionId).exec();
+	const refused = closure?.sync_error === SESSION_SET_ASIDE;
+	if (refused)
+		await closure.incrementalPatch({
+			sync_status: 'failed',
+			sync_next_at: null,
+			sync_error: 'wcpos_session_not_found',
+		});
+	return marked.length > 0 || refused;
 }

@@ -183,9 +183,9 @@ function SelectSingleContent({
 			// Options in a group: a listbox promises arrow keys a touch sheet lacks (CodeRabbit, #2215).
 			list="group"
 			content={{
-				style: anchoredListWidth(triggerWidth, matchWidth, native),
 				position,
 				...props,
+				style: listStyle(anchoredListWidth(triggerWidth, matchWidth, native), props.style),
 			}}
 			sheetStyle={props.style}
 		/>
@@ -200,8 +200,15 @@ function SelectSingleContent({
 function anchoredListWidth(triggerWidth: number | undefined, matchWidth?: boolean, native = false) {
 	if (!triggerWidth) return undefined;
 	if (matchWidth) return { width: triggerWidth };
-	return native ? { minWidth: triggerWidth } : undefined;
+	// An inline minWidth replaces the `min-w-32` class, so a narrow trigger keeps that floor here.
+	return native ? { minWidth: Math.max(triggerWidth, LIST_MIN_WIDTH) } : undefined;
 }
+/** A caller's style adds to the width floor; spread after it, it used to replace it. */
+function listStyle<T>(floor: object | undefined, style: T) {
+	return style ? [floor, style] : floor;
+}
+/** `min-w-32` in points: the list's floor under a trigger narrower than it. */
+const LIST_MIN_WIDTH = 128;
 
 /** The anchored adapter: Radix's positioned list, with the rows inside its viewport. */
 function SelectPanel({ position, children, ...props }: SelectPrimitive.ContentProps) {
@@ -241,12 +248,13 @@ function SelectContent({
 	const triggerWidth = React.useContext(SelectWidthContext);
 
 	if (isMulti) {
-		const { className, children, portalHost, ...rest } = props;
+		const { className, children, portalHost, style, ...rest } = props;
+		const floor = anchoredListWidth(triggerWidth, matchWidth, Platform.OS !== 'web');
 		return (
 			<SelectMultiContent
 				className={className}
 				portalHost={portalHost}
-				style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
+				style={listStyle(floor, style)}
 				{...(rest as any)}
 			>
 				{children}

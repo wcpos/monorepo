@@ -40,6 +40,7 @@ export const countRecorded = (
  * it or the cashier has abandoned it, so a refused (`failed`) close stays current. So does a
  * session whose status POST was refused while its closure is unaccepted (a refused abandon), at
  * whatever status it holds, until the next refresh. A set-aside session (#3753) is history.
+ * A session the store answered 404 for stays current, so its one way out, Set aside, is offered.
  */
 export function currentSession<T extends SessionRef>(
 	all: { active: readonly T[]; closed: readonly T[] },
@@ -52,7 +53,10 @@ export function currentSession<T extends SessionRef>(
 	const unacceptedClosure = (id: string) => unaccepted(closures.find((row) => row.id === id));
 	return (
 		rows.active.find((row) => row.sync_status !== 'failed') ??
-		rows.active.find((row) => row.sync_status === 'failed' && unacceptedClosure(row.id)) ??
+		rows.active.find(
+			(row) =>
+				row.sync_status === 'failed' && (unacceptedClosure(row.id) || sessionUnreachable(row))
+		) ??
 		rows.closed.find(
 			(row) =>
 				row.closure_id === row.id &&

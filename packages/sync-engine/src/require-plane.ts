@@ -1823,8 +1823,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			if (activeScope() === null) return;
 			for (const key of this.liveOrderBrowseQueryKeys()) {
 				const decision = parseOrderBrowserSchedulerDescriptor(key);
-				if (!decision || 'skipReason' in decision || decision.descriptor.complete === true)
-					continue;
+				// Orders have no change feed, so a manual sync re-reads every live window, complete or not.
+				if (!decision || 'skipReason' in decision) continue;
 				const entry = liveOrderKeys.get(activeScope())?.get(key);
 				if (!entry) continue;
 				try {

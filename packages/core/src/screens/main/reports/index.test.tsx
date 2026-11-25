@@ -14,6 +14,7 @@ import { compileQuery } from '@wcpos/query/query-state';
 
 import { ReportsScreen } from './index';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+import { REPORTS_REFRESH_MS } from './use-reports-refresh';
 
 import type { QueryHandle, QueryStateOf } from '../../../query';
 
@@ -190,6 +191,7 @@ beforeEach(() => {
 	mockBinding = { registerId: 'r', registerName: 'Front' };
 	mockPhone = true;
 	mockRoute = {};
+	mockFocused = true;
 	mockClosureScope.mockClear();
 	mockSetParams.mockClear();
 	mockReadClosure.mockReset().mockResolvedValue({ toMutableJSON: () => mockLocalClosure });
@@ -239,7 +241,11 @@ jest.mock('@wcpos/components/suspense', () => ({
 }));
 // The readers read as the real ones do (`useQuerySnapshot`): suspend while unanswered, throw a
 // failure to the boundary.
-let mockProvided: { handle: QueryHandle; refundsHandle: QueryHandle } | null = null;
+let mockProvided: {
+	handle: QueryHandle;
+	refundsHandle: QueryHandle;
+	quietRefresh?: boolean;
+} | null = null;
 jest.mock('./context', () => ({
 	...jest.requireActual('./context'),
 	ReportsRefunds: ({ children }: React.PropsWithChildren) => {
@@ -484,6 +490,80 @@ describe('ReportsScreen query-state wiring', () => {
 
 		expect(latestState().filters.dateRange).not.toEqual(before);
 	});
+
+	/** This render's sales, comparison, No store and refunds handles, in that order. */
+	function screenHandles() {
+		const { calls, results } = mockUseCollectionQueryHandle.mock;
+		const orders = calls.flatMap(([name], index) => (name === 'orders' ? [index] : []));
+		const handles = orders.slice(-3).map((index) => results[index].value as FakeHandle);
+		return [...handles, latestHandle('refunds')];
+	}
+	const period = () =>
+		act(() => {
+			jest.advanceTimersByTime(REPORTS_REFRESH_MS);
+		});
+
+	it("one timer period re-reads today's sales handle once and no other handle", async () => {
+		render(<ReportsScreen />);
+		await act(async () => {});
+		const handles = screenHandles();
+		expect(new Set(handles).size).toBe(4);
+		const [sales, ...others] = handles.map((handle) => jest.spyOn(handle, 'sync'));
+		period();
+		expect(sales).toHaveBeenCalledTimes(1);
+		for (const sync of others) expect(sync).not.toHaveBeenCalled();
+	});
+
+	it('a range ending yesterday is re-read by no timer', async () => {
+		render(<ReportsScreen />);
+		await act(async () => {});
+		fireEvent.click(screen.getByTestId('past-scope'));
+		await act(async () => {});
+		expect(latestState().filters.dateRange?.to).toBe('2026-07-14T23:59:59.999Z');
+		const syncs = [...mockHandles.values()].map((handle) => jest.spyOn(handle, 'sync'));
+		period();
+		for (const sync of syncs) expect(sync).not.toHaveBeenCalled();
+	});
+
+	it('a range ending yesterday is not re-read when focus returns; today is', async () => {
+		const { rerender } = render(<ReportsScreen />);
+		await act(async () => {});
+		const refocus = async () => {
+			mockFocused = false;
+			rerender(<ReportsScreen />);
+			mockFocused = true;
+			rerender(<ReportsScreen />);
+			await act(async () => {});
+		};
+		const sales = jest.spyOn(screenHandles()[0], 'sync');
+		await refocus();
+		expect(sales).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByTestId('past-scope'));
+		await act(async () => {});
+		const syncs = [...mockHandles.values()].map((handle) => jest.spyOn(handle, 'sync'));
+		syncs.forEach((sync) => sync.mockClear());
+		await refocus();
+		for (const sync of syncs) expect(sync).not.toHaveBeenCalled();
+	});
+
+	it('a timer re-read of a whole, idle sales day reaches the provider as quiet', async () => {
+		render(<ReportsScreen />);
+		await act(async () => {});
+		const [sales] = screenHandles();
+		let resolve = () => {};
+		jest.spyOn(sales, 'sync').mockImplementation(
+			() =>
+				new Promise<void>((done) => {
+					resolve = done;
+				})
+		);
+		act(() => sales.set({ laneComplete: true, laneProgress: null }));
+		expect(mockProvided?.quietRefresh).toBe(false);
+		period();
+		expect(mockProvided?.quietRefresh).toBe(true);
+		await act(async () => resolve());
+		expect(mockProvided?.quietRefresh).toBe(false);
+	});
 });
 
 // Revert: convert a newly selected store's days using the bound till's UTC midnight.
@@ -665,10 +745,12 @@ const mockSetParams = jest.fn((params) => {
 	mockRoute = { ...mockRoute, ...params };
 });
 const mockOpenDrawer = jest.fn();
+let mockFocused = true;
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => mockRoute,
 	useRouter: () => ({ setParams: mockSetParams }),
 	useNavigation: () => ({ openDrawer: mockOpenDrawer, setParams: mockSetParams }),
+	useIsFocused: () => mockFocused,
 }));
 let mockPhone = true;
 jest.mock('@wcpos/components/lib/device', () => ({

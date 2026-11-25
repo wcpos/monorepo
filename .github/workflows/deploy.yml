@@ -53,9 +53,9 @@ on:
 #   coalescing below could never fire (the newest deploy would queue behind
 #   an hour of obsolete verification).
 # - Job level: on main, `deploy` serialises in its own group and is never
-#   cancelled (a production deploy always finishes); `e2e`, `e2e-report` and
-#   `cold-start` coalesce — a newer main run cancels an OLDER run's
-#   verification, so a merge burst verifies only the artifact that is live.
+#   cancelled (a production deploy always finishes). Web E2E coalesces at
+#   e2e-setup admission (#3821): a push no longer main's head skips its logins
+#   and shards while that newer head deploys; the head's run verifies it.
 # Re-run attempts use their original run id so a stale re-run cannot cancel a
 # newer SHA. There is deliberately NO cross-run store serialization except the
 # dev-next queue — see the comment above e2e.
@@ -286,7 +286,34 @@ jobs:
       queue: ${{ steps.queue.outcome }}
       queue_attempt: ${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}
       login: ${{ steps.setup.outcome }}
+      superseded: ${{ steps.head.outputs.superseded }}
+      superseded_by: ${{ steps.head.outputs.head }}
     steps:
+      # Coalesce main pushes (desk ruling 2026-11-25, #3821): admitted behind
+      # the serial setup queue, a push whose commit is no longer main's head
+      # skips its logins and shards IF that newer head is deploying; the head's
+      # own run verifies this tree as an ancestor. Any doubt runs as before.
+      - name: ⏩ Skip a superseded main push
+        id: head
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha) || exit 0
+          if [ -z "$head" ] || [ "$head" = "$GITHUB_SHA" ]; then exit 0; fi
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?event=push&branch=main&head_sha=$head" --jq '.workflow_runs[0].id // empty') || exit 0
+          [ -n "$run" ] || exit 0
+          deploy=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs?per_page=100" --jq '[.jobs[] | select(.name == "🚀 Deploy")][0] | if . == null then "absent" else (.conclusion // "running") end') || exit 0
+          # A skipped deploy (docs-only head) runs no E2E, so it never supersedes.
+          case "$deploy" in
+            success|running)
+              { echo "superseded=true"; echo "head=$head"; } >> "$GITHUB_OUTPUT"
+              echo "::notice title=E2E coalesced::Superseded by main@$head (run $run); its run verifies this commit as an ancestor."
+              ;;
+          esac
+          exit 0
+
       - name: 🔑 Check for the auth-state key
         id: key
         env:
@@ -294,15 +321,18 @@ jobs:
         run: echo "present=$([ -n "$E2E_AUTH_CACHE_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: 🏗 Setup repository
+        if: steps.head.outputs.superseded != 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: 🏗 Setup monorepo
+        if: steps.head.outputs.superseded != 'true'
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
       - name: 🎭 Install Playwright browsers
+        if: steps.head.outputs.superseded != 'true'
         run: cd apps/main && npx playwright install chromium --only-shell
 
       # dev-next serves one E2E run at a time (ruling B, 2026-10-01): wait here,
@@ -322,7 +352,7 @@ jobs:
       # into 401/403 (2026-11-09).
       - name: 🔑 Log in and sync every shard's cashier, one at a time
         id: setup
-        if: steps.key.outputs.present == 'true'
+        if: steps.key.outputs.present == 'true' && steps.head.outputs.superseded != 'true'
         continue-on-error: true
         timeout-minutes: 20
         working-directory: apps/main
@@ -338,7 +368,7 @@ jobs:
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
 
       - name: 🔐 Encrypt the shared auth state
-        if: steps.key.outputs.present == 'true'
+        if: steps.key.outputs.present == 'true' && steps.head.outputs.superseded != 'true'
         env:
           E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
           SETUP_OUTCOME: ${{ steps.setup.outcome }}
@@ -373,7 +403,8 @@ jobs:
   # store whole. Since 2026-11-18 (desk ruling, after the 2026-11-17
   # saturation: ~20 laps × 6 shards since 15:00Z, VPS load ~38 on 12 cores,
   # production slowed) shards queue in 3 slots per lane, not 6: the pairs are
-  # 1+5, 2+4 and 3+6, balanced by measured length, so a pair takes turns.
+  # 1+6, 2+5 and 3+4, balanced by the medians of 24 Nov 2026 (15.3+15.6,
+  # 10.1+17.4, 14.2+16.1 = 30.9/27.5/30.3 min), so a pair takes turns.
   # Peak is 3 shards × 2 workers = 6 browser sessions per store; a healthy
   # lap goes from ~21–27 min to ~30–41 min. The Merge Gate poll was raised
   # to ~240 min (merge-gate.yml, MERGE_GATE_MAX_ATTEMPTS) so a PR four runs
@@ -401,7 +432,7 @@ jobs:
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     needs: [changes, deploy, e2e-setup]
-    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && needs.changes.outputs.e2e_proof == '' }}
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && needs.changes.outputs.e2e_proof == '' && needs.e2e-setup.outputs.superseded != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -421,10 +452,11 @@ jobs:
         # nothing. One shard cannot produce that. A quarantine-only run is one shard too.
         shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[1, 2, 3, 4, 5, 6]') }}
         shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || (github.event_name == 'schedule' || inputs.quarantine_only) && '[1]' || '[6]') }}
-    # At most 3 web E2E shards per dev store: shards queue per lane in 3 slots (pairs 1+5, 2+4,
-    # 3+6), never cancelled (desk rulings 2026-11-13, 2026-11-18). Why: see the comment above `e2e:`.
+    # At most 3 web E2E shards per dev store: shards queue per lane in 3 slots (pairs 1+6, 2+5,
+    # 3+4, from the 2026-11-24 medians), never cancelled (desk rulings 2026-11-13, 2026-11-18).
+    # Why: see the comment above `e2e:`.
     concurrency:
-      group: ${{ (github.event_name == 'schedule' || inputs.quarantine_only || needs.changes.outputs.lane == '') && format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) || format('e2e-store-{0}-slot-{1}', needs.changes.outputs.lane, fromJSON('[0,1,2,3,2,1,3]')[matrix.shardIndex]) }}
+      group: ${{ (github.event_name == 'schedule' || inputs.quarantine_only || needs.changes.outputs.lane == '') && format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) || format('e2e-store-{0}-slot-{1}', needs.changes.outputs.lane, fromJSON('[0,1,2,3,3,2,1]')[matrix.shardIndex]) }}
       cancel-in-progress: false
       queue: max
     steps:
@@ -711,7 +743,7 @@ jobs:
   # app-affecting paths) or when a manual dispatch explicitly opted out.
   e2e-gate:
     name: 🎭 E2E Tests
-    needs: [changes, deploy, e2e, cold-start]
+    needs: [changes, deploy, e2e, cold-start, e2e-setup]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -726,6 +758,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           SKIP_E2E_INPUT: ${{ github.event.inputs.skip_e2e }}
+          SUPERSEDED: ${{ needs.e2e-setup.outputs.superseded }}
+          SUPERSEDED_BY: ${{ needs.e2e-setup.outputs.superseded_by }}
         run: |
           set -uo pipefail
 
@@ -740,6 +774,12 @@ jobs:
           if [ "$DEPLOY_RESULT" = "cancelled" ]; then
             echo "::error::Deploy did not succeed (result: cancelled), so verification never ran."
             exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "push" ] && [ "${SUPERSEDED:-}" = "true" ]; then
+            msg="⏭️ Web E2E skipped: superseded by main@${SUPERSEDED_BY:-?}, whose run verifies this commit as an ancestor"
+            echo "$msg"; echo "$msg" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 0
           fi
 
           # Cold-start is demanded only when a main push actually deployed; a
@@ -821,7 +861,7 @@ jobs:
     name: 📕 main verification ledger
     # `deploy` too: DEPLOY_RESULT below reads needs.deploy, which is empty
     # unless the job is listed here.
-    needs: [deploy, e2e-gate, e2e, cold-start]
+    needs: [deploy, e2e-gate, e2e, cold-start, e2e-setup]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       issues: write
@@ -837,6 +877,7 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           COLD_START_RESULT: ${{ needs.cold-start.result }}
+          SUPERSEDED: ${{ needs.e2e-setup.outputs.superseded }}
           SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -846,7 +887,7 @@ jobs:
 
           # A cancelled deploy is a pending deploy REPLACED by a newer main push
           # (see the deploy job's concurrency) — superseded, never red.
-          if [ "$GATE_RESULT" = "cancelled" ] || [ "$DEPLOY_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ]; then
+          if [ "$GATE_RESULT" = "cancelled" ] || [ "$DEPLOY_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ] || [ "${SUPERSEDED:-}" = "true" ]; then
             echo "Ledger unchanged: superseded verification at $short_sha"
             exit 0
           fi

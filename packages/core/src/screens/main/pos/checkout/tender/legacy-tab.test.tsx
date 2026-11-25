@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { PaymentWebview, type PaymentWebviewProps } from '../components/payment-webview';
 import { LegacyTab } from './legacy-tab';
 
@@ -25,6 +27,14 @@ const MOCK_CHECKOUT_SESSION = {
 let mockCheckoutSession = MOCK_CHECKOUT_SESSION;
 jest.mock('../hooks/use-checkout-session', () => ({
 	useCheckoutSession: () => mockCheckoutSession,
+}));
+// The store the pay links are checked against (example.com, as makeOrder's link); null is
+// app state with no site record yet.
+let mockStoreSite: { wcpos_api_url: string } | null = {
+	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+};
+jest.mock('../../../../../contexts/app-state', () => ({
+	useAppState: () => ({ site: mockStoreSite }),
 }));
 // Mounting the payment frame starts a sale; keep that boundary inert in this UI test. The
 // stand-in records its props and answers the tab's ref the way the real frame's WebView does.
@@ -84,9 +94,9 @@ const flow = {
 	legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
 	saveState: null,
 } as never;
-const makeOrder = (hasURL = true) =>
+const makeOrder = (hasURL = true, href = 'https://example.com/pay') =>
 	({
-		payload: { links: { payment: hasURL ? [{ href: 'https://example.com/pay' }] : [] } },
+		payload: { links: { payment: hasURL ? [{ href }] : [] } },
 	}) as never;
 /** The props of the frame's latest render. */
 const frameProps = () => jest.mocked(PaymentWebview).mock.lastCall![0] as PaymentWebviewProps;
@@ -177,6 +187,40 @@ it('the frame slot holds the pane height before the pay page mounts, so Process 
 	const button = view.getByTestId('checkout-legacy-process-payment');
 	expect(slot.contains(button)).toBe(false);
 	expect(slot.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it('a pay link on another host is no usable link: the other-domain notice shows and no frame mounts', () => {
+	const view = render(
+		<LegacyTab order={makeOrder(true, 'https://pay.elsewhere.example/pay')} flow={flow} />
+	);
+	expect(PaymentWebview).not.toHaveBeenCalled();
+	expect(view.getByTestId('checkout-payment-form-unavailable').textContent).toContain(
+		en['pos_checkout.payment_page_other_domain']
+	);
+});
+
+it('the split screen offers no pay page, so a foreign link there logs nothing', () => {
+	const splitFlow = { ...(flow as object), hasLiveLeg: true } as never;
+	render(
+		<LegacyTab order={makeOrder(true, 'https://pay.elsewhere.example/pay')} flow={splitFlow} />
+	);
+	// The mapped logger mock, as useStorePayLink imports it.
+	expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).error).not.toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'CHECKOUT101' })
+	);
+});
+
+it('with no site there is no store origin: the missing-link notice shows and no frame mounts', () => {
+	const site = mockStoreSite;
+	mockStoreSite = null;
+	try {
+		const view = render(<LegacyTab order={makeOrder()} flow={flow} />);
+		expect(PaymentWebview).not.toHaveBeenCalled();
+		expect(view.getByTestId('checkout-payment-form-unavailable')).toBeTruthy();
+	} finally {
+		mockStoreSite = site;
+	}
 });
 
 it('forwards receiptHost to PaymentWebview', () => {

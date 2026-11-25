@@ -50,6 +50,7 @@ export {
 	type ReadonlyClosureDocument,
 } from './reads';
 export { runRegisterSessionCycle } from './cycle';
+export { sessionRestored } from './queue';
 export { observeRegisterDrawer, observeRegisterStatus } from './drawer';
 export { countRecorded, isLiveMovement, SESSION_SET_ASIDE } from './drawer-rules';
 export { abandonCount, beginCount } from './count';
