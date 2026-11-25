@@ -289,6 +289,9 @@ jobs:
       superseded: ${{ steps.head.outputs.superseded }}
       superseded_by: ${{ steps.head.outputs.head }}
     steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       # Coalesce main pushes (desk ruling 2026-11-25, #3821): admitted behind
       # the serial setup queue, a push whose commit is no longer main's head
       # skips its logins and shards IF that newer head is deploying; the head's
@@ -299,30 +302,13 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha) || exit 0
-          if [ -z "$head" ] || [ "$head" = "$GITHUB_SHA" ]; then exit 0; fi
-          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?event=push&branch=main&head_sha=$head" --jq '.workflow_runs[0].id // empty') || exit 0
-          [ -n "$run" ] || exit 0
-          deploy=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs?per_page=100" --jq '[.jobs[] | select(.name == "🚀 Deploy")][0] | if . == null then "absent" else (.conclusion // "running") end') || exit 0
-          # A skipped deploy (docs-only head) runs no E2E, so it never supersedes.
-          case "$deploy" in
-            success|running)
-              { echo "superseded=true"; echo "head=$head"; } >> "$GITHUB_OUTPUT"
-              echo "::notice title=E2E coalesced::Superseded by main@$head (run $run); its run verifies this commit as an ancestor."
-              ;;
-          esac
-          exit 0
+        run: bash .github/scripts/main-push-e2e-superseded.sh
 
       - name: 🔑 Check for the auth-state key
         id: key
         env:
           E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
         run: echo "present=$([ -n "$E2E_AUTH_CACHE_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-
-      - name: 🏗 Setup repository
-        if: steps.head.outputs.superseded != 'true'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: 🏗 Setup monorepo
         if: steps.head.outputs.superseded != 'true'
@@ -435,6 +421,17 @@ jobs:
     if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next' && needs.changes.outputs.e2e_proof == '' && needs.e2e-setup.outputs.superseded != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    # Only the current shard sets its key; empty outputs do not overwrite other shards.
+    outputs:
+      superseded_1: ${{ steps.head.outputs.superseded_1 }}
+      superseded_2: ${{ steps.head.outputs.superseded_2 }}
+      superseded_3: ${{ steps.head.outputs.superseded_3 }}
+      superseded_4: ${{ steps.head.outputs.superseded_4 }}
+      superseded_5: ${{ steps.head.outputs.superseded_5 }}
+      superseded_6: ${{ steps.head.outputs.superseded_6 }}
     strategy:
       fail-fast: false
       matrix:
@@ -499,7 +496,16 @@ jobs:
           fetch-depth: 0
           submodules: false
 
+      - name: ⏩ Skip a superseded main push
+        id: head
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/main-push-e2e-superseded.sh "${{ matrix.shardIndex }}"
+
       - name: 🏗 Setup monorepo
+        if: steps.head.outputs.superseded != 'true'
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
@@ -507,7 +513,7 @@ jobs:
 
       # Without them (no key, or a failed upload or decrypt) each shard logs in and syncs itself, loudly.
       - name: 📥 Download the shared auth state
-        if: needs.e2e-setup.outputs.state == 'ready'
+        if: needs.e2e-setup.outputs.state == 'ready' && steps.head.outputs.superseded != 'true'
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -515,7 +521,7 @@ jobs:
           path: apps/main/e2e
 
       - name: 🔓 Decrypt the shared auth state
-        if: needs.e2e-setup.outputs.state == 'ready' && env.E2E_AUTH_CACHE_KEY != ''
+        if: needs.e2e-setup.outputs.state == 'ready' && env.E2E_AUTH_CACHE_KEY != '' && steps.head.outputs.superseded != 'true'
         env:
           E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
         working-directory: apps/main
@@ -525,6 +531,7 @@ jobs:
           rm -f e2e/auth-state.enc
 
       - name: 💾 Cache Playwright browsers
+        if: steps.head.outputs.superseded != 'true'
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: ~/.cache/ms-playwright
@@ -533,12 +540,14 @@ jobs:
             playwright-${{ runner.os }}-
 
       - name: 🎭 Install Playwright browsers
+        if: steps.head.outputs.superseded != 'true'
         # No --with-deps: GitHub's Ubuntu images already carry Chrome's system
         # libraries, and the apt run it triggers goes through the same flaky
         # azure mirror that wedged a shard for 36 minutes on 2026-08-18.
         run: cd apps/main && npx playwright install chromium --only-shell
 
       - name: 🏥 Health check deployment
+        if: steps.head.outputs.superseded != 'true'
         run: |
           URL="${{ needs.deploy.outputs.deployment_url }}"
           echo "Checking deployment at: $URL"
@@ -569,6 +578,7 @@ jobs:
       # someone reads the reds (2026-08-19: a saturated dev-pro sent a whole
       # night of gates red and the reds read as ordinary test failures).
       - name: 🌡 Probe store health (pre-flight)
+        if: steps.head.outputs.superseded != 'true'
         continue-on-error: true
         env:
           E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
@@ -580,6 +590,7 @@ jobs:
           fi
 
       - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+        if: steps.head.outputs.superseded != 'true'
         id: e2e-tests
         # backstop behind playwright.config's 50-min globalTimeout; keeps the always() report uploads inside the 60-min job
         timeout-minutes: 55
@@ -655,7 +666,7 @@ jobs:
       # be saturated by the time the run fails, and that distinction is the
       # difference between "your diff" and "the queue".
       - name: 🌡 Probe store health (after failure)
-        if: failure()
+        if: failure() && steps.head.outputs.superseded != 'true'
         continue-on-error: true
         env:
           E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
@@ -668,7 +679,7 @@ jobs:
 
       - name: 📊 Upload blob report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        if: always()
+        if: always() && steps.head.outputs.superseded != 'true'
         with:
           name: blob-report-${{ matrix.shardIndex }}
           path: apps/main/blob-report/
@@ -676,7 +687,7 @@ jobs:
 
       - name: 📸 Upload screenshots on failure
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        if: failure()
+        if: failure() && steps.head.outputs.superseded != 'true'
         with:
           name: playwright-screenshots-${{ matrix.shardIndex }}-${{ github.sha }}
           path: apps/main/test-results/
@@ -805,6 +816,21 @@ jobs:
           fi
 
           if [ "$E2E_RESULT" = "success" ]; then
+            superseded_shards=0
+            for shard in \
+              '${{ needs.e2e.outputs.superseded_1 }}' \
+              '${{ needs.e2e.outputs.superseded_2 }}' \
+              '${{ needs.e2e.outputs.superseded_3 }}' \
+              '${{ needs.e2e.outputs.superseded_4 }}' \
+              '${{ needs.e2e.outputs.superseded_5 }}' \
+              '${{ needs.e2e.outputs.superseded_6 }}'; do
+              if [ "$shard" = "true" ]; then superseded_shards=$((superseded_shards + 1)); fi
+            done
+            if [ "$superseded_shards" -gt 0 ]; then
+              msg="⏭️ Web E2E partly skipped: $superseded_shards of 6 shards were superseded by a newer main push, whose run verifies this commit as an ancestor"
+              echo "$msg"; echo "$msg" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+              exit 0
+            fi
             echo "✅ All E2E shards passed"
             exit 0
           fi
@@ -877,7 +903,7 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           COLD_START_RESULT: ${{ needs.cold-start.result }}
-          SUPERSEDED: ${{ needs.e2e-setup.outputs.superseded }}
+          SUPERSEDED: ${{ needs.e2e-setup.outputs.superseded == 'true' || needs.e2e.outputs.superseded_1 == 'true' || needs.e2e.outputs.superseded_2 == 'true' || needs.e2e.outputs.superseded_3 == 'true' || needs.e2e.outputs.superseded_4 == 'true' || needs.e2e.outputs.superseded_5 == 'true' || needs.e2e.outputs.superseded_6 == 'true' }}
           SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -887,14 +913,15 @@ jobs:
 
           # A cancelled deploy is a pending deploy REPLACED by a newer main push
           # (see the deploy job's concurrency) — superseded, never red.
-          if [ "$GATE_RESULT" = "cancelled" ] || [ "$DEPLOY_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ] || [ "${SUPERSEDED:-}" = "true" ]; then
+          # An actual shard failure wins over every superseded/cancelled signal.
+          if [ "$E2E_RESULT" != "failure" ] && { [ "$GATE_RESULT" = "cancelled" ] || [ "$DEPLOY_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ] || [ "${SUPERSEDED:-}" = "true" ]; }; then
             echo "Ledger unchanged: superseded verification at $short_sha"
             exit 0
           fi
 
           issues=$(gh issue list --label "$label" --state open --json number --limit 1)
           issue=$(jq -r '.[0].number // empty' <<<"$issues")
-          if [ "$GATE_RESULT" = "failure" ]; then
+          if [ "$GATE_RESULT" = "failure" ] || [ "$E2E_RESULT" = "failure" ]; then
             if [ -z "$issue" ]; then
               gh label create "$label" --color B60205 --description "Main production verification is red" || true
               gh issue create --title "main is red: production verification failed at $short_sha" --label "$label" --body "Verification failed for $SHA ($RUN_URL). Fix forward on main; this issue closes itself on the next green." >/dev/null

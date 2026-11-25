@@ -302,13 +302,13 @@ test('the E2E gate passes a superseded main push and only a push', () => {
 test('e2e-setup skips a superseded main push only when the newer head is deploying', () => {
 	const workflow = readWorkflow('deploy.yml');
 	const setup = workflow.jobs['e2e-setup'];
-	const head = setup.steps[0];
-	assert.equal(head.id, 'head', 'the superseded check must be the first step');
+	const head = setup.steps.find((step) => step.id === 'head');
+	assert.ok(setup.steps[0].uses?.startsWith('actions/checkout'));
+	assert.equal(head.run, 'bash .github/scripts/main-push-e2e-superseded.sh');
 	assert.match(head.if, /github\.event_name == 'push'/);
 	assert.match(head.if, /github\.ref == 'refs\/heads\/main'/);
 	assert.equal(head['continue-on-error'], true);
 	for (const name of [
-		'🏗 Setup repository',
 		'🏗 Setup monorepo',
 		'🎭 Install Playwright browsers',
 		"🔑 Log in and sync every shard's cashier, one at a time",
@@ -333,18 +333,21 @@ case "$2" in
   *"/runs?"*) printf '%s' "$FAKE_RUN" ;;
   */jobs*) printf '%s' "$FAKE_DEPLOY" ;;
 esac
+[ "$2" != "$FAKE_FAIL_ENDPOINT" ] || exit 1
 exit "\${FAKE_EXIT:-0}"
 `,
 		{ mode: 0o755 }
 	);
-	const run = (fake) => {
+	const run = (fake, shard = '') => {
 		writeFileSync(output, '');
-		const result = runShell(head.run, {
+		writeFileSync(path.join(workspace, 'summary'), '');
+		const result = runShell(`${head.run} ${shard}`, {
 			env: {
 				PATH: `${binDir}:${process.env.PATH}`,
 				GITHUB_SHA: 'aaa',
 				GITHUB_REPOSITORY: 'wcpos/monorepo',
 				GITHUB_OUTPUT: output,
+				GITHUB_STEP_SUMMARY: path.join(workspace, 'summary'),
 				FAKE_EXIT: '0',
 				...fake,
 			},
@@ -361,12 +364,112 @@ exit "\${FAKE_EXIT:-0}"
 		assert.match(running.output, /^superseded=true\nhead=bbb$/m);
 		assert.match(running.result.stdout, /::notice title=E2E coalesced::.*main@bbb \(run 7\)/);
 		assert.match(run({ ...newer, FAKE_DEPLOY: 'success' }).output, /^superseded=true$/m);
+		for (let index = 1; index <= 6; index++) {
+			const shard = run({ ...newer, FAKE_DEPLOY: 'success' }, index);
+			assert.equal(shard.output, `superseded=true\nhead=bbb\nsuperseded_${index}=true\n`);
+			assert.match(readFileSync(path.join(workspace, 'summary'), 'utf8'), /main@bbb/);
+		}
+		for (const endpoint of [
+			'repos/wcpos/monorepo/commits/main',
+			'repos/wcpos/monorepo/actions/workflows/deploy.yml/runs?event=push&branch=main&head_sha=bbb',
+			'repos/wcpos/monorepo/actions/runs/7/jobs?per_page=100',
+		]) {
+			assert.equal(
+				run({ ...newer, FAKE_DEPLOY: 'running', FAKE_FAIL_ENDPOINT: endpoint }).output,
+				''
+			);
+		}
+		assert.equal(run({ FAKE_HEAD: '' }).output, '');
+		for (const deploy of ['', 'failure', 'cancelled']) {
+			assert.equal(run({ ...newer, FAKE_DEPLOY: deploy }).output, '');
+		}
 		// A docs-only head skips its deploy and runs no E2E: never superseded by it.
 		assert.equal(run({ ...newer, FAKE_DEPLOY: 'skipped' }).output, '');
 		assert.equal(run({ ...newer, FAKE_DEPLOY: 'absent' }).output, '');
 		assert.equal(run({ FAKE_HEAD: 'bbb', FAKE_RUN: '' }).output, '');
 		// An API error fails open, even when the output looks superseded.
 		assert.equal(run({ ...newer, FAKE_DEPLOY: 'running', FAKE_EXIT: '1' }).output, '');
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('queued shards recheck supersession and skip every later step', () => {
+	const jobs = readWorkflow('deploy.yml').jobs;
+	const shard = jobs.e2e;
+	const index = shard.steps.findIndex((step) => step.id === 'head');
+	assert.ok(index > 0, 'missing shard supersession check');
+	const head = shard.steps[index];
+	assert.equal(
+		head.run,
+		'bash .github/scripts/main-push-e2e-superseded.sh "${{ matrix.shardIndex }}"'
+	);
+	assert.equal(head.if, jobs['e2e-setup'].steps.find((step) => step.id === 'head').if);
+	assert.equal(head['continue-on-error'], true);
+	assert.deepEqual(shard.permissions, { contents: 'read', actions: 'read' });
+	assert.ok(shard.steps[index - 1].uses.startsWith('actions/checkout'));
+	assert.equal(
+		shard.steps.slice(0, index - 1).filter((step) => step.name.includes('Refuse')).length,
+		3
+	);
+	for (const step of shard.steps.slice(index + 1)) {
+		assert.ok(step.if?.includes("steps.head.outputs.superseded != 'true'"), step.name);
+		if (step.name.includes('on failure') || step.name.includes('after failure')) {
+			assert.match(step.if, /failure\(\) &&/);
+		}
+		if (step.name.includes('Upload blob')) assert.match(step.if, /always\(\) &&/);
+	}
+	for (let i = 1; i <= 6; i++) {
+		assert.equal(
+			shard.outputs[`superseded_${i}`],
+			'${{ steps.head.outputs.superseded_' + i + ' }}'
+		);
+		assert.ok(jobs['e2e-gate'].steps[0].run.includes(`needs.e2e.outputs.superseded_${i}`));
+	}
+	assert.equal(Object.keys(shard.outputs).length, 6);
+	for (let i = 1; i <= 6; i++) {
+		assert.ok(
+			jobs['main-ledger'].steps[0].env.SUPERSEDED.includes(
+				`needs.e2e.outputs.superseded_${i} == 'true'`
+			)
+		);
+	}
+});
+
+test('the gate counts superseded shards only on success and never hides a failure', () => {
+	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'].steps[0];
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-shard-gate-'));
+	const summary = path.join(workspace, 'summary');
+	try {
+		for (const count of [0, 1, 3, 6]) {
+			const script = gate.run.replace(
+				/\$\{\{ needs\.e2e\.outputs\.superseded_(\d) \}\}/g,
+				(_, index) => (Number(index) <= count ? 'true' : '')
+			);
+			for (const e2e of ['success', 'failure', 'cancelled', 'skipped']) {
+				writeFileSync(summary, '');
+				const result = runShell(script, {
+					env: {
+						CHANGES_RESULT: 'success',
+						DEPLOY_RESULT: 'success',
+						DEPLOY_URL: 'https://preview.test',
+						COLD_START_RESULT: 'success',
+						E2E_RESULT: e2e,
+						EVENT_NAME: 'push',
+						SUPERSEDED: '',
+						SKIP_E2E_INPUT: 'false',
+						GITHUB_STEP_SUMMARY: summary,
+					},
+				});
+				assert.equal(result.status, e2e === 'success' ? 0 : 1, result.stdout + result.stderr);
+				if (e2e === 'success' && count > 0) {
+					const message = `⏭️ Web E2E partly skipped: ${count} of 6 shards were superseded by a newer main push, whose run verifies this commit as an ancestor`;
+					assert.ok(result.stdout.includes(message));
+					assert.equal(readFileSync(summary, 'utf8'), `${message}\n`);
+					assert.doesNotMatch(result.stdout, /All E2E shards passed/);
+				} else if (e2e === 'success') assert.match(result.stdout, /All E2E shards passed/);
+			}
+		}
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
@@ -485,6 +588,19 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 		assert.equal(supersededDeploy.result.status, 0, supersededDeploy.result.stdout);
 		assert.equal(supersededDeploy.trace, '');
 
+		// A real shard failure wins even when cold-start was cancelled and another shard skipped.
+		for (const issues of ['[]', '[{"number":42}]']) {
+			const failed = run({
+				gate: 'failure',
+				e2e: 'failure',
+				cold: 'cancelled',
+				issues,
+				superseded: 'true',
+			});
+			assert.equal(failed.result.status, 0, failed.result.stderr);
+			assert.match(failed.trace, issues === '[]' ? /issue create/ : /issue comment 42/);
+			assert.doesNotMatch(failed.trace, /^issue close /m);
+		}
 		// A main push coalesced into a newer head: a green gate must not close the issue.
 		const coalesced = run({ gate: 'success', issues: '[{"number":42}]', superseded: 'true' });
 		assert.equal(coalesced.result.status, 0, coalesced.result.stdout + coalesced.result.stderr);
@@ -2456,11 +2572,15 @@ test('E2E declares store-health probes and a bounded worker count', () => {
 		assert.equal(probe['continue-on-error'], true);
 	}
 	assert.ok(
-		probes.some((probe) => probe.if === 'failure()'),
+		probes.some((probe) => probe.if === "failure() && steps.head.outputs.superseded != 'true'"),
 		'no post-failure store probe — a store that saturates mid-run would go unrecorded'
 	);
-	const preFlight = probes.find((probe) => probe.if !== 'failure()');
-	const postFailure = probes.find((probe) => probe.if === 'failure()');
+	const preFlight = probes.find(
+		(probe) => probe.if !== "failure() && steps.head.outputs.superseded != 'true'"
+	);
+	const postFailure = probes.find(
+		(probe) => probe.if === "failure() && steps.head.outputs.superseded != 'true'"
+	);
 	assert.ok(preFlight && postFailure, 'expected both probe phases');
 	assert.equal(postFailure.env.E2E_STORE_URL_FREE, preFlight.env.E2E_STORE_URL_FREE);
 	assert.match(postFailure.run, /probe-store-health\.mjs.*E2E_STORE_URL_FREE/);
