@@ -36,6 +36,7 @@ export type ErrorCode =
 	| 'PAYMENT221'
 	| 'PAYMENT301'
 	| 'PAYMENT311'
+	| 'PAYMENT312'
 	| 'PAYMENT401'
 	| 'PAYMENT501'
 	| 'PRINT101'
@@ -482,6 +483,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 			'Open the order and check its refunds before trying again — a retry could refund twice.',
 		dataSafety: 'outcome-unknown',
 		summary: "WCPOS couldn't confirm whether this refund went through.",
+	},
+	PAYMENT312: {
+		code: 'PAYMENT312',
+		symbol: 'REFUND_RECORD_LOST',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			"Don't refund again — the money went back. Check the order notes, then ask a store admin to record the refund.",
+		dataSafety: 'money-moved',
+		summary: "The refund was returned to the customer, but the store couldn't keep its record.",
 	},
 	PAYMENT401: {
 		code: 'PAYMENT401',
@@ -1306,6 +1317,7 @@ export const ERROR_CODES = {
 	PAYMENT_VOID_REFUSED: 'PAYMENT221',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
 	REFUND_OUTCOME_UNKNOWN: 'PAYMENT311',
+	REFUND_RECORD_LOST: 'PAYMENT312',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',
 	PAYMENT_ALREADY_PAID_ONLINE: 'PAYMENT501',
 	AUTOPRINT_DID_NOT_START: 'PRINT101',

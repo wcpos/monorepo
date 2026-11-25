@@ -8,6 +8,7 @@ import {
 	ScrollView,
 	type StyleProp,
 	StyleSheet,
+	useWindowDimensions,
 	View,
 	type ViewInstance,
 	type ViewStyle,
@@ -16,12 +17,16 @@ import {
 import Animated, {
 	FadeIn,
 	FadeOut,
+	ReduceMotion,
 	SlideInDown,
 	SlideInLeft,
 	SlideInRight,
 	SlideOutDown,
 	SlideOutLeft,
 	SlideOutRight,
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -261,6 +266,15 @@ export const OVERLAY_MOTION: Record<
 		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE_EXIT),
 	},
 };
+/** Native, non-anchored panels: the `entering` durations above, played by an animated style (#3678). */
+const PANEL_ENTER_DURATION: Record<OverlayPresentation, number> = {
+	anchored: POPOVER_FADE,
+	center: OVERLAY_FADE,
+	left: PANEL_SLIDE,
+	right: PANEL_SLIDE,
+	page: PANEL_SLIDE,
+	bottom: SHEET_RISE,
+};
 /**
  * The phone sheet's panel for an overlay that mounts no primitive `Content` (the popover
  * family under the phone width): the drawn sheet skin, the rise from `open`, the caller's
@@ -371,6 +385,25 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	const { paddingTop: owedStrip = 0 } = useEdgeInsets(STRIP);
 	const stripTop = inline ? owedStrip : stripHeight;
 	const keyboardVisible = useKeyboardVisible();
+	const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+	const enter = useSharedValue(0);
+	// Fixed at mount, so the entrance plays once, as `entering` did.
+	const [enterDuration] = React.useState(() => PANEL_ENTER_DURATION[presentation]);
+	React.useEffect(() => {
+		if (isWeb) return;
+		enter.value = withTiming(1, {
+			duration: enterDuration,
+			easing: EASE,
+			reduceMotion: ReduceMotion.System,
+		});
+	}, [enter, enterDuration]);
+	const enterStyle = useAnimatedStyle(() => {
+		const rest = 1 - enter.value;
+		if (presentation === 'center') return { opacity: enter.value };
+		if (presentation === 'bottom') return { transform: [{ translateY: rest * windowHeight }] };
+		const from = presentation === 'left' ? -windowWidth : windowWidth;
+		return { transform: [{ translateX: rest * from }] };
+	});
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
 	const deferAutoFocus = isWeb && fullHeight;
@@ -658,10 +691,13 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 					presentation === 'bottom' ? 'max-h-[92%] w-full' : 'max-h-full'
 				)}
 			>
+				{/* No `entering` here (#3678): Reanimated's Android layout-animation fade could strand
+				    the panel at opacity 0 on a busy device, mounted but never drawn. An animated style
+				    is re-applied on every commit and always lands; same duration, easing and motion. */}
 				<Animated.View
 					pointerEvents="box-none"
 					onAccessibilityEscape={onDismiss}
-					entering={OVERLAY_MOTION[presentation].entering}
+					style={enterStyle}
 					exiting={OVERLAY_MOTION[presentation].exiting}
 					className={cn(
 						'max-h-full max-w-full',
