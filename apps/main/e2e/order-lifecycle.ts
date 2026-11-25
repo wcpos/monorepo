@@ -850,7 +850,7 @@ export async function trashOrder(
 	// single bare read here would turn one 502 into either a guaranteed leak (the
 	// update serialises without `baseRevision` and the push contract rejects it) or
 	// an unverified write.
-	let current = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
+	const current = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
 
 	// Ownership must be PROVEN, not merely "not disproven". If the read failed
 	// after its retries, we do not know whose order this is, and on a shared live
@@ -870,14 +870,10 @@ export async function trashOrder(
 
 	// An order's refunds outlive its trash on HPOS and every pro boot syncs them (#3806). REST
 	// cannot trash a refund, so they are deleted, and only for an order whose run label this read proved.
+	// The delete runs after the trash or cancel lands, so a slow or failed delete never leaves the order live.
 	const refundIds = (current?.refunds ?? [])
 		.map((refund) => Number(refund.id))
 		.filter((id) => Number.isInteger(id) && id > 0);
-	if (refundIds.length > 0 && isRunLabel(order.label)) {
-		await deleteRefunds(request, storeUrl, order.id, refundIds).catch(() => null);
-		current = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
-		if (!ownershipProven(current)) return false;
-	}
 
 	const attempts: string[] = [];
 	const postStatus = (status: string, current: ServerOrder | null): Promise<boolean | 'stale'> => {
@@ -944,6 +940,9 @@ export async function trashOrder(
 		}
 		if (applied === true) {
 			console.log(`[e2e-cleanup] order ${order.id} -> ${status}`);
+			if (refundIds.length > 0 && isRunLabel(order.label)) {
+				await deleteRefunds(request, storeUrl, order.id, refundIds).catch(() => null);
+			}
 			if (status === 'cancelled') await trashAsWriter(request, storeUrl, [order.id]);
 			return true;
 		}

@@ -356,19 +356,23 @@ test.describe('trashOrder refunds', () => {
 	const cancelled = reply(200, { document: { status: 'cancelled' } });
 	const trashAsWriter = async () => ({ trashed: 1, failed: 0, skipped: 0 });
 
-	test("deletes a labelled order's refunds before it trashes the order", async () => {
+	test("deletes a labelled order's refunds after the status lands, then trashes", async () => {
 		const { request, testInfo, posted } = fakes(
-			[refunded('rev-1', [{ id: 501 }, { id: 502 }]), refunded('rev-2', [])],
+			[refunded('rev-1', [{ id: 501 }, { id: 502 }])],
 			[notTrashable, cancelled]
 		);
 		const { calls, deleteRefunds } = deleter(posted, { deleted: 2, failed: 0, skipped: 0 });
-		expect(await trashOrder(request, testInfo, null, ORDER, trashAsWriter, deleteRefunds)).toBe(
-			true
-		);
-		expect(calls).toEqual([{ orderId: 77, ids: [501, 502], postsBefore: 0 }]);
+		const trashed: number[] = [];
+		const trashAfter = async () => {
+			trashed.push(calls.length);
+			return { trashed: 1, failed: 0, skipped: 0 };
+		};
+		expect(await trashOrder(request, testInfo, null, ORDER, trashAfter, deleteRefunds)).toBe(true);
+		expect(calls).toEqual([{ orderId: 77, ids: [501, 502], postsBefore: 2 }]);
 		const cancels = posted.filter((post) => post.status === 'cancelled');
 		expect(cancels).toHaveLength(1);
-		expect(cancels[0].baseRevision).toBe('rev-2');
+		expect(cancels[0].baseRevision).toBe('rev-1');
+		expect(trashed).toEqual([1]);
 	});
 
 	test('leaves refunds alone on an order without a run label', async () => {
@@ -386,7 +390,7 @@ test.describe('trashOrder refunds', () => {
 
 	test('still trashes the order when the refunds cannot be deleted', async () => {
 		const { request, testInfo, posted } = fakes(
-			[refunded('rev-1', [{ id: 501 }, { id: 502 }]), refunded('rev-2', [])],
+			[refunded('rev-1', [{ id: 501 }, { id: 502 }])],
 			[notTrashable, cancelled]
 		);
 		const { deleteRefunds } = deleter(posted, { deleted: 0, failed: 0, skipped: 1 });
@@ -394,5 +398,34 @@ test.describe('trashOrder refunds', () => {
 			true
 		);
 		expect(posted.filter((post) => post.status === 'cancelled')).toHaveLength(1);
+	});
+
+	test('deletes nothing when no status is ever applied', async () => {
+		const { request, testInfo, posted } = fakes(
+			[refunded('rev-1', [{ id: 501 }])],
+			[notTrashable, notTrashable]
+		);
+		const { calls, deleteRefunds } = deleter(posted, { deleted: 1, failed: 0, skipped: 0 });
+		expect(await trashOrder(request, testInfo, null, ORDER, trashAsWriter, deleteRefunds)).toBe(
+			false
+		);
+		expect(calls).toEqual([]);
+	});
+
+	test('a delete that throws still resolves true and still trashes', async () => {
+		const { request, testInfo } = fakes(
+			[refunded('rev-1', [{ id: 501 }])],
+			[notTrashable, cancelled]
+		);
+		const trashed: number[][] = [];
+		const trashAfter = async (_r: APIRequestContext, _s: string, ids: readonly number[]) => {
+			trashed.push([...ids]);
+			return { trashed: 1, failed: 0, skipped: 0 };
+		};
+		const throwing = async (): Promise<DeleteRefundsResult> => {
+			throw new Error('refund delete failed');
+		};
+		expect(await trashOrder(request, testInfo, null, ORDER, trashAfter, throwing)).toBe(true);
+		expect(trashed).toEqual([[77]]);
 	});
 });
