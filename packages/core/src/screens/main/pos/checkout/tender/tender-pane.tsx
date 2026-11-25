@@ -29,7 +29,7 @@ import { Text } from '@wcpos/components/text';
 import { Tile } from '@wcpos/components/tile';
 import { TileGrid } from '@wcpos/components/tile-grid';
 import { VStack } from '@wcpos/components/vstack';
-import { countsTowardPaid, fromMinor, toMinor } from '@wcpos/order-math';
+import { countedLegs, fromMinor, toMinor } from '@wcpos/order-math';
 
 import { firstMissingRequired } from './declared-fields';
 import { DeclaredFieldsView } from './declared-fields-view';
@@ -272,7 +272,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	const pickList = splitOn && phone && pickerOpen && !doneOpen;
 	const percent = flow.state.entryMode === 'percent';
 	const done = figures.legs.filter((leg) => leg.state === 'done');
-	const counted = flow.rows.filter(countsTowardPaid);
+	const counted = countedLegs(flow.rows);
 	const name = (id: string | number) =>
 		decode(flow.split.lines.find((line) => String(line.id) === String(id))?.name ?? '');
 	const doneLeg = (row: TenderFlow['rows'][number]): PlanLeg => ({
@@ -375,7 +375,7 @@ function TenderKeypad({ flow, format, saving = false, slow = false }: Props) {
 	};
 	const legs: (PlanLeg & { index: number; run: number })[] = [];
 	(plan
-		? [...flow.rows.slice(0, plan.from).filter(countsTowardPaid).map(doneLeg), ...figures.legs]
+		? [...countedLegs(flow.rows, 0, plan.from).map(doneLeg), ...figures.legs]
 		: [
 				...counted.map(doneLeg),
 				{ minor: figures.nowMinor, state: 'now' as const },

@@ -1,6 +1,7 @@
 import {
 	allowedOrderStatuses,
 	availableForRefund,
+	countedLegs,
 	derive,
 	effectiveRows,
 	hasRefundableMoney,
@@ -81,6 +82,9 @@ describe('isTenderCorrectable (test 1)', () => {
 
 	it.each<[string, PaymentRow, PaymentRow[], MetaDataEntry[] | undefined]>([
 		['not_captured', row({ status: 'authorized' }), [], undefined],
+		// C7: a failed or voided plain manual app row is refused for its status alone.
+		['not_captured: failed', row({ status: 'failed' }), [], undefined],
+		['not_captured: voided', row({ status: 'voided' }), [], undefined],
 		['voidable (no completion counted it)', original, [original], withLedger([], [original])],
 		['is_reversal', minus, corrected, undefined],
 		['already_corrected', original, corrected, undefined],
@@ -264,5 +268,79 @@ describe('isPlainManualMethod (#3651)', () => {
 			capture: { mode: 'manual', provider: null, hardware: null, webview_available: false },
 		});
 		expect(isPlainManualMethod(noModes)).toBe(false);
+	});
+
+	it('P2: is false for a no-provider method whose only modes are not manual', () => {
+		const deviceOnly = method('pos_reader', {
+			capture: {
+				mode: 'device',
+				provider: null,
+				hardware: null,
+				webview_available: false,
+				modes: [{ mode: 'device', provider: null, hardware: null }],
+			},
+		});
+		expect(isPlainManualMethod(deviceOnly)).toBe(false);
+	});
+});
+
+describe('countedLegs (#3651): a correction stands in its original’s ledger place', () => {
+	const ids = (rows: PaymentRow[]) => rows.map(({ id }) => id);
+	const a = row({ id: 'a' });
+	const minusA = row({ id: 'minusA', amount: '-10.00', reverses: 'a' });
+	const plusA = row({ id: 'plusA', method_id: 'pos_cash', corrects: 'a' });
+	const leg = row({ id: 'leg' });
+
+	it('reads a corrected leg as one leg at the original’s place', () => {
+		const rows = [a, leg, minusA, plusA];
+		expect(ids(countedLegs(rows))).toEqual(['leg', 'plusA']);
+		// The R+ is at index 3 but stands at index 0: a `from` after the original leaves it out.
+		expect(ids(countedLegs(rows, 1))).toEqual(['leg']);
+		expect(ids(countedLegs(rows, 0, 1))).toEqual(['plusA']);
+		expect(ids(countedLegs(rows, 0, 2))).toEqual(['leg', 'plusA']);
+	});
+
+	it('follows a leg corrected twice back to the first original', () => {
+		const minusPlus = row({ id: 'minusPlus', amount: '-10.00', reverses: 'plusA' });
+		const plus2 = row({ id: 'plus2', method_id: 'pos_cheque', corrects: 'plusA' });
+		const rows = [a, leg, minusA, plusA, minusPlus, plus2];
+		expect(ids(countedLegs(rows))).toEqual(['leg', 'plus2']);
+		expect(ids(countedLegs(rows, 1))).toEqual(['leg']);
+		expect(ids(countedLegs(rows, 0, 1))).toEqual(['plus2']);
+	});
+
+	it('matches ids that differ in letter case between `corrects` and the row', () => {
+		const upper = row({ id: 'A' });
+		const plus = row({ id: 'plus', corrects: 'a' });
+		const rows = [upper, leg, row({ id: 'minus', amount: '-10.00', reverses: 'A' }), plus];
+		expect(ids(countedLegs(rows, 1))).toEqual(['leg']);
+		expect(ids(countedLegs(rows, 0, 1))).toEqual(['plus']);
+	});
+
+	it('leaves out a row whose status does not count toward paid', () => {
+		const authorized = row({ id: 'held', status: 'authorized' });
+		const failed = row({ id: 'failed', status: 'failed' });
+		expect(ids(countedLegs([a, authorized, failed, leg]))).toEqual(['a', 'leg']);
+	});
+
+	it('keeps its own place for a `corrects` that names no row', () => {
+		const orphan = row({ id: 'orphan', corrects: 'missing' });
+		expect(ids(countedLegs([a, leg, orphan], 2))).toEqual(['orphan']);
+	});
+
+	it('returns for two rows that correct each other', () => {
+		const x = row({ id: 'x', corrects: 'y' });
+		const y = row({ id: 'y', corrects: 'x' });
+		expect(ids(countedLegs([a, x, y], 1))).toEqual(['x', 'y']);
+		expect(ids(countedLegs([a, x, y], 2))).toEqual([]);
+	});
+
+	it('with no correction, is a plain slice and filter', () => {
+		const held = row({ id: 'held', status: 'authorized' });
+		const rows = [a, held, leg, row({ id: 'last' })];
+		expect(countedLegs(rows, 1, 3)).toEqual(
+			rows.slice(1, 3).filter((r) => r.status === 'captured')
+		);
+		expect(countedLegs(rows)).toEqual(rows.filter((r) => r.status === 'captured'));
 	});
 });

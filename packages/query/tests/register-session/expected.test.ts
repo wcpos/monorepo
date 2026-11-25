@@ -419,6 +419,25 @@ describe('drawer terms anchored to the server terms', () => {
 		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
 	});
 
+	// Q3 (#3651): the R+ is the order's only cash row; it is a correction, never a new cash sale.
+	it('an unsynced card-to-cash pair on an order with no cash sale does not raise the sale count', () => {
+		const card = (id: string, amount: string) => ({
+			...leg(id, 'o2', amount),
+			kind: 'card',
+			method_id: 'card',
+		});
+		const pair = [
+			{ ...card('rminus', '-30.0000'), entry: 'tender_correction' },
+			{ ...leg('rplus', 'o2', '30.0000'), entry: 'tender_correction' },
+		];
+		const ledgerRowsBySession = [leg('leg1', 'o1', '79'), card('cardleg', '30.0000'), ...pair];
+		const input = { session, movements: [outMilk], ledgerRowsBySession };
+		const terms = deriveDrawerTerms(input, baselineHas);
+		expect(terms.cashCorrections).toBe('30.0000');
+		expect(terms.cashSales).toEqual({ amount: '579.0000', count: 3 });
+		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+	});
+
 	it('shows the server terms when the baseline holds every local row', () => {
 		const input = {
 			session,

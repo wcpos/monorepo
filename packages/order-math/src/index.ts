@@ -106,6 +106,7 @@ export {
 	OFFLINE_DEVICE_AUTHORIZATION,
 	hasLiveSettlementLeg,
 	partitionVoidableRows,
+	countedLegs,
 	effectiveRows,
 	correctionOf,
 	isPlainManualMethod,

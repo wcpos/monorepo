@@ -46,6 +46,19 @@ describe('useStoreCapability (test 12)', () => {
 		expect(mockGet).toHaveBeenCalledTimes(2);
 	});
 
+	// K3 (#3651): one mounted hook moved to another store whose answer has not come is hidden.
+	it('is hidden at once when the session moves to another store that has not answered', async () => {
+		mockGet.mockResolvedValueOnce({ data: { capabilities: ['tender_correction'] } });
+		const { result, rerender } = renderHook(() => useStoreCapability('tender_correction'));
+		await waitFor(() => expect(result.current).toBe(true));
+		mockGet.mockReturnValue(new Promise(() => {}));
+		mockSession = { ...mockSession, store: { id: 2 } };
+		rerender();
+		await flush();
+		expect(result.current).toBe(false);
+		expect(mockGet).toHaveBeenCalledTimes(2);
+	});
+
 	it('is hidden on a 404, and the 404 is kept for the session', async () => {
 		mockGet.mockRejectedValue({ response: { status: 404 } });
 		const { result } = renderHook(() => useStoreCapability('tender_correction'));

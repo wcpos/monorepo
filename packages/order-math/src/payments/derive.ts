@@ -2,7 +2,7 @@
  * Pure derivation mirrors the server ledger so balance and order status have one contract.
  */
 
-import { isLivePaymentStatus, reversedPaymentIds } from './ledger';
+import { isLivePaymentStatus, reversedPaymentIds, samePaymentId } from './ledger';
 import { fromMinor, toMinor } from './money';
 
 import type { DerivedOrderView, PaymentMethodDescriptor, PaymentRow } from './types';
@@ -23,6 +23,27 @@ export function countsTowardPaid(row: Pick<PaymentRow, 'status'>): boolean {
 export function effectiveRows<T extends PaymentRow>(rows: readonly T[]): T[] {
 	const reversed = reversedPaymentIds(rows);
 	return rows.filter((row) => !row.reverses && !reversed.has(row.id.toLowerCase()));
+}
+
+/**
+ * The effective rows that count toward paid, in ledger order, whose place is in `[from, to)`. A
+ * row's place is its index in `rows`; an R+ (`corrects`) stands in the place of the row it corrects,
+ * followed back through repeat corrections, so a corrected leg is one leg where it was taken and a
+ * split plan's `from` reads it on the right side (#3647). Only a strictly earlier row is followed,
+ * so a malformed or cyclic `corrects` ends the walk.
+ */
+export function countedLegs<T extends PaymentRow>(
+	rows: readonly T[],
+	from = 0,
+	to = Infinity
+): T[] {
+	const place = (index: number): number => {
+		const target = rows[index].corrects;
+		const earlier = target ? rows.findIndex((row) => samePaymentId(row.id, target)) : -1;
+		return earlier >= 0 && earlier < index ? place(earlier) : index;
+	};
+	const counted = new Set(effectiveRows(rows).filter(countsTowardPaid));
+	return rows.filter((row, index) => counted.has(row) && place(index) >= from && place(index) < to);
 }
 
 /** Server ledger amounts have six decimal places, independent of currency display precision. */

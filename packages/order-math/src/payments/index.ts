@@ -18,6 +18,7 @@ export {
 export { availableForRefund, hasRefundableMoney, netRefundable } from './derive';
 export {
 	allowedOrderStatuses,
+	countedLegs,
 	countsTowardPaid,
 	derive,
 	effectiveRows,

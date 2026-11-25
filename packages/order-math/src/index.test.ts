@@ -12,6 +12,8 @@ test('public value surface is exactly the spec', () => {
 		'calculateCartLine',
 		'captureEntry',
 		'correctionOf',
+		// Added 2026-11-25 (#3651): the checkout's leg reads; a correction stands in its original's place.
+		'countedLegs',
 		'countsTowardPaid',
 		'createCartConfig',
 		'derive',
