@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { finalizeCreatedOrders } from './order-cleanup';
-import { trashOrdersAsWriter } from './search-probe';
+import { deleteOrderRefundsAsWriter, trashOrdersAsWriter } from './search-probe';
 
 import type { APIRequestContext } from '@playwright/test';
 
@@ -110,4 +110,65 @@ test('finalizeCreatedOrders swallows a throwing trash', async () => {
 	} finally {
 		console.log = originalLog;
 	}
+});
+
+const refundsReply = (body: unknown) => ({ code: 200, body });
+
+test('deleteOrderRefundsAsWriter deletes each refund by post with force, one per id, in order', async () => {
+	const { request, calls } = fakeRequest([refundsReply({ id: 5 }), refundsReply({ id: 6 })]);
+	await deleteOrderRefundsAsWriter(request, STORE, 77, [5, 6], writer);
+	expect(calls.map((call) => call.url)).toEqual([
+		`${STORE}/wp-json/wc/v3/orders/77/refunds/5`,
+		`${STORE}/wp-json/wc/v3/orders/77/refunds/6`,
+	]);
+	for (const call of calls) {
+		expect(call.options?.params).toEqual({ _method: 'DELETE', force: 'true' });
+		expect(call.options?.data).toBeUndefined();
+	}
+});
+
+test('deleteOrderRefundsAsWriter counts only a reply that names the refund, by id or previous.id', async () => {
+	const { request } = fakeRequest([
+		refundsReply({ id: 1 }),
+		refundsReply({ previous: { id: 2 } }),
+		refundsReply({ id: 99 }),
+		refundsReply({}),
+		refundsReply({ refund: { id: 5 } }),
+	]);
+	expect(await deleteOrderRefundsAsWriter(request, STORE, 77, [1, 2, 3, 4, 5], writer)).toEqual({
+		deleted: 2,
+		failed: 3,
+		skipped: 0,
+	});
+});
+
+test('deleteOrderRefundsAsWriter counts an HTTP failure and a throw as failed and runs the rest', async () => {
+	const { request, calls } = fakeRequest([
+		refundsReply({ id: 1 }),
+		// The failure names the refund, so only the status check can make it `failed`.
+		{ code: 500, body: { id: 2 } },
+		refundsReply({ previous: { id: 3 } }),
+		new Error('request failed'),
+	]);
+	expect(await deleteOrderRefundsAsWriter(request, STORE, 77, [1, 2, 3, 4], writer)).toEqual({
+		deleted: 2,
+		failed: 2,
+		skipped: 0,
+	});
+	expect(calls).toHaveLength(4);
+});
+
+test('deleteOrderRefundsAsWriter sends nothing for a null writer or no ids', async () => {
+	const { request, calls } = fakeRequest([]);
+	expect(await deleteOrderRefundsAsWriter(request, STORE, 77, [5, 6], null)).toEqual({
+		deleted: 0,
+		failed: 0,
+		skipped: 2,
+	});
+	expect(await deleteOrderRefundsAsWriter(request, STORE, 77, [], writer)).toEqual({
+		deleted: 0,
+		failed: 0,
+		skipped: 0,
+	});
+	expect(calls).toEqual([]);
 });
