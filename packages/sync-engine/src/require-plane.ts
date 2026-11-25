@@ -72,6 +72,7 @@ import {
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
 	refundBrowserQueryKey,
+	type RefundHistoryCheckpointStore,
 	refundParentQueryKey,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
@@ -100,7 +101,6 @@ import type { EngineSourceFetcher } from './change-signal/change-signal-source';
 import type { RxCollection, RxDatabase } from 'rxdb';
 import type { LocalCoverage } from './local-coverage/local-coverage';
 import type { BarcodeSelectors, BarcodeSelectorsReader } from './materialization/barcode-selectors';
-import type { RefundHistoryCheckpointStore } from './scheduler/rx-scheduler-refund-fetcher';
 
 const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
 

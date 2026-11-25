@@ -54,6 +54,7 @@ import {
 	type QueryTotalCacheEntry,
 	type QueryTotalRequestState,
 	type QueryTotalWooRequest,
+	type RefundHistoryCheckpointStore,
 	runEngineSchedulerDrain,
 	type SchedulerDrainDatabase,
 	seedOrderFilterSchedulerTask,
@@ -90,7 +91,6 @@ import type {
 	BarcodeSelectorsReader,
 } from '../materialization/barcode-selectors';
 import type { LocalCoverage } from '../local-coverage/local-coverage';
-import type { RefundHistoryCheckpointStore } from '../scheduler/rx-scheduler-refund-fetcher';
 import type { RxDatabase } from 'rxdb';
 import type { SyncCollectionName } from '../collections/engine-collections';
 

@@ -97,6 +97,8 @@ import {
 	type ProductBrowseWindowOrderby,
 	QUERY_TOTAL_REQUEST_DEADLINE_MS,
 	type QueryTotalWooRequest,
+	REFUND_HISTORY_CHECKPOINT_KEY,
+	type RefundHistoryCheckpointStore,
 	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
@@ -114,10 +116,6 @@ import {
 import { PRODUCT_TRICKLE_STATE_KEY } from './maintenance/product-trickle';
 import { purgeMisfiledVariationProducts } from './maintenance/purge-misfiled-variation-products';
 import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
-import {
-	REFUND_HISTORY_CHECKPOINT_KEY,
-	type RefundHistoryCheckpointStore,
-} from './scheduler/rx-scheduler-refund-fetcher';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
