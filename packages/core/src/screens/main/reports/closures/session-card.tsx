@@ -26,6 +26,8 @@ import type { SessionCardData, SessionSummary } from './use-last-closure';
 
 export type { SessionCardData, SessionSummary } from './use-last-closure';
 type BatchProps = {
+	/** The Closures list read failed: its status row and Retry speak for this card too (#3623). */
+	listFailed?: boolean;
 	summary?: SessionCardData;
 	reload?: () => void;
 	onSessions?: (sessions: SessionSummary[]) => void;
@@ -219,6 +221,7 @@ export function RemoteSessionCard({
 	register,
 	storeId,
 	localCard,
+	listFailed,
 	summary,
 	reload,
 	onSessions,
@@ -229,6 +232,7 @@ export function RemoteSessionCard({
 	localCard?: (unavailableReason?: string) => React.ReactNode;
 }) {
 	const { data, online, load, unavailable } = useLastClosure(register, storeId, summary);
+	const listShowsError = listFailed && data.status === 'error';
 	// Report the existing lookup result without introducing another session read.
 	React.useEffect(() => {
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-pass-data-to-parent -- Publish the existing lookup without moving or duplicating its reads.
@@ -280,7 +284,7 @@ export function RemoteSessionCard({
 					}}
 				/>
 			) : null}
-			{data.status !== 'ready' && (online || !localCard) && (
+			{data.status !== 'ready' && (online || !localCard) && !listShowsError && (
 				<ListRow
 					size="sm"
 					trailing={

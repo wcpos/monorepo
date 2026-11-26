@@ -59,6 +59,7 @@ export function Closures({
 	const { rows, localRows, scope, status, hasMore, loadMore, refreshRow, unavailableIds } =
 		useClosureRows(requested);
 	const [selected, setSelected] = React.useState<string | null>(initialClosureId ?? null);
+	const [cardsAttempt, retryCards] = React.useReducer((n: number) => n + 1, 0);
 	const close = () => {
 		setSelected(null);
 		onClose?.();
@@ -152,6 +153,8 @@ export function Closures({
 						!scope.registerId ? (
 							<SessionCards
 								key={scope.storeId}
+								listFailed={status === 'error'}
+								retryKey={cardsAttempt}
 								registers={directory.registers}
 								storeId={scope.storeId}
 								onSessions={setSessions}
@@ -159,10 +162,16 @@ export function Closures({
 								localRegisterId={scope.storeId === store.id ? binding.registerId : undefined}
 							/>
 						) : scope.storeId === store.id && scope.registerId === binding.registerId ? (
-							<SessionCard onSessions={setSessions} cashier={scope.cashier} />
+							<SessionCard
+								key={cardsAttempt}
+								listFailed={status === 'error'}
+								onSessions={setSessions}
+								cashier={scope.cashier}
+							/>
 						) : register ? (
 							<RemoteSessionCard
-								key={sessionKey}
+								key={`${sessionKey}:${cardsAttempt}`}
+								listFailed={status === 'error'}
 								register={register}
 								storeId={scope.storeId}
 								onSessions={setSessions}
@@ -193,7 +202,10 @@ export function Closures({
 									testID={status === 'error' ? 'closures-retry' : 'closures-load-more'}
 									variant="outline"
 									className="w-full"
-									onPress={loadMore}
+									onPress={() => {
+										if (status === 'error') retryCards();
+										return loadMore();
+									}}
 								>
 									{status === 'error' ? t('common.retry') : t('reports.load_more')}
 								</Button>

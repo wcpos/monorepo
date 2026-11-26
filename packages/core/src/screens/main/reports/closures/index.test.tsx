@@ -28,10 +28,10 @@ let status = 'ready';
 let unavailableIds = new Set<string>();
 const loadMore = jest.fn();
 jest.mock('./use-closure-rows', () => ({
-	useClosureRows: (requested: { cashier?: number }) => ({
+	useClosureRows: (requested: typeof scope & { cashier?: number }) => ({
 		rows,
 		localRows,
-		scope: { ...scope, cashier: requested.cashier },
+		scope: requested,
 		status,
 		loadMore,
 		hasMore: true,
@@ -61,7 +61,13 @@ jest.mock('./closure-list', () => ({
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({ blind: false }),
 }));
-jest.mock('./session-cards', () => ({ SessionCards: () => null }));
+const sessionCards = jest.fn();
+jest.mock('./session-cards', () => ({
+	SessionCards: (props: unknown) => {
+		sessionCards(props);
+		return null;
+	},
+}));
 const sessionCard = jest.fn();
 jest.mock('./session-card', () => ({
 	SessionCard: (props: unknown) => {
@@ -179,6 +185,26 @@ it.each(['loading', 'unavailable', 'denied', 'error'])(
 		status = 'ready';
 	}
 );
+it('one failed list read hands the cards its Retry (#3623)', () => {
+	const allRegisters = { ...scope, registerId: '' };
+	const previousStatus = status;
+	try {
+		status = 'error';
+		const view = render(<Closures scope={allRegisters} />);
+		expect(sessionCards).toHaveBeenLastCalledWith(
+			expect.objectContaining({ listFailed: true, retryKey: 0 })
+		);
+		loadMore.mockClear();
+		fireEvent.click(screen.getByTestId('closures-retry'));
+		expect(loadMore).toHaveBeenCalledTimes(1);
+		expect(sessionCards).toHaveBeenLastCalledWith(expect.objectContaining({ retryKey: 1 }));
+		status = 'ready';
+		view.rerender(<Closures scope={allRegisters} />);
+		expect(sessionCards).toHaveBeenLastCalledWith(expect.objectContaining({ listFailed: false }));
+	} finally {
+		status = previousStatus;
+	}
+});
 // Revert: drop the `unknown=` prop index.tsx passes to ClosureList.
 it.each([
 	['unavailable', true],
@@ -230,7 +256,10 @@ it.each(['sm', 'lg'])('consumes the deep link when the %s panel closes', (size) 
 // Revert: feed date/cashier-filtered rows to the current register's last-closure action.
 it('does not substitute scoped history for the register last closure', () => {
 	render(<Closures scope={scope} />);
-	expect(sessionCard).toHaveBeenLastCalledWith({ onSessions: expect.any(Function) });
+	expect(sessionCard).toHaveBeenLastCalledWith({
+		onSessions: expect.any(Function),
+		listFailed: false,
+	});
 });
 
 // Revert: count every open session toward a scope that names a cashier.
