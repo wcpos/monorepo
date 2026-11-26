@@ -239,6 +239,7 @@ jest.mock('./reports/panels/specs', () => ({
 jest.mock('./reports/context', () => ({
 	useIncludedStatus: () => () => true,
 	useReportsData: () => ({
+		cashierNames: { names: {}, ready: true },
 		allOrders: [],
 		selectedOrders: [],
 		// panelSpec is stubbed; the panel itself reads only the gross figure for its footer.

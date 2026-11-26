@@ -27,6 +27,7 @@ let mockCashiersPending = false;
 let mockPhone = true;
 const mockPendingCashiers = new Promise(() => {});
 const mockCashiers = of([{ id: 7, display_name: 'Priya' }]);
+let mockCustomers: { id: number; first_name: string; last_name: string }[] = [];
 const mockStores = new BehaviorSubject([{ id: 9, name: 'Shop' }]);
 const mockStore = {
 	id: 9,
@@ -65,7 +66,12 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: null, locale: 'en' }),
-	observeLocalRecordsById: () => of([]),
+	observeLocalRecordsById: (_engine: unknown, name: string, ids: number[]) =>
+		of(
+			name === 'customers'
+				? mockCustomers.filter((row) => ids.includes(row.id)).map((payload) => ({ payload }))
+				: []
+		),
 	useDocField: (
 		source: Record<string, unknown> | undefined,
 		select: (v: Record<string, unknown>) => unknown
@@ -326,6 +332,7 @@ function tree({
 const setup = (options?: Parameters<typeof tree>[0]) => render(tree(options));
 beforeEach(() => {
 	mockPhone = true;
+	mockCustomers = [];
 	mockStretch.clear();
 	jest.useFakeTimers().setSystemTime(new Date('2026-07-15T16:00:00Z'));
 	mockPrint.mockReset().mockResolvedValue(true);
@@ -818,6 +825,19 @@ it('prints the grouped summary of the viewed scope once the refunds lane is comp
 	} finally {
 		mockStores.next([{ id: 9, name: 'Shop' }]);
 	}
+});
+
+it.each([
+	['without a credentials row', 12],
+	['instead of the credentials name', 7],
+] as const)('prints the filtered customer name %s even with no sale for that cashier', (_, id) => {
+	mockCustomers = [{ id, first_name: 'Ana', last_name: 'Reis' }];
+	setup({ cashier: String(id) });
+	fireEvent.click(screen.getByTestId('hero-print'));
+	const { useReceiptDocument } = jest.requireMock('../../receipt/use-receipt-document');
+	expect(useReceiptDocument.mock.calls.at(-1)[0].localReport.report.scope.label).toContain(
+		' · Ana Reis · '
+	);
 });
 
 it('the summary print reads the largest currency only', () => {

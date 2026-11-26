@@ -70,6 +70,7 @@ export function setOrders(orders: ReportOrder[]) {
 		end: new Date('2026-07-15T23:59:59Z'),
 	};
 	mockState.data = {
+		cashierNames: { names: {}, ready: true },
 		allOrders: orders,
 		periodRefunds: [],
 		selectedOrders: orders,
@@ -155,6 +156,9 @@ jest.mock('../../../../hooks/use-store-day', () => ({
 	useViewedStore: () => mockState.store,
 	useStoreDay: () => ({
 		timezone: 'UTC',
+		dayBounds: (day: ReturnType<typeof import('../../../../hooks/use-store-day').calendarDate>) =>
+			jest.requireActual('../../../../hooks/use-store-day').storeDayBounds(day, 'UTC'),
+		rangeToFilter: jest.requireActual('../../../../hooks/use-store-day').storeRangeToFilter,
 		presets: () =>
 			jest
 				.requireActual('../../../../hooks/use-store-day')
@@ -222,6 +226,8 @@ jest.mock('../../../../query', () => ({
 	useQueryState: () => ({
 		filters: { register: mockState.register, store: mockState.storeFilter },
 	}),
+	useDrawnHandle: jest.requireActual('@wcpos/query/query-state').useDrawnHandle,
+	useQuerySnapshot: jest.requireActual('@wcpos/query/query-state').useQuerySnapshot,
 	// The panel reads its lanes from the handles the tests drive.
 	useQueryHandleFields: (...args: unknown[]) =>
 		jest.requireActual('@wcpos/query/query-state').useQueryHandleFields(...args),

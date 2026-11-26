@@ -4,7 +4,6 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
-import { useReportCashierNames } from '../use-report-cashier-names';
 import { useReportFormats } from '../use-report-formats';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
@@ -12,12 +11,14 @@ import { Donut } from './donut';
 export function CashiersCard() {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
-		{ figures } = useReportsData(),
+		{ figures, cashierNames } = useReportsData(),
 		{ storeId } = useReportsPeriod();
 	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId);
 	const rows = figures.byCashier;
-	const { names, ready } = useReportCashierNames(rows.map((row) => row.key));
-	if (!store || !ready)
+	const { names, ready } = cashierNames;
+	const [shown, setShown] = React.useState(false);
+	if (store && ready && !shown) setShown(true);
+	if (!store || (!ready && !shown))
 		return <CardSkeleton testID="card-cashiers" name={t('reports.card_cashiers')} />;
 	return (
 		<ReportCard

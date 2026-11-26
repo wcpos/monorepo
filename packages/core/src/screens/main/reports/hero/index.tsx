@@ -20,7 +20,6 @@ import { useT } from '../../../../contexts/translations';
 import { inZone } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useQueryStateActions } from '../../../../query';
-import { useReportCashierNames } from '../use-report-cashier-names';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
 import {
@@ -228,13 +227,12 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const host = usePageSheetHost();
 	const t = useT();
 	const phone = useIsPhone();
-	const { figures } = useReportsData();
+	const { figures, cashierNames } = useReportsData();
 	const { statusMode } = useReportsScope();
 	const formats = useReportFormats(storeId);
 	const { allStores, names, namesReady } = useReportsFilterScope();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const cashier = useReportCashier();
-	const cashierNames = useReportCashierNames(figures.byCashier.map((row) => row.key));
 	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const spec = summarySpec(
 		{

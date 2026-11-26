@@ -1,14 +1,14 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { map, startWith } from 'rxjs';
+import { map } from 'rxjs';
 
 import { observeLocalRecordsById, useQueryRuntime } from '@wcpos/query';
 import { parseRemoteId } from '@wcpos/query/query-state';
 
 import { useT } from '../../../contexts/translations';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
-import { useReportsDirectories, useReportsFilterScope } from './scope';
+import { useReportsFilterScope } from './scope';
 
 /**
  * The names Reports shows for these cashier ids, resolved as the Orders page does
@@ -19,7 +19,6 @@ import { useReportsDirectories, useReportsFilterScope } from './scope';
 export function useReportCashierNames(keys: string[]) {
 	const runtime = useQueryRuntime();
 	const { names: directory, namesReady } = useReportsFilterScope();
-	const { cashiers } = useReportsDirectories();
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 	const ids = keys.map(parseRemoteId).filter((id) => id !== undefined);
@@ -30,22 +29,22 @@ export function useReportCashierNames(keys: string[]) {
 				runtime.engine,
 				'customers',
 				key ? key.split(',').map(Number) : []
-			).pipe(
-				map((rows) => ({ key, rows })),
-				startWith(undefined)
-			),
+			).pipe(map((rows) => ({ key, rows }))),
 		[runtime.engine, runtime.locale, key]
 	);
 	const customers = useObservableState(source);
-	const names = { ...directory.cashier };
-	// Filter scope substitutes "Unknown" for blank display names; Orders treats them as absent.
-	for (const row of cashiers ?? []) if (!row.display_name && row.id != null) delete names[row.id];
-	for (const { payload } of customers?.rows ?? []) {
-		if (payload.id != null) names[payload.id] = format(payload);
-	}
-	for (const raw of keys) {
-		const id = parseRemoteId(raw);
-		if (id !== undefined) names[raw] = names[id] || t('common.cashier_number', { id });
-	}
-	return { names, ready: namesReady.cashier && customers?.key === key };
+	const ready = namesReady.cashier && customers?.key === key;
+	const raws = [...new Set(keys)].sort().join(',');
+	// One object per answer: the Data context hands it to every reader.
+	return React.useMemo(() => {
+		const names = { ...directory.cashier };
+		for (const { payload } of customers?.rows ?? []) {
+			if (payload.id != null) names[payload.id] = format(payload);
+		}
+		for (const raw of raws ? raws.split(',') : []) {
+			const id = parseRemoteId(raw);
+			if (id !== undefined) names[raw] = names[id] || t('common.cashier_number', { id });
+		}
+		return { names, ready };
+	}, [directory.cashier, customers, raws, ready, format, t]);
 }

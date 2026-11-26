@@ -16,12 +16,14 @@ import {
 	setOrders,
 } from '../cards/test-utils';
 import {
+	emitSales,
 	mockPrintDocument,
 	mockRefundsHandle,
 	mockSalesHandle,
 	preparePanel,
 	room,
 } from './test-utils';
+import { Reports } from '../reports';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 
@@ -183,6 +185,42 @@ function salesByCashiers(...keys: string[]) {
 		})) as Context.ReportOrder[]
 	);
 }
+it('opens the Cashiers panel with Export ready on the names the card already shows', () => {
+	salesByCashiers('12');
+	mockCustomers.next([{ id: 12, first_name: 'Ana', last_name: 'Reis' }]);
+	const exportVisible: boolean[] = [];
+	const record = () => {
+		if (screen.queryByTestId('detail-panel'))
+			exportVisible.push(!!screen.queryByTestId('detail-panel-export'));
+	};
+	room(
+		<React.Profiler id="room" onRender={record}>
+			<Reports date="Sales" />
+		</React.Profiler>
+	);
+	expect(screen.getByTestId('card-cashiers-donut-row-12').textContent).toContain('Ana Reis');
+	// An existing subscriber keeps its answer; a fresh subscriber would have to wait.
+	act(() => mockCustomers.next(undefined));
+	fireEvent.click(screen.getByTestId('card-cashiers-open'));
+	expect(exportVisible[0]).toBe(true);
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
+});
+it('keeps the Cashiers card visible while a new cashier is being looked up', () => {
+	salesByCashiers('12');
+	mockCustomers.next([{ id: 12, first_name: 'Ana', last_name: 'Reis' }]);
+	room();
+	expect(screen.getByTestId('card-cashiers-donut-row-12').textContent).toContain('Ana Reis');
+	act(() => {
+		mockCustomers.next(undefined);
+		salesByCashiers('12', '13');
+		emitSales();
+	});
+	expect(screen.queryByTestId('card-cashiers-loading')).toBeNull();
+	expect(screen.getByTestId('card-cashiers-donut-row-12').textContent).toContain('Ana Reis');
+	expect(screen.getByTestId('card-cashiers-donut-row-13').textContent).toContain('Cashier #13');
+	fireEvent.click(screen.getByTestId('card-cashiers-open'));
+	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
+});
 it('names a cashier from the local customer even without a credentials row', () => {
 	salesByCashiers('12');
 	mockCustomers.next([{ id: 12, first_name: 'Ana', last_name: 'Reis' }]);

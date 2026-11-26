@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { format } from 'date-fns/format';
 
-import { wooMetaCarrier } from '@wcpos/sync-core';
 import { rungUpMomentOf, saleMomentOf } from '@wcpos/query/query-state';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -25,7 +24,6 @@ import {
 } from '../context';
 import { useLocalCategories } from '../cards/use-local-categories';
 import { ReportPanel } from '../report-panel';
-import { useReportCashierNames } from '../use-report-cashier-names';
 import { useReportFormats } from '../use-report-formats';
 import { MenuChip } from '../menu-chip';
 import { useReportsFilterScope } from '../scope';
@@ -44,7 +42,7 @@ export function DetailPanel() {
 function DetailPanelContent() {
 	const host = usePageSheetHost();
 	const { detail, setDetail } = useReportsScope(),
-		{ allOrders, selectedOrders, figures, periodRefunds } = useReportsData();
+		{ allOrders, selectedOrders, figures, periodRefunds, cashierNames } = useReportsData();
 	const included = useIncludedStatus();
 	const selection = useReportsSelection();
 	const { unselectedRowIds } = selection;
@@ -63,13 +61,6 @@ function DetailPanelContent() {
 		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
 	};
 	const { names, namesReady } = useReportsFilterScope();
-	const cashierNames = useReportCashierNames(
-		detail === 'orders'
-			? includedOrders.map((order) => wooMetaCarrier.readIdentity(order.meta_data).cashierId ?? '')
-			: detail === 'cashiers'
-				? figures.byCashier.map((row) => row.key)
-				: []
-	);
 	const ids = [...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
 		(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 	);

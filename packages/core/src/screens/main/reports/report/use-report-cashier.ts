@@ -1,21 +1,16 @@
-import { useDocField } from '@wcpos/query';
-
 import { useT } from '../../../../contexts/translations';
-import { useReportsDirectories, useReportsFilterScope } from '../scope';
+import { useReportsData } from '../context';
+import { useReportsFilterScope } from '../scope';
 
 /**
- * The cashier the report is scoped to, resolved from the query's `cashier` filter against the
- * credentials directory (whoever set the filter: the chip or a cashier cell); Everyone with no
+ * The cashier the report is scoped to, from the query's `cashier` filter (whoever set it: the chip
+ * or a cashier cell), named as every other Reports surface names a cashier; Everyone with no
  * filter. Never the session cashier.
  */
 export function useReportCashier() {
 	const t = useT();
 	const value = useReportsFilterScope().cashierId;
-	// Undefined until the directory has emitted: a name cannot be resolved before then.
-	const { cashiers } = useReportsDirectories();
-	const match = value === undefined ? undefined : cashiers?.find((row) => String(row.id) === value);
-	// The name is read live from the document: the directory does not re-emit on a rename.
-	const displayName = useDocField(match, (row) => row.display_name);
+	const { cashierNames } = useReportsData();
 	if (value === undefined) return { name: t('reports.everyone'), id: '' as const, ready: true };
-	return { name: displayName ?? value, id: value, ready: !!cashiers };
+	return { name: cashierNames.names[value] ?? value, id: value, ready: cashierNames.ready };
 }

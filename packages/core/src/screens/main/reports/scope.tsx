@@ -48,6 +48,7 @@ export interface ReportsFilterScope {
 	/** All stores, the register's name, or All registers: what the printed scope line names. */
 	registerLabel: string;
 	names: {
+		/** Logged-in users only; surfaces that name a cashier read useReportsData().cashierNames. */
 		cashier: Record<string, string>;
 		register: Record<string, string>;
 		store: Record<string, string>;
@@ -148,7 +149,9 @@ export function ReportsFilterScopeProvider({ children }: React.PropsWithChildren
 						: t('reports.all_registers'),
 			names: {
 				cashier: Object.fromEntries(
-					(cashiers ?? []).map((row) => [String(row.id), row.display_name || t('common.unknown')])
+					(cashiers ?? []).flatMap((row) =>
+						row.display_name ? [[String(row.id), row.display_name]] : []
+					)
 				),
 				register,
 				store: Object.fromEntries(
