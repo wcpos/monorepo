@@ -29,11 +29,12 @@ export function useReportCashierNames(keys: string[]) {
 				runtime.engine,
 				'customers',
 				key ? key.split(',').map(Number) : []
-			).pipe(map((rows) => ({ key, rows }))),
+			).pipe(map((rows) => ({ key, engine: runtime.engine, rows }))),
 		[runtime.engine, runtime.locale, key]
 	);
 	const customers = useObservableState(source);
-	const ready = namesReady.cashier && customers?.key === key;
+	// An answer counts only for the ids and the engine it was asked of.
+	const ready = namesReady.cashier && customers?.key === key && customers.engine === runtime.engine;
 	const raws = [...new Set(keys)].sort().join(',');
 	// One object per answer: the Data context hands it to every reader.
 	return React.useMemo(() => {

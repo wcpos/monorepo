@@ -134,7 +134,8 @@ export function preparePanel() {
 }
 function SelectionControls({ children }: React.PropsWithChildren) {
 	const { unselectedRowIds, setUnselectedRowIds } = real.useReportsSelection();
-	React.useEffect(() => setUnselectedRowIds({ hidden: true }), [setUnselectedRowIds]);
+	// Test fixture: the real provider owns the selection, so the left-out row is seeded on mount.
+	React.useEffect(() => setUnselectedRowIds({ hidden: true }), []);
 	const { statusMode, setStatusMode, setDetail } = real.useReportsScope();
 	return (
 		<>
