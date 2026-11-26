@@ -217,7 +217,15 @@ export function useRegisterSession() {
 			/** The store no longer has the session (#3753): keep it here as history, sell on. */
 			setAsideSession: async () => {
 				if (!session) throw new RegisterSessionRequiredError();
-				return setAsideSession(storeDB, session.id, { userDB, siteUuid: site.uuid! });
+				const result = await setAsideSession(storeDB, session.id, { userDB, siteUuid: site.uuid! });
+				recordRegisterFact({
+					kind: 'session-set-aside',
+					actor,
+					sessionId: session.id,
+					registerId: session.register_id,
+					unsentMovements: result.unsentMovements,
+				});
+				return result;
 			},
 			closeSession: async (input: RegisterCount) => {
 				if (!session) throw new RegisterSessionRequiredError();

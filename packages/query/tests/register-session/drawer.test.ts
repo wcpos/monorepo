@@ -218,7 +218,9 @@ describe('the current session', () => {
 		await storeDB.cash_movements.insert(movement({ sync_status: 'failed' }));
 		const snapshot = await drawer((value) => value.session !== null);
 		expect(snapshot).toMatchObject({ refusedClose: true, sessionUnreachable: true });
-		await setAsideSession(storeDB, 's1', { userDB, siteUuid: 'site' });
+		await expect(setAsideSession(storeDB, 's1', { userDB, siteUuid: 'site' })).resolves.toEqual({
+			unsentMovements: 1,
+		});
 		const settled = await drawer((value) => value.session === null);
 		expect(settled).toMatchObject({ refusedClose: false, sessionUnreachable: false });
 		expect(settled.refusedMovements).toEqual([]);

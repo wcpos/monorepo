@@ -51,6 +51,7 @@ export type RegisterFact =
 	| (Human &
 			Movement & { kind: 'movement-voided'; voids: string; voidedType?: CashMovementRow['type'] })
 	| (Human & { kind: 'movement-retry-requested'; movementId: string })
+	| (Human & { kind: 'session-set-aside'; unsentMovements: number })
 	| (Human & { kind: 'approval-granted'; approvedBy: number | null })
 	| (Human & { kind: 'variance-over-threshold'; variance: string; threshold: string | undefined })
 	| (Pair & Failure & { kind: 'outbox-approval-refused'; sessionId: string; endpoint: string })
@@ -144,6 +145,13 @@ export function recordRegisterFact(fact: RegisterFact): void {
 			return emit('Register session counting started', 'register.counting-started');
 		case 'counting-abandoned':
 			return emit('Register session counting abandoned', 'register.counting-abandoned');
+		case 'session-set-aside':
+			return emit(
+				'Register session set aside',
+				'register.session-set-aside',
+				{ unsentMovements: fact.unsentMovements },
+				'warn'
+			);
 		case 'session-closed':
 			return emit('Register session closed', 'register.session-closed', {
 				closureId: fact.closureId,

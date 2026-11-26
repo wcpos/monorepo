@@ -2346,7 +2346,9 @@ describe('#2016: retry and abandon keep the closure row', () => {
 		expect(session.getLatest().sync_error).toBe('wcpos_session_not_found');
 		expect((await readCurrentSession(db, 'register'))?.id).toBe(session.id);
 		expect(movement.getLatest().toJSON()).toMatchObject(marked);
-		await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+		await expect(setAsideSession(db, session.id, { userDB, siteUuid: 'site' })).resolves.toEqual({
+			unsentMovements: 1,
+		});
 		expect(session.getLatest().toJSON()).toMatchObject({ ...marked, counted: { cash: '100' } });
 		expect(row.getLatest().toJSON()).toMatchObject(marked);
 		expect(movement.getLatest().toJSON()).toMatchObject({ ...marked, amount: '30' });
@@ -2772,6 +2774,16 @@ describe('#2016: retry and abandon keep the closure row', () => {
 			expect(readLiveSession('site', 'register')?.session_id).toBe(session.id);
 			await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
 			expect(readLiveSession('site', 'register')).toBeNull();
+		});
+
+		it('a set aside undone and made again counts the movement the undo put back', async () => {
+			const { session, movement } = await setAside();
+			serve(session, 'open');
+			await refresh();
+			expect(json(movement).sync_status).toBe('pending');
+			await expect(setAsideSession(db, session.id, { userDB, siteUuid: 'site' })).resolves.toEqual({
+				unsentMovements: 1,
+			});
 		});
 	});
 });

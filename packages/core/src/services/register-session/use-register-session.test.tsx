@@ -74,6 +74,7 @@ jest.mock('../../../../query/src/register-session/reads', () => ({
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
 	openSession: jest.fn(),
+	setAsideSession: jest.fn(),
 	recordLiveSession: jest.fn(),
 	beginCount: jest.fn(),
 	abandonCount: jest.fn(),
@@ -374,6 +375,34 @@ it('logs openSession with the cashier only after it succeeds', async () => {
 				registerId: 'register',
 			}),
 		})
+	);
+});
+
+it('logs a set aside with the cashier only after it succeeds (#3753)', async () => {
+	const result = await settled();
+	jest.mocked(actions.setAsideSession).mockRejectedValueOnce(new Error('disk'));
+	await expect(result.current.actions.setAsideSession()).rejects.toThrow('disk');
+	expect(logger.warn.mock.calls.map(([message]) => message)).not.toContain(
+		'Register session set aside'
+	);
+	jest.mocked(actions.setAsideSession).mockResolvedValueOnce({ unsentMovements: 2 });
+	await result.current.actions.setAsideSession();
+	expect(logger.warn).toHaveBeenCalledWith(
+		'Register session set aside',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: expect.objectContaining({
+				type: 'register.session-set-aside',
+				sessionId: 'session',
+				registerId: 'register',
+				unsentMovements: 2,
+			}),
+		})
+	);
+	expect(actions.setAsideSession).toHaveBeenCalledWith(
+		expect.anything(),
+		'session',
+		expect.objectContaining({ siteUuid: 'site' })
 	);
 });
 

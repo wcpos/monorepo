@@ -286,6 +286,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.register_session_pruned');
 		case 'register.session-refresh-failed':
 			return t('health.logs.event.register_session_refresh_failed');
+		case 'register.session-set-aside':
+			return t('health.logs.event.register_session_set_aside');
 		case 'register.switched':
 			return t('health.logs.event.register_switched');
 		case 'register.unbound':
@@ -469,6 +471,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.register_session_pruned');
 		case 'register.session-refresh-failed':
 			return t('health.logs.event_description.register_session_refresh_failed');
+		case 'register.session-set-aside':
+			return t('health.logs.event_description.register_session_set_aside');
 		case 'register.switched':
 			return t('health.logs.event_description.register_switched');
 		case 'register.unbound':

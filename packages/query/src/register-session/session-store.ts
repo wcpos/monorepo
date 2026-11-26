@@ -354,6 +354,7 @@ export async function setAsideSession(
 	// The session row is marked last: an interrupted set aside stays current, to be set aside again.
 	await row.incrementalPatch(marked);
 	await recordLiveSession(live.userDB, live.siteUuid, row.register_id, null);
+	return { unsentMovements: unsent.length };
 }
 export function recordMovement(
 	storeDB: RegisterStoreDatabase,
