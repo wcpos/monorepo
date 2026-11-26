@@ -36,6 +36,7 @@ jest.mock('expo-router', () => ({
 const mockEngineRequire = jest.fn();
 const mockAwaitWriteOutcome = jest.fn(async (..._args: unknown[]) => undefined as unknown);
 jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({
 		engine: { write: mockEngineWrite, require: mockEngineRequire },
 	}),

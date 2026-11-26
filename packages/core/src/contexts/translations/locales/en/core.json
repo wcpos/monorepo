@@ -1134,6 +1134,7 @@
 	"pos_cart.tax_exempt_hint": "Removes all tax from this order, including fees and shipping.",
 	"pos_cart.tax_exempt_inclusive_store": "Tax exempt is not available when prices include tax.",
 	"pos_cart.tax_exempt_locked": "This order cannot change tax right now. Finish the payment in progress or reopen the order first.",
+	"pos_cart.tax_location_locked": "This order has a refund, so its tax address can't change here. Start a new order for this customer.",
 	"pos_cart.tax_exempt_offline": "Connect to the store to change tax on an order with a coupon",
 	"pos_cart.tax_exempt_payment": "Finish the payment in progress first",
 	"pos_cart.tax_exempt_references_unavailable": "Connect to the store to change tax on an order with a coupon.",

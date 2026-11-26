@@ -55,6 +55,9 @@ const mockEngine = {
 
 const localPatch = jest.fn();
 const mockActionLog = jest.fn();
+const storeData = { calc_taxes: 'yes' };
+const mockStore = { get: () => storeData, $: new BehaviorSubject(storeData) };
+jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ store: mockStore }) }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({
 		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
@@ -87,6 +90,7 @@ const billing = { first_name: 'Ada', email: 'ada@example.com' };
 const shipping = { first_name: 'Ada', country: 'AU' };
 
 beforeEach(() => {
+	storeData.calc_taxes = 'yes';
 	resetOrderMutationQueues();
 	jest.clearAllMocks();
 	resetActionRegistry();
@@ -344,6 +348,7 @@ describe('the lines follow the rates of the address written (#1875)', () => {
 			rates: [
 				{ id: 1, country: 'AU', rate: '10', class: 'standard', shipping: true, priority: 1 },
 				{ id: 2, country: 'NZ', rate: '15', class: 'standard', shipping: true, priority: 1 },
+				{ id: 3, country: 'GB', rate: '20', class: 'standard', shipping: true, priority: 1 },
 			],
 			baseLocation: { country: 'AU' },
 			order: payload,
@@ -378,6 +383,53 @@ describe('the lines follow the rates of the address written (#1875)', () => {
 		return outcome;
 	};
 	const nzLine = expect.objectContaining({ total: '100', subtotal: '100', total_tax: '15' });
+
+	const us = { country: 'US' };
+	const gb = { country: 'GB' };
+	const billed = (refunded = true, status = 'pos-open') =>
+		record({
+			billing: us,
+			meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }],
+			refunds: refunded ? [{ id: 7 }] : [],
+			status,
+		});
+	it.each([
+		['A1', 'pos-open'],
+		['A10', 'completed'],
+	])('%s refuses a new billing country (%s)', async (_, status) => {
+		expect(await setCustomer(billed(true, status), { billing: gb, shipping: au })).toBe(false);
+		expect(localPatch).not.toHaveBeenCalled();
+		expect(mockActionLog).toHaveBeenCalledWith(
+			'warn',
+			'pos_cart.tax_location_locked',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+	it('F1a writes a new billing country on a refunded cart when taxes are off', async () => {
+		storeData.calc_taxes = 'no';
+		expect(await setCustomer(billed(), { billing: gb, shipping: au })).toEqual({
+			uuid: 'order-uuid',
+		});
+		expect(localPatch.mock.lastCall![0].data.billing).toEqual(gb);
+	});
+	it('A2 writes contact fields at the same tax address', async () => {
+		const contact = { ...us, first_name: 'Jo', email: 'jo@example.com' };
+		await setCustomer(billed(), { billing: contact, shipping: au });
+		expect(localPatch.mock.lastCall![0].data.billing).toEqual(contact);
+	});
+	it('A3 writes and re-taxes a moved address without a refund', async () => {
+		await setCustomer(billed(false), { billing: gb, shipping: au });
+		expect(localPatch.mock.lastCall![0].data).toMatchObject({ billing: gb, total_tax: '20' });
+	});
+	it('A11 checks the address after the customer hook rewrites it', async () => {
+		registerActionHook(
+			'cart.customer.set',
+			async (_ctx, event, next) => next({ ...event, payload: { ...event.payload, billing: us } }),
+			{ id: 'test.rewriter', tier: 'extension' }
+		);
+		await setCustomer(billed(), { billing: gb, shipping: au });
+		expect(localPatch.mock.lastCall![0].data.billing).toEqual(us);
+	});
 
 	it('one write carries the address, the re-taxed lines and the aggregate at the new rate', async () => {
 		await setCustomer(record(), { billing: nz, shipping: nz });

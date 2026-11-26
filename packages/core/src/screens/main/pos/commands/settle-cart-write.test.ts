@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import {
+	calculateCartLine,
 	type CartConfig,
 	type CouponInput,
 	createCartConfig,
@@ -31,6 +32,42 @@ const record = (value = payload) =>
 			return this;
 		},
 	}) as unknown as CurrentOrderRecord;
+
+it('C3 settles a cashier quantity change on a refunded open order', async () => {
+	const rate = { id: 1, rate: '20', class: 'standard', country: 'AU' };
+	const taxable = createCartConfig({ ...config, rates: [rate], allRates: [rate], calcTaxes: true });
+	const product = {
+		product_id: 1,
+		quantity: 1,
+		meta_data: [
+			{ key: '_woocommerce_pos_data', value: JSON.stringify({ price: 10, tax_status: 'taxable' }) },
+		],
+	};
+	const priced = (quantity: number) =>
+		calculateCartLine({ kind: 'line_item', line: product, changes: { quantity } }, taxable).line;
+	const document = record();
+	Object.assign(document.payload, {
+		refunds: [{ id: 7 }],
+		meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }],
+		total: '12',
+		total_tax: '2',
+		line_items: [priced(1)],
+	});
+	const patch = jest.fn();
+	await settleCartWrite(
+		{ document, data: { line_items: [priced(2)] } },
+		{
+			localPatch: resolveCartWrite(patch),
+			configForOrder: () => taxable,
+			serverOwnsMoney: () => false,
+		}
+	);
+	expect(patch.mock.lastCall![0].data).toMatchObject({
+		total: '24',
+		total_tax: '4',
+		line_items: [{ quantity: 2, total_tax: '4', taxes: [{ id: 1, total: '4.000000' }] }],
+	});
+});
 
 it('settles the latest post-intent payload in one write, without changing outbound intent', async () => {
 	const latest = record();

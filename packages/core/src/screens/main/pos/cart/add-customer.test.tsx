@@ -58,10 +58,12 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: null }),
 	useStoreSession: () => ({ storeDB: mockStoreDB }),
 }));
 
 jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useQueryRuntime: () => ({ engine: { status: () => ({ activeScopeId: 'scope-1' }) } }),
 }));
