@@ -50,6 +50,21 @@ describe('orderTaxLocation', () => {
 		expect(result.addressUsed).toBe('base');
 	});
 
+	it.each(['billing', 'shipping', 'base'])(
+		"a stamped order keeps its basis when the store's setting changes (store: %s)",
+		(storeTaxBasedOn) => {
+			const result = orderTaxLocation(base, storeTaxBasedOn, {
+				meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }],
+				billing: { country: 'GB', state: '', city: 'London', postcode: 'N1' },
+				shipping: { country: 'FR', state: '', city: 'Paris', postcode: '75001' },
+			});
+
+			expect(result.taxBasedOn).toBe('billing');
+			expect(result.location).toEqual({ country: 'GB', state: '', city: 'London', postcode: 'N1' });
+			expect(result.addressUsed).toBe('billing');
+		}
+	);
+
 	it('keeps the shipping address once it has a country', () => {
 		const result = orderTaxLocation(base, 'shipping', {
 			billing: { country: 'FR' },
