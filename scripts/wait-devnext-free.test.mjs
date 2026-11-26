@@ -9,6 +9,7 @@ import {
 	QUEUE_STEP_NAME,
 	QUEUE_WORKFLOWS,
 	queueState,
+	queueWorkflows,
 	waitForDevNext,
 } from './wait-devnext-free.mjs';
 
@@ -221,4 +222,9 @@ test('each blocked poll logs its queue position and the holder run', async () =>
 	const waiting = fakeQueue([[waiter(50)]], { maxWaitMs: 500 });
 	await waiting.run();
 	assert.deepEqual(waiting.calls.logs.slice(1), ['Queue position 2; holder run none']);
+});
+
+test('Q6: main mode polls only deploy.yml; the default polls every queue workflow', () => {
+	assert.deepEqual(queueWorkflows(true), ['deploy.yml']);
+	assert.deepEqual(queueWorkflows(false), QUEUE_WORKFLOWS);
 });

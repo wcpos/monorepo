@@ -483,7 +483,7 @@ jobs:
       # A next-lane shard may touch dev-next only after e2e-setup's queue step
       # admitted this run (cancelled or timed out reads as not admitted).
       - name: 🚦 Refuse dev-next without the queue
-        if: (needs.changes.outputs.lane == 'next' || needs.changes.outputs.lane == 'main') && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))
+        if: (needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))) || (needs.changes.outputs.lane == 'main' && needs.e2e-setup.outputs.queue != 'success')
         env:
           QUEUE_OUTCOME: ${{ needs.e2e-setup.outputs.queue }}
           QUEUE_ATTEMPT: ${{ needs.e2e-setup.outputs.queue_attempt }}
