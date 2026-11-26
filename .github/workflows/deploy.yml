@@ -279,12 +279,11 @@ jobs:
     permissions:
       contents: read
       actions: read
-    # The queue may wait up to 4 h on next; main keeps 30.
-    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 290 || 30 }}
+    timeout-minutes: ${{ needs.changes.outputs.lane == 'next' && 290 || needs.changes.outputs.lane == 'main' && 270 || 30 }} # the queue may wait up to 4 h
     outputs:
       state: ${{ steps.upload.outcome == 'success' && 'ready' || '' }}
-      queue: ${{ steps.queue.outcome }}
-      queue_attempt: ${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}
+      queue: ${{ needs.changes.outputs.lane == 'main' && steps.queue_main.outcome || steps.queue.outcome }}
+      queue_attempt: ${{ (needs.changes.outputs.lane == 'main' && steps.queue_main.outcome || steps.queue.outcome) == 'success' && github.run_attempt || '' }}
       login: ${{ steps.setup.outcome }}
       superseded: ${{ steps.head.outputs.superseded }}
       superseded_by: ${{ steps.head.outputs.head }}
@@ -344,6 +343,14 @@ jobs:
         timeout-minutes: 250
         env:
           GH_TOKEN: ${{ github.token }}
+        run: node scripts/wait-devnext-free.mjs
+      - name: 🚦 Queue for dev-free and dev-pro
+        id: queue_main
+        if: needs.changes.outputs.lane == 'main' && steps.head.outputs.superseded != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUEUE_STEP_NAME: 🚦 Queue for dev-free and dev-pro
+          QUEUE_EVENTS: all
         run: node scripts/wait-devnext-free.mjs
 
       # globalSetup runs before tests load, so a grep matching nothing runs only
@@ -419,7 +426,7 @@ jobs:
   # e2e-native.yml (scripts/wait-devnext-free.mjs). Only dispatched and
   # scheduled runs reach dev-next — PRs to next skip this suite — so the
   # queue cannot starve a merge gate. The main lane queues in 3 store slots
-  # through the e2e job's concurrency group instead.
+  # within a run; whole runs queue in e2e-setup since 2026-11-26.
   # dev-next is the next lane's one store (owner ruling 2026-10-19: three dev
   # stores, no fourth). Six shards logging in at once saturated it on
   # 2026-09-30 (#2321); e2e-setup now does every login and sync serially (#2324).
@@ -476,7 +483,7 @@ jobs:
       # A next-lane shard may touch dev-next only after e2e-setup's queue step
       # admitted this run (cancelled or timed out reads as not admitted).
       - name: 🚦 Refuse dev-next without the queue
-        if: needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))
+        if: (needs.changes.outputs.lane == 'next' || needs.changes.outputs.lane == 'main') && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))
         env:
           QUEUE_OUTCOME: ${{ needs.e2e-setup.outputs.queue }}
           QUEUE_ATTEMPT: ${{ needs.e2e-setup.outputs.queue_attempt }}
@@ -684,8 +691,8 @@ jobs:
 
   cold-start:
     name: 🥶 Cold-start E2E (thin local catalogue)
-    needs: [changes, deploy]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy.outputs.deployment_url != ''
+    needs: [changes, deploy, e2e-setup]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && (needs.e2e-setup.result == 'skipped' || needs.e2e-setup.outputs.queue == 'success') && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy.outputs.deployment_url != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:

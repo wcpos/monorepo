@@ -16,7 +16,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
-export const QUEUE_STEP_NAME = '🚦 Queue for dev-next';
+export const QUEUE_STEP_NAME = process.env.QUEUE_STEP_NAME || '🚦 Queue for dev-next';
 export const QUEUE_WORKFLOWS = ['deploy.yml', 'e2e-native.yml'];
 /** Between polls. ~5 API calls a poll stays far below GITHUB_TOKEN's 1,000/h. */
 export const POLL_INTERVAL_MS = 90_000;
@@ -25,8 +25,8 @@ export const MAX_WAIT_MS = 240 * 60_000;
 /** A broken token or API outage fails the step instead of waiting 4 h. */
 export const MAX_CONSECUTIVE_ERRORS = 5;
 
-export function queueState(jobs) {
-	const step = jobs.flatMap((job) => job.steps ?? []).find(({ name }) => name === QUEUE_STEP_NAME);
+export function queueState(jobs, stepName = QUEUE_STEP_NAME) {
+	const step = jobs.flatMap((job) => job.steps ?? []).find(({ name }) => name === stepName);
 	if (step?.status === 'in_progress') return 'waiting';
 	if (step?.status === 'completed' && step.conclusion === 'success') return 'holding';
 	return 'none';
@@ -50,7 +50,10 @@ export async function waitForDevNext({
 	pollIntervalMs = POLL_INTERVAL_MS,
 	maxWaitMs = MAX_WAIT_MS,
 	maxConsecutiveErrors = MAX_CONSECUTIVE_ERRORS,
+	stepName = QUEUE_STEP_NAME,
+	allEvents = false,
 }) {
+	const store = stepName.replace(/^🚦 Queue for /, '');
 	const start = now();
 	let clearPolls = 0;
 	let errors = 0;
@@ -61,13 +64,12 @@ export async function waitForDevNext({
 			for (const run of await listRuns()) {
 				if (
 					Number(run.id) === Number(ownRunId) ||
-					run.event === 'pull_request' ||
-					run.event === 'push'
+					(!allEvents && (run.event === 'pull_request' || run.event === 'push'))
 				)
 					continue;
 				runs.push({
 					id: Number(run.id),
-					state: queueState(await listJobs(run.id)),
+					state: queueState(await listJobs(run.id), stepName),
 					url: run.html_url,
 				});
 			}
@@ -76,21 +78,24 @@ export async function waitForDevNext({
 			if (blockers.length) {
 				clearPolls = 0;
 				log(
-					`Waiting for dev-next: ${blockers
+					`Waiting for ${store}: ${blockers
 						.map(
 							({ url, state }) =>
 								`${url} (${state === 'holding' ? 'holding' : 'older run waiting'})`
 						)
 						.join(', ')}`
 				);
+				const holding = blockers.find(({ state }) => state === 'holding');
+				const position = 1 + blockers.filter(({ state }) => state === 'waiting').length;
+				log(`Queue position ${position}; holder run ${holding?.id ?? 'none'}`);
 			} else {
 				clearPolls++;
 				if (clearPolls === 2) {
 					const waitedMs = now() - start;
-					log(`dev-next is free; proceeding after ${Math.round(waitedMs / 60_000)} min`);
+					log(`${store} is free; proceeding after ${Math.round(waitedMs / 60_000)} min`);
 					return { admitted: true, waitedMs };
 				}
-				log(`dev-next looks free; confirming in ${pollIntervalMs / 1000} s`);
+				log(`${store} looks free; confirming in ${pollIntervalMs / 1000} s`);
 			}
 		} catch (error) {
 			clearPolls = 0;
@@ -150,6 +155,7 @@ async function main() {
 		sleep,
 		now: Date.now,
 		log: console.log,
+		allEvents: process.env.QUEUE_EVENTS === 'all',
 	});
 	if (!result.admitted) {
 		console.log(
