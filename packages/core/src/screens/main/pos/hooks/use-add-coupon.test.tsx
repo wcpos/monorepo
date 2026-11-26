@@ -329,7 +329,7 @@ describe('useAddCoupon engine reads', () => {
 		await expect(result.current.addCoupon(' CREDIT20 ')).resolves.toEqual({
 			success: false,
 			error:
-				"CREDIT20 can't be applied in the POS: its coupon type (pi_store_credit) comes from another plugin. Only percentage and fixed discount coupons are supported.",
+				"CREDIT20 can't be applied in the POS: its coupon type (pi_store_credit) comes from another plugin. Only percentage and fixed discount coupons are supported. Apply it on the payment page in the checkout's Store checkout tab instead.",
 		});
 		expect(orderSnapshot.coupon_lines).toEqual(baseOrderSnapshot.coupon_lines);
 		expect(recalculate).not.toHaveBeenCalled();
