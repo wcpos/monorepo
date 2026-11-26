@@ -21,7 +21,13 @@ The atomic output of a settle — the exact order fields to persist in one write
 **Frozen regime**:
 Mutation-time calculation: a line's taxes/totals are computed once at add/edit
 and stored; later config or rate changes do not recompute them while no coupons
-are applied.
+are applied. One exception (#1875): a cart customer write (`cart.customer.set`:
+picking a customer or editing the address) that moves the order's tax location
+to a different rate set re-taxes its active product lines and fixed fees in that
+same write, tax fields only (price, subtotal and total kept). It does not run
+when the order is server-owned, exempt or has a pending or authorized settlement
+leg; an order no longer open (status not pos-open, pos-partial or pending)
+refuses the whole write, address included.
 
 **Settle regime**:
 With active coupons, the settle recomputes line taxes from current rates with

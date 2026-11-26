@@ -1,3 +1,4 @@
+import { hasLiveSettlementLeg } from '@wcpos/order-math';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { config as baseConfig } from '../../../../../jest/cart-write';
@@ -93,6 +94,11 @@ it('leaves the lines to the server when it owns the money or a settlement leg is
 		],
 	} as never);
 	expect(retaxForCustomerWrite(leg, toNZ, deps).lines).toEqual({});
+	const authorized = { id: 'leg', status: 'authorized', amount: '110', refunded_amount: '0' };
+	const held = order({
+		meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments: [authorized] } }],
+	} as never);
+	expect(retaxForCustomerWrite(held, toNZ, deps).lines).toEqual({});
 });
 
 it('a non-taxable product stays at zero tax under the new rates', () => {
@@ -178,4 +184,60 @@ describe('a server-flagged exempt order keeps its lines (roadmap#477)', () => {
 	it('on an exclusive store', () => {
 		expect(retaxForCustomerWrite(exempt, toNZ, deps).lines).toEqual({});
 	});
+});
+
+it('a captured partial tender does not hold the lines: the cart re-taxes them', () => {
+	const meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [{ id: 'cash', status: 'captured', amount: '50', refunded_amount: '0' }],
+			},
+		},
+	];
+	// The live-settlement guard covers pending and authorized legs only, not a captured one.
+	expect(hasLiveSettlementLeg(meta_data)).toBe(false);
+	const { lines } = retaxForCustomerWrite(order({ meta_data } as never), toNZ, deps);
+	expect(lines.line_items?.[0]).toMatchObject({ total: '100', total_tax: '15' });
+});
+
+it('a move to another rate set and back leaves the lines byte-identical', () => {
+	// Round at subtotal: the line's total_tax is stored at 6 dp, so a cent rounding would show.
+	const roundAtSubtotal = (o: OrderPayload) =>
+		cartConfigForOrder({
+			settings: {
+				...baseConfig,
+				calcTaxes: true,
+				priceNumDecimals: 2,
+				taxRoundAtSubtotal: true,
+				taxBasedOn: 'shipping',
+			},
+			rates,
+			baseLocation: { country: 'AU' },
+			order: o,
+		} as never);
+	const roundDeps = { ...deps, configForOrder: roundAtSubtotal };
+	const toAU = { billing: { country: 'AU' }, shipping: { country: 'AU' } };
+	const priced = { ...line, subtotal: '10.99', total: '10.99' };
+	const fee = { name: 'Handling', total: '4.99', tax_status: 'taxable', tax_class: '' };
+	// The start lines come from the same tax function: one re-tax at AU from an NZ fixture.
+	const fixture = order({ ...toNZ, line_items: [priced], fee_lines: [fee] } as never);
+	const start = { ...fixture, ...toAU, ...retaxForCustomerWrite(fixture, toAU, roundDeps).lines };
+	expect(start.line_items?.[0].total_tax).toBe('1.099');
+	expect(start.fee_lines?.[0].total_tax).toBe('0.499');
+
+	const atNZ = {
+		...start,
+		...toNZ,
+		...retaxForCustomerWrite(start as never, toNZ, roundDeps).lines,
+	};
+	expect(atNZ.line_items?.[0].total_tax).toBe('1.6485');
+	const final = {
+		...atNZ,
+		...toAU,
+		...retaxForCustomerWrite(atNZ as never, toAU, roundDeps).lines,
+	};
+	expect(final.line_items).toEqual(start.line_items);
+	expect(final.fee_lines).toEqual(start.fee_lines);
 });
