@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { BehaviorSubject, combineLatest, type Observable, Subscription } from 'rxjs';
+import { BehaviorSubject, combineLatest, Subscription } from 'rxjs';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useQueryRuntime } from '@wcpos/query';
@@ -15,9 +15,8 @@ import { useTaxSettings } from '../../contexts/tax-rates';
 import type { RatesReady } from './settlement-coordinator';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
-// eslint-disable-next-line wcpos/no-rx-in-context-value -- #3843 spec: the readiness channel, read only in pipelines (the coordinator, whenReady); dated 2026-11-26.
 const Context = React.createContext<{
-	ready$: Observable<RatesReady>;
+	subscribe: (next: (r: RatesReady) => void) => () => void;
 	whenReady: (key?: string) => Promise<boolean>;
 } | null>(null);
 
@@ -51,6 +50,14 @@ export function RatesReadyProvider({ children }: { children: React.ReactNode }) 
 	const t = useT();
 	React.useLayoutEffect(() => online$.next(online), [online, online$]);
 	React.useEffect(() => rates.watch(), [rates]);
+	// A subscribe function, not the observable: ready$ changes per engine. Keyed on rates alone.
+	const subscribe = React.useCallback(
+		(next: (r: RatesReady) => void) => {
+			const sub = rates.ready$.subscribe(next);
+			return () => sub.unsubscribe();
+		},
+		[rates]
+	);
 	const value = React.useMemo(() => {
 		// True on the first ready verdict; false once a later call takes the key, the scope moves, or offline.
 		const whenReady = (key?: string) =>
@@ -80,8 +87,8 @@ export function RatesReadyProvider({ children }: { children: React.ReactNode }) 
 					})
 				);
 			});
-		return { ready$: rates.ready$, whenReady };
-	}, [manager.engine, rates, online$, pending, t]);
+		return { subscribe, whenReady };
+	}, [manager.engine, rates, online$, pending, t, subscribe]);
 	return (
 		<Context.Provider value={value}>
 			{children}

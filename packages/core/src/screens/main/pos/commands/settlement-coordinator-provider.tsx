@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { observeCatalogChanges, useDocField, useQueryRuntime } from '@wcpos/query';
@@ -16,7 +16,11 @@ import { settleOpenOrder } from './settle-open-order';
 import { useBoundaryCommitter } from './use-boundary-committer';
 import { useOrderLockReaders } from './use-order-lock-readers';
 import { useSaleContext } from '../checkout/hooks/use-sale-context';
-import { createSettlementCoordinator, type SettlementDiagnostic } from './settlement-coordinator';
+import {
+	createSettlementCoordinator,
+	type RatesReady,
+	type SettlementDiagnostic,
+} from './settlement-coordinator';
 import { useT } from '../../../../contexts/translations';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
@@ -59,7 +63,7 @@ export function SettlementCoordinatorProvider() {
 		report,
 		t,
 	}));
-	const { ready$ } = useRatesReady();
+	const { subscribe } = useRatesReady();
 	const [inputs$] = React.useState(() => new BehaviorSubject(inputs));
 	// A boundary deferred offline is retried when the till reconnects.
 	const [reconnected$] = React.useState(() => new Subject<void>());
@@ -80,7 +84,7 @@ export function SettlementCoordinatorProvider() {
 				? observeOpenSessionPresence(storeDB, { registerId })
 				: undefined,
 			openOrders$,
-			ratesReady$: ready$,
+			ratesReady$: new Observable<RatesReady>((s) => subscribe((r) => s.next(r))),
 			references$: couponReferences(manager.engine),
 			readCoupons: (payload) =>
 				readCouponContext(manager, {
@@ -129,7 +133,7 @@ export function SettlementCoordinatorProvider() {
 		registerId,
 		inputs$,
 		reconnected$,
-		ready$,
+		subscribe,
 		orderSaveState,
 		inCheckout,
 	]);

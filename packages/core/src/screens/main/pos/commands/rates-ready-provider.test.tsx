@@ -49,7 +49,7 @@ function Probe() {
 }
 const ready = () => {
 	let value: RatesReady | undefined;
-	seen.ready$.subscribe((next) => (value = next)).unsubscribe();
+	seen.subscribe((next) => (value = next))();
 	return value?.ready;
 };
 const wait = (key: string) => {
