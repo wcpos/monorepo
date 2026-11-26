@@ -232,7 +232,10 @@ jest.mock('../../../../hooks/user-db-list-resources', () => ({
 	credentialsListResource: () => null,
 }));
 jest.mock('../../../../hooks/use-store-day-label', () => ({
-	useStoreDayLabel: () => ({ time: (at: string) => at.slice(11, 16) }),
+	useStoreDayLabel: () => ({
+		time: (at: string) => at.slice(11, 16),
+		dateTime: (at: string) => `store-zone ${at.slice(11, 16)}`,
+	}),
 }));
 jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 it.each([
@@ -270,6 +273,13 @@ it('says who closed on another till and when, but not after a close here', () =>
 	} finally {
 		mockClosedElsewhere = previous;
 	}
+});
+
+it('shows the last closure time in the store zone, as the notice does (#3303)', () => {
+	render(<OpenRegisterCard />);
+	expect(screen.getByTestId('open-register-last-closure-line').textContent).toContain(
+		'store-zone 10:00'
+	);
 });
 
 it("a suggestion shows at the store's decimals, as the cashier would type it", async () => {
