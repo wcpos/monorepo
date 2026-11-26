@@ -81,12 +81,15 @@ function LiveCartHeader() {
 	const { addCustomer } = useAddCustomer();
 	const side = usePanelSide('cart');
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
+	// A pick waiting for the tax rates keeps the select shown, busy (#3843).
+	const [picking, setPicking] = React.useState(false);
 	const t = useT();
 	const triggerRef = React.useRef<{ open: () => void } | null>(null);
 	const handleSelectCustomer = React.useCallback(
 		async (option: Option<CustomerData> | undefined) => {
 			if (option?.item) {
-				await addCustomer(option.item);
+				setPicking(true);
+				await addCustomer(option.item).finally(() => setPicking(false));
 			}
 			setShowCustomerSelect(false);
 		},
@@ -125,7 +128,7 @@ function LiveCartHeader() {
 				</Text>
 				<View className="min-w-0 shrink">
 					<ErrorBoundary>
-						{showCustomerSelect ? (
+						{showCustomerSelect || picking ? (
 							<Combobox<CustomerData>
 								onValueChange={handleSelectCustomer}
 								onOpenChange={delayedCloseHandler}
@@ -135,7 +138,8 @@ function LiveCartHeader() {
 									<Chip
 										testID="cart-customer-select"
 										icon="customer"
-										label={t('common.select_customer')}
+										label={picking ? t('common.loading') : t('common.select_customer')}
+										disabled={picking}
 									/>
 								</ComboboxTrigger>
 								<ComboboxContent>

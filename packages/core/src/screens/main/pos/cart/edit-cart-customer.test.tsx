@@ -55,6 +55,9 @@ const currentOrderRecord = {
 	},
 };
 
+jest.mock('../commands/rates-ready-provider', () => ({
+	useWhenRatesReady: () => async () => true,
+}));
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (observable: BehaviorSubject<unknown>) => observable.value,
 }));

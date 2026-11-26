@@ -131,6 +131,7 @@ function EditCartCustomerFields() {
 				billing,
 				shipping,
 				taxIds: (tax_ids ?? []).filter((row) => String(row?.value ?? '') !== ''),
+				supersede: false,
 			}),
 	});
 
