@@ -83,6 +83,14 @@ const lineInfo = {
 	},
 } as const;
 
+// WooCommerce rejects fee names that pass PHP's empty($posted['name']) check.
+function withFeeName(type: EditableLineType, edit: Record<string, unknown>, t: ActionContext['t']) {
+	const { name } = edit;
+	return type === 'fee_lines' && typeof name === 'string' && (name.trim() === '' || name === '0')
+		? { ...edit, name: t('pos_cart.fee') }
+		: edit;
+}
+
 /**
  * The bottom handler for cart.line.update takes the order it must operate on rather than
  * resolving the CURRENT one.
@@ -221,7 +229,8 @@ export const useUpdateCartLine = () => {
 									? {}
 									: { skipStockGuard: options.skipStockGuard },
 						},
-						(e, settledWrite) => write(target, type, uuid, { ...e.payload.changes }, settledWrite)
+						({ payload: { changes } }, settledWrite) =>
+							write(target, type, uuid, withFeeName(type, { ...changes }, ctx.t), settledWrite)
 					) as Promise<Awaited<ReturnType<SlotWrite>> | undefined | ActionRefusal>;
 				},
 				(record) => ({ orderId: record.uuid, uuid }),
