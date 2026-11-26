@@ -101,7 +101,10 @@ export const useAddCoupon = () => {
 						});
 						return {
 							success: false,
-							error: t('pos_cart.coupon_type_unsupported', { code: couponCode.trim(), type }),
+							error: t('pos_cart.coupon_type_unsupported_store_checkout', {
+								code: couponCode.trim(),
+								type,
+							}),
 						};
 					}
 					return { success: false, error: t('pos_cart.coupon_not_found') };
