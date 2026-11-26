@@ -94,8 +94,11 @@ export function countDecision(
  */
 export const mayAbandonCount = (
 	session: { status?: string } | null | undefined,
-	refusedClose: boolean | undefined
-) => session?.status === 'counting' || (!!refusedClose && session?.status !== 'open');
+	refusedClose: boolean | undefined,
+	unreachable?: boolean
+) =>
+	!unreachable &&
+	(session?.status === 'counting' || (!!refusedClose && session?.status !== 'open'));
 
 /**
  * The count a refused close kept (#2016), which the count pane starts from. The store's row

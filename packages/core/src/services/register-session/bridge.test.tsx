@@ -4,6 +4,8 @@ import * as React from 'react';
 import { act, render, waitFor } from '@testing-library/react';
 import { of, Subject } from 'rxjs';
 
+import { Toast } from '@wcpos/components/toast';
+import { sessionRestored } from '@wcpos/query/register-session';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { RegisterSessionBridge } from './bridge';
@@ -39,6 +41,7 @@ jest.mock('../../contexts/app-state', () => {
 	return { useStoreSession: session, useAppState: session };
 });
 const http = {};
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
@@ -299,4 +302,16 @@ it('sends a close within a second of its request, not at the next minute tick', 
 		await jest.advanceTimersByTimeAsync(1_000);
 	});
 	expect(drain).toHaveBeenCalledTimes(3);
+});
+
+it('#3753: says once that a set-aside session is active again, for this register only', async () => {
+	render(<RegisterSessionBridge />);
+	await waitFor(() => expect(drain).toHaveBeenCalledTimes(1));
+	act(() => sessionRestored.next({ sessionId: 'other', registerId: 'other-register' }));
+	expect(Toast.show).not.toHaveBeenCalled();
+	act(() => sessionRestored.next({ sessionId: 'session', registerId: 'register' }));
+	expect(Toast.show).toHaveBeenCalledTimes(1);
+	expect(Toast.show).toHaveBeenCalledWith({
+		title: 'register.session_restored',
+	});
 });

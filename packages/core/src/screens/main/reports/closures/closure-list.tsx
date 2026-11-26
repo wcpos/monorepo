@@ -14,7 +14,7 @@ import { Card } from '@wcpos/components/card';
 import { Badge } from '@wcpos/components/badge';
 import { ListRow } from '@wcpos/components/list-row';
 import { Text } from '@wcpos/components/text';
-import type { ClosureRow } from '@wcpos/query/register-session';
+import { type ClosureRow, SESSION_SET_ASIDE } from '@wcpos/query/register-session';
 
 import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { useT } from '../../../../contexts/translations';
@@ -199,7 +199,7 @@ export function ClosureList({
 					</Badge>
 				);
 				const destination = get(row.breakdowns, 'labels.carried_to_store_name');
-				const badge = !row.synced_rows_at
+				const status = !row.synced_rows_at
 					? t('register.unsynced')
 					: row.reason === 'store_switch'
 						? destination
@@ -208,6 +208,9 @@ export function ClosureList({
 						: row.corrections_count
 							? t('reports.corrected')
 							: null;
+				// A session the store no longer has, kept here as history (#3753).
+				const setAside = row.sync_error === SESSION_SET_ASIDE;
+				const badge = setAside ? t('register.set_aside_history') : status;
 				return (
 					<React.Fragment key={row.id}>
 						{row.business_day !== today &&

@@ -25,7 +25,7 @@ import { ToneDisc } from '@wcpos/components/tone-disc';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
-import { isLiveMovement, readCarriedFrom } from '@wcpos/query/register-session';
+import { isLiveMovement, readCarriedFrom, SESSION_SET_ASIDE } from '@wcpos/query/register-session';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
 import { credentialsListResource } from '../../../../hooks/user-db-list-resources';
@@ -77,6 +77,7 @@ export function RegisterPanel({
 		movements,
 		refusedMovements,
 		refusedClose,
+		sessionUnreachable,
 		lastClosure,
 		actions,
 		canManageCash,
@@ -145,7 +146,7 @@ export function RegisterPanel({
 			// ×, Escape and an outside tap wait for a close in flight: resuming selling under it
 			// would write `open` over the closed session.
 			if (!next && countBusy) return;
-			if (!next && pane === 'count' && mayAbandonCount(session, refusedClose))
+			if (!next && pane === 'count' && mayAbandonCount(session, refusedClose, sessionUnreachable))
 				await actions.backToSelling();
 			if (!next) {
 				setPane('register');
@@ -198,6 +199,8 @@ export function RegisterPanel({
 	// the banner survives the close that would otherwise hide the last record of the cash.
 	const refused = refusedMovements;
 	const closeForbidden = session?.sync_error === 'rest_forbidden';
+	// An unreachable session's only action writes on the device, so it is offered to every cashier (#3753, option A).
+	const mayShowRefusedClose = canManageCash || !closeForbidden || sessionUnreachable;
 	// Refused cash alone can open the panel (no session, no closure): then there is no stamp.
 	const stamp = session?.opened_at_gmt ?? lastClosure?.closed_at;
 	const openedDate = stamp ? convertUTCStringToLocalDate(stamp) : undefined;
@@ -255,7 +258,9 @@ export function RegisterPanel({
 			.join(' · ');
 	const description = <Ticking>{describe}</Ticking>;
 	// Without the cash permission the store refuses every POST, so no action offers one.
-	const retryRefused = canManageCash
+	// A session the store no longer has (#3753) refuses every resend: the set-aside notice is the way.
+	const mayRetry = canManageCash && !sessionUnreachable;
+	const retryRefused = mayRetry
 		? ([
 				{
 					label: t('register.retry'),
@@ -341,10 +346,13 @@ export function RegisterPanel({
 						title={t('register.figures_after_sync')}
 					/>
 				)}
-				{refusedClose && session && (canManageCash || !closeForbidden) && (
+				{(refusedClose || sessionUnreachable) && session && mayShowRefusedClose && (
 					<RefusedCloseNotice
 						className="mx-4"
 						forbidden={closeForbidden}
+						onSetAside={
+							sessionUnreachable ? () => void attempt(actions.setAsideSession) : undefined
+						}
 						onRetry={
 							canManageCash
 								? () =>
@@ -598,7 +606,9 @@ export function RegisterPanel({
 							)}
 							{lastClosure.sync_status === 'failed' && (
 								<Text testID="closure-sync-error" variant="key" className="text-bad px-2.5 py-1">
-									{lastClosure.sync_error}
+									{lastClosure.sync_error === SESSION_SET_ASIDE
+										? t('register.set_aside_history')
+										: lastClosure.sync_error}
 								</Text>
 							)}
 						</View>

@@ -111,11 +111,13 @@ function Provider({
 	handle,
 	comparisonHandle = handle,
 	refundsHandle = handleOf([]),
+	quietRefresh,
 	children,
 }: React.PropsWithChildren<{
 	handle: QueryHandle;
 	comparisonHandle?: QueryHandle;
 	refundsHandle?: QueryHandle;
+	quietRefresh?: boolean;
 }>) {
 	return (
 		<Scoped>
@@ -123,6 +125,7 @@ function Provider({
 				handle={handle}
 				comparisonHandle={comparisonHandle}
 				refundsHandle={refundsHandle}
+				quietRefresh={quietRefresh}
 			>
 				{children}
 			</ReportsProvider>
@@ -264,6 +267,31 @@ describe('ReportsProvider handles context', () => {
 		fireEvent.click(screen.getByTestId('exclude'));
 
 		expect(onHandlesRender).toHaveBeenCalledTimes(rendersBefore);
+	});
+
+	// The handles stay the same objects, so only `quietRefresh` can change the published value.
+	it('hands a changed quietRefresh to the handles readers', () => {
+		const refundsHandle = handleOf([]);
+		function QuietProbe() {
+			return <span data-testid="quiet">{String(useReportsHandles().quietRefresh)}</span>;
+		}
+		const room = (quietRefresh: boolean) => (
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={Number.MAX_SAFE_INTEGER}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<Provider handle={handle} refundsHandle={refundsHandle} quietRefresh={quietRefresh}>
+					<QuietProbe />
+				</Provider>
+			</QueryStateProvider>
+		);
+		const view = render(room(false));
+		expect(screen.getByTestId('quiet').textContent).toBe('false');
+		view.rerender(room(true));
+		expect(screen.getByTestId('quiet').textContent).toBe('true');
+		view.rerender(room(false));
+		expect(screen.getByTestId('quiet').textContent).toBe('false');
 	});
 });
 

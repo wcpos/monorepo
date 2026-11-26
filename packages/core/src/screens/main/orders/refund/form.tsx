@@ -561,6 +561,7 @@ export function RefundOrderForm({ order }: Props) {
 					code: report.code,
 				});
 			}
+			if (report.refunded) router.back();
 		} finally {
 			setLoading(false);
 		}

@@ -15,6 +15,9 @@ import { type EngineRecord, WriteOutcomeTimeoutError } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
 
+// Paid on has its own integration suite; keep this form harness focused on its existing rows.
+jest.mock('./paid-on', () => ({ PaidOn: () => null }));
+
 const testLogger = getLogger(['test']);
 
 const mockPushDocument = jest.fn();

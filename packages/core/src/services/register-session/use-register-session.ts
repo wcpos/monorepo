@@ -20,6 +20,7 @@ import {
 	requireOpenSession,
 	retryMovement,
 	sessionRefreshRequests,
+	setAsideSession,
 	voidMovement,
 } from '@wcpos/query/register-session';
 
@@ -166,6 +167,7 @@ export function useRegisterSession() {
 		countingElsewhere:
 			!!session && session.status === 'counting' && !data?.countingHere && !refusedClose,
 		refusedClose,
+		sessionUnreachable: !!data?.sessionUnreachable,
 		countingBy,
 		closedElsewhere: data?.closedElsewhere ?? null,
 		salesCount: data?.salesCount ?? 0,
@@ -211,6 +213,19 @@ export function useRegisterSession() {
 			backToSelling: async () => {
 				if (!session) throw new RegisterSessionRequiredError();
 				return abandonCount({ storeDB, userDB, siteUuid: site.uuid!, actor }, session.id);
+			},
+			/** The store no longer has the session (#3753): keep it here as history, sell on. */
+			setAsideSession: async () => {
+				if (!session) throw new RegisterSessionRequiredError();
+				const result = await setAsideSession(storeDB, session.id, { userDB, siteUuid: site.uuid! });
+				recordRegisterFact({
+					kind: 'session-set-aside',
+					actor,
+					sessionId: session.id,
+					registerId: session.register_id,
+					unsentMovements: result.unsentMovements,
+				});
+				return result;
 			},
 			closeSession: async (input: RegisterCount) => {
 				if (!session) throw new RegisterSessionRequiredError();

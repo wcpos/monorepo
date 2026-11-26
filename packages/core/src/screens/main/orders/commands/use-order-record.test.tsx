@@ -53,6 +53,7 @@ const identity = [
 ];
 const order = {
 	uuid: 'order-uuid',
+	getLatest: () => order,
 	collection: { name: 'orders' },
 	get payload() {
 		return mockStored.payload;

@@ -7,7 +7,7 @@ import { useT } from '../../../../../contexts/translations';
 import type { PaymentFrameStatus } from './use-pay-frame-gate';
 
 interface Props {
-	status: PaymentFrameStatus | 'link-missing';
+	status: PaymentFrameStatus | 'link-missing' | 'link-foreign';
 	onRetry?: () => void;
 	/** The host's own notice id, which E2E selects by. */
 	testID: string;
@@ -23,11 +23,13 @@ export function PayFrameNotice({ status, onRetry, testID, className }: Props) {
 			tone="bad"
 			className={className}
 			title={
-				status === 'link-missing'
-					? t('pos_checkout.payment_form_unavailable')
-					: status === 'stalled'
-						? t('pos_checkout.payment_form_load_failed_retry')
-						: t('pos_checkout.payment_form_navigation_failed')
+				status === 'link-foreign'
+					? t('pos_checkout.payment_page_other_domain')
+					: status === 'link-missing'
+						? t('pos_checkout.payment_form_unavailable')
+						: status === 'stalled'
+							? t('pos_checkout.payment_form_load_failed_retry')
+							: t('pos_checkout.payment_form_navigation_failed')
 			}
 			actions={
 				status === 'stalled' && onRetry

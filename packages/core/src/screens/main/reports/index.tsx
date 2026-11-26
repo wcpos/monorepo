@@ -27,6 +27,7 @@ import {
 	useStoreDay,
 	zoneOptions,
 } from '../../../hooks/use-store-day';
+import { useServerFeature } from '../hooks/use-server-feature';
 import { ManagementBar } from '../components/management-bar';
 import { Bar, ClosuresCashierChip } from './bar';
 import { ScopeRow } from './scope-row';
@@ -54,6 +55,7 @@ import {
 	useQueryStateActions,
 } from '../../../query';
 import { clampClosureScope, type ClosureScope, useLocalClosure } from './closures/use-closure-rows';
+import { reportsRefreshCadence, useReportsRefresh } from './use-reports-refresh';
 
 import type { FiltersOf, QueryStateOf } from '../../../query';
 
@@ -113,7 +115,12 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	// comparison boundaries, so a suspended or failed secondary read never drops a handle. A
 	// failed sales read goes to the screen's boundary above this owner; its reset remounts the
 	// owner, which reads afresh.
-	const handle = useCollectionQueryHandle('orders', state, { storeScope: 'sales' });
+	const saleDayCorrection = useServerFeature('order_sale_day_correction');
+	const salesOptions = {
+		storeScope: 'sales' as const,
+		...(saleDayCorrection ? { saleDayCorrection } : {}),
+	};
+	const handle = useCollectionQueryHandle('orders', state, salesOptions);
 	const { comparisonFilter } = useReportsPeriod();
 	// A handle is keyed by the state's canonical JSON, so an equal state is the same handle even
 	// unmemoised; the memo only saves building the key on every render.
@@ -125,9 +132,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 		}),
 		[state, comparisonFrom, comparisonTo]
 	);
-	const comparisonHandle = useCollectionQueryHandle('orders', comparisonState, {
-		storeScope: 'sales',
-	});
+	const comparisonHandle = useCollectionQueryHandle('orders', comparisonState, salesOptions);
 	const {
 		search,
 		limit,
@@ -149,6 +154,15 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
 	const { store, site } = useAppState();
 	const range = state.filters.dateRange;
+	// Only the sales handle is re-read; the comparison and refunds handles read once per mount.
+	const refreshRange = {
+		from: range?.from ? convertUTCStringToLocalDate(range.from) : undefined,
+		to: range?.to ? convertUTCStringToLocalDate(range.to) : undefined,
+	};
+	// Read again when a timer pass runs: nothing re-renders this screen at the store's midnight.
+	const quietRefresh = useReportsRefresh(handle, () =>
+		reportsRefreshCadence(refreshRange, presets().today)
+	);
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
 			value ? convertUTCStringToLocalDate(value) : fallback,
@@ -207,7 +221,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 				: state,
 		[state, noStoreEnabled, storeIds, noStoreRange]
 	);
-	const noStoreHandle = useCollectionQueryHandle('orders', noStoreState, { storeScope: 'sales' });
+	const noStoreHandle = useCollectionQueryHandle('orders', noStoreState, salesOptions);
 	const currentNoStoreFilter = noStoreFilter(storeIds);
 	// Stores added or removed while No store stays selected move the sales, comparison and
 	// refunds scope with the directory, as the notice's count already does.
@@ -261,6 +275,7 @@ function ReportsScreenContent({ hasRoom, onRoomChange, onOpenClosure, page }: Sa
 							handle={handle}
 							comparisonHandle={comparisonHandle}
 							refundsHandle={refundsHandle}
+							quietRefresh={quietRefresh}
 						>
 							<ErrorBoundary
 								FallbackComponent={() => <Reports date={date} header={strip} />}

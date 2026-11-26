@@ -3,6 +3,7 @@ import * as React from 'react';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
+import { sameStoreOrigin } from '@wcpos/components/webview/same-store-origin';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -84,7 +85,7 @@ export function PaymentWebview({
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
-	const { wpCredentials } = useAppState();
+	const { wpCredentials, site } = useAppState();
 	const jwt = useDocField(wpCredentials, (value) => value.access_token);
 	const refreshAccessToken = useAccessTokenRefresher();
 	const t = useT();
@@ -119,10 +120,14 @@ export function PaymentWebview({
 		orderLogger.warn(t('pos_checkout.reopen_payment'), { showToast: true });
 	}, [orderLogger, t]);
 
+	// A foreign link is never prepared, so no sale is committed for a page that will not open.
+	const storePaymentURL = sameStoreOrigin(rawPaymentURL, site?.wcpos_api_url)
+		? rawPaymentURL
+		: undefined;
 	const { prepared, paymentURL } = usePayPagePreparation({
 		order,
 		ctx,
-		rawPaymentURL,
+		rawPaymentURL: storePaymentURL,
 		retryToken,
 		settledRef,
 		logger: orderLogger,
@@ -277,7 +282,7 @@ export function PaymentWebview({
 	};
 
 	const onMessage = (event: { nativeEvent: { data: unknown } }) => {
-		const message = readPayPageMessage(event?.nativeEvent?.data);
+		const message = readPayPageMessage(event?.nativeEvent?.data, { orderId, uuid: order.uuid });
 		switch (message.kind) {
 			case 'session-expired':
 				void handleSessionExpired(message.orderId);

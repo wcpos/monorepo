@@ -1,12 +1,25 @@
 import * as React from 'react';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
-import { mockPhone, mockRoot } from '../dropdown-menu/sheet.test-utils';
+import { mockPhone, mockPlatform, mockRoot } from '../dropdown-menu/sheet.test-utils';
 import * as C from './index';
 jest.mock('@rn-primitives/select', () =>
 	jest.requireActual('../dropdown-menu/sheet.test-utils').mockPrimitive(true)
 );
+const mockMultiContent = jest.fn();
+const mockMultiLayout: { current: (e: unknown) => void } = { current: () => {} };
+jest.mock('./select-multi', () => ({
+	SelectMultiRoot: ({ children }: { children: React.ReactNode }) => children,
+	SelectMultiTrigger: ({ onLayout }: { onLayout: (e: unknown) => void }) => {
+		mockMultiLayout.current = onLayout;
+		return null;
+	},
+	SelectMultiContent: (props: { style?: unknown }) => {
+		mockMultiContent(props.style);
+		return null;
+	},
+}));
 const mockFieldBox = jest.fn();
 jest.mock('../field-box', () => {
 	const actual = jest.requireActual('../field-box');
@@ -159,3 +172,131 @@ it.each([
 		expect(mockFieldBox).toHaveBeenLastCalledWith(state);
 	}
 );
+
+// A native list with no width floor is a blank strip: its rows' labels are flex-1 and lend it none.
+it.each([
+	['ios', false, { minWidth: 240 }, false],
+	['ios', true, { width: 240 }, false],
+	['web', false, undefined, true],
+] as const)(
+	'the anchored list on %s (matchWidth %s) is floored at its trigger',
+	(OS, matchWidth, style, cssFloor) => {
+		mockPhone.current = false;
+		mockPlatform.OS = OS;
+		const primitive = jest.requireMock('@rn-primitives/select');
+		const Keep = primitive.Content;
+		const seen = jest.fn();
+		function ContentSpy(props: { style?: unknown; className?: string }) {
+			seen(props.style, props.className);
+			return null;
+		}
+		primitive.Content = ContentSpy;
+		const trigger = jest.requireMock('./trigger');
+		const KeepTrigger = trigger.Trigger;
+		let layout: (e: unknown) => void = () => {};
+		function TriggerSpy(props: { onLayout: (e: unknown) => void }) {
+			layout = props.onLayout;
+			return null;
+		}
+		trigger.Trigger = TriggerSpy;
+		try {
+			render(
+				<C.Select>
+					<C.SelectTrigger testID="trigger" />
+					<C.SelectContent inline matchWidth={matchWidth}>
+						<C.SelectItem value="a" label="A" />
+					</C.SelectContent>
+				</C.Select>
+			);
+			act(() => layout({ nativeEvent: { layout: { width: 240 } } }));
+			const [lastStyle, className] = seen.mock.calls.at(-1)!;
+			expect(lastStyle).toEqual(style);
+			expect(className.includes('min-w-(--radix-select-trigger-width)')).toBe(cssFloor);
+			expect(className.includes('min-w-32')).toBe(OS === 'ios' && !matchWidth);
+		} finally {
+			primitive.Content = Keep;
+			trigger.Trigger = KeepTrigger;
+			mockPlatform.OS = 'web';
+		}
+	}
+);
+
+// The multi-select's rows are the same flex-1 labels: at the bare 128-point fallback they truncate.
+it.each([
+	['ios', false, 240, { minWidth: 240 }],
+	// A trigger narrower than `min-w-32` keeps that floor: the inline minWidth replaces the class.
+	['ios', false, 96, { minWidth: 128 }],
+	['ios', true, 240, { width: 240 }],
+	['web', false, 240, undefined],
+	['web', true, 240, { width: 240 }],
+] as const)(
+	'the multi-select list on %s (matchWidth %s, trigger %s) is floored at its trigger',
+	(OS, matchWidth, width, style) => {
+		mockPlatform.OS = OS;
+		try {
+			render(
+				<C.Select multiple>
+					<C.SelectTrigger />
+					<C.SelectContent matchWidth={matchWidth} />
+				</C.Select>
+			);
+			act(() => mockMultiLayout.current({ nativeEvent: { layout: { width } } }));
+			expect(mockMultiContent.mock.calls.at(-1)![0]).toEqual(style);
+		} finally {
+			mockPlatform.OS = 'web';
+		}
+	}
+);
+
+it("a caller's style on the multi-select list keeps the trigger floor", () => {
+	mockPlatform.OS = 'ios';
+	try {
+		render(
+			<C.Select multiple>
+				<C.SelectTrigger />
+				<C.SelectContent style={{ maxHeight: 300 }} />
+			</C.Select>
+		);
+		act(() => mockMultiLayout.current({ nativeEvent: { layout: { width: 240 } } }));
+		expect(mockMultiContent.mock.calls.at(-1)![0]).toEqual([{ minWidth: 240 }, { maxHeight: 300 }]);
+	} finally {
+		mockPlatform.OS = 'web';
+	}
+});
+
+it("a caller's style on the single-select list keeps the trigger floor", () => {
+	mockPhone.current = false;
+	mockPlatform.OS = 'ios';
+	const primitive = jest.requireMock('@rn-primitives/select');
+	const Keep = primitive.Content;
+	const seen = jest.fn();
+	function ContentSpy(props: { style?: unknown }) {
+		seen(props.style);
+		return null;
+	}
+	primitive.Content = ContentSpy;
+	const trigger = jest.requireMock('./trigger');
+	const KeepTrigger = trigger.Trigger;
+	let layout: (e: unknown) => void = () => {};
+	function TriggerSpy(props: { onLayout: (e: unknown) => void }) {
+		layout = props.onLayout;
+		return null;
+	}
+	trigger.Trigger = TriggerSpy;
+	try {
+		render(
+			<C.Select>
+				<C.SelectTrigger />
+				<C.SelectContent inline style={{ maxHeight: 300 }}>
+					<C.SelectItem value="a" label="A" />
+				</C.SelectContent>
+			</C.Select>
+		);
+		act(() => layout({ nativeEvent: { layout: { width: 240 } } }));
+		expect(seen.mock.calls.at(-1)![0]).toEqual([{ minWidth: 240 }, { maxHeight: 300 }]);
+	} finally {
+		primitive.Content = Keep;
+		trigger.Trigger = KeepTrigger;
+		mockPlatform.OS = 'web';
+	}
+});

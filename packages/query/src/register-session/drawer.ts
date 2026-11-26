@@ -9,6 +9,8 @@ import {
 	currentSession,
 	isSessionOrder,
 	refusedCashOf,
+	SESSION_SET_ASIDE,
+	sessionUnreachable,
 	unaccepted,
 	unsyncedCount,
 } from './drawer-rules';
@@ -67,7 +69,10 @@ function deriveDrawer(
 	// The pane's refused movements, by REGISTER (pos/cart LEDGER line 57): they outlive their session.
 	const registerSessionIds = new Set([...rows.active, ...rows.closed].map((row) => row.id));
 	const refusedMovements = all.filter(
-		(row) => row.sync_status === 'failed' && registerSessionIds.has(row.session_id)
+		(row) =>
+			row.sync_status === 'failed' &&
+			row.sync_error !== SESSION_SET_ASIDE &&
+			registerSessionIds.has(row.session_id)
 	);
 	// The closure row's refused cash, by SESSION: what the count asks the cashier to acknowledge.
 	const refusedCash = refusedCashOf(movements);
@@ -122,6 +127,11 @@ function deriveDrawer(
 	return {
 		session,
 		refusedClose,
+		/** The store no longer has the session (#3753), or a set aside did not finish: set it aside. */
+		sessionUnreachable:
+			!!session &&
+			(sessionUnreachable(session) ||
+				movements.some((row) => sessionUnreachable(row) || row.sync_error === SESSION_SET_ASIDE)),
 		movements,
 		refusedMovements,
 		refusedCash,

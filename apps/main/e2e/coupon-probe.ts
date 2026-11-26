@@ -1,4 +1,7 @@
+import { randomUUID } from 'node:crypto';
+
 import { type StoreAuthorization, storeRequestOptions } from './probe-credential';
+import { mintSearchProbeToken } from './search-probe';
 
 import type { APIRequestContext, APIResponse } from '@playwright/test';
 
@@ -12,18 +15,25 @@ import type { APIRequestContext, APIResponse } from '@playwright/test';
  * worker-scoped coupon outlives (30 min), so its delete 401ed silently; it now renews first. By 2026-11-02 dev-free carried 3,990 of them — 40 pages of
  * coupons that the 2.0 startup sync paged through on every run, starving the filtered product
  * window the category-filter spec waits on and the quiet the perf specs need before they
- * measure (main run 41536443936, shards 2/4/6, free only). So, like
- * `sweepOrphanedProductProbes`, each fixture sweeps the previous runs' orphans before it mints
- * its own. The sweep reads every page of `zx` coupons within its budget, including pages with
- * nothing to delete, batch-deletes orphans and prints a census line to stdout.
+ * measure (main run 41536443936, shards 2/4/6, free only). So each CI run sweeps the previous
+ * runs' orphans once, from shard index 0's `globalSetup`, at a 20-minute floor. The sweep reads
+ * every page of `zx` coupons within its budget, including pages with nothing to delete,
+ * batch-deletes orphans and prints a census line to stdout.
  */
 export const PROBE_COUPON_DESCRIPTION_LEAD = 'wcpos-e2e coupon';
 
 /** Every probe code starts with `mintSearchProbeToken`'s lead; WC's `search` matches the code. */
 export const PROBE_COUPON_CODE_LEAD = 'zx';
 
-/** Orphans older than this are swept; a live run is never this long. */
-export const PROBE_COUPON_ORPHAN_AGE_MS = 2 * 60 * 60 * 1_000;
+/**
+ * The exact shape `mintProbeCouponCode` mints from `mintSearchProbeToken` (search-probe.ts):
+ * `zx` + base-36 worker index (1-3 chars) + base-36 `Date.now()` (8 chars until 2059) +
+ * 12 lowercase hex characters.
+ */
+export const PROBE_COUPON_CODE_PATTERN = /^zx[0-9a-z]{9,12}[0-9a-f]{12}$/;
+
+/** Orphans older than this are swept: 20 minutes, the desk's floor, so a concurrent run's fresh probe survives. */
+export const PROBE_COUPON_ORPHAN_AGE_MS = 20 * 60 * 1_000;
 
 /** Each sweep round reads one wc/v3 page and batch-deletes at most this many orphans. */
 const SWEEP_PAGE_SIZE = 100;
@@ -63,11 +73,21 @@ export async function couponRequest(
 	return request[method](`${base}/?rest_route=/wc/v3/${path}`, options);
 }
 
+/** A probe coupon code for one worker; always matches `PROBE_COUPON_CODE_PATTERN`. */
+export function mintProbeCouponCode(workerIndex: number): string {
+	return `${mintSearchProbeToken(workerIndex)}${randomUUID().slice(0, 4)}`.toLowerCase();
+}
+
+/** Once per CI run; local runs never delete store data. */
+export function sweepsProbeCoupons(shardIndex: number, ci: string | undefined): boolean {
+	return Boolean(ci) && shardIndex === 0;
+}
+
 function isProbeCoupon(record: Record<string, unknown> | null): boolean {
 	const code = typeof record?.code === 'string' ? record.code : '';
 	const description = typeof record?.description === 'string' ? record.description : '';
 	return (
-		code.startsWith(PROBE_COUPON_CODE_LEAD) && description.startsWith(PROBE_COUPON_DESCRIPTION_LEAD)
+		PROBE_COUPON_CODE_PATTERN.test(code) && description.startsWith(PROBE_COUPON_DESCRIPTION_LEAD)
 	);
 }
 

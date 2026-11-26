@@ -88,6 +88,32 @@ describe('classifyRefundFailure', () => {
 		expect(classifyRefundFailure(forbidden, t).code).toBe('AUTH201');
 	});
 
+	it('says the money went back when the store lost the refund record', () => {
+		const error = {
+			response: {
+				status: 500,
+				data: { code: 'wcpos_refund_record_lost', message: 'x', data: { status: 500 } },
+			},
+		};
+		expect(classifyRefundFailure(error, t)).toEqual({
+			level: 'error',
+			code: 'PAYMENT312',
+			title: 'orders.refund_record_lost',
+			text2: 'orders.refund_record_lost_check',
+			refunded: true,
+		});
+	});
+
+	it('keeps a different server error unconfirmed', () => {
+		const error = { response: { status: 500, data: { code: 'internal_server_error' } } };
+		expect(classifyRefundFailure(error, t)).toEqual({
+			level: 'error',
+			code: 'PAYMENT311',
+			title: 'orders.refund_outcome_unknown',
+			text2: 'orders.refund_check_before_retry',
+		});
+	});
+
 	// Each retry mints a new idempotency key, so a lost reply must never read as
 	// "failed, try again" — that is a double refund.
 	it.each([

@@ -1,3 +1,4 @@
+import { filter, firstValueFrom, type Subscription, timeout } from 'rxjs';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
@@ -14,16 +15,21 @@ import {
 	backToSelling,
 	closeSession,
 	openSession,
+	readCurrentSession,
 	recordMovement,
 	requeueClose,
 	retryMovement,
+	setAsideSession,
 	startCounting,
 	voidMovement,
 	writeClosure,
 } from '../../src/register-session/session-store';
+import { SESSION_SET_ASIDE, sessionUnreachable } from '../../src/register-session/drawer-rules';
 import {
 	adoptCounters,
 	isoGmt,
+	readLiveSession,
+	recordLiveSession,
 	remintRegister,
 	reviseClosureReservation,
 } from '../../src/register-session/register-document';
@@ -31,7 +37,10 @@ import {
 	adoptSessionRow,
 	drainRegisterSessionQueue,
 	type ServerMovementRow,
+	sessionRestored,
 } from '../../src/register-session/queue';
+import { observeRegisterDrawer } from '../../src/register-session/drawer';
+import { createEngineDatabase, createFakeEngine } from '../../src/testing';
 import { refreshSessions } from '../../src/register-session/refresh';
 import { deriveDrawerTerms } from '../../src/register-session/expected';
 import { reversalsInFlight } from '../../src/register-session/reversal-claims';
@@ -2255,5 +2264,526 @@ describe('#2016: retry and abandon keep the closure row', () => {
 		expect(row.getLatest().toJSON()).toMatchObject(
 			rewritten(before, session.getLatest().closed_at_gmt)
 		);
+	});
+	// #3753: the store no longer has the session, so a retry gets the same 404 for ever.
+	it('a queued close the store answers 404 wcpos_session_not_found leaves the register usable', async () => {
+		const { session, row } = await closure();
+		const movement = await recordMovement(db, {
+			sessionId: session.id,
+			type: 'paid_in',
+			amount: '30',
+			reason: '',
+			actor: 7,
+		});
+		await movement.incrementalPatch({ sync_status: 'failed' });
+		http.post.mockRejectedValue({
+			response: { status: 404, data: { code: 'wcpos_session_not_found' } },
+		});
+		await drain();
+		expect(session.getLatest().toJSON()).toMatchObject({
+			sync_status: 'failed',
+			sync_next_at: null,
+		});
+		expect(sessionUnreachable(session.getLatest())).toBe(true);
+		http.post.mockClear();
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		const { counted, closed_at_gmt } = session.getLatest();
+		await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+		const marked = { sync_status: 'failed', sync_next_at: null, sync_error: SESSION_SET_ASIDE };
+		const kept = (await db.register_sessions.findOne(session.id).exec())!;
+		expect(kept.toJSON()).toMatchObject({ ...marked, status: 'closed', counted, closed_at_gmt });
+		expect(counted).toEqual({ cash: '100' });
+		expect(sessionUnreachable(kept)).toBe(false);
+		expect(row.getLatest().toJSON()).toMatchObject({ ...marked, counted: { cash: '100' } });
+		expect(movement.getLatest().toJSON()).toMatchObject({ ...marked, amount: '30' });
+		expect(await db.closures.count().exec()).toBe(1);
+		expect(await readCurrentSession(db, 'register')).toBeNull();
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		// A fresh session opens as on a register with no session, and its create leaves.
+		const next = await open();
+		expect((await readCurrentSession(db, 'register'))?.id).toBe(next.id);
+		http.post.mockResolvedValue({ status: 201, data: { ...next.toJSON(), status: 'open' } });
+		await drain();
+		expect(http.post).toHaveBeenCalledTimes(1);
+		expect(http.post).toHaveBeenCalledWith('sessions', expect.objectContaining({ id: next.id }));
+		expect(next.getLatest().sync_status).toBe('synced');
+	});
+	it('an interrupted set aside is finished by setting it aside again', async () => {
+		const { session, row } = await closure();
+		const movement = await recordMovement(db, {
+			sessionId: session.id,
+			type: 'paid_in',
+			amount: '30',
+			reason: '',
+			actor: 7,
+		});
+		await movement.incrementalPatch({
+			sync_status: 'failed',
+			sync_error: 'wcpos_session_not_found',
+		});
+		http.post.mockRejectedValue({
+			response: { status: 404, data: { code: 'wcpos_session_not_found' } },
+		});
+		await drain();
+		expect(sessionUnreachable(session.getLatest())).toBe(true);
+		expect((await readCurrentSession(db, 'register'))?.id).toBe(session.id);
+		// The write to the session row fails once, after the movements and closure are marked.
+		const failing = {
+			register_id: session.register_id,
+			incrementalPatch: jest.fn().mockRejectedValue(new Error('disk')),
+		};
+		const findOne = jest
+			.spyOn(db.register_sessions, 'findOne')
+			.mockReturnValueOnce({ exec: async () => failing } as never);
+		await expect(setAsideSession(db, session.id, { userDB, siteUuid: 'site' })).rejects.toThrow(
+			'disk'
+		);
+		expect(failing.incrementalPatch).toHaveBeenCalledTimes(1);
+		findOne.mockRestore();
+		const marked = { sync_status: 'failed', sync_next_at: null, sync_error: SESSION_SET_ASIDE };
+		expect(session.getLatest().sync_error).toBe('wcpos_session_not_found');
+		expect((await readCurrentSession(db, 'register'))?.id).toBe(session.id);
+		expect(movement.getLatest().toJSON()).toMatchObject(marked);
+		await expect(setAsideSession(db, session.id, { userDB, siteUuid: 'site' })).resolves.toEqual({
+			unsentMovements: 1,
+		});
+		expect(session.getLatest().toJSON()).toMatchObject({ ...marked, counted: { cash: '100' } });
+		expect(row.getLatest().toJSON()).toMatchObject(marked);
+		expect(movement.getLatest().toJSON()).toMatchObject({ ...marked, amount: '30' });
+		expect(await readCurrentSession(db, 'register')).toBeNull();
+		http.post.mockClear();
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+	});
+	it.each([
+		[404, { response: { status: 404, data: { code: 'wcpos_session_not_found' } } }],
+		[503, { response: { status: 503, data: {} } }],
+	])(
+		'#3753: a set aside made while a request is in flight keeps its marker when the reply is %s',
+		async (_status, reply) => {
+			const { session, row } = await closure();
+			const movement = await recordMovement(db, {
+				sessionId: session.id,
+				type: 'paid_in',
+				amount: '30',
+				reason: '',
+				actor: 7,
+			});
+			http.post.mockImplementation(async () => {
+				await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+				throw reply;
+			});
+			await drain();
+			expect(http.post.mock.calls).toHaveLength(1);
+			const marked = { sync_status: 'failed', sync_next_at: null, sync_error: SESSION_SET_ASIDE };
+			expect(session.getLatest().toJSON()).toMatchObject(marked);
+			expect(row.getLatest().toJSON()).toMatchObject(marked);
+			expect(movement.getLatest().toJSON()).toMatchObject(marked);
+			http.post.mockClear();
+			await drain();
+			expect(http.post).not.toHaveBeenCalled();
+		}
+	);
+	describe('#3753: the store serves a set-aside session again', () => {
+		type Latest = {
+			toJSON(meta?: boolean): Record<string, any>;
+			sync_status: string;
+			voided_by?: string | null;
+		};
+		type Doc = { id: string; getLatest(): Latest };
+		const notFound = { response: { status: 404, data: { code: 'wcpos_session_not_found' } } };
+		const marked = {
+			sync_status: 'failed',
+			sync_next_at: null,
+			sync_error: SESSION_SET_ASIDE,
+		} as const;
+		const refusedClosure = { sync_status: 'failed', sync_error: 'wcpos_session_not_found' };
+		const json = (doc: Doc) => doc.getLatest().toJSON();
+		const refresh = () => refreshSessions({ registerId: 'register', http, storeDB: db });
+		const postedIds = () => http.post.mock.calls.map(([, body]) => body.id).sort();
+		const add = (session: Doc, type: 'paid_in' | 'paid_out' = 'paid_in', amount = '30') =>
+			recordMovement(db, { sessionId: session.id, type, amount, reason: 'Float', actor: 7 });
+		let emitted: unknown[];
+		let restoredEvents: Subscription;
+		beforeEach(() => {
+			emitted = [];
+			restoredEvents = sessionRestored.subscribe((event) => emitted.push(event));
+		});
+		afterEach(() => restoredEvents.unsubscribe());
+		/** A queued close the store answered 404, its paid-in 30 refused with it, set aside. */
+		async function setAside(withVoid = false) {
+			const { session, row } = await closure();
+			const movement = await add(session);
+			const unsent: Doc[] = [movement];
+			const target = withVoid ? await add(session, 'paid_out', '5') : undefined;
+			if (target) {
+				await target.incrementalPatch({ sync_status: 'synced' });
+				unsent.push(await voidMovement(db, target.id, 7));
+			}
+			for (const doc of unsent)
+				await (doc as typeof movement).incrementalPatch({
+					sync_status: 'failed',
+					sync_error: 'wcpos_session_not_found',
+				});
+			http.post.mockRejectedValue(notFound);
+			await drain();
+			await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+			// The refresh after the reversal's refusal dropped its claim (`claimStands`).
+			await target?.incrementalPatch({ voided_by: null });
+			http.post.mockReset();
+			const before = { movement: json(movement), row: json(row) };
+			return { session, row, movement, reversal: unsent[1], target, before };
+		}
+		/** The store serves the session at `status` and answers a movement POST with what it stores. */
+		function serve(session: Doc, status: string, detail: Record<string, unknown> = {}) {
+			const listRow = serverListRow({ ...json(session), status, counted: null, closure_id: null });
+			http.get.mockImplementation(async (url: string) => ({
+				data: url === 'sessions' ? [listRow] : { ...listRow, movements: [], ...detail },
+			}));
+			http.post.mockReset().mockImplementation(async (url: string, body: Record<string, any>) => {
+				if (url !== 'movements') throw new Error(`unexpected ${url}`);
+				return { data: { ...body, actor: 7, voided_by: null, created_at_gmt: body.created_at } };
+			});
+		}
+		async function drawerOf() {
+			const engineDB = await createEngineDatabase(['orders', 'refunds']);
+			const ctx = { storeDB: db, userDB, siteUuid: 'site', engine: createFakeEngine(engineDB) };
+			try {
+				return await firstValueFrom(
+					observeRegisterDrawer(ctx, 'register').pipe(filter(Boolean), timeout(3000))
+				);
+			} finally {
+				await engineDB.close();
+			}
+		}
+		/** Current again, its cash back in the outbox and its close a refused one. */
+		async function expectUndone(session: Doc, row: Doc, unsent: Doc[], status = 'open') {
+			expect((await readCurrentSession(db, 'register'))?.id).toBe(session.id);
+			expect(json(session)).toMatchObject({ status, sync_status: 'synced', sync_error: null });
+			expect(sessionUnreachable(session.getLatest())).toBe(false);
+			expect(json(row)).toMatchObject({ ...refusedClosure, sync_next_at: null });
+			for (const doc of unsent)
+				expect(json(doc)).toMatchObject({
+					sync_status: 'pending',
+					sync_attempts: 0,
+					sync_error: null,
+				});
+			expect(await drawerOf()).toMatchObject({
+				refusedClose: true,
+				sessionUnreachable: false,
+				refusedMovements: [],
+			});
+		}
+		type Write = (next: Record<string, any>, prev: Record<string, any>) => boolean;
+		/** Throw once from the first write `match` picks on `name`, as a crash at that point would. */
+		function failOnce(name: 'cash_movements' | 'closures' | 'register_sessions', match: Write) {
+			let failed = false;
+			db[name].preSave((next, prev) => {
+				if (failed || !match(next, prev as Record<string, any>)) return;
+				failed = true;
+				throw new Error('disk');
+			}, false);
+		}
+		const secondRestored = (): Write => {
+			let seen = 0;
+			return (next, prev) =>
+				next.sync_status === 'pending' && prev.sync_status !== 'pending' && ++seen === 2;
+		};
+
+		it.each(['open', 'counting'])(
+			'(a) served %s, the whole set aside is undone',
+			async (status) => {
+				const { session, row, movement, before } = await setAside();
+				serve(session, status);
+				await refresh();
+				await expectUndone(session, row, [movement], status);
+				expect(json(movement)).toEqual({
+					...before.movement,
+					sync_status: 'pending',
+					sync_error: null,
+				});
+				const { sync_status, sync_error, ...closureFigures } = before.row;
+				expect(json(row)).toMatchObject(closureFigures);
+				await drain();
+				expect(http.post.mock.calls).toEqual([
+					[
+						'movements',
+						expect.objectContaining({ id: movement.id, amount: '30', reason: 'Float' }),
+					],
+				]);
+				expect(emitted).toEqual([{ sessionId: session.id, registerId: 'register' }]);
+			}
+		);
+
+		it('(b) a movement the store already holds is replayed under its id and counted once', async () => {
+			const { session, movement } = await setAside();
+			serve(session, 'open', {
+				movements: [serverMovementRow(json(movement) as CashMovementRow)],
+				expected: { cash: '130.0000' },
+				as_of_gmt: new Date().toISOString(),
+			});
+			await refresh();
+			await drain();
+			expect(postedIds()).toEqual([movement.id]);
+			expect(await db.cash_movements.count().exec()).toBe(1);
+			expect(movement.getLatest().sync_status).toBe('synced');
+			expect((await drawerOf()).expected.cash).toBe('130.0000');
+		});
+
+		it('(c) later refreshes never flip it back; it is sent and announced once', async () => {
+			const { session, row, movement } = await setAside();
+			serve(session, 'open');
+			const states = [];
+			for (let round = 0; round < 3; round++) {
+				await refresh();
+				states.push([session, row, movement].map(json));
+				await drain();
+			}
+			const sent = { ...states[0][2], sync_status: 'synced', voids: null, voided_by: null };
+			expect(states[1]).toEqual([states[0][0], states[0][1], sent]);
+			expect(states[2]).toEqual(states[1]);
+			expect(emitted).toHaveLength(1);
+			expect(postedIds()).toEqual([movement.id]);
+		});
+
+		it.each([
+			['after the first of two movements', 'cash_movements' as const, secondRestored],
+			[
+				"after the movements, before a reversal's claim",
+				'cash_movements' as const,
+				(): Write => (next, prev) => !!next.voided_by && !prev.voided_by,
+			],
+			['after the claims, before the closure', 'closures' as const, (): Write => () => true],
+			[
+				'after the closure, before the session write',
+				'register_sessions' as const,
+				(): Write => () => true,
+			],
+		])(
+			'(d) an undo interrupted %s is finished by the next refresh',
+			async (_point, name, match) => {
+				const { session, row, movement, reversal, target } = await setAside(true);
+				serve(session, 'open');
+				failOnce(name, match());
+				await expect(refresh()).rejects.toThrow('disk');
+				expect(json(session)).toMatchObject(marked);
+				if (name !== 'register_sessions') expect(json(row)).toMatchObject(marked);
+				expect(await readCurrentSession(db, 'register')).toBeNull();
+				await drain();
+				expect(http.post).not.toHaveBeenCalled();
+				expect(emitted).toEqual([]);
+				await refresh();
+				await expectUndone(session, row, [movement, reversal]);
+				expect(target!.getLatest().voided_by).toBe(reversal.id);
+				expect(emitted).toHaveLength(1);
+				await drain();
+				expect(postedIds()).toEqual([movement.id, reversal.id].sort());
+			}
+		);
+
+		it('(e) a movement already back in the outbox is not written again by the re-run', async () => {
+			const { session, movement, reversal } = await setAside(true);
+			serve(session, 'open');
+			failOnce('cash_movements', secondRestored());
+			await expect(refresh()).rejects.toThrow('disk');
+			const back = [movement, reversal].find((doc) => json(doc).sync_status === 'pending')!;
+			const { _rev, sync_attempts } = back.getLatest().toJSON(true);
+			await refresh();
+			expect(back.getLatest().toJSON(true)).toMatchObject({ _rev, sync_attempts });
+			await drain();
+			expect(postedIds().filter((id) => id === back.id)).toHaveLength(1);
+		});
+
+		it('(f) served closed, the set aside stands byte for byte, by list and by direct adopt', async () => {
+			const { session, row, movement, reversal, target } = await setAside(true);
+			const docs = [session, row, movement, reversal, target!];
+			const before = docs.map((doc) => doc.getLatest().toJSON(true));
+			serve(session, 'closed');
+			await refresh();
+			expect(docs.map((doc) => doc.getLatest().toJSON(true))).toEqual(before);
+			// A read from before the set aside: the merge itself refuses it too.
+			const stale = { exec: async () => null } as never;
+			jest.spyOn(db.register_sessions, 'findOne').mockReturnValueOnce(stale);
+			await adoptSessionRow(
+				db.register_sessions,
+				serverListRow({ ...json(session), status: 'closed' }) as never
+			);
+			expect(emitted).toEqual([]);
+			serve(session, 'open');
+			await refresh();
+			await expectUndone(session, row, [movement, reversal]);
+			expect(emitted).toHaveLength(1);
+		});
+
+		describe.each(['open', 'closed'])('(g) then served %s', (served) => {
+			it.each(['status 2xx', 'override refused', '404', '503', 'movement 2xx'])(
+				'a set aside made while the request is in flight, reply %s',
+				async (reply) => {
+					const { session, row } = await closure();
+					const movements = [await add(session), await add(session)];
+					if (reply !== 'movement 2xx')
+						for (const doc of movements) await doc.incrementalPatch({ sync_status: 'failed' });
+					http.post.mockImplementation(async (url: string, body: Record<string, any>) => {
+						if (http.post.mock.calls.length === 1)
+							await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+						if (reply === '404') throw notFound;
+						if (reply === '503') throw { response: { status: 503, data: {} } };
+						if (reply === 'override refused')
+							throw { response: { status: 403, data: { code: 'wcpos_override_refused' } } };
+						if (url !== 'movements') return { data: { ...json(session), status: body.status } };
+						return {
+							data: { ...body, actor: 7, voided_by: null, created_at_gmt: body.created_at },
+						};
+					});
+					await drain();
+					const sentId = reply === 'movement 2xx' ? http.post.mock.calls[0][1].id : null;
+					const unsent = movements.filter((doc) => doc.id !== sentId);
+					expect(unsent).toHaveLength(sentId ? 1 : 2);
+					if (sentId)
+						expect(json(movements.find((doc) => doc.id === sentId)!).sync_status).toBe('synced');
+					if (reply === 'override refused')
+						expect(logger.warn).toHaveBeenCalledWith(
+							'Register session close approval refused',
+							expect.anything()
+						);
+					for (const doc of [session, row, ...unsent]) expect(json(doc)).toMatchObject(marked);
+					serve(session, served);
+					await refresh();
+					if (served === 'closed') {
+						for (const doc of [session, row, ...unsent]) expect(json(doc)).toMatchObject(marked);
+						expect(emitted).toEqual([]);
+						return;
+					}
+					await expectUndone(session, row, unsent);
+					await drain();
+					expect(postedIds()).toEqual(unsent.map((doc) => doc.id).sort());
+				}
+			);
+		});
+
+		it('(h) an interrupted set aside, served open, is undone and its cash sent once', async () => {
+			const { session, row } = await closure();
+			const movement = await add(session);
+			await movement.incrementalPatch({
+				sync_status: 'failed',
+				sync_error: 'wcpos_session_not_found',
+			});
+			http.post.mockRejectedValue(notFound);
+			await drain();
+			for (const doc of [movement, row]) await doc.incrementalPatch(marked);
+			expect(json(session)).toMatchObject({
+				sync_status: 'failed',
+				sync_error: 'wcpos_session_not_found',
+			});
+			serve(session, 'open');
+			await refresh();
+			await expectUndone(session, row, [movement]);
+			expect(emitted).toHaveLength(1);
+			await drain();
+			expect(postedIds()).toEqual([movement.id]);
+		});
+
+		it('(n) an interrupted set aside, served closed, stays set aside', async () => {
+			const { session, row } = await closure();
+			const movement = await add(session);
+			await movement.incrementalPatch({
+				sync_status: 'failed',
+				sync_error: 'wcpos_session_not_found',
+			});
+			http.post.mockRejectedValue(notFound);
+			await drain();
+			for (const doc of [movement, row]) await doc.incrementalPatch(marked);
+			expect(json(session)).toMatchObject({ sync_error: 'wcpos_session_not_found' });
+			const before = [movement, row].map((doc) => doc.getLatest().toJSON(true));
+			serve(session, 'closed');
+			await refresh();
+			await refresh();
+			expect([movement, row].map((doc) => doc.getLatest().toJSON(true))).toEqual(before);
+			expect(json(session)).toMatchObject({ status: 'closed' });
+			expect(emitted).toEqual([]);
+			await drain();
+			expect(http.post).not.toHaveBeenCalled();
+		});
+
+		it('(i) after an undo the store answers 404 again: Set aside marks all three again', async () => {
+			const { session, row, movement } = await setAside();
+			serve(session, 'open');
+			await refresh();
+			http.post.mockReset().mockRejectedValue(notFound);
+			await drain();
+			expect((await drawerOf()).sessionUnreachable).toBe(true);
+			await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+			for (const doc of [session, row, movement]) expect(json(doc)).toMatchObject(marked);
+			expect(await readCurrentSession(db, 'register')).toBeNull();
+		});
+
+		it('(j) the 409 session_already_open adopt of a set-aside session undoes it, once', async () => {
+			const { session, row } = await setAside();
+			await open();
+			serve(session, 'open');
+			http.post.mockRejectedValueOnce({
+				response: {
+					status: 409,
+					data: { code: 'wcpos_session_already_open', data: { session_id: session.id } },
+				},
+			});
+			await drain();
+			expect(json(session)).toMatchObject({
+				status: 'open',
+				sync_status: 'synced',
+				sync_error: null,
+			});
+			expect(json(row)).toMatchObject(refusedClosure);
+			expect(emitted).toEqual([{ sessionId: session.id, registerId: 'register' }]);
+		});
+
+		it("(k) a set-aside reversal claims its target again, through the refresh's detail adopt", async () => {
+			const { session, reversal, target } = await setAside(true);
+			expect(target!.getLatest().voided_by).toBeNull();
+			serve(session, 'open', { movements: [serverMovementRow(json(target!) as CashMovementRow)] });
+			await refresh();
+			expect(target!.getLatest().voided_by).toBe(reversal.id);
+			expect(json(reversal)).toMatchObject({ sync_status: 'pending', voids: target!.id });
+		});
+
+		it('(o) a restored reversal leaves a target another reversal already voided', async () => {
+			const { session, movement, reversal, target } = await setAside(true);
+			const other = '0a7c1e52-4b8d-4f3e-9d61-5c2b8e7f1a90';
+			await target!.incrementalPatch({ voided_by: other });
+			serve(session, 'open');
+			await refresh();
+			expect(target!.getLatest().voided_by).toBe(other);
+			for (const doc of [movement, reversal])
+				expect(json(doc)).toMatchObject({ sync_status: 'pending', sync_error: null });
+		});
+
+		it('(l) M12: a set aside clears the register live copy', async () => {
+			const session = await open();
+			await recordLiveSession(userDB, 'site', 'register', {
+				session_id: session.id,
+				status: 'open',
+				opened_at_gmt: session.opened_at_gmt,
+				opened_by: null,
+				acknowledged: true,
+				expected_float: null,
+				counted_float: null,
+				business_day: null,
+			});
+			expect(readLiveSession('site', 'register')?.session_id).toBe(session.id);
+			await setAsideSession(db, session.id, { userDB, siteUuid: 'site' });
+			expect(readLiveSession('site', 'register')).toBeNull();
+		});
+
+		it('a set aside undone and made again counts the movement the undo put back', async () => {
+			const { session, movement } = await setAside();
+			serve(session, 'open');
+			await refresh();
+			expect(json(movement).sync_status).toBe('pending');
+			await expect(setAsideSession(db, session.id, { userDB, siteUuid: 'site' })).resolves.toEqual({
+				unsentMovements: 1,
+			});
+		});
 	});
 });

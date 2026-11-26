@@ -243,7 +243,7 @@ test('the E2E aggregator runs on cancellation and fails the cancelled deploy', (
 test('the E2E aggregator fails closed when change detection fails', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
 
-	assert.deepEqual([...gate.needs].sort(), ['changes', 'cold-start', 'deploy', 'e2e']);
+	assert.deepEqual([...gate.needs].sort(), ['changes', 'cold-start', 'deploy', 'e2e', 'e2e-setup']);
 	assert.equal(gate.steps[0].env.CHANGES_RESULT, '${{ needs.changes.result }}');
 
 	const failedDetection = runShell(gate.steps[0].run, {
@@ -272,6 +272,104 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 		},
 	});
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
+});
+
+test('the E2E gate passes a superseded main push and only a push', () => {
+	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
+	const env = {
+		CHANGES_RESULT: 'success',
+		COLD_START_RESULT: 'cancelled',
+		DEPLOY_RESULT: 'success',
+		DEPLOY_URL: 'https://preview.test',
+		E2E_RESULT: 'skipped',
+		EVENT_NAME: 'push',
+		SKIP_E2E_INPUT: 'false',
+		SUPERSEDED: 'true',
+		SUPERSEDED_BY: 'bbb',
+	};
+
+	const push = runShell(gate.steps[0].run, { env });
+	assert.equal(push.status, 0, push.stdout + push.stderr);
+	assert.match(push.stdout, /superseded by main@bbb/);
+
+	const pullRequest = runShell(gate.steps[0].run, {
+		env: { ...env, EVENT_NAME: 'pull_request', COLD_START_RESULT: 'skipped', BASE_REF: 'main' },
+	});
+	assert.notEqual(pullRequest.status, 0, pullRequest.stdout + pullRequest.stderr);
+	assert.match(pullRequest.stdout + pullRequest.stderr, /E2E shards were skipped/);
+});
+
+test('e2e-setup skips a superseded main push only when the newer head is deploying', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const setup = workflow.jobs['e2e-setup'];
+	const head = setup.steps[0];
+	assert.equal(head.id, 'head', 'the superseded check must be the first step');
+	assert.match(head.if, /github\.event_name == 'push'/);
+	assert.match(head.if, /github\.ref == 'refs\/heads\/main'/);
+	assert.equal(head['continue-on-error'], true);
+	for (const name of [
+		'🏗 Setup repository',
+		'🏗 Setup monorepo',
+		'🎭 Install Playwright browsers',
+		"🔑 Log in and sync every shard's cashier, one at a time",
+		'🔐 Encrypt the shared auth state',
+	]) {
+		assert.ok(
+			findStep(workflow, 'e2e-setup', name).if?.includes("steps.head.outputs.superseded != 'true'"),
+			`${name} must skip when superseded`
+		);
+	}
+	assert.ok(workflow.jobs.e2e.if.includes("needs.e2e-setup.outputs.superseded != 'true'"));
+
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-e2e-coalesce-'));
+	const binDir = path.join(workspace, 'bin');
+	const output = path.join(workspace, 'output');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		`#!/usr/bin/env bash
+case "$2" in
+  *commits/main*) printf '%s' "$FAKE_HEAD" ;;
+  *"/runs?"*) printf '%s' "$FAKE_RUN" ;;
+  */jobs*) printf '%s' "$FAKE_DEPLOY" ;;
+esac
+exit "\${FAKE_EXIT:-0}"
+`,
+		{ mode: 0o755 }
+	);
+	const run = (fake) => {
+		writeFileSync(output, '');
+		const result = runShell(head.run, {
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GITHUB_SHA: 'aaa',
+				GITHUB_REPOSITORY: 'wcpos/monorepo',
+				GITHUB_OUTPUT: output,
+				FAKE_EXIT: '0',
+				...fake,
+			},
+		});
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		return { result, output: readFileSync(output, 'utf8') };
+	};
+
+	try {
+		assert.equal(run({ FAKE_HEAD: 'aaa' }).output, '');
+
+		const newer = { FAKE_HEAD: 'bbb', FAKE_RUN: '7' };
+		const running = run({ ...newer, FAKE_DEPLOY: 'running' });
+		assert.match(running.output, /^superseded=true\nhead=bbb$/m);
+		assert.match(running.result.stdout, /::notice title=E2E coalesced::.*main@bbb \(run 7\)/);
+		assert.match(run({ ...newer, FAKE_DEPLOY: 'success' }).output, /^superseded=true$/m);
+		// A docs-only head skips its deploy and runs no E2E: never superseded by it.
+		assert.equal(run({ ...newer, FAKE_DEPLOY: 'skipped' }).output, '');
+		assert.equal(run({ ...newer, FAKE_DEPLOY: 'absent' }).output, '');
+		assert.equal(run({ FAKE_HEAD: 'bbb', FAKE_RUN: '' }).output, '');
+		// An API error fails open, even when the output looks superseded.
+		assert.equal(run({ ...newer, FAKE_DEPLOY: 'running', FAKE_EXIT: '1' }).output, '');
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
 });
 
 test('every job lists each job whose needs context it reads', () => {
@@ -316,7 +414,15 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 	// The job has no checkout, so gh must be told the repo explicitly.
 	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
 	assert.ok([ledger.needs].flat().includes('cold-start'), 'ledger must see cold-start too');
-	const run = ({ gate, deploy = 'success', e2e = 'success', cold = 'success', issues }) => {
+	assert.ok([ledger.needs].flat().includes('e2e-setup'), 'ledger must see the superseded flag');
+	const run = ({
+		gate,
+		deploy = 'success',
+		e2e = 'success',
+		cold = 'success',
+		issues,
+		superseded = '',
+	}) => {
 		writeFileSync(trace, '');
 		const result = runShell(ledger.steps[0].run, {
 			env: {
@@ -327,6 +433,7 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 				DEPLOY_RESULT: deploy,
 				E2E_RESULT: e2e,
 				COLD_START_RESULT: cold,
+				SUPERSEDED: superseded,
 				SHA: '0123456789abcdef',
 				RUN_URL: 'https://github.test/actions/runs/1',
 			},
@@ -377,6 +484,12 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 		});
 		assert.equal(supersededDeploy.result.status, 0, supersededDeploy.result.stdout);
 		assert.equal(supersededDeploy.trace, '');
+
+		// A main push coalesced into a newer head: a green gate must not close the issue.
+		const coalesced = run({ gate: 'success', issues: '[{"number":42}]', superseded: 'true' });
+		assert.equal(coalesced.result.status, 0, coalesced.result.stdout + coalesced.result.stderr);
+		assert.equal(coalesced.trace, '');
+		assert.match(coalesced.result.stdout, /superseded/i);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
@@ -1889,7 +2002,7 @@ test('main-lane web E2E shards queue across runs per dev store', () => {
 	assert.equal(concurrency['cancel-in-progress'], false);
 	assert.ok(
 		concurrency.group.includes(
-			"format('e2e-store-{0}-slot-{1}', needs.changes.outputs.lane, fromJSON('[0,1,2,3,2,1,3]')[matrix.shardIndex])"
+			"format('e2e-store-{0}-slot-{1}', needs.changes.outputs.lane, fromJSON('[0,1,2,3,3,2,1]')[matrix.shardIndex])"
 		)
 	);
 	assert.match(concurrency.group, /github\.event_name == 'schedule'/);
@@ -1897,7 +2010,7 @@ test('main-lane web E2E shards queue across runs per dev store', () => {
 	assert.match(concurrency.group, /needs\.changes\.outputs\.lane == ''/);
 });
 
-test('main-lane web E2E shards queue in three store slots, paired 1+5, 2+4, 3+6', () => {
+test('main-lane web E2E shards queue in three store slots, paired 1+6, 2+5, 3+4', () => {
 	// Desk ruling 2026-11-18: at most 3 shards per dev store across all runs.
 	// The slot comes from an index into a literal array, never a matrix
 	// `include`, which would add stray jobs to a one-shard narrowed run.
@@ -1908,7 +2021,7 @@ test('main-lane web E2E shards queue in three store slots, paired 1+5, 2+4, 3+6'
 	assert.ok(slotsLiteral, 'the slot index into a literal array is gone');
 	const slots = JSON.parse(slotsLiteral[1]);
 	const slotOf = Object.fromEntries([1, 2, 3, 4, 5, 6].map((shard) => [shard, slots[shard]]));
-	assert.deepEqual(slotOf, { 1: 1, 5: 1, 2: 2, 4: 2, 3: 3, 6: 3 });
+	assert.deepEqual(slotOf, { 1: 1, 6: 1, 2: 2, 5: 2, 3: 3, 4: 3 });
 	assert.ok(!('include' in strategy.matrix), 'a matrix include adds stray jobs to narrowed runs');
 	assert.equal(concurrency['cancel-in-progress'], false);
 	assert.equal(concurrency.queue, 'max');
@@ -1932,7 +2045,10 @@ test('a failed shared login fails e2e-setup and the shards refuse to start', () 
 	assert.equal(setup.outputs.login, '${{ steps.setup.outcome }}');
 	const login = setup.steps.find(({ id }) => id === 'setup');
 	assert.equal(login['continue-on-error'], true);
-	assert.equal(login.if, "steps.key.outputs.present == 'true'");
+	assert.equal(
+		login.if,
+		"steps.key.outputs.present == 'true' && steps.head.outputs.superseded != 'true'"
+	);
 
 	const fail = findStep(workflow, 'e2e-setup', '🛑 Fail when the shared login failed');
 	assert.equal(fail.if, "steps.setup.outcome == 'failure'");
@@ -2126,7 +2242,10 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	assert.ok(!steps.some((candidate) => candidate.with?.key?.includes('e2e-auth')));
 
 	// Without the key (forks) nothing logs in here and the shards set up alone.
-	assert.equal(run.if, "steps.key.outputs.present == 'true'");
+	assert.equal(
+		run.if,
+		"steps.key.outputs.present == 'true' && steps.head.outputs.superseded != 'true'"
+	);
 	assert.equal(upload.if, "steps.setup.outcome == 'success'");
 	assert.equal(setup.outputs.state, "${{ steps.upload.outcome == 'success' && 'ready' || '' }}");
 	const shardSteps = jobs.e2e.steps.filter(({ name }) => /shared auth state/.test(name ?? ''));
