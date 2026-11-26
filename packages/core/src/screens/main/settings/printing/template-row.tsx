@@ -46,7 +46,11 @@ export function TemplateRow({
 		<DeviceRow
 			testID={`template-row-${templateId}`}
 			name={template.title}
-			tag={templateTypeLabel(template, t('settings.template_type_thermal'))}
+			tag={templateTypeLabel(
+				template,
+				t('settings.template_type_thermal'),
+				t('settings.template_type_html')
+			)}
 		>
 			<DeviceRowActions>
 				<View testID={`template-row-${templateId}-printer-select`} className="w-64">

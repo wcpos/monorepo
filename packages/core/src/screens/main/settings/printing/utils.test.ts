@@ -40,6 +40,12 @@ describe('templateTypeLabel', () => {
 	it('labels a non-escpos template as "HTML"', () => {
 		expect(templateTypeLabel({ output_type: 'html', paper_width: null })).toBe('HTML');
 	});
+
+	it('uses the supplied HTML label for a non-escpos template', () => {
+		expect(templateTypeLabel({ output_type: 'html' }, undefined, 'Document HTML')).toBe(
+			'Document HTML'
+		);
+	});
 });
 
 describe('printing settings copy', () => {
