@@ -573,7 +573,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// durable execution is allowed: the demand plane is uncapped by ruling (#1134 item 2).
 	// A refund history refresh runs on its own lane so its walk holds neither a browse window nor a picker refresh (#3782).
 	type Lane = 'search' | 'durable' | 'reference' | 'refunds';
-	const running = { search: false, durable: false, reference: false, refunds: false };
+	const running: Record<Lane, boolean> = {
+		search: false,
+		durable: false,
+		reference: false,
+		refunds: false,
+	};
 	const laneOf = (entry: QueuedRequirement): Lane => {
 		if (entry.requirement.kind === 'search') return 'search';
 		if (entry.requirement.kind === 'refresh' && entry.requirement.collection === 'refunds')
@@ -1804,8 +1809,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	}
 
 	return {
-		hasPendingWork: () =>
-			running.search || running.durable || running.reference || queue.length > 0,
+		hasPendingWork: () => Object.values(running).some(Boolean) || queue.length > 0,
 		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
 		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
 		liveOrderBrowseQueryKeys: () => {

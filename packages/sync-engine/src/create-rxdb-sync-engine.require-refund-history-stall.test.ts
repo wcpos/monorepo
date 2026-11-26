@@ -123,6 +123,39 @@ describe('the refund history walk yields the require lane to browse windows', ()
 		}
 	}, 30_000);
 
+	it('a refund history refresh keeps product trickle waiting while the refunds lane runs (#3782)', async () => {
+		const gate = Promise.withResolvers<void>();
+		const harness = await createEngineHarness({
+			startAtMs,
+			routes: {
+				...routes,
+				'/refunds': async (request: EngineHarnessRequest) => {
+					if (pageOf(request) === 2) await gate.promise;
+					return routes['/refunds'](request);
+				},
+			},
+		});
+		try {
+			const { engine } = harness;
+			engine.reconfigure({ pullBatchSize: 100 });
+			const refresh = engine.require(refundRefresh);
+			await vi.waitFor(() => expect(harness.requests.filter(isRefund).map(pageOf)).toContain(2), {
+				timeout: 5_000,
+			});
+			await expect(engine.sync('product-trickle')).resolves.toMatchObject({
+				status: 'skipped',
+				reason: 'interactive-demand',
+			});
+			expect(harness.requests.filter(({ path }) => path.endsWith('/products'))).toHaveLength(0);
+			gate.resolve();
+			await refresh.ready;
+			refresh.release();
+		} finally {
+			gate.resolve();
+			await harness.dispose();
+		}
+	}, 30_000);
+
 	it('a refund history refresh does not hold a picker refresh declared after it', async () => {
 		const gate = Promise.withResolvers<void>();
 		const harness = await createEngineHarness({
