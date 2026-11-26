@@ -57,6 +57,35 @@ function decodeRefundHistoryCheckpoint(
 	return { lastWalkStartedAtMs, lastFullWalkStartedAtMs };
 }
 
+function decodeWalk(raw: string | null, taskId: string, perPage: number, nowMs: number) {
+	if (raw === null) return null;
+	try {
+		const { v, walk } = JSON.parse(raw);
+		if (v !== 1 || walk?.taskId !== taskId || walk.perPage !== perPage) return null;
+		const { page, after, ids, startedAtMs, lastFullWalkStartedAtMs }: Record<string, unknown> =
+			walk;
+		if (
+			typeof page !== 'number' ||
+			!Number.isSafeInteger(page) ||
+			page < 1 ||
+			typeof after !== 'string' ||
+			!Array.isArray(ids) ||
+			!ids.every((id) => typeof id === 'string') ||
+			typeof startedAtMs !== 'number' ||
+			!Number.isFinite(startedAtMs) ||
+			typeof lastFullWalkStartedAtMs !== 'number' ||
+			!Number.isFinite(lastFullWalkStartedAtMs) ||
+			lastFullWalkStartedAtMs > startedAtMs ||
+			startedAtMs > nowMs ||
+			nowMs - startedAtMs >= REFUND_HISTORY_FULL_WALK_EVERY_MS
+		)
+			return null;
+		return { page, perPage, after, ids, startedAtMs, lastFullWalkStartedAtMs };
+	} catch {
+		return null;
+	}
+}
+
 export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDocument> & {
 	/** Persisted history walk checkpoint (#3340); absent means every history walk is full. */
 	historyCheckpoint?: RefundHistoryCheckpointStore;
@@ -123,6 +152,7 @@ export function createRefundsSchedulerFetcher(
 			ids: string[];
 			startedAtMs: number;
 			failed: boolean;
+			last: RefundHistoryCheckpoint | null;
 			lastFullWalkStartedAtMs: number; // this walk's start when it is full
 		}
 	>();
@@ -145,9 +175,9 @@ export function createRefundsSchedulerFetcher(
 		if (!walk) {
 			const startedAtMs = input.nowMs?.() ?? Date.now();
 			const windowStartMs = startedAtMs - HISTORY_DAYS * 86400000;
-			const last = historyCheckpoint
-				? decodeRefundHistoryCheckpoint(await historyCheckpoint.get(), startedAtMs)
-				: null;
+			const raw = (await historyCheckpoint?.get()) ?? null;
+			const last = decodeRefundHistoryCheckpoint(raw, startedAtMs);
+			const perPage = Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
 			// Delta only while a full walk started less than a day ago; otherwise walk the window.
 			const delta =
 				last !== null &&
@@ -159,12 +189,15 @@ export function createRefundsSchedulerFetcher(
 				: windowStartMs;
 			walk = {
 				page: 1,
-				perPage: Math.min(task.limit, WOO_REST_MAX_PER_PAGE),
+				perPage,
 				ids: [],
 				after: wooGmtDate(Math.floor(afterMs / 1000)),
 				startedAtMs,
 				failed: false,
 				lastFullWalkStartedAtMs: delta?.lastFullWalkStartedAtMs ?? startedAtMs,
+				last,
+				// Resume with one page of overlap so deletions cannot skip rows shifted back a page (#3782).
+				...decodeWalk(raw, task.id, perPage, startedAtMs),
 			};
 		}
 		const query = new URLSearchParams({
@@ -183,7 +216,7 @@ export function createRefundsSchedulerFetcher(
 			const rows = (await response.json()) as WooRefundPayload[];
 			applied = await admitRefundPage(input, rows);
 			const pageIds = applied.map((document) => document.uuid);
-			walk.ids.push(...pageIds);
+			const ids = [...new Set([...walk.ids, ...pageIds])];
 			// WooCommerce always sends the page count; a short page is the end only when it does not.
 			const totalPages = Number(response.headers.get('X-WP-TotalPages'));
 			completed = totalPages > 0 ? walk.page >= totalPages : rows.length < walk.perPage;
@@ -194,9 +227,29 @@ export function createRefundsSchedulerFetcher(
 				pageIds,
 				completed,
 				undefined,
-				completed ? walk.ids : undefined
+				completed ? ids : undefined
 			);
+			if (!completed && historyCheckpoint && !walk.failed) {
+				const { after, perPage, page, startedAtMs, lastFullWalkStartedAtMs } = walk;
+				await historyCheckpoint.set(
+					JSON.stringify({
+						v: 1,
+						...walk.last,
+						walk: {
+							taskId: task.id,
+							after,
+							perPage,
+							page,
+							startedAtMs,
+							lastFullWalkStartedAtMs,
+							ids,
+						},
+					})
+				);
+			}
+			walk.ids = ids;
 		} catch (error) {
+			if (context?.signal?.aborted) throw error;
 			// A failed walk never writes the checkpoint, so the walk after it is full (#3340).
 			if (historyCheckpoint) {
 				walk.failed = true;

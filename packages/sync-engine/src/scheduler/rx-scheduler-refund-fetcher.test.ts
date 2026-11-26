@@ -263,6 +263,7 @@ describe('refund history checkpoint (#3340)', () => {
 		const state = { now: T0, failNext: false };
 		const requests: URL[] = [];
 		const local = new Map<number, LocalRefundDocument>();
+		const coverage: BuildCoverageDocumentsFromQueryResultInput[] = [];
 		const port = {
 			get: vi.fn(async () => store.get(KEY) ?? null),
 			set: vi.fn(async (value: string) => {
@@ -286,9 +287,15 @@ describe('refund history checkpoint (#3340)', () => {
 					},
 				},
 				...(historyCheckpoint ? { historyCheckpoint } : {}),
-				fetcher: async (url) => {
+				coverageRepository: {
+					recordQueryResult: async (value) => {
+						coverage.push(value);
+					},
+				},
+				fetcher: async (url, init) => {
 					const parsed = new URL(url);
 					requests.push(parsed);
+					if (init?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
 					if (state.failNext) {
 						state.failNext = false;
 						return new Response('failure', { status: 500 });
@@ -316,7 +323,7 @@ describe('refund history checkpoint (#3340)', () => {
 		};
 		const blob = () => (store.has(KEY) ? JSON.parse(store.get(KEY)!) : undefined);
 		const afters = (urls: URL[]) => urls.map((u) => u.searchParams.get('after'));
-		return { state, requests, local, port, store, build, fetcher, walkAll, blob, afters };
+		return { state, requests, local, port, store, build, fetcher, walkAll, blob, afters, coverage };
 	}
 
 	// Revert the completion set: no checkpoint is written.
@@ -461,16 +468,113 @@ describe('refund history checkpoint (#3340)', () => {
 		expect(h.port.get).not.toHaveBeenCalled();
 	});
 
-	// Revert the completed guard on the checkpoint write: page 1 writes the blob and the restart walks delta.
-	it('F11: a walk interrupted after page 1 writes no checkpoint and the restart walks full', async () => {
+	it('F11: a walk interrupted after page 1 resumes on a fresh fetcher from that page', async () => {
 		const h = checkpointSetup(baseRows());
 		expect(await h.fetcher(task())).toMatchObject({ completed: false });
-		expect(h.port.set).not.toHaveBeenCalled();
-		expect(h.blob()).toBeUndefined();
 		const restarted = h.build();
 		h.state.now += 31 * MIN;
 		const requests = await h.walkAll(task(), restarted);
-		expect(h.afters(requests)).toEqual(Array(3).fill('2026-06-16T00:31:00'));
+		expect(requests.map((url) => url.searchParams.get('page'))).toEqual(['1', '2', '3']);
+		expect(h.afters(requests)).toEqual(Array(3).fill('2026-06-16T00:00:00'));
 		expect(h.local.size).toBe(250);
+		expect(h.blob()).toEqual({ v: 1, lastWalkStartedAtMs: T0, lastFullWalkStartedAtMs: T0 });
+	});
+
+	it('R1: an aborted full walk resumes from its last page and completes its coverage once', async () => {
+		const h = checkpointSetup(baseRows());
+		expect(await h.fetcher(task())).toMatchObject({ completed: false });
+		expect(await h.fetcher(task())).toMatchObject({ completed: false });
+		const controller = new AbortController();
+		controller.abort();
+		await expect(h.fetcher(task(), { signal: controller.signal })).rejects.toMatchObject({
+			name: 'AbortError',
+		});
+		expect(h.requests.at(-1)?.searchParams.get('page')).toBe('3');
+		expect(h.port.remove).not.toHaveBeenCalled();
+		expect(h.blob()).toEqual({ v: 1, walk: expect.objectContaining({ page: 2 }) });
+		h.state.now += MIN;
+		const resumed = await h.walkAll(task(), h.build());
+		expect(resumed.map((url) => url.searchParams.get('page'))).toEqual(['2', '3']);
+		expect(h.afters(resumed)).toEqual(Array(2).fill('2026-06-16T00:00:00'));
+		const complete = h.coverage.filter((value) => value.complete);
+		expect(complete).toHaveLength(1);
+		expect(complete[0].expectedRecordIds).toHaveLength(250);
+		expect(new Set(complete[0].expectedRecordIds).size).toBe(250);
+		expect(h.blob()).toEqual({ v: 1, lastWalkStartedAtMs: T0, lastFullWalkStartedAtMs: T0 });
+	});
+
+	it('R2: an aborted delta walk keeps the last completed walk for older readers', async () => {
+		const rows = baseRows();
+		const h = checkpointSetup(rows);
+		await h.walkAll();
+		rows.push(
+			...Array.from({ length: 150 }, (_, index) => stamped(251 + index, '2026-09-16T00:05:00'))
+		);
+		h.state.now += 31 * MIN;
+		expect(await h.fetcher(task())).toMatchObject({ completed: false });
+		const controller = new AbortController();
+		controller.abort();
+		await expect(h.fetcher(task(), { signal: controller.signal })).rejects.toMatchObject({
+			name: 'AbortError',
+		});
+		expect(h.requests.at(-1)?.searchParams.get('page')).toBe('2');
+		expect(h.blob()).toMatchObject({
+			v: 1,
+			lastWalkStartedAtMs: T0,
+			lastFullWalkStartedAtMs: T0,
+			walk: { page: 1 },
+		});
+		h.state.now += MIN;
+		const resumed = await h.walkAll(task(), h.build());
+		expect(resumed.map((url) => url.searchParams.get('page'))).toEqual(['1', '2']);
+		expect(h.afters(resumed)).toEqual(Array(2).fill('2026-09-15T00:00:00'));
+		expect(h.blob()).toEqual({
+			v: 1,
+			lastWalkStartedAtMs: T0 + 31 * MIN,
+			lastFullWalkStartedAtMs: T0,
+		});
+	});
+
+	it.each([
+		{ startedAtMs: T0 - 25 * 60 * MIN },
+		{ perPage: 50 },
+		{ taskId: 'other' },
+		{ ids: 'not an array' },
+		{ page: 0 },
+		{ startedAtMs: T0 + MIN },
+	])('R3: an invalid walk record %o falls back to the completed checkpoint', async (invalid) => {
+		const stored = JSON.stringify({
+			v: 1,
+			lastWalkStartedAtMs: T0 - 30 * MIN,
+			lastFullWalkStartedAtMs: T0 - 30 * MIN,
+			walk: {
+				taskId: task().id,
+				after: '2026-06-16T00:00:00',
+				perPage: 100,
+				page: 2,
+				startedAtMs: T0,
+				lastFullWalkStartedAtMs: T0 - 25 * 60 * MIN,
+				ids: [],
+				...invalid,
+			},
+		});
+		const h = checkpointSetup(baseRows(), new Map([[KEY, stored]]));
+		const requests = await h.walkAll();
+		expect(requests.map((url) => url.searchParams.get('page'))).toEqual(['1']);
+		expect(h.afters(requests)).toEqual(['2026-09-14T23:30:00']);
+	});
+
+	it('R4: a non-abort error after a resumable page still forces the next walk full', async () => {
+		const h = checkpointSetup(baseRows());
+		expect(await h.fetcher(task())).toMatchObject({ completed: false });
+		expect(h.blob()).toMatchObject({ walk: { page: 1 } });
+		h.state.failNext = true;
+		await expect(h.fetcher(task())).rejects.toThrow('500');
+		expect(h.requests.at(-1)?.searchParams.get('page')).toBe('2');
+		expect(h.blob()).toBeUndefined();
+		h.state.now += MIN;
+		const next = await h.walkAll(task(), h.build());
+		expect(next.map((url) => url.searchParams.get('page'))).toEqual(['1', '2', '3']);
+		expect(h.afters(next)).toEqual(Array(3).fill('2026-06-16T00:01:00'));
 	});
 });
