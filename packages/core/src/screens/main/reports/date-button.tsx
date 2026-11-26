@@ -124,7 +124,7 @@ export function DateButton({
 	React.useEffect(() => {
 		if (openInitially) trigger.current?.open();
 	}, [openInitially]);
-	const [selectingStart, setSelectingStart] = React.useState(scope.from !== scope.to);
+	const [selectingStart, setSelectingStart] = React.useState(true);
 	// The visible month, so the header arrows stop at the reach and at today's month instead of
 	// paging into months with no usable day.
 	const [visibleMonth, setVisibleMonth] = React.useState(() => scope.from.slice(0, 7));
@@ -148,7 +148,7 @@ export function DateButton({
 		const end = to < start ? start : to > today ? today : to;
 		onScopeChange({ ...scope, from: start, to: end });
 		setDraft({ from: parseISO(start), to: parseISO(end) });
-		setSelectingStart(start !== end);
+		setSelectingStart(true);
 		return true;
 	};
 
@@ -173,7 +173,7 @@ export function DateButton({
 				if (value) {
 					setDraft({ from: parseISO(scope.from), to: parseISO(scope.to) });
 					setVisibleMonth(scope.from.slice(0, 7));
-					setSelectingStart(scope.from !== scope.to);
+					setSelectingStart(true);
 					// A locked deep link opens the picker to show its hint; only a cashier's own tap clears it.
 					if (!linkOpen.current) setLocked('');
 					linkOpen.current = false;
