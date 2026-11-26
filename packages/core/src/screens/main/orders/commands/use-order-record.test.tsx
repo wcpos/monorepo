@@ -3,7 +3,12 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { useOrderRecord } from './use-order-record';
+
+jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ store: null }) }));
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
 /**
  * The real write chain (`localPatch` → `applyLocalPatch` → `patchAndEnqueueEngineResident`),
@@ -135,6 +140,24 @@ describe('the Orders command never stamps this device on an order (Edit tab writ
 		});
 		expect(mockWrite).not.toHaveBeenCalled();
 		expect(mockStored.payload.meta_data).toEqual(identity);
+	});
+
+	it('E6 refuses a resolver moving the landing payload and notifies once', async () => {
+		seed([{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }]);
+		const { result } = renderHook(() => useOrderRecord());
+		Object.assign(mockStored.payload, { refunds: [{ id: 7 }], billing: { country: 'US' } });
+		const warn = jest.mocked(getLogger(['test']).warn);
+		warn.mockClear();
+		expect(
+			await result.current.saveOrderFields(order, () => ({ billing: { country: 'GB' } }))
+		).toBe(false);
+		expect(mockWrite).not.toHaveBeenCalled();
+		expect(mockStored.payload.billing).toEqual({ country: 'US' });
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith('pos_cart.tax_location_locked', {
+			showToast: true,
+			context: { orderId: 'order-uuid' },
+		});
 	});
 
 	it('a reopen still stamps this device’s register and till (ledger line 10)', async () => {

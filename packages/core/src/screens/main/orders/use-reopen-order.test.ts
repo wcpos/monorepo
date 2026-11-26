@@ -70,6 +70,7 @@ jest.mock('@wcpos/query/mutations', () => ({
 	patchEngineResident: jest.fn(),
 }));
 jest.mock('../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: null }),
 	useStoreSession: () => ({
 		store: { id: 1 },
 		wpCredentials: { id: 7 },

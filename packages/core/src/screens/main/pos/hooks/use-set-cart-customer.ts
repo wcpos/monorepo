@@ -1,13 +1,16 @@
 import * as React from 'react';
 
 import { isActiveLineItem } from '@wcpos/order-math';
-import { useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, POS_META_KEYS } from '@wcpos/sync-core';
 import type { EngineWarning } from '@wcpos/order-math';
 
 import { useCartConfigReader } from './use-cart-config';
 import { readCatalogTaxStatuses } from './use-coupon-context';
 import { retaxForCustomerWrite } from '../commands/retax-for-customer-write';
+import { refusesTaxLocationMove } from '../commands/tax-location-lock';
+import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
+import { useAppState } from '../../../../contexts/app-state';
 import { useCartCommand } from '../commands/use-cart-command';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { useServerOwnsMoneyReader } from '../contexts/order-money-divergence';
@@ -41,6 +44,8 @@ export interface CartCustomerFields {
 export const useSetCartCustomer = () => {
 	const command = useCartCommand('cart.customer.set');
 	const configForOrder = useCartConfigReader();
+	const base = useBaseTaxLocation();
+	const basis = useDocField(useAppState().store, (value) => value.tax_based_on);
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const runtime = useQueryRuntime();
@@ -80,6 +85,8 @@ export const useSetCartCustomer = () => {
 						let warnings: readonly EngineWarning[] = [];
 						const data = (currentPayload: OrderPayload) => {
 							warnings = [];
+							if (refusesTaxLocationMove(currentPayload, intent, base, basis))
+								return { deny: { reasonKey: 'pos_cart.tax_location_locked' } };
 							const retaxed = retaxForCustomerWrite(currentPayload, intent, {
 								configForOrder,
 								ownedElsewhere: serverOwnsMoney(target.uuid),
@@ -97,6 +104,6 @@ export const useSetCartCustomer = () => {
 				order
 			)) as Awaited<ReturnType<SlotWrite>> | false;
 		},
-		[command, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime]
+		[command, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime, base, basis]
 	);
 };

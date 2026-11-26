@@ -20,6 +20,7 @@ export function refusalText(deny: ActionRefusal['deny'], t: ActionContext['t']):
 	if (deny.reasonKey === 'pos_cart.void_payments_first')
 		return t('pos_cart.void_payments_first', deny.params);
 	if (deny.reasonKey === 'pos_cart.tax_exempt_locked') return t('pos_cart.tax_exempt_locked');
+	if (deny.reasonKey === 'pos_cart.tax_location_locked') return t('pos_cart.tax_location_locked');
 	if (deny.reasonKey === 'pos_cart.tax_exempt_references_unavailable')
 		return t('pos_cart.tax_exempt_references_unavailable');
 	if (deny.reasonKey === 'pos_cart.tax_exempt_wc_version')

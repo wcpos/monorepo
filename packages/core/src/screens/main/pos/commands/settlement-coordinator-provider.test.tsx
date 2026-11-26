@@ -366,6 +366,28 @@ it('#952 replays a quick discount after a line edit without demanding catalog re
 	}
 });
 
+it.each([
+	['C1', true],
+	['C2', false],
+] as const)('%s handles a store re-tax (refunded: %s)', async (_, refunded) => {
+	const refunds = refunded ? [{ id: 7 }] : [];
+	orders.next({ ready: true, hits: [{ record: record({ billing: { country: 'US' }, refunds }) }] });
+	render(<SettlementCoordinatorProvider />);
+	await flush();
+	writes.length = 0;
+	const pulled = record({
+		billing: { country: 'GB' },
+		total: '12',
+		total_tax: '2',
+		tax_lines: [{ rate_id: 2, tax_total: '2' }],
+		refunds,
+	});
+	act(() => orders.next({ ready: true, hits: [{ record: pulled }] }));
+	await flush();
+	if (refunded) expect(writes).toEqual([]);
+	else expect(writes).toEqual([expect.objectContaining({ total: '10', total_tax: '0' })]);
+});
+
 it('#1472 bind settles stale money; a subsequent bind with correct totals writes nothing', async () => {
 	const a = record();
 	orders.next({ ready: true, hits: [{ record: a }] });

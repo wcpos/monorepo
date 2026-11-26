@@ -1,11 +1,19 @@
 import * as React from 'react';
 
-import { type OrderPayload, type ReadonlyEngineRecord, useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
+import type { OrderPayload, ReadonlyEngineRecord } from '@wcpos/query';
 import { patchEngineResident } from '@wcpos/query/mutations';
 import { ORDER_REFRESH_TIMEOUT_MS } from '@wcpos/query/record-readers';
 import { type MetaDataEntry, POS_META_KEYS } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
+import { useAppState } from '../../../../contexts/app-state';
+import { useT } from '../../../../contexts/translations';
+import { refusesTaxLocationMove } from '../../pos/commands/tax-location-lock';
+
+const logger = getLogger(['wcpos', 'orders']);
 
 /** The entries a reopen stamps (`wooMetaCarrier.stampIdentity`): cashier, store, register, till. */
 const REOPEN_IDENTITY_KEYS: readonly string[] = [
@@ -22,6 +30,9 @@ type BeforeReopen = { status: OrderPayload['status']; identity: MetaDataEntry[] 
 
 export function useOrderRecord() {
 	const { localPatch } = useLocalMutation();
+	const base = useBaseTaxLocation();
+	const basis = useDocField(useAppState().store, (value) => value.tax_based_on);
+	const t = useT();
 	// The Edit tab manages an order; it is not the till ringing it up, so none of its writes add
 	// this device's register or till rows to an order without them. A reopen does (`reopenOrder`).
 	// A resolver is applied to the payload the write lands on; one that finds nothing to change
@@ -31,13 +42,25 @@ export function useOrderRecord() {
 			order: ReadonlyEngineRecord<'orders'>,
 			data: Partial<OrderPayload> | ((payload: OrderPayload) => Partial<OrderPayload>)
 		): Promise<boolean> => {
-			if (typeof data !== 'function')
+			if (typeof data === 'function') {
+				let refused = false;
+				const changes = (payload: Record<string, unknown>) => {
+					const patch = data(payload as OrderPayload);
+					refused = refusesTaxLocationMove(payload, patch, base, basis);
+					return refused ? {} : patch;
+				};
+				const result = await localPatch({ document: order, changes }, { stampTill: false });
+				if (!refused) return !!result?.document && Object.keys(result.changes).length > 0;
+			} else if (
+				!refusesTaxLocationMove((order.getLatest?.() ?? order).payload, data, base, basis)
+			) {
 				return !!(await localPatch({ document: order, data }, { stampTill: false }))?.document;
-			const changes = (payload: Record<string, unknown>) => data(payload as OrderPayload);
-			const result = await localPatch({ document: order, changes }, { stampTill: false });
-			return !!result?.document && Object.keys(result.changes).length > 0;
+			}
+			const context = { orderId: order.uuid };
+			logger.warn(t('pos_cart.tax_location_locked'), { showToast: true, context });
+			return false;
 		},
-		[localPatch]
+		[localPatch, base, basis, t]
 	);
 	/**
 	 * Null when the local write failed; otherwise the queued row to follow, if one was queued,

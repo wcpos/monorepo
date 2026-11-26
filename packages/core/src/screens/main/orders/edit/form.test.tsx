@@ -46,6 +46,7 @@ type CustomerValueRef = { current: CustomerRecord | null };
 
 const customerResources = new Map<number, { valueRef$$: Subject<CustomerValueRef> }>();
 const mockMarkSaved = jest.fn();
+const mockMarkFailed = jest.fn();
 const mockFlush = jest.fn();
 const mockFormSelect = jest.fn();
 const mockSaveOrderFields = jest.fn();
@@ -127,7 +128,7 @@ jest.mock('@wcpos/components/form', () => ({
 	SavedMark: () => null,
 	useSavedName: () => '',
 	useMarkSaved: () => mockMarkSaved,
-	useMarkFailed: () => jest.fn(),
+	useMarkFailed: () => mockMarkFailed,
 	useFormChangeHandler: (options: { onChange: typeof capturedChange }) => {
 		capturedChange = options.onChange;
 		return { flush: mockFlush };
@@ -184,7 +185,10 @@ jest.mock('../../components/customer/address-rows', () => ({
 	asShipping: (billing: unknown) => billing,
 	TextPart: () => null,
 }));
+const storeData = { tax_based_on: 'shipping' };
+const mockStore = { get: () => storeData, $: new BehaviorSubject(storeData) };
 jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: mockStore }),
 	useStoreSession: () => ({ store: null, wpCredentials: {} }),
 }));
 jest.mock('../../components/cashier-select', () => ({ CashierSelect: () => null }));
@@ -355,6 +359,64 @@ async function editField(name: string, value: unknown) {
 	});
 	return written;
 }
+
+describe('refund tax address lock', () => {
+	const billing = { first_name: 'Previous', country: 'US', city: 'Seattle' };
+	const shipping = { first_name: 'Previous', country: 'US', state: 'WA' };
+	beforeEach(() => {
+		Object.assign(orderPayload, {
+			billing,
+			shipping,
+			refunds: [{ total: '-1' }],
+			meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }],
+		});
+		draft = { ...orderPayload };
+	});
+	afterEach(() => {
+		orderPayload.billing = { first_name: 'Previous' };
+		orderPayload.shipping = { first_name: 'Previous' };
+	});
+	const expectRefusal = () => {
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(testLogger.warn).toHaveBeenCalledWith('pos_cart.tax_location_locked', {
+			showToast: true,
+			context: { orderId: order.uuid },
+		});
+	};
+	it.each([
+		['E1', 'billing', 'city', 'Boston'],
+		['E5', 'shipping', 'state', 'MA'],
+	])('%s marks the refused %s.%s edit not saved', async (row, root, field, value) => {
+		if (row === 'E5') orderPayload.meta_data = [];
+		draft[root] = { ...(root === 'billing' ? billing : shipping), [field]: value };
+		render(<EditOrderForm order={order} />);
+		expect(await editField(`${root}.${field}`, value)).toBe(false);
+		expectRefusal();
+		expect(mockMarkFailed).toHaveBeenCalledWith([root]);
+	});
+	it.each([
+		['E2', 'phone', '555'],
+		['E3', 'city', 'Boston'],
+	])('%s writes the allowed billing.%s edit', async (row, field, value) => {
+		if (row === 'E3') orderPayload.refunds = [];
+		draft.billing = { ...billing, [field]: value };
+		render(<EditOrderForm order={order} />);
+		expect(await editField(`billing.${field}`, value)).toBe(true);
+		expect(mockLocalPatch.mock.lastCall![0].data).toEqual({ billing: draft.billing });
+	});
+	it('E4 refuses a picked customer without resetting the form', async () => {
+		const selected = new Subject<CustomerValueRef>();
+		customerResources.set(2, { valueRef$$: selected });
+		const other = customer(2);
+		other.payload.billing.country = 'GB';
+		render(<EditOrderForm order={order} />);
+		act(() => selectCustomer('2'));
+		await act(async () => selected.next({ current: other }));
+		expectRefusal();
+		expect(form.reset).not.toHaveBeenCalled();
+		expect(mockMarkSaved).not.toHaveBeenCalled();
+	});
+});
 
 describe('EditOrderForm customer lookup', () => {
 	it('writes one customer snapshot after flushing and resets the draft when the selected lookup resolves', async () => {
