@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Check out the workflow revision (for the release gate)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
           fetch-depth: 1
@@ -76,7 +76,7 @@ jobs:
           override: ${{ github.event.inputs.override_release_gate }}
 
       - name: 📥 Check out monorepo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The SHA the gate verified, not the ref: a branch can advance between the two.
           ref: ${{ steps.monorepo-sha.outputs.sha }}

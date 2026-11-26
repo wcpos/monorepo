@@ -8,13 +8,13 @@ jobs:
   bundle:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
       - run: bash spikes/2210-desktop-engine/run.sh --build-only
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: spike-2210-bundles
           include-hidden-files: true
@@ -26,11 +26,11 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=2048
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: spike-2210-bundles
           path: .build
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       # A cross-engine content mismatch exits 1 after writing the JSON; the stop harness still runs
@@ -39,7 +39,7 @@ jobs:
         run: node .build/bench-node.js --out results.windows.json --scale both
         continue-on-error: true
       - run: node .build/crash-node.js --trials 30 --out crash.windows.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: spike-2210-results-windows
