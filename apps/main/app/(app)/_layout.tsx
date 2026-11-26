@@ -42,6 +42,7 @@ import { StripeTerminalDriverRegistration } from '../../lib/payment-drivers';
 import { SyncConfigBridge } from '../../components/sync-config-bridge';
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
+import { setPullsPaused } from '../../lib/pulls-paused';
 import {
 	createAppSyncEngine,
 	createSessionFetcherOptions,
@@ -78,6 +79,12 @@ export const unstable_settings = {
 };
 
 function AppStack() {
+	// Signing out unmounts this stack, but the cached engine must keep sending sales.
+	React.useEffect(() => {
+		setPullsPaused(false);
+		return () => setPullsPaused(true);
+	}, []);
+
 	const screenBackgroundColor = useNavigationBackground();
 	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
 	const { locale } = useLocale();
@@ -330,6 +337,8 @@ function EngineConnectivityBridge() {
 	// Keep the sync engine's non-React connectivity port aligned with the provider.
 	React.useEffect(() => {
 		setAppOnlineStatus(status);
+		// Signed out, the provider is gone: the engine falls back to the platform's own reading.
+		return () => setAppOnlineStatus(null);
 	}, [status]);
 
 	return null;

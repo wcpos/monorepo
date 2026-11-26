@@ -246,6 +246,14 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(networkWarn).toHaveBeenCalledWith(message, meta);
 	});
 
+	it('resumes pulls as soon as an engine is requested, before any effect runs', () => {
+		const { createAppSyncEngine } = loadCreateAppEngine();
+		const flag: typeof import('./pulls-paused') = require('./pulls-paused');
+		flag.setPullsPaused(true);
+		createAppSyncEngine(BASE_OPTIONS);
+		expect(flag.getPullsPaused()).toBe(false);
+	});
+
 	it('prompts sign-in once per newly exhausted token', async () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')

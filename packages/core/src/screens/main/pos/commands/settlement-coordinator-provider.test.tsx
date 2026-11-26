@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render as rtlRender } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -15,11 +15,14 @@ import { settleCartWrite } from './settle-cart-write';
 import { commitAtBoundary, retryable } from './boundary-commit';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
+import { RatesReadyProvider } from './rates-ready-provider';
 import { quickDiscountCouponInput } from '../hooks/quick-discount';
 import { createSettlementCoordinator } from './settlement-coordinator';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
+
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: RatesReadyProvider });
 
 jest.mock('@wcpos/order-math', () => ({
 	...jest.requireActual('@wcpos/order-math'),

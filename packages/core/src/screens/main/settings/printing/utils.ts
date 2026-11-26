@@ -24,20 +24,21 @@ export function printerIconName(
  * printer (ESC/POS, StarPRNT, ePOS-XML, …) — naming one wire format here
  * misleads users with Star or Epson cloud printers.
  *
- * @param thermalLabel Translated word for "Thermal", supplied by the caller
- *                     so this util stays hook-free.
+ * @param thermalLabel Translated label for thermal templates.
+ * @param htmlLabel Translated label for HTML templates.
  */
 export function templateTypeLabel(
 	template: {
 		output_type?: string | null;
 		paper_width?: string | number | null;
 	},
-	thermalLabel = 'Thermal'
+	thermalLabel = 'Thermal',
+	htmlLabel = 'HTML'
 ): string {
 	if (template.output_type === 'escpos') {
 		return `${thermalLabel} ${template.paper_width ?? ''}`.trim();
 	}
-	return 'HTML';
+	return htmlLabel;
 }
 
 /**

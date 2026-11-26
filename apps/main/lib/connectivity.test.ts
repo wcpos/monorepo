@@ -30,6 +30,16 @@ describe('app connectivity store', () => {
 		}
 	});
 
+	it('returns to the platform reading once the provider lets go', () => {
+		const { getEngineConnectivity, setAppOnlineStatus } = loadConnectivity();
+		setAppOnlineStatus('offline');
+		expect(getEngineConnectivity()).toBe('offline');
+
+		setAppOnlineStatus(null);
+
+		expect(getEngineConnectivity()).toBe('online');
+	});
+
 	it.each([
 		['offline', 'offline'],
 		['online-website-unavailable', 'degraded'],

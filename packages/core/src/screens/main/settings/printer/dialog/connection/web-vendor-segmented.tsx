@@ -32,8 +32,16 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 				testID="add-printer-vendor-segmented"
 				className="w-full"
 				segments={[
-					{ value: 'epson', label: 'Epson', testID: 'add-printer-vendor-epson' },
-					{ value: 'star', label: 'Star Micronics', testID: 'add-printer-vendor-star' },
+					{
+						value: 'epson',
+						label: t('settings.printer_vendor_epson'),
+						testID: 'add-printer-vendor-epson',
+					},
+					{
+						value: 'star',
+						label: t('settings.printer_vendor_star'),
+						testID: 'add-printer-vendor-star',
+					},
 				]}
 				value={normalizeVendor(vendor) ?? ''}
 				onValueChange={(next) => {
