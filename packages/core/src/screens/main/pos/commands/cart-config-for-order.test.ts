@@ -50,20 +50,23 @@ describe('orderTaxLocation', () => {
 		expect(result.addressUsed).toBe('base');
 	});
 
-	it.each(['billing', 'shipping', 'base'])(
-		"a stamped order keeps its basis when the store's setting changes (store: %s)",
-		(storeTaxBasedOn) => {
-			const result = orderTaxLocation(base, storeTaxBasedOn, {
-				meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }],
-				billing: { country: 'GB', state: '', city: 'London', postcode: 'N1' },
-				shipping: { country: 'FR', state: '', city: 'Paris', postcode: '75001' },
-			});
+	const billing = { country: 'GB', state: '', city: 'London', postcode: 'N1' };
+	const shipping = { country: 'FR', state: '', city: 'Paris', postcode: '75001' };
+	it.each([
+		{ stamp: 'shipping', store: 'billing', location: shipping },
+		{ stamp: 'base', store: 'billing', location: base },
+		{ stamp: 'billing', store: 'shipping', location: billing },
+	])('a $stamp stamp wins over a $store store basis', ({ stamp, store, location }) => {
+		const result = orderTaxLocation(base, store, {
+			meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: stamp }],
+			billing,
+			shipping,
+		});
 
-			expect(result.taxBasedOn).toBe('billing');
-			expect(result.location).toEqual({ country: 'GB', state: '', city: 'London', postcode: 'N1' });
-			expect(result.addressUsed).toBe('billing');
-		}
-	);
+		expect(result.taxBasedOn).toBe(stamp);
+		expect(result.location).toEqual(location);
+		expect(result.addressUsed).toBe(stamp);
+	});
 
 	it('keeps the shipping address once it has a country', () => {
 		const result = orderTaxLocation(base, 'shipping', {

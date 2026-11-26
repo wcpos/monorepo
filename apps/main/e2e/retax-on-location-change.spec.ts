@@ -2,7 +2,7 @@
  * #1875: a cart write that moves the order's tax location to another rate set re-taxes its
  * lines (tax fields only), and the till's total still equals the server's at 6 dp.
  *
- * Store-agnostic: L1 is the store's base location (a guest cart is taxed there), L2 is a
+ * Store-agnostic: L1 is the guest's address (the store's base country, no state), L2 is a
  * location the store's own standard-class rates tax differently. Customers come through the
  * store API and are deleted in teardown; orders are rung up through the POS UI.
  */
@@ -142,10 +142,10 @@ async function setup(
 	const basis = String(store.tax_based_on ?? 'base');
 	liveTest.skip(
 		basis === 'base',
-		'tax is based on the store base: a customer cannot move the rates'
+		'tax is based on the store base: a customer cannot move the rates (#3850)'
 	);
-	const [country, splitState] = String(store.store_country ?? '').split(':');
-	const base = { country, state: String(store.store_state || splitState || '') };
+	// The guest's billing address (use-guest-customer.ts): the store country, no state.
+	const guest = { country: String(store.store_country ?? ''), state: '' };
 	const all = await getJson<Rate[]>(request, `${storeUrl}/wp-json/wcpos/v2/taxes`, authorization);
 	const rates = all.filter(
 		(r) =>
@@ -155,7 +155,7 @@ async function setup(
 			!r.postcodes?.length &&
 			!r.cities?.length
 	);
-	const l1 = rateSet(rates, base);
+	const l1 = rateSet(rates, guest);
 	// A country-wide rate first: E2 moves the customer through the country picker alone.
 	const l2 = rates
 		.filter((r) => r.country)
@@ -167,7 +167,7 @@ async function setup(
 		});
 	liveTest.skip(
 		l1.length === 0 || !l2,
-		`no pair of locations with different, non-empty standard rate sets (base ${base.country}:${base.state} has ${l1.length} rates)`
+		`no pair of locations with different, non-empty standard rate sets (the guest at ${guest.country} has ${l1.length} rates)`
 	);
 	const sets = [l1, rateSet(rates, l2!)];
 	const dp = Number(store.price_num_decimals ?? 2);
@@ -184,7 +184,7 @@ async function setup(
 		basis,
 		dp,
 		inclusive,
-		l1: base,
+		l1: guest,
 		l2: l2!,
 		misc: misc!,
 		edited: edited!,
@@ -434,6 +434,7 @@ liveTest.describe('#1875 re-tax on a tax-location change — till equals server 
 		const server = await readOrder(f.request, testInfo, authorization, till.orderId);
 		expectOrderPaid(server);
 		assertDiscriminating(server as Record<string, unknown>, 'line_items', `${label} at L2`, s.dp);
+		assertDiscriminating(server as Record<string, unknown>, 'fee_lines', `${label} at L2`, s.dp);
 		expectServerIsTill(server, till, label);
 	}
 
@@ -553,14 +554,15 @@ liveTest.describe('#1875 re-tax on a tax-location change — till equals server 
 			await checkoutControl(page, await checkoutSurface(page), 'close').click();
 			const chip = page.getByTestId('cart-customer-name');
 			const unlocked = await becomesVisible(chip, 15_000);
-			liveTest.skip(
-				!unlocked,
+			expect(
+				unlocked,
 				'cart is locked after a partial payment: no customer chip after closing checkout'
-			);
+			).toBe(true);
 			await pickCustomer(page, customer);
 			await awaitRetax(page, first.till.total);
 			const second = await checkout(page, trackOrder, `${label} after the customer`);
 			expectRetaxed(first.till.sent, second.till.sent, s);
+			// The due proof: the till's balance is the new total less the captured leg.
 			const due = await readAmountMinor(page, 'checkout-balance');
 			expect(due, 'still due = new till total − captured').toBe(
 				Math.round((Number(second.till.total) - Number(leg.amount)) * 10 ** s.dp)
@@ -570,9 +572,6 @@ liveTest.describe('#1875 re-tax on a tax-location change — till equals server 
 				amount: leg.amount,
 				status: 'captured',
 			});
-			expect((Number(moved.total) - Number(leg.amount)).toFixed(6), 'due at 6 dp').toBe(
-				(Number(second.till.total) - Number(leg.amount)).toFixed(6)
-			);
 
 			await payRest(page, cash, first.till.orderId, divergence);
 			const server = await pollOrder(

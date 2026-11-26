@@ -94,6 +94,11 @@ it('leaves the lines to the server when it owns the money or a settlement leg is
 		],
 	} as never);
 	expect(retaxForCustomerWrite(leg, toNZ, deps).lines).toEqual({});
+	const authorized = { id: 'leg', status: 'authorized', amount: '110', refunded_amount: '0' };
+	const held = order({
+		meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments: [authorized] } }],
+	} as never);
+	expect(retaxForCustomerWrite(held, toNZ, deps).lines).toEqual({});
 });
 
 it('a non-taxable product stays at zero tax under the new rates', () => {
