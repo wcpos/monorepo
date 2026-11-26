@@ -581,8 +581,8 @@ it('replaces September 1–30 with September 10–20 using two day taps', () => 
 	);
 });
 
-// Revert: discard the single-day preset when opening Custom.
-it('keeps a single-day seed when selecting the custom end', () => {
+// Revert: seed selectingStart from scope.from !== scope.to again.
+it('the first tap selects just that day, even after a single-day period', () => {
 	isPro = true;
 	jest.setSystemTime(new Date('2026-09-30T12:00:00Z'));
 	draw();
@@ -590,7 +590,21 @@ it('keeps a single-day seed when selecting the custom end', () => {
 	fireEvent.click(screen.getByTestId('day-2026-09-20'));
 	fireEvent.click(screen.getByTestId('reports-period-apply'));
 	expect(change).toHaveBeenLastCalledWith(
-		expect.objectContaining({ from: '2026-09-16', to: '2026-09-20' })
+		expect.objectContaining({ from: '2026-09-20', to: '2026-09-20' })
+	);
+});
+
+// Revert: let the Pro override set selectingStart back to true after its tap.
+it('a second tap on another day extends it to a range, from a single-day period', () => {
+	isPro = true;
+	jest.setSystemTime(new Date('2026-09-30T12:00:00Z'));
+	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('day-2026-09-20'));
+	fireEvent.click(screen.getByTestId('day-2026-09-10'));
+	fireEvent.click(screen.getByTestId('reports-period-apply'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-10', to: '2026-09-20' })
 	);
 });
 
