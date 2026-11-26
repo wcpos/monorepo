@@ -2253,12 +2253,19 @@ test('lane-next web setup waits in the dev-next queue before every store request
 		if (step.env?.E2E_STORE_URL_PRO !== undefined) assert.ok(queueIndex < index);
 	}
 	assert.equal(setup.permissions.actions, 'read');
-	assert.equal(setup.outputs.queue, '${{ steps.queue.outcome }}');
+	// Main now queues too (#3848).
+	assert.equal(
+		setup.outputs.queue,
+		"${{ needs.changes.outputs.lane == 'main' && steps.queue_main.outcome || steps.queue.outcome }}"
+	);
 	assert.equal(
 		setup.outputs.queue_attempt,
-		"${{ steps.queue.outcome == 'success' && github.run_attempt || '' }}"
+		"${{ (needs.changes.outputs.lane == 'main' && steps.queue_main.outcome || steps.queue.outcome) == 'success' && github.run_attempt || '' }}"
 	);
-	assert.match(setup['timeout-minutes'], /lane == 'next' && 290 \|\| 30/);
+	assert.match(
+		setup['timeout-minutes'],
+		/lane == 'next' && 290 \|\| needs\.changes\.outputs\.lane == 'main' && 270 \|\| 30/
+	);
 	assert.ok(queue['timeout-minutes'] < 290);
 });
 
@@ -2269,7 +2276,7 @@ test('lane-next web shards refuse dev-next without queue admission as their seco
 	assert.equal(steps.indexOf(refuse), 1);
 	assert.equal(
 		refuse.if,
-		"needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))"
+		"(needs.changes.outputs.lane == 'next' && (needs.e2e-setup.outputs.queue != 'success' || needs.e2e-setup.outputs.queue_attempt != format('{0}', github.run_attempt))) || (needs.changes.outputs.lane == 'main' && needs.e2e-setup.outputs.queue != 'success')"
 	);
 	assert.equal(refuse.env.QUEUE_ATTEMPT, '${{ needs.e2e-setup.outputs.queue_attempt }}');
 	assert.equal(refuse.env.RUN_ATTEMPT, '${{ github.run_attempt }}');
