@@ -8,7 +8,10 @@ import type { OrderPayload } from './cart-config-for-order';
 
 type Lines = Pick<ReturnType<typeof retaxCartLines>, 'line_items' | 'fee_lines'>;
 
-/** A customer write that moves the rates re-taxes the lines in the same write (#1875). */
+/**
+ * A customer write that moves the rates re-taxes the lines in the same write (#1875).
+ * Callers await `useWhenRatesReady` before they enter the order's slot (#3843).
+ */
 export function retaxForCustomerWrite(
 	current: OrderPayload,
 	intent: object,

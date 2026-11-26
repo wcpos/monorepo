@@ -7,6 +7,7 @@ import type { EngineWarning } from '@wcpos/order-math';
 
 import { useCartConfigReader } from './use-cart-config';
 import { readCatalogTaxStatuses } from './use-coupon-context';
+import { useWhenRatesReady } from '../commands/rates-ready-provider';
 import { retaxForCustomerWrite } from '../commands/retax-for-customer-write';
 import { useCartCommand } from '../commands/use-cart-command';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
@@ -31,6 +32,8 @@ export interface CartCustomerFields {
 	shipping: Plain | undefined;
 	/** The order's own snapshot of the customer's tax ids; `null` leaves the current snapshot alone. */
 	taxIds: Plain[] | null;
+	/** `false`: a typed edit, queued in call order, never superseded by a later write (#3843). */
+	supersede?: false;
 }
 
 /**
@@ -44,9 +47,13 @@ export const useSetCartCustomer = () => {
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const runtime = useQueryRuntime();
+	const whenRatesReady = useWhenRatesReady();
 
 	return React.useCallback(
 		async (order: CurrentOrderRecord, fields: CartCustomerFields) => {
+			// Outside the slot: one write, re-taxed at ready rates; a later pick on the order wins (#3843).
+			if (!(await whenRatesReady(fields.supersede === false ? undefined : order.uuid)))
+				return false;
 			return (await command(
 				async ({ target, dispatch }) => {
 					// Read inside the slot: a stamp queued ahead (the new-customer link bridge) is the
@@ -97,6 +104,6 @@ export const useSetCartCustomer = () => {
 				order
 			)) as Awaited<ReturnType<SlotWrite>> | false;
 		},
-		[command, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime]
+		[command, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime, whenRatesReady]
 	);
 };
