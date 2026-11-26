@@ -536,13 +536,17 @@ describe('refund history checkpoint (#3340)', () => {
 	});
 
 	it.each([
-		{ startedAtMs: T0 - 25 * 60 * MIN },
+		{},
+		{ startedAtMs: T0 - 25 * 60 * MIN, lastFullWalkStartedAtMs: T0 - 25 * 60 * MIN },
 		{ perPage: 50 },
 		{ taskId: 'other' },
 		{ ids: 'not an array' },
+		{ ids: [1] },
+		{ lastRowId: undefined },
+		{ startedAtMs: T0 - 60 * MIN, lastFullWalkStartedAtMs: T0 - 25 * 60 * MIN },
 		{ page: 0 },
 		{ startedAtMs: T0 + MIN },
-	])('R3: an invalid walk record %o falls back to the completed checkpoint', async (invalid) => {
+	])('R3: only a valid walk record resumes with overrides %o', async (overrides) => {
 		const stored = JSON.stringify({
 			v: 1,
 			lastWalkStartedAtMs: T0 - 30 * MIN,
@@ -553,15 +557,19 @@ describe('refund history checkpoint (#3340)', () => {
 				perPage: 100,
 				page: 2,
 				startedAtMs: T0,
-				lastFullWalkStartedAtMs: T0 - 25 * 60 * MIN,
+				lastFullWalkStartedAtMs: T0,
+				lastRowId: 200,
 				ids: [],
-				...invalid,
+				...overrides,
 			},
 		});
 		const h = checkpointSetup(baseRows(), new Map([[KEY, stored]]));
 		const requests = await h.walkAll();
-		expect(requests.map((url) => url.searchParams.get('page'))).toEqual(['1']);
-		expect(h.afters(requests)).toEqual(['2026-09-14T23:30:00']);
+		const valid = Object.keys(overrides).length === 0;
+		expect(requests.map((url) => url.searchParams.get('page'))).toEqual(valid ? ['2', '3'] : ['1']);
+		expect(h.afters(requests)).toEqual(
+			valid ? Array(2).fill('2026-06-16T00:00:00') : ['2026-09-14T23:30:00']
+		);
 	});
 
 	it('R4: a non-abort error after a resumable page still forces the next walk full', async () => {
@@ -576,5 +584,51 @@ describe('refund history checkpoint (#3340)', () => {
 		const next = await h.walkAll(task(), h.build());
 		expect(next.map((url) => url.searchParams.get('page'))).toEqual(['1', '2', '3']);
 		expect(h.afters(next)).toEqual(Array(3).fill('2026-06-16T00:01:00'));
+	});
+
+	it.each([
+		{
+			name: 'R5: a resume after more than a page of deletions restarts the walk from page 1',
+			deleted: 120,
+			pages: ['2', '1', '2'],
+		},
+		{
+			name: 'R6: a resume whose page is past the shrunk end does not complete the walk early',
+			deleted: 200,
+			pages: ['2', '1'],
+		},
+		{
+			name: 'R7: fewer deletions than a page are absorbed by the overlap',
+			deleted: 30,
+			pages: ['2', '3'],
+		},
+	])('$name', async ({ deleted, pages }) => {
+		const rows = baseRows();
+		const h = checkpointSetup(rows);
+		expect(await h.fetcher(task())).toMatchObject({ completed: false });
+		expect(await h.fetcher(task())).toMatchObject({ completed: false });
+		const controller = new AbortController();
+		controller.abort();
+		await expect(h.fetcher(task(), { signal: controller.signal })).rejects.toMatchObject({
+			name: 'AbortError',
+		});
+		expect(h.requests.at(-1)?.searchParams.get('page')).toBe('3');
+		expect(h.blob()).toMatchObject({ walk: { page: 2, lastRowId: 200 } });
+		rows.splice(0, deleted);
+		h.state.now += MIN;
+		const resumed = h.build();
+		const start = h.requests.length;
+		expect(await resumed(task())).toMatchObject({ completed: false });
+		expect(h.coverage.at(-1)?.complete).toBe(false);
+		if (pages[1] === '1') expect(h.blob()).toMatchObject({ walk: { page: 1, lastRowId: 200 } });
+		await h.walkAll(task(), resumed);
+		expect(h.requests.slice(start).map((url) => url.searchParams.get('page'))).toEqual(pages);
+		for (const { id } of rows) expect(h.local.has(id)).toBe(true);
+		const complete = h.coverage.filter((value) => value.complete);
+		expect(complete).toHaveLength(1);
+		expect(complete[0].expectedRecordIds).toEqual(
+			expect.arrayContaining(rows.map(({ id }) => `woo-refund:${id}`))
+		);
+		expect(h.blob()).toEqual({ v: 1, lastWalkStartedAtMs: T0, lastFullWalkStartedAtMs: T0 });
 	});
 });

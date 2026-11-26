@@ -64,6 +64,7 @@ function decodeWalk(raw: string | null, taskId: string, perPage: number, nowMs: 
 		if (v !== 1 || walk?.taskId !== taskId || walk.perPage !== perPage) return null;
 		const { page, after, ids, startedAtMs, lastFullWalkStartedAtMs }: Record<string, unknown> =
 			walk;
+		const resumeAfterRowId: unknown = walk.lastRowId;
 		if (
 			typeof page !== 'number' ||
 			!Number.isSafeInteger(page) ||
@@ -71,16 +72,20 @@ function decodeWalk(raw: string | null, taskId: string, perPage: number, nowMs: 
 			typeof after !== 'string' ||
 			!Array.isArray(ids) ||
 			!ids.every((id) => typeof id === 'string') ||
+			typeof resumeAfterRowId !== 'number' ||
+			!Number.isSafeInteger(resumeAfterRowId) ||
 			typeof startedAtMs !== 'number' ||
 			!Number.isFinite(startedAtMs) ||
 			typeof lastFullWalkStartedAtMs !== 'number' ||
 			!Number.isFinite(lastFullWalkStartedAtMs) ||
 			lastFullWalkStartedAtMs > startedAtMs ||
 			startedAtMs > nowMs ||
-			nowMs - startedAtMs >= REFUND_HISTORY_FULL_WALK_EVERY_MS
+			nowMs - startedAtMs >= REFUND_HISTORY_FULL_WALK_EVERY_MS ||
+			(lastFullWalkStartedAtMs < startedAtMs &&
+				nowMs - lastFullWalkStartedAtMs >= REFUND_HISTORY_FULL_WALK_EVERY_MS)
 		)
 			return null;
-		return { page, perPage, after, ids, startedAtMs, lastFullWalkStartedAtMs };
+		return { page, perPage, after, ids, startedAtMs, lastFullWalkStartedAtMs, resumeAfterRowId };
 	} catch {
 		return null;
 	}
@@ -147,6 +152,7 @@ export function createRefundsSchedulerFetcher(
 		string,
 		{
 			page: number;
+			resumeAfterRowId?: number;
 			perPage: number;
 			after: string;
 			ids: string[];
@@ -210,6 +216,7 @@ export function createRefundsSchedulerFetcher(
 		});
 		let applied: readonly LocalRefundDocument[];
 		let completed: boolean;
+		let restart: boolean;
 		try {
 			const response = await httpGet(input, `${input.baseUrl}/refunds?${query}`, context);
 			if (!response.ok) throw new Error(`Woo REST refunds request failed: ${response.status}`);
@@ -217,9 +224,15 @@ export function createRefundsSchedulerFetcher(
 			applied = await admitRefundPage(input, rows);
 			const pageIds = applied.map((document) => document.uuid);
 			const ids = [...new Set([...walk.ids, ...pageIds])];
+			// #3782: IDs ascend and new refunds append; a first ID above the marker means deletions shifted unseen rows back past this page.
+			restart =
+				walk.page > 1 &&
+				walk.resumeAfterRowId !== undefined &&
+				(rows.length === 0 || rows[0].id > walk.resumeAfterRowId);
 			// WooCommerce always sends the page count; a short page is the end only when it does not.
 			const totalPages = Number(response.headers.get('X-WP-TotalPages'));
-			completed = totalPages > 0 ? walk.page >= totalPages : rows.length < walk.perPage;
+			completed =
+				!restart && (totalPages > 0 ? walk.page >= totalPages : rows.length < walk.perPage);
 			await recordCoverage(
 				'refunds',
 				input,
@@ -229,7 +242,7 @@ export function createRefundsSchedulerFetcher(
 				undefined,
 				completed ? ids : undefined
 			);
-			if (!completed && historyCheckpoint && !walk.failed) {
+			if (!completed && historyCheckpoint && !walk.failed && (restart || rows.length > 0)) {
 				const { after, perPage, page, startedAtMs, lastFullWalkStartedAtMs } = walk;
 				await historyCheckpoint.set(
 					JSON.stringify({
@@ -239,7 +252,8 @@ export function createRefundsSchedulerFetcher(
 							taskId: task.id,
 							after,
 							perPage,
-							page,
+							page: restart ? 1 : page,
+							lastRowId: restart ? walk.resumeAfterRowId : rows[rows.length - 1].id,
 							startedAtMs,
 							lastFullWalkStartedAtMs,
 							ids,
@@ -248,6 +262,7 @@ export function createRefundsSchedulerFetcher(
 				);
 			}
 			walk.ids = ids;
+			delete walk.resumeAfterRowId;
 		} catch (error) {
 			if (context?.signal?.aborted) throw error;
 			// A failed walk never writes the checkpoint, so the walk after it is full (#3340).
@@ -269,7 +284,7 @@ export function createRefundsSchedulerFetcher(
 		}
 		if (completed) walks.delete(task.id);
 		else {
-			walk.page += 1;
+			walk.page = restart ? 1 : walk.page + 1;
 			walks.set(task.id, walk);
 		}
 		return { taskId: task.id, documentCount: applied.length, requestCount: 1, completed };
