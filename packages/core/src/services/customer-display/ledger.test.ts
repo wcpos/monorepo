@@ -132,6 +132,26 @@ describe('buildLedger', () => {
 		expect(result.total).toBe('€1.234');
 		expect(result.total_raw).toBe(1.234);
 	});
+
+	test('B5: a cash leg corrected to card draws one leg (the R+) and no change', () => {
+		const pair = { entry: 'tender_correction', tendered: '-20.00', change: '0.00' };
+		const rows = [
+			row({ id: 'orig', amount: '20.00', tendered: '25.00', change: '5.00' }),
+			row({ ...pair, id: 'rminus', amount: '-20.00', reverses: 'orig' }),
+			row({
+				...pair,
+				id: 'rplus',
+				method_id: 'card',
+				kind: 'card',
+				amount: '20.00',
+				tendered: '20.00',
+				corrects: 'orig',
+			}),
+		];
+		const result = buildLedger(rows, 20, 'EUR', 'en-IE', new Map([['card', 'Card']]), 2);
+		expect(result.payments.map(({ id, method }) => [id, method])).toEqual([['rplus', 'Card']]);
+		expect(result).toMatchObject({ status: 'paid', paid_raw: 20, change_raw: 0, due_raw: 0 });
+	});
 });
 
 describe('derivePaymentEvent', () => {

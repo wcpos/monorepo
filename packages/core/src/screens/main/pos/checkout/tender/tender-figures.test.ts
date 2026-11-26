@@ -227,6 +227,36 @@ describe('tenderFigures', () => {
 		expect(tenderFigures(input)).toMatchObject(expected);
 	});
 
+	// A tender correction (#3647) appends R- and R+ for one leg: the bill counts it once, in the
+	// original's place, whether it was corrected while the split was open or before it was made.
+	it.each([
+		['corrected while the split is open', 1],
+		['corrected before the split', 3],
+	])('numbers a %s as one payment', (_name, from) => {
+		const a = row('a', '55.00');
+		const b = { ...row('b', '-55.00'), reverses: 'a' };
+		const c = { ...row('c', '55.00'), method_id: 'pos_card', corrects: 'a' };
+		const pick = ({ n, ways, label, thisPaymentMinor }: TenderFigures) => ({
+			n,
+			ways,
+			label,
+			thisPaymentMinor,
+		});
+		const uncorrected = tenderFigures(
+			facts({ balanceMinor: 3000, rows: [a] }, { plan: { kind: 'even', ways: 3, from: 1 } })
+		);
+		expect(pick(uncorrected)).toEqual({
+			n: 2,
+			ways: 4,
+			label: { n: 1, ways: 3, rest: false, title: null },
+			thisPaymentMinor: 1000,
+		});
+		const corrected = tenderFigures(
+			facts({ balanceMinor: 3000, rows: [a, b, c] }, { plan: { kind: 'even', ways: 3, from } })
+		);
+		expect(pick(corrected)).toEqual(pick(uncorrected));
+	});
+
 	// The one place the pane's own formula differed: with no method open (the select view, as
 	// after Back from Cancel payment) the pane counted the empty entry as this payment, so the
 	// strip read "0.00, then the balance". This payment is the planned share, as the hook's

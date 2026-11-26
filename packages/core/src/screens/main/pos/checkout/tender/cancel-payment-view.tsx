@@ -6,7 +6,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { useIsPhone } from '@wcpos/components/lib/device';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { toMinor } from '@wcpos/order-math';
+import { effectiveRows, toMinor } from '@wcpos/order-math';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -24,6 +24,8 @@ interface Props {
  */
 export function CancelPaymentView({ flow, format }: Props) {
 	const t = useT();
+	// A tender correction's R- and the row it reversed are not legs; R+ is the tender (#3647).
+	const legs = effectiveRows(flow.liveRows);
 	// Two buttons side by side outgrow a phone in de and nl (#3654): there they stack, full width.
 	const phone = useIsPhone();
 	const button = phone ? 'w-full' : undefined;
@@ -31,14 +33,15 @@ export function CancelPaymentView({ flow, format }: Props) {
 	return (
 		<VStack space="md" className="mx-auto w-full max-w-md p-4">
 			<Text className="text-lg font-semibold">{t('pos_checkout.cancel_payment_question')}</Text>
-			{flow.liveRows.length === 0 ? (
+			{legs.length === 0 ? (
 				<EmptyState kind="empty" size="inline" title={t('pos_checkout.nothing_taken_yet')} />
 			) : (
 				<VStack space="xs">
 					<Text variant="key">{t('pos_checkout.money_taken_has_to_go_back')}</Text>
-					{flow.liveRows.map((row) => {
+					{legs.map((row) => {
 						const amount = format(toMinor(row.amount, flow.dp));
 						const title =
+							flow.byId?.get(row.method_id)?.title ??
 							flow.tiles.find(({ method }) => method.id === row.method_id)?.method.title ??
 							row.method_id;
 						// The same rule `voidPayments` applies: a captured card leg, or a captured

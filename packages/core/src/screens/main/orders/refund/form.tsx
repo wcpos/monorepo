@@ -33,7 +33,7 @@ import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { readLedger } from '@wcpos/order-math';
+import { hasUnverifiedMoney, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
@@ -185,9 +185,12 @@ export function RefundOrderForm({ order }: Props) {
 	const refundOptions = React.useMemo(() => deriveRefundDestinationOptions(gateway), [gateway]);
 	const isPosCash = orderData.payment_method === 'pos_cash';
 	const awaitingGateway = gatewaysLoading && !isPosCash;
+	// #3651: money recorded by hand against a provider method is never refunded through it.
+	const originalBlocked = hasUnverifiedMoney(readLedger(orderData.meta_data));
+	const originalEnabled = refundOptions[0]?.enabled && !originalBlocked;
 	const defaultDestination: RefundDestination = isPosCash
 		? 'cash'
-		: refundOptions[0]?.enabled
+		: originalEnabled
 			? 'original_method'
 			: 'cash';
 
@@ -334,6 +337,12 @@ export function RefundOrderForm({ order }: Props) {
 	}, [form, initialLineItems, refundDetailsLoading]);
 
 	React.useEffect(() => {
+		// A choice made before the unverified row arrived cannot stay.
+		if (originalBlocked) {
+			form.setValue('refund_destination', 'cash');
+			return;
+		}
+
 		if (form.getFieldState('refund_destination').isDirty) {
 			return;
 		}
@@ -346,7 +355,7 @@ export function RefundOrderForm({ order }: Props) {
 		if (!gatewaysLoading) {
 			form.setValue('refund_destination', defaultDestination);
 		}
-	}, [defaultDestination, form, gatewaysError, gatewaysLoading]);
+	}, [defaultDestination, form, gatewaysError, gatewaysLoading, originalBlocked]);
 
 	const { fields } = useFieldArray({
 		control: form.control,
@@ -741,7 +750,7 @@ export function RefundOrderForm({ order }: Props) {
 									label: t('orders.refund_to_original_method', {
 										gateway: orderData.payment_method_title || orderData.payment_method || '',
 									}),
-									disabled: !refundOptions[0].enabled,
+									disabled: !originalEnabled,
 									testID: 'refund-destination-original_method',
 								},
 								{
@@ -751,7 +760,7 @@ export function RefundOrderForm({ order }: Props) {
 								},
 							]}
 						/>
-						{refundOptions[0].enabled ? null : (
+						{originalEnabled ? null : (
 							<Text variant="help">{t('orders.original_method_refund_unavailable')}</Text>
 						)}
 					</VStack>

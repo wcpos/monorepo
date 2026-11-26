@@ -1,6 +1,7 @@
 import { paidUnitsMeta, type PaymentRow } from '@wcpos/order-math';
 
 import { rowsSince, type SplitFacts, type SplitView, splitView } from './split-view';
+import { activePlan, planLegs, type TenderPlan } from './tender-state';
 
 /** A ledger row as `_wcpos_payments` stores it. */
 function payment(id: string, amount: string, over: Partial<PaymentRow> = {}): PaymentRow {
@@ -199,6 +200,43 @@ describe('rowsSince', () => {
 		expect(splitView(facts({ rows, plan })).rowsSinceFrom).toEqual(
 			rowsSince(plan, rows, 2, titleOf)
 		);
+	});
+});
+
+describe('rowsSince with a tender correction', () => {
+	// A 55.00 cash sale reopened with 30.00 added, its 55.00 leg corrected (R- then R+), once or twice.
+	const a = payment('a', '55.00');
+	const b = payment('b', '-55.00', { reverses: 'a' });
+	const c = card('c', '55.00', { corrects: 'a' });
+	const d = payment('d', '-55.00', { reverses: 'c' });
+	const e = payment('e', '55.00', { corrects: 'c' });
+	const leg = payment('leg', '10.00');
+	const even = (from: number): TenderPlan => ({ kind: 'even', ways: 3, from });
+	const fixed: TenderPlan = { kind: 'fixed', firstMinor: 1200, title: null, from: 1 };
+	const next = (plan: TenderPlan, rows: PaymentRow[], balanceMinor: number) => {
+		const since = rowsSince(plan, rows, 2, titleOf);
+		const active = activePlan(plan, since.length, balanceMinor);
+		const legs = active ? planLegs(active, since, balanceMinor) : null;
+		return { thisPaymentMinor: legs?.thisPaymentMinor, label: legs?.label };
+	};
+	const oneOf3 = { n: 1, ways: 3, rest: false, title: null };
+	it.each<[string, TenderPlan, PaymentRow[], number, number, typeof oneOf3]>([
+		['no correction', even(1), [a], 3000, 1000, oneOf3],
+		['corrected while the split is open', even(1), [a, b, c], 3000, 1000, oneOf3],
+		['corrected twice while open', even(1), [a, b, c, d, e], 3000, 1000, oneOf3],
+		['one leg taken, then corrected', even(1), [a, leg, b, c], 2000, 1000, { ...oneOf3, n: 2 }],
+		['corrected before the split', even(3), [a, b, c], 3000, 1000, oneOf3],
+	])('%s: the next payment and its label', (_name, plan, rows, balance, minor, label) => {
+		expect(next(plan, rows, balance)).toEqual({ thisPaymentMinor: minor, label });
+	});
+
+	it('fixed first 12.00, corrected: the same next payment and label as with no correction', () => {
+		const uncorrected = next(fixed, [a], 3000);
+		expect(uncorrected).toEqual({
+			thisPaymentMinor: 1200,
+			label: { n: 1, ways: 2, rest: false, title: null },
+		});
+		expect(next(fixed, [a, b, c], 3000)).toEqual(uncorrected);
 	});
 });
 

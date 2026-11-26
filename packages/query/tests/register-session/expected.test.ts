@@ -224,6 +224,7 @@ it('derives the drawer terms in display units from captured session cash and liv
 		paidIn: [{ amount: '20.0000', note: 'change' }],
 		paidOut: { amount: '25.0000', count: 2, note: undefined },
 		cashRefunds: { amount: '5.0000', count: 1 },
+		cashCorrections: '0.0000',
 		noSales: 1,
 		voids: 2,
 		expected: '190.1234',
@@ -243,6 +244,7 @@ it('keeps a single paid-out reason and attributes refunds to their own session',
 		paidIn: [],
 		paidOut: { amount: '2.0000', count: 1, note: 'bank' },
 		cashRefunds: { amount: '20.0000', count: 1 },
+		cashCorrections: '0.0000',
 		noSales: 0,
 		voids: 0,
 		expected: '8.0000',
@@ -396,7 +398,45 @@ describe('drawer terms anchored to the server terms', () => {
 		toMinor(terms.cashSales.amount, 4) +
 		terms.paidIn.reduce((total, row) => total + toMinor(row.amount, 4), 0) -
 		toMinor(terms.paidOut.amount, 4) -
-		toMinor(terms.cashRefunds.amount, 4);
+		toMinor(terms.cashRefunds.amount, 4) +
+		toMinor(terms.cashCorrections, 4);
+
+	// #3647: a correction pair moves cashCorrections, never cash sales; the terms still sum.
+	it('reads cash_corrections and adds an unsynced correction pair to it, not to cash sales', () => {
+		const input = { session, movements: [outMilk], ledgerRowsBySession: [leg('leg1', 'o1', '79')] };
+		const served = { ...session, server_terms: { ...serverTerms, cash_corrections: '10.0000' } };
+		expect(deriveDrawerTerms({ ...input, session: served }, baselineHas).cashCorrections).toBe(
+			'10.0000'
+		);
+		const pair = [
+			{ ...leg('rminus', 'o1', '-79.0000'), entry: 'tender_correction' },
+			{ ...leg('rplus', 'o1', '79'), kind: 'card', method_id: 'card', entry: 'tender_correction' },
+		];
+		const ledgerRowsBySession = [...input.ledgerRowsBySession, ...pair];
+		const terms = deriveDrawerTerms({ ...input, ledgerRowsBySession }, baselineHas);
+		expect(terms.cashCorrections).toBe('-79.0000');
+		expect(terms.cashSales).toEqual({ amount: '579.0000', count: 3 });
+		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+	});
+
+	// Q3 (#3651): the R+ is the order's only cash row; it is a correction, never a new cash sale.
+	it('an unsynced card-to-cash pair on an order with no cash sale does not raise the sale count', () => {
+		const card = (id: string, amount: string) => ({
+			...leg(id, 'o2', amount),
+			kind: 'card',
+			method_id: 'card',
+		});
+		const pair = [
+			{ ...card('rminus', '-30.0000'), entry: 'tender_correction' },
+			{ ...leg('rplus', 'o2', '30.0000'), entry: 'tender_correction' },
+		];
+		const ledgerRowsBySession = [leg('leg1', 'o1', '79'), card('cardleg', '30.0000'), ...pair];
+		const input = { session, movements: [outMilk], ledgerRowsBySession };
+		const terms = deriveDrawerTerms(input, baselineHas);
+		expect(terms.cashCorrections).toBe('30.0000');
+		expect(terms.cashSales).toEqual({ amount: '579.0000', count: 3 });
+		expect(sum(terms)).toBe(toMinor(terms.expected, 4));
+	});
 
 	it('shows the server terms when the baseline holds every local row', () => {
 		const input = {
@@ -411,6 +451,7 @@ describe('drawer terms anchored to the server terms', () => {
 			paidIn: [{ amount: '50.0000', note: 'change' }],
 			paidOut: { amount: '5.0000', count: 1, note: 'milk' },
 			cashRefunds: { amount: '0.0000', count: 0 },
+			cashCorrections: '0.0000',
 			noSales: 0,
 			voids: 0,
 			expected: deriveExpected(input, baselineHas).cash,
@@ -555,6 +596,7 @@ describe('drawer terms anchored to the server terms', () => {
 			paidIn: [],
 			paidOut: { amount: '5.0000', count: 1, note: 'milk' },
 			cashRefunds: { amount: '0.0000', count: 0 },
+			cashCorrections: '0.0000',
 			noSales: 0,
 			voids: 0,
 		});

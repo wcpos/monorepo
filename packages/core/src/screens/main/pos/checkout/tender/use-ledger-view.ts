@@ -6,6 +6,7 @@ import {
 	type AwaitingCustomerStamp,
 	derive,
 	fromMinor,
+	type PaymentMethodDescriptor,
 	type PaymentRow,
 	readLedger,
 	toMinor,
@@ -24,6 +25,8 @@ export interface LedgerView {
 	/** Contract 1.2: the order was sent to the customer and no money has been taken since. */
 	invoiceSent: AwaitingCustomerStamp | null;
 	tiles: TenderTile[];
+	/** The held methods, for a leg's title; the tiles leave some out (webview methods). */
+	byId?: ReadonlyMap<string, PaymentMethodDescriptor>;
 	/** Store decimal places; every `*Minor` number is in these units. */
 	dp: number;
 	totalMinor: number;
@@ -54,6 +57,7 @@ export function useLedgerView(
 		rows,
 		invoiceSent: activeAwaitingCustomer(payload.meta_data),
 		tiles: buildTenderTiles(methods, { online }),
+		byId,
 		dp,
 		totalMinor: toMinor(payload.total, dp),
 		paidMinor: toMinor(derived.paid, dp),

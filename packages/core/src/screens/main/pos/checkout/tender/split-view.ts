@@ -1,5 +1,5 @@
 import {
-	countsTowardPaid,
+	countedLegs,
 	isLivePaymentStatus,
 	type PaymentRow,
 	readPaidUnits,
@@ -57,7 +57,8 @@ export function mergedAllocations(meta: Payload['meta_data'], store: Allocations
 
 /**
  * The legs a plan has taken: its rows from `plan.from` on that `derive()` counts (ADR 0040 D6),
- * so an authorization (a hold) never advances it. No plan, no legs.
+ * so an authorization (a hold) never advances it, and a corrected leg is one leg in its original's
+ * place (`countedLegs`, #3647). No plan, no legs.
  */
 export function rowsSince(
 	plan: Pick<TenderPlan, 'from'> | null,
@@ -65,10 +66,10 @@ export function rowsSince(
 	dp: number,
 	titleOf: (methodId: string) => string
 ) {
-	return rows
-		.slice(plan?.from ?? rows.length)
-		.filter(countsTowardPaid)
-		.map((row) => ({ minor: toMinor(row.amount, dp), title: titleOf(row.method_id) }));
+	return countedLegs(rows, plan?.from ?? rows.length).map((row) => ({
+		minor: toMinor(row.amount, dp),
+		title: titleOf(row.method_id),
+	}));
 }
 
 export interface SplitFacts {

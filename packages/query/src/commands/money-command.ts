@@ -367,8 +367,9 @@ export async function settleMoneyCommand(
 /**
  * Whether a well-formed answer is about THIS command: the row it carries is the record's own
  * row, the leg the route names, or, for a recorded submit, the submitted attempt (whose id the
- * row takes). A proxy, a filter or a wrong handler answering with another payment's row never
- * settles the command, so its retry is never lost.
+ * row takes), or, for a correct, the NEW row (R+) that names the leg it `corrects` (#3647). A
+ * proxy, a filter or a wrong handler answering with another payment's row never settles the
+ * command, so its retry is never lost.
  */
 function answersCommand(entry: MoneyCommandEntry, data: Record<string, unknown>): boolean {
 	const row = (data.payment as { id?: unknown } | null | undefined)?.id;
@@ -382,6 +383,14 @@ function answersCommand(entry: MoneyCommandEntry, data: Record<string, unknown>)
 		case 'void':
 		case 'refund':
 			return is(entry.target);
+		case 'correct': {
+			const corrects = (data.payment as { corrects?: unknown } | null | undefined)?.corrects;
+			return (
+				typeof corrects === 'string' &&
+				typeof entry.target === 'string' &&
+				samePaymentId(corrects, entry.target)
+			);
+		}
 		case 'submit':
 			return data.outcome !== 'recorded' || is(entry.body.attempt_id);
 		default:
@@ -466,8 +475,10 @@ export async function resendOpenCommands(
 			await poster.abandon();
 			throw new Error('money_command_unconfirmed');
 		}
+		// A correct's answer carries R+ without its R-: mirrored alone it reads as paid twice, so only
+		// the summary is mirrored and the refresh brings the pair together (#3647).
 		await poster.mirror({
-			payment: data.payment as PaymentRow | undefined,
+			payment: entry.kind === 'correct' ? undefined : (data.payment as PaymentRow | undefined),
 			order: data.order as OrderPaymentSummary | undefined,
 		});
 		answers.push({ kind: entry.kind, data });
