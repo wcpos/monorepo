@@ -22,6 +22,9 @@ export const mockStores = new BehaviorSubject<
 export const mockCategories = new BehaviorSubject<
 	{ id: number; name: string; parent: number }[] | undefined
 >([]);
+export const mockCustomers = new BehaviorSubject<
+	{ id: number; first_name: string; last_name: string }[] | undefined
+>([]);
 export const mockProducts = new BehaviorSubject<LocalProduct[] | undefined>([]);
 export const mockCredentials = new BehaviorSubject<
 	{ id: number; display_name: string }[] | undefined
@@ -127,9 +130,11 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
 	observeLocalRecordsById: (_engine: unknown, name: string, ids: readonly number[]) =>
 		(
-			(name === 'products/categories' ? mockCategories : mockProducts) as Observable<
-				LocalProduct[] | undefined
-			>
+			(name === 'customers'
+				? mockCustomers
+				: name === 'products/categories'
+					? mockCategories
+					: mockProducts) as Observable<LocalProduct[] | undefined>
 		).pipe(
 			jest.requireActual('rxjs').filter((products: unknown) => products !== undefined),
 			jest

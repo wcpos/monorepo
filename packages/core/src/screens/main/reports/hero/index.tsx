@@ -20,6 +20,7 @@ import { useT } from '../../../../contexts/translations';
 import { inZone } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useQueryStateActions } from '../../../../query';
+import { useReportCashierNames } from '../use-report-cashier-names';
 import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
 import {
@@ -233,12 +234,13 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const { allStores, names, namesReady } = useReportsFilterScope();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const cashier = useReportCashier();
+	const cashierNames = useReportCashierNames(figures.byCashier.map((row) => row.key));
 	const [sheetOpen, setSheetOpen] = React.useState(false);
 	const spec = summarySpec(
 		{
 			figures,
 			registerNames: names.register,
-			cashierNames: names.cashier,
+			cashierNames: cashierNames.names,
 			storeNames: allStores ? names.store : undefined,
 		},
 		t,
@@ -255,7 +257,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		dataReady:
 			!!formats.store &&
 			cashier.ready &&
-			(figures.byCashier.length < 2 || namesReady.cashier) &&
+			(figures.byCashier.length < 2 || cashierNames.ready) &&
 			(allStores ||
 				namesReady.register ||
 				!online ||

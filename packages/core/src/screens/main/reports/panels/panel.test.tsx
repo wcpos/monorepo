@@ -9,6 +9,7 @@ import { PENDING_USER_DB_READ } from '@wcpos/query/user-db';
 import {
 	mockCategories,
 	mockCredentials,
+	mockCustomers,
 	mockProducts,
 	mockState,
 	mockStores,
@@ -48,6 +49,7 @@ beforeEach(() => {
 	mockPrintDocument.documentError = null;
 	mockPrintDocument.print.mockReset().mockResolvedValue(true);
 	mockCredentials.next([]);
+	mockCustomers.next([]);
 	mockProducts.next([]);
 	mockState.screenSize = 'lg';
 	mockState.register = 'r';
@@ -171,6 +173,56 @@ it.each(['categories', 'cashiers', 'orders'])(
 		);
 	}
 );
+function salesByCashiers(...keys: string[]) {
+	setOrders(
+		keys.map((key) => ({
+			uuid: key,
+			status: 'completed',
+			total: '10',
+			meta_data: [{ key: '_pos_user', value: key }],
+		})) as Context.ReportOrder[]
+	);
+}
+it('names a cashier from the local customer even without a credentials row', () => {
+	salesByCashiers('12');
+	mockCustomers.next([{ id: 12, first_name: 'Ana', last_name: 'Reis' }]);
+	room();
+	fireEvent.click(screen.getByTestId('card-cashiers-open'));
+	expect(reportDocument().rows.map((row) => row.label)).toEqual(['Ana Reis']);
+	fireEvent.click(screen.getByTestId('detail-panel-close'));
+	expect(screen.getByTestId('card-cashiers-donut-row-12').textContent).toContain('Ana Reis');
+	act(() => mockCredentials.next([{ id: 12, display_name: 'Staff login' }]));
+	expect(screen.getByTestId('card-cashiers-donut-row-12').textContent).toContain('Ana Reis');
+});
+it('keeps unknown numeric cashiers distinguishable on the exported report', () => {
+	salesByCashiers('12', '13', '14');
+	mockCredentials.next([{ id: 14, display_name: '' }]);
+	room();
+	fireEvent.click(screen.getByTestId('card-cashiers-open'));
+	expect(
+		reportDocument()
+			.rows.map((row) => row.label)
+			.sort()
+	).toEqual(['Cashier #12', 'Cashier #13', 'Cashier #14']);
+	fireEvent.click(screen.getByTestId('detail-panel-export'));
+	expect(saveOrShareCsv).toHaveBeenCalledWith(
+		expect.stringContaining('"Cashier #13"'),
+		expect.any(String)
+	);
+});
+it('waits for the local customers before printing or exporting cashier labels', async () => {
+	salesByCashiers('12');
+	mockCustomers.next(undefined);
+	room();
+	fireEvent.click(screen.getByTestId('card-orders-open'));
+	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(true);
+	await act(async () => mockCustomers.next([{ id: 12, first_name: 'Ana', last_name: 'Reis' }]));
+	expect(screen.getByTestId('print-sheet-print').hasAttribute('disabled')).toBe(false);
+	expect(screen.getByTestId('detail-panel-export')).toBeTruthy();
+	expect(screen.getByTestId('orders-panel-row-12').textContent).toContain('Ana Reis');
+});
 it('the footer names the items missing a cost', () => {
 	setOrders([
 		{

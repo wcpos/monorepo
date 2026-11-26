@@ -64,6 +64,8 @@ jest.mock('../../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: null, locale: 'en' }),
+	observeLocalRecordsById: () => of([]),
 	useDocField: (
 		source: Record<string, unknown> | undefined,
 		select: (v: Record<string, unknown>) => unknown

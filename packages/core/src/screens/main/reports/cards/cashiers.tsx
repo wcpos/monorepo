@@ -4,7 +4,7 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
 import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
-import { useReportsDirectories } from '../scope';
+import { useReportCashierNames } from '../use-report-cashier-names';
 import { useReportFormats } from '../use-report-formats';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
@@ -13,11 +13,11 @@ export function CashiersCard() {
 	const { setDetail } = useReportsScope();
 	const t = useT(),
 		{ figures } = useReportsData(),
-		{ storeId } = useReportsPeriod(),
-		directory = useReportsDirectories().cashiers;
+		{ storeId } = useReportsPeriod();
 	const { store, money, moneyWhole, number, percent } = useReportFormats(storeId);
 	const rows = figures.byCashier;
-	if (!store || !directory)
+	const { names, ready } = useReportCashierNames(rows.map((row) => row.key));
+	if (!store || !ready)
 		return <CardSkeleton testID="card-cashiers" name={t('reports.card_cashiers')} />;
 	return (
 		<ReportCard
@@ -35,9 +35,7 @@ export function CashiersCard() {
 					}}
 					parts={rows.map((row) => ({
 						key: row.key,
-						label:
-							directory.find((user) => String(user.id) === row.key)?.display_name ||
-							(row.key ? `#${row.key}` : t('common.unknown')),
+						label: names[row.key] || t('common.unknown'),
 						value: row.amount,
 						valueText: money(row.amount),
 						shareText: t('reports.percent', { value: percent(row.share * 100) }),

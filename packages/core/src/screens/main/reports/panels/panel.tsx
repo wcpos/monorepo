@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { format } from 'date-fns/format';
 
+import { wooMetaCarrier } from '@wcpos/sync-core';
 import { rungUpMomentOf, saleMomentOf } from '@wcpos/query/query-state';
 import { Breadcrumb } from '@wcpos/components/breadcrumb';
 import { useIsPhone } from '@wcpos/components/lib/device';
@@ -24,6 +25,7 @@ import {
 } from '../context';
 import { useLocalCategories } from '../cards/use-local-categories';
 import { ReportPanel } from '../report-panel';
+import { useReportCashierNames } from '../use-report-cashier-names';
 import { useReportFormats } from '../use-report-formats';
 import { MenuChip } from '../menu-chip';
 import { useReportsFilterScope } from '../scope';
@@ -61,6 +63,13 @@ function DetailPanelContent() {
 		to: format(dateRange.end, 'yyyy-MM-dd', zoneOptions(timezone)),
 	};
 	const { names, namesReady } = useReportsFilterScope();
+	const cashierNames = useReportCashierNames(
+		detail === 'orders'
+			? includedOrders.map((order) => wooMetaCarrier.readIdentity(order.meta_data).cashierId ?? '')
+			: detail === 'cashiers'
+				? figures.byCashier.map((row) => row.key)
+				: []
+	);
 	const ids = [...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
 		(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 	);
@@ -107,12 +116,12 @@ function DetailPanelContent() {
 		((detail !== 'refunds' && !grouped) || periodRefunds !== undefined) &&
 		(!grouped || products) &&
 		((detail !== 'categories' && detail !== 'products') || tree) &&
-		(detail !== 'cashiers' && detail !== 'orders' ? true : namesReady.cashier) &&
+		(detail !== 'cashiers' && detail !== 'orders' ? true : cashierNames.ready) &&
 		(detail !== 'registers' || namesReady.register) &&
 		(detail !== 'stores' || namesReady.store);
 	const spec = panelSpec(detail ?? 'orders', figures, formats, t, {
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
-		names,
+		names: { ...names, cashier: cashierNames.names },
 		directory: products,
 		categoryTree: tree,
 		productLines: { orders: filteredOrders, refunds: filteredRefunds },
