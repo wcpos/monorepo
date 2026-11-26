@@ -387,7 +387,12 @@ type RequirementSubscriber = {
  */
 type RequirementDrainOverrides = Pick<
 	Parameters<typeof runEngineSchedulerDrain>[0],
-	'taskId' | 'referenceLanes' | 'maxRequestsPerTask' | 'refreshBrowseWindowKey' | 'nowMs'
+	| 'taskId'
+	| 'referenceLanes'
+	| 'refundHistory'
+	| 'maxRequestsPerTask'
+	| 'refreshBrowseWindowKey'
+	| 'nowMs'
 >;
 
 /**
@@ -566,14 +571,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// Searches stay serial among themselves, so a newer search still supersedes the older
 	// one through release → abandonIfUnclaimed → abort (#1221). Running a search beside a
 	// durable execution is allowed: the demand plane is uncapped by ruling (#1134 item 2).
-	// Reference refreshes get their own lane so a full walk cannot hold a browse window (#3782).
+	// Refund history refreshes share the reference lane so neither walk holds a browse window (#3782).
 	type Lane = 'search' | 'durable' | 'reference';
 	const running: Record<Lane, boolean> = { search: false, durable: false, reference: false };
 	const laneOf = (entry: QueuedRequirement): Lane => {
 		if (entry.requirement.kind === 'search') return 'search';
 		if (
 			entry.requirement.kind === 'refresh' &&
-			descriptorFor(entry.requirement.collection)?.shape === 'greedy-prunable'
+			(entry.requirement.collection === 'refunds' ||
+				descriptorFor(entry.requirement.collection)?.shape === 'greedy-prunable')
 		) {
 			return 'reference';
 		}
@@ -945,6 +951,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					signal: item.abortController.signal,
 					onProgress: progressObserver(item.requirement, onProgressActivity),
 					referenceLanes: 'exclude',
+					refundHistory: 'exclude',
 					...overrides,
 				});
 
