@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Response } from '@playwright/test';
 
 import {
 	getStoreUrl,
@@ -176,6 +176,24 @@ test('a product created on the server reaches the products grid without a search
 	const authorization =
 		writer ?? (await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 
+	// The default name window can finish before we click Name again. During completed-window
+	// dedupe, the grid sorts locally without another request, so record browses from navigation.
+	const nameBrowses: { response: Response; order: string }[] = [];
+	const recordNameBrowse = (response: Response) => {
+		if (!response.ok() || response.request().method() !== 'GET') return;
+		const { pathname, searchParams } = new URL(response.url());
+		const order = searchParams.get('order');
+		if (
+			(pathname.endsWith('/wp-json/wcpos/v2/products') ||
+				searchParams.get('rest_route') === '/wcpos/v2/products') &&
+			searchParams.get('orderby') === NAME_SORT_WIRE_ORDERBY &&
+			(order === 'asc' || order === 'desc') &&
+			!searchParams.get('search')
+		) {
+			nameBrowses.push({ response, order });
+		}
+	};
+	page.on('response', recordNameBrowse);
 	await navigateToPage(page, 'products');
 	const screen = page.getByTestId('screen-products').filter({ visible: true });
 	await expect(screen.getByTestId('data-table-count')).toBeVisible({
@@ -203,27 +221,30 @@ test('a product created on the server reaches the products grid without a search
 		throw new Error(`Products price browse failed: HTTP ${priceProducts.status()}`);
 	}
 
-	const sortedProductsPending = page.waitForResponse(
-		(response) => {
-			if (response.request().method() !== 'GET') return false;
-			const url = new URL(response.url());
-			const route = url.searchParams.get('rest_route');
-			const isProductsBrowse =
-				url.pathname.endsWith('/wp-json/wcpos/v2/products') || route === '/wcpos/v2/products';
-			return (
-				isProductsBrowse &&
-				url.searchParams.get('orderby') === NAME_SORT_WIRE_ORDERBY &&
-				url.searchParams.get('order') === 'asc'
-			);
-		},
-		{ timeout: 60_000 }
-	);
-	sortedProductsPending.catch(() => {});
+	const beforeNameClick = nameBrowses.length;
 	await screen.getByTestId('data-table-header-name').first().click();
-	const sortedProducts = await sortedProductsPending;
-	if (!sortedProducts.ok()) {
-		throw new Error(`Products name browse failed: HTTP ${sortedProducts.status()}`);
-	}
+	let sortedProducts!: Response;
+	await expect
+		.poll(
+			async () => {
+				if (nameBrowses.length > beforeNameClick) {
+					sortedProducts = nameBrowses[nameBrowses.length - 1].response;
+					return 'ready';
+				}
+				for (const direction of ['asc', 'desc']) {
+					if (await screen.getByTestId(`data-table-sort-name-${direction}`).first().isVisible()) {
+						const match = [...nameBrowses].reverse().find(({ order }) => order === direction);
+						if (!match) return `No post-click name browse or recorded ${direction} name browse`;
+						sortedProducts = match.response;
+						return 'ready';
+					}
+				}
+				return 'No post-click name browse or visible name-sort indicator';
+			},
+			{ timeout: 60_000 }
+		)
+		.toBe('ready');
+	page.off('response', recordNameBrowse);
 	const sortedUrl = new URL(sortedProducts.url());
 	const order = sortedUrl.searchParams.get('order');
 	if (order !== 'asc' && order !== 'desc') {
