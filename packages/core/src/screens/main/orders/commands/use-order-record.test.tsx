@@ -2,12 +2,15 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
+import { of } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useOrderRecord } from './use-order-record';
 
-jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ store: null }) }));
+const storeData = { calc_taxes: 'yes' };
+const mockStore = { get: () => storeData, $: of(storeData) };
+jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ store: mockStore }) }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
 /**

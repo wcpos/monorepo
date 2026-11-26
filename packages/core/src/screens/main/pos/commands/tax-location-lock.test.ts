@@ -32,6 +32,20 @@ it.each<[string, string, OrderPayload, OrderPayload, boolean]>([
 	['A8 billing differs from base fallback', 'billing', {}, { billing: other }, true],
 	['A9 base never moves', 'base', {}, { billing: other, shipping: other }, false],
 	[
+		'F2a undefined billing keeps country',
+		'billing',
+		{ billing: other },
+		{ billing: undefined },
+		false,
+	],
+	[
+		'F2b undefined shipping keeps country',
+		'shipping',
+		{ shipping: other },
+		{ shipping: undefined },
+		false,
+	],
+	[
 		'null and empty city match',
 		'billing',
 		{ billing: { ...base, city: null! } },

@@ -15,6 +15,7 @@ export function refusesTaxLocationMove(
 ): boolean {
 	if (!payload.refunds?.length) return false;
 	const before = orderTaxLocation(baseLocation, storeTaxBasedOn, payload).location;
+	changes = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined));
 	const next = { ...payload, ...changes };
 	const after = orderTaxLocation(baseLocation, storeTaxBasedOn, next).location;
 	const fields = ['country', 'state', 'city', 'postcode'] as const;

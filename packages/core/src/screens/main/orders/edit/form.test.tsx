@@ -185,7 +185,7 @@ jest.mock('../../components/customer/address-rows', () => ({
 	asShipping: (billing: unknown) => billing,
 	TextPart: () => null,
 }));
-const storeData = { tax_based_on: 'shipping' };
+const storeData = { tax_based_on: 'shipping', calc_taxes: 'yes' };
 const mockStore = { get: () => storeData, $: new BehaviorSubject(storeData) };
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: mockStore }),
@@ -319,6 +319,7 @@ async function degradeStorage(databaseName: string) {
 }
 
 beforeEach(() => {
+	storeData.calc_taxes = 'yes';
 	jest.clearAllMocks();
 	mockLocalPatch.mockReset().mockResolvedValue({ changes: {}, document: order });
 	mockPushDocument.mockReset().mockResolvedValue(order);
@@ -393,6 +394,14 @@ describe('refund tax address lock', () => {
 		expect(await editField(`${root}.${field}`, value)).toBe(false);
 		expectRefusal();
 		expect(mockMarkFailed).toHaveBeenCalledWith([root]);
+	});
+	it('F1b saves a billing.city edit on a refunded order without notice when taxes are off', async () => {
+		storeData.calc_taxes = 'no';
+		draft.billing = { ...billing, city: 'Boston' };
+		render(<EditOrderForm order={order} />);
+		expect(await editField('billing.city', 'Boston')).toBe(true);
+		expect(mockLocalPatch.mock.lastCall![0].data).toEqual({ billing: draft.billing });
+		expect(testLogger.warn).not.toHaveBeenCalled();
 	});
 	it.each([
 		['E2', 'phone', '555'],

@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { config, expectSettledWrites } from '../../../../../jest/cart-write';
 import { resetOrderMutationQueues } from './order-mutation-queue';
@@ -14,7 +15,9 @@ import { useSetCartCustomer } from './use-set-cart-customer';
 
 const localPatch = jest.fn();
 const mockActionLog = jest.fn();
-jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ store: null }) }));
+const storeData = { calc_taxes: 'yes' };
+const mockStore = { get: () => storeData, $: new BehaviorSubject(storeData) };
+jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({ store: mockStore }) }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({
 		localPatch: jest.requireActual('../../../../../jest/cart-write').resolveCartWrite(localPatch),
@@ -47,6 +50,7 @@ const billing = { first_name: 'Ada', email: 'ada@example.com' };
 const shipping = { first_name: 'Ada', country: 'AU' };
 
 beforeEach(() => {
+	storeData.calc_taxes = 'yes';
 	resetOrderMutationQueues();
 	jest.clearAllMocks();
 	resetActionRegistry();
@@ -358,6 +362,13 @@ describe('the lines follow the rates of the address written (#1875)', () => {
 			'pos_cart.tax_location_locked',
 			expect.objectContaining({ showToast: true })
 		);
+	});
+	it('F1a writes a new billing country on a refunded cart when taxes are off', async () => {
+		storeData.calc_taxes = 'no';
+		expect(await setCustomer(billed(), { billing: gb, shipping: au })).toEqual({
+			uuid: 'order-uuid',
+		});
+		expect(localPatch.mock.lastCall![0].data.billing).toEqual(gb);
 	});
 	it('A2 writes contact fields at the same tax address', async () => {
 		const contact = { ...us, first_name: 'Jo', email: 'jo@example.com' };

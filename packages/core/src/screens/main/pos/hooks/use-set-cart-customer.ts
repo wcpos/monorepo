@@ -46,6 +46,7 @@ export const useSetCartCustomer = () => {
 	const configForOrder = useCartConfigReader();
 	const base = useBaseTaxLocation();
 	const basis = useDocField(useAppState().store, (value) => value.tax_based_on);
+	const taxes = useDocField(useAppState().store, (value) => value.calc_taxes);
 	const serverOwnsMoney = useServerOwnsMoneyReader();
 	const reportEngineWarnings = useReportEngineWarnings();
 	const runtime = useQueryRuntime();
@@ -85,7 +86,7 @@ export const useSetCartCustomer = () => {
 						let warnings: readonly EngineWarning[] = [];
 						const data = (currentPayload: OrderPayload) => {
 							warnings = [];
-							if (refusesTaxLocationMove(currentPayload, intent, base, basis))
+							if (taxes === 'yes' && refusesTaxLocationMove(currentPayload, intent, base, basis))
 								return { deny: { reasonKey: 'pos_cart.tax_location_locked' } };
 							const retaxed = retaxForCustomerWrite(currentPayload, intent, {
 								configForOrder,
@@ -104,6 +105,6 @@ export const useSetCartCustomer = () => {
 				order
 			)) as Awaited<ReturnType<SlotWrite>> | false;
 		},
-		[command, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime, base, basis]
+		[command, configForOrder, serverOwnsMoney, reportEngineWarnings, runtime, base, basis, taxes]
 	);
 };

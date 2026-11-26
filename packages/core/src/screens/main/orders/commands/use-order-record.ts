@@ -32,6 +32,7 @@ export function useOrderRecord() {
 	const { localPatch } = useLocalMutation();
 	const base = useBaseTaxLocation();
 	const basis = useDocField(useAppState().store, (value) => value.tax_based_on);
+	const taxes = useDocField(useAppState().store, (value) => value.calc_taxes);
 	const t = useT();
 	// The Edit tab manages an order; it is not the till ringing it up, so none of its writes add
 	// this device's register or till rows to an order without them. A reopen does (`reopenOrder`).
@@ -46,12 +47,13 @@ export function useOrderRecord() {
 				let refused = false;
 				const changes = (payload: Record<string, unknown>) => {
 					const patch = data(payload as OrderPayload);
-					refused = refusesTaxLocationMove(payload, patch, base, basis);
+					refused = taxes === 'yes' && refusesTaxLocationMove(payload, patch, base, basis);
 					return refused ? {} : patch;
 				};
 				const result = await localPatch({ document: order, changes }, { stampTill: false });
 				if (!refused) return !!result?.document && Object.keys(result.changes).length > 0;
 			} else if (
+				taxes !== 'yes' ||
 				!refusesTaxLocationMove((order.getLatest?.() ?? order).payload, data, base, basis)
 			) {
 				return !!(await localPatch({ document: order, data }, { stampTill: false }))?.document;
@@ -60,7 +62,7 @@ export function useOrderRecord() {
 			logger.warn(t('pos_cart.tax_location_locked'), { showToast: true, context });
 			return false;
 		},
-		[localPatch, base, basis, t]
+		[localPatch, base, basis, taxes, t]
 	);
 	/**
 	 * Null when the local write failed; otherwise the queued row to follow, if one was queued,
