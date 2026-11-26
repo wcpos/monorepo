@@ -7,6 +7,13 @@ export interface PrinterErrorDescription {
 }
 
 /**
+ * A web network print that never reached the printer (`buildConnectionError` in @wcpos/printer).
+ * Its suggestions mention the browser's local-network permission, so it must be read before the
+ * permission catches: it is a printer that did not answer, not a system-settings denial (#3370).
+ */
+export const WEB_CONNECTION_FAILURE_RE = /Could not connect to .+ printer at /i;
+
+/**
  * Every raw string a print path can throw, mapped to one line the cashier can act on
  * (roadmap#161 P1). Order matters: the first match wins, so the specific transport
  * failures sit above the generic permission/timeout catches.
@@ -14,6 +21,7 @@ export interface PrinterErrorDescription {
 const RULES: readonly (readonly [RegExp, string])[] = [
 	[/Error invoking remote method/i, 'err_bridge'],
 	[/not supported on Windows/i, 'err_windows_usb'],
+	[WEB_CONNECTION_FAILURE_RE, 'err_timeout'],
 	[/LIBUSB_ERROR_ACCESS|EACCES|permission/i, 'err_permission'],
 	[/Unsupported native printer vendor/i, 'err_unsupported'],
 	[/missing its device key|is not connected/i, 'err_reconnect'],
