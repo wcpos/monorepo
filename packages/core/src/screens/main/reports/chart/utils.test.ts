@@ -42,6 +42,9 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 // The decoded `store: '9'` filter of the rendered case below; the decoding has its own tests.
 jest.mock('../scope', () => ({ useReportsFilterScope: () => ({ storeId: 9 }) }));
+jest.mock('../use-report-cashier-names', () => ({
+	useReportCashierNames: () => ({ names: {}, ready: true }),
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (
 		source: Record<string, unknown> | undefined,
