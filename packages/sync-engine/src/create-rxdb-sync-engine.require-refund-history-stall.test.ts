@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createEngineHarness, type EngineHarnessRequest } from './testing';
@@ -74,22 +74,36 @@ describe('the refund history walk yields the require lane to browse windows', ()
 	}, 30_000);
 
 	it('a refund history refresh does not hold a browse window declared after it', async () => {
-		const harness = await createEngineHarness({ routes, startAtMs });
+		const gate = Promise.withResolvers<void>();
+		const harness = await createEngineHarness({
+			startAtMs,
+			routes: {
+				...routes,
+				'/refunds': async (request: EngineHarnessRequest) => {
+					if (pageOf(request) === 2) await gate.promise;
+					return routes['/refunds'](request);
+				},
+			},
+		});
 		try {
 			const { engine } = harness;
 			const refresh = engine.require(refundRefresh);
+			await vi.waitFor(() => expect(harness.requests.filter(isRefund).map(pageOf)).toContain(2), {
+				timeout: 5_000,
+			});
 			const products = engine.require(filteredProducts);
-			await Promise.all([refresh.ready, products.ready]);
-			refresh.release();
-			products.release();
-
-			const browseIndex = harness.requests.findIndex(isCategoryBrowse);
-			const lastPageIndex = harness.requests.findIndex(
-				(request) => isRefund(request) && pageOf(request) === 21
-			);
-			expect(browseIndex).toBeGreaterThanOrEqual(0);
-			expect(browseIndex).toBeLessThan(lastPageIndex);
+			try {
+				await vi.waitFor(() => expect(harness.requests.some(isCategoryBrowse)).toBe(true), {
+					timeout: 5_000,
+				});
+			} finally {
+				gate.resolve();
+				await Promise.all([refresh.ready, products.ready]);
+				refresh.release();
+				products.release();
+			}
 		} finally {
+			gate.resolve();
 			await harness.dispose();
 		}
 	}, 30_000);
@@ -105,6 +119,60 @@ describe('the refund history walk yields the require lane to browse windows', ()
 				Array.from({ length: 21 }, (_, index) => index + 1)
 			);
 		} finally {
+			await harness.dispose();
+		}
+	}, 30_000);
+
+	it('a refund history refresh does not hold a picker refresh declared after it', async () => {
+		const gate = Promise.withResolvers<void>();
+		const harness = await createEngineHarness({
+			startAtMs,
+			routes: {
+				...routes,
+				'/refunds': async (request: EngineHarnessRequest) => {
+					if (pageOf(request) === 2) await gate.promise;
+					return routes['/refunds'](request);
+				},
+				'/coupons': () =>
+					Response.json(
+						Array.from({ length: 3 }, (_, index) => ({
+							id: index + 1,
+							code: `coupon-${index + 1}`,
+							meta_data: [
+								{
+									key: '_woocommerce_pos_uuid',
+									value: `55555555-5555-4555-8555-${String(index + 1).padStart(12, '0')}`,
+								},
+							],
+						})),
+						{ headers: { 'X-WP-Total': '3', 'X-WP-TotalPages': '1' } }
+					),
+			},
+		});
+		try {
+			const { engine } = harness;
+			const refresh = engine.require(refundRefresh);
+			await vi.waitFor(() => expect(harness.requests.filter(isRefund).map(pageOf)).toContain(2), {
+				timeout: 5_000,
+			});
+			const coupons = engine.require({
+				id: 'coupons-refresh',
+				collection: 'coupons',
+				kind: 'refresh',
+			});
+			try {
+				await vi.waitFor(
+					() => expect(harness.requests.some(({ path }) => path.endsWith('/coupons'))).toBe(true),
+					{ timeout: 5_000 }
+				);
+			} finally {
+				gate.resolve();
+				await Promise.all([refresh.ready, coupons.ready]);
+				refresh.release();
+				coupons.release();
+			}
+		} finally {
+			gate.resolve();
 			await harness.dispose();
 		}
 	}, 30_000);
