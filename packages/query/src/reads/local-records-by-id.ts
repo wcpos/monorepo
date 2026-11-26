@@ -7,7 +7,9 @@ import { observeEngineQuery } from '../engine-query';
 import type { PayloadOf } from '../records/engine-record';
 
 /** Local Woo-id lookup only: no demand or loading state. An unbound scope answers []. */
-export function observeLocalRecordsById<Name extends 'orders' | 'products' | 'products/categories'>(
+export function observeLocalRecordsById<
+	Name extends 'customers' | 'orders' | 'products' | 'products/categories',
+>(
 	engine: RxdbSyncEngine,
 	name: Name,
 	ids: readonly number[]

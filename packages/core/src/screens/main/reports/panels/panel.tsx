@@ -42,7 +42,7 @@ export function DetailPanel() {
 function DetailPanelContent() {
 	const host = usePageSheetHost();
 	const { detail, setDetail } = useReportsScope(),
-		{ allOrders, selectedOrders, figures, periodRefunds } = useReportsData();
+		{ allOrders, selectedOrders, figures, periodRefunds, cashierNames } = useReportsData();
 	const included = useIncludedStatus();
 	const selection = useReportsSelection();
 	const { unselectedRowIds } = selection;
@@ -107,12 +107,12 @@ function DetailPanelContent() {
 		((detail !== 'refunds' && !grouped) || periodRefunds !== undefined) &&
 		(!grouped || products) &&
 		((detail !== 'categories' && detail !== 'products') || tree) &&
-		(detail !== 'cashiers' && detail !== 'orders' ? true : namesReady.cashier) &&
+		(detail !== 'cashiers' && detail !== 'orders' ? true : cashierNames.ready) &&
 		(detail !== 'registers' || namesReady.register) &&
 		(detail !== 'stores' || namesReady.store);
 	const spec = panelSpec(detail ?? 'orders', figures, formats, t, {
 		orders: detail === 'orders' ? includedOrders : selectedOrders,
-		names,
+		names: { ...names, cashier: cashierNames.names },
 		directory: products,
 		categoryTree: tree,
 		productLines: { orders: filteredOrders, refunds: filteredRefunds },

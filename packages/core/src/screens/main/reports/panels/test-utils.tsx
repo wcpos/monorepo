@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { OverlayHostProvider } from '@wcpos/components/lib/overlay-host';
 
-import { figuresOf, mockState, render } from '../cards/test-utils';
+import { mockState, render } from '../cards/test-utils';
 import { Reports } from '../reports';
 
 import type * as Context from '../context';
@@ -117,41 +117,28 @@ jest.mock('@wcpos/components/select', () => ({
 		<span data-testid={testID}>{label}</span>
 	),
 }));
-const Selection = React.createContext<Context.ReportsSelection | undefined>(undefined);
 const context = jest.requireMock<typeof Context>('../context');
 export const real = jest.requireActual<typeof Context>('../context');
 export function preparePanel() {
 	jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
 	jest.spyOn(context, 'useIncludedStatus').mockImplementation(real.useIncludedStatus);
-	jest.spyOn(context, 'useReportsHandles').mockImplementation(
-		() =>
-			({
-				handle: mockSalesHandle,
-				comparisonHandle: mockSalesHandle,
-				refundsHandle: mockRefundsHandle,
-			}) as unknown as Context.ReportsHandles
-	);
-	jest.spyOn(context, 'useReportsSelection').mockImplementation(() => React.useContext(Selection)!);
 	jest.spyOn(context, 'useReportsData').mockImplementation(() => {
-		const included = real.useIncludedStatus();
-		const { unselectedRowIds } = React.useContext(Selection)!;
-		const selectedOrders = mockState.data.allOrders.filter(
-			(order) => included(order) && !unselectedRowIds[order.uuid]
-		);
+		const data = real.useReportsData();
+		const { periodRefunds } = mockState.data;
 		return {
-			...mockState.data,
-			selectedOrders,
-			figures: figuresOf(mockState.data, selectedOrders),
+			...data,
+			periodRefunds,
+			figures: periodRefunds ? data.figures.withRefunds(periodRefunds) : data.figures,
 		};
 	});
 }
-function SelectionProvider({ children }: React.PropsWithChildren) {
-	const [unselectedRowIds, setUnselectedRowIds] = React.useState<
-		Context.ReportsSelection['unselectedRowIds']
-	>({ hidden: true });
+function SelectionControls({ children }: React.PropsWithChildren) {
+	const { unselectedRowIds, setUnselectedRowIds } = real.useReportsSelection();
+	// Test fixture: the real provider owns the selection, so the left-out row is seeded on mount.
+	React.useEffect(() => setUnselectedRowIds({ hidden: true }), []);
 	const { statusMode, setStatusMode, setDetail } = real.useReportsScope();
 	return (
-		<Selection.Provider value={{ unselectedRowIds, setUnselectedRowIds }}>
+		<>
 			<button
 				data-testid="widen"
 				onClick={() => setStatusMode(statusMode === 'all' ? 'done' : 'all')}
@@ -162,19 +149,32 @@ function SelectionProvider({ children }: React.PropsWithChildren) {
 				<button key={id} data-testid={`open-${id}`} onClick={() => setDetail(id)} />
 			))}
 			{children}
-		</Selection.Provider>
+		</>
 	);
 }
-export const room = () =>
-	render(
+export function emitSales() {
+	mockSalesHandle.set({
+		result: {
+			hits: mockState.data.allOrders.map(({ uuid, ...payload }) => ({ record: { uuid, payload } })),
+		},
+	});
+}
+export function room(page = <Reports date="Sales" />) {
+	emitSales();
+	return render(
 		<OverlayHostProvider name="scene:reports" phoneUsesRoot>
 			<real.ReportsScopeProvider>
-				<SelectionProvider>
-					<Reports date="Sales" />
-				</SelectionProvider>
+				<real.ReportsProvider
+					handle={mockSalesHandle}
+					comparisonHandle={mockSalesHandle}
+					refundsHandle={mockRefundsHandle}
+				>
+					<SelectionControls>{page}</SelectionControls>
+				</real.ReportsProvider>
 			</real.ReportsScopeProvider>
 		</OverlayHostProvider>
 	);
+}
 
 const { fakeQueryHandle } = jest.requireActual('@wcpos/core-test/fake-query-handle');
 /** The sales and refunds handles; a test drives `set({ laneProgress })` (null: range complete). */

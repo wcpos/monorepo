@@ -27,6 +27,7 @@ import {
 	zoneOptions,
 } from '../../../hooks/use-store-day';
 import { currencyOf, salesByCurrency, salesFigures } from './report/sales-figures';
+import { useReportCashierNames } from './use-report-cashier-names';
 import { inRoom, useReportsDirectories, useReportsFilterScope } from './scope';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
@@ -85,6 +86,7 @@ export interface ReportsData {
 	live: boolean;
 	/** The selected orders' figures, at the viewed store's precision, for every reader. */
 	figures: SalesFigures;
+	cashierNames: ReturnType<typeof useReportCashierNames>;
 }
 
 export type DetailId =
@@ -378,7 +380,12 @@ export function ReportsProvider({
 	);
 
 	// One set of figures for the hero, the cards, the panels and the printed summary.
-	const { storeId } = useReportsPeriod();
+	const { storeId, cashierId } = useReportsFilterScope();
+	const cashierIds = allOrders.map(
+		(order) => wooMetaCarrier.readIdentity(order.meta_data).cashierId ?? ''
+	);
+	if (cashierId !== undefined) cashierIds.push(cashierId);
+	const cashierNames = useReportCashierNames(cashierIds);
 	const numDecimals = useDocField(useViewedStore(storeId), (value) => value.price_num_decimals);
 	const figures = React.useMemo(
 		() => salesFigures({ orders: selectedOrders, decimals: numDecimals }),
@@ -394,8 +401,9 @@ export function ReportsProvider({
 			comparisonOrders: [],
 			wholeComparisonOrders: [],
 			figures,
+			cashierNames,
 		}),
-		[allOrders, selectedOrders, dateRange, comparisonRange, live, figures]
+		[allOrders, selectedOrders, dateRange, comparisonRange, live, figures, cashierNames]
 	);
 
 	return (

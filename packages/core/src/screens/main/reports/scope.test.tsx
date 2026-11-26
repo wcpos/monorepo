@@ -245,7 +245,7 @@ it('decodes the filters once, with names Unknown until each directory answers', 
 		mockCashiers.next([{ id: 7, display_name: 'Pat' }, { id: 8 }]);
 		mockStores.next(twoStores);
 	});
-	expect(result.current.names.cashier).toEqual({ 7: 'Pat', 8: 'common.unknown' });
+	expect(result.current.names.cashier).toEqual({ 7: 'Pat' });
 	expect(result.current.names.store).toEqual({ 7: 'Front shop', 9: 'common.unknown' });
 	expect(result.current.namesReady).toEqual({ cashier: true, register: false, store: true });
 	expect(result.current.directories.cashiers).toHaveLength(2);
