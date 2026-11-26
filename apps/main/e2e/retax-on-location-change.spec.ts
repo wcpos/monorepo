@@ -5,6 +5,7 @@
  * Store-agnostic: L1 is the guest's address (the store's base country, no state), L2 is a
  * location the store's own standard-class rates tax differently. Customers come through the
  * store API and are deleted in teardown; orders are rung up through the POS UI.
+ * E5 is fixme here: see its reason; it moves to the orders Edit tab with #1875 PR 2.
  */
 import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
 
@@ -512,6 +513,10 @@ liveTest.describe('#1875 re-tax on a tax-location change — till equals server 
 	liveTest(
 		'E5: a captured partial cash leg, then a customer at another rate set, then the rest',
 		async ({ posPage: page, trackOrder, request, storeAuthorization }, testInfo) => {
+			liveTest.fixme(
+				true,
+				'E5 moves to the orders Edit tab (#1875 PR 2, #3850): the cart cannot write a customer on a part-paid order, because checkout keeps it (close opens Cancel payment)'
+			);
 			liveTest.slow();
 			const s = await setup(request, testInfo, storeAuthorization);
 			const customer = await createCustomer(request, testInfo, s.authorization, s.l2, created);
