@@ -1071,6 +1071,8 @@
 	"orders.submit_refund_cash": "Refund {amount} in cash",
 	"orders.submit_refund_original": "Refund {amount} to the original method",
 	"orders.refund_total": "Refund Total",
+	"orders.refund_unverified_payment": "This payment was recorded by hand, so its provider can't refund it.",
+	"orders.refund_unverified_payment_check": "Nothing was refunded. Choose another refund destination, such as cash, and try again.",
 	"orders.refunded_by": "By",
 	"orders.refunds": "Refunds",
 	"orders.refunds_load_failed": "Could not load refund details.",

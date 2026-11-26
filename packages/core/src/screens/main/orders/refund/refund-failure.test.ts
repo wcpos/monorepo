@@ -104,6 +104,44 @@ describe('classifyRefundFailure', () => {
 		});
 	});
 
+	it('maps a refund refused for a hand-recorded payment to its own line, not an unknown outcome', () => {
+		const error = {
+			response: {
+				status: 409,
+				data: {
+					code: 'wcpos_refund_unverified_payment',
+					message: 'x',
+					data: { status: 409, reason: 'unverified', payment_id: '17' },
+				},
+			},
+		};
+		expect(classifyRefundFailure(error, t)).toEqual({
+			level: 'warn',
+			code: 'SYNC211',
+			title: 'orders.refund_unverified_payment',
+			text2: 'orders.refund_unverified_payment_check',
+		});
+	});
+
+	it('keeps the same code with another reason an unknown outcome', () => {
+		const error = {
+			response: {
+				status: 409,
+				data: {
+					code: 'wcpos_refund_unverified_payment',
+					message: 'x',
+					data: { status: 409, reason: 'other', payment_id: '17' },
+				},
+			},
+		};
+		expect(classifyRefundFailure(error, t)).toEqual({
+			level: 'error',
+			code: 'PAYMENT311',
+			title: 'orders.refund_outcome_unknown',
+			text2: 'orders.refund_check_before_retry',
+		});
+	});
+
 	it('keeps a different server error unconfirmed', () => {
 		const error = { response: { status: 500, data: { code: 'internal_server_error' } } };
 		expect(classifyRefundFailure(error, t)).toEqual({

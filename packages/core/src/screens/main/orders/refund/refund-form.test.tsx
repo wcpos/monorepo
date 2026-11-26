@@ -1323,6 +1323,37 @@ describe('RefundOrderForm', () => {
 			expect(success).not.toHaveBeenCalled();
 		});
 
+		it('a refund refused for a hand-recorded payment warns with its own line and keeps the form', async () => {
+			const failure = Object.assign(new Error('409'), {
+				response: {
+					status: 409,
+					data: {
+						code: 'wcpos_refund_unverified_payment',
+						message: 'x',
+						data: { status: 409, reason: 'unverified', payment_id: '17' },
+					},
+				},
+			});
+			await sendRefund(jest.fn().mockRejectedValue(failure));
+
+			await waitFor(() =>
+				expect(warn).toHaveBeenCalledWith(
+					'Refund failed',
+					expect.objectContaining({
+						showToast: true,
+						toast: {
+							title: 'orders.refund_unverified_payment',
+							text2: 'orders.refund_unverified_payment_check',
+						},
+						code: 'SYNC211',
+					})
+				)
+			);
+			expect(back).not.toHaveBeenCalled();
+			expect(success).not.toHaveBeenCalled();
+			expect(screen.getByTestId('refund-custom-amount')).toHaveValue('5');
+		});
+
 		it('another server error logs PAYMENT311 and stays on the form', async () => {
 			const failure = Object.assign(new Error('500'), {
 				response: { status: 500, data: { code: 'internal_server_error' } },
