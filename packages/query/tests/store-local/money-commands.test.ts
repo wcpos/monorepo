@@ -18,6 +18,7 @@ import {
 	CLAIM_LEASE_MS,
 	claimHeld,
 	claimRoute,
+	classifyMoneyRoute,
 	type CommandState,
 	commandState,
 	deferEntry,
@@ -459,4 +460,13 @@ describe('the entry state and the reads over it', () => {
 		// The session owes a re-send for the candidate's scope (`test-scope`), whoever reads it.
 		expect(!!entry && owedResend(entry, 'test-scope')).toBe(owed);
 	});
+});
+
+it('classifies a tender correction route by its leg (#3647)', () => {
+	expect(classifyMoneyRoute('orders/12/payments/9b2c-uuid/correct')).toEqual({
+		kind: 'correct',
+		orderId: 12,
+		target: '9b2c-uuid',
+	});
+	expect(classifyMoneyRoute('orders/12/payments/9b2c-uuid/correct/x')).toBeNull();
 });

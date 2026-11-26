@@ -113,7 +113,7 @@ describe('the close answer rule', () => {
 describe('the money answer rule, per kind', () => {
 	const row = { id: 'p1', status: 'captured', amount: '10.00' };
 	const order = { status: 'pos-open' };
-	it.each(['record', 'intent', 'capture', 'void'] as const)(
+	it.each(['record', 'intent', 'capture', 'void', 'correct'] as const)(
 		'%s needs the row and the summary',
 		(kind) => {
 			expect(isMoneyAnswer(kind, { payment: row, order, revision: 'r' })).toBe(true);

@@ -185,6 +185,13 @@ export function TillStrip({
 					`${t('reports.cash_refunds')} · ${terms.cashRefunds.count}`,
 					money(terms.cashRefunds.amount),
 				]);
+			if (Number(terms.cashCorrections))
+				rows.push([
+					'till-term-corrections',
+					Number(terms.cashCorrections) < 0 ? '−' : '+',
+					t('register.cash_corrections'),
+					format(Math.abs(Number(terms.cashCorrections))),
+				]);
 			// The result is the hook's expected (the server's anchor when it has one), never a second derivation.
 			rows.push([
 				'till-expected',

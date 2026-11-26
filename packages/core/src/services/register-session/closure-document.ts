@@ -117,6 +117,8 @@ function envelope(
 			);
 		});
 	const methods = (breakdowns.payment_methods ?? {}) as Record<string, Values>;
+	// Receipt_Data_Builder's Corrections line (#3647): only a corrected tender carries one.
+	const corrected = (m: Values) => toMinor(String(m.corrections || '0'), 4) !== 0;
 	const tenders = [
 		...new Set([...Object.keys(row.counted ?? {}), ...Object.keys(row.expected ?? {})]),
 	].map((name) => {
@@ -144,6 +146,7 @@ function envelope(
 	return {
 		closure: {
 			has_discounts: !!discounts && (discounts.count > 0 || toMinor(discounts.amount, 4) !== 0),
+			has_corrections_line: Object.values(methods).some(corrected),
 			has_variance_note: !!String(breakdowns.variance_note ?? '').trim(),
 			has_denominations: !!denominations?.length,
 			has_sales:
@@ -194,7 +197,9 @@ function envelope(
 					? { denominations: denominations.map((d) => money(d, ['value', 'amount'])) }
 					: {}),
 				labels,
-				payment_methods: rows('payment_methods', ['sales', 'refunds']),
+				payment_methods: rows('payment_methods', ['sales', 'refunds']).map((m) =>
+					corrected(m) ? { ...money(m, ['corrections']), has_corrections: true } : m
+				),
 				tax_rates: rows('tax_rates', ['net', 'tax', 'gross']),
 				opening_float: money((breakdowns.opening_float ?? {}) as Values, [
 					'expected',

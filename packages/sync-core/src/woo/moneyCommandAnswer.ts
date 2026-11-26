@@ -166,7 +166,8 @@ const isSummary = (value: unknown) => isObject(value) && typeof value.status ===
 /**
  * Whether a 2xx answer to a money command is the store's own, by kind (free `next`
  * `API/V2/Payments_Controller.php`): `record`, `intent`, `capture` and `void` answer the row and
- * the summary (`payment_response`, :174, :297, :370, and their replays, :475-478); `refund`
+ * the summary (`payment_response`, :174, :297, :370, and their replays, :475-478), and so does
+ * `correct` (its R+ row; #3647); `refund`
  * answers the row alone (:368, :475); `submit` answers a known `outcome` with the summary (and
  * the row for `recorded`), `cancel`
  * the summary (:451); `close` as `isCloseAnswer`. Anything else (a proxy page, a plugin filter's
@@ -174,7 +175,8 @@ const isSummary = (value: unknown) => isObject(value) && typeof value.status ===
  * not send. The command stays journaled and its outcome is unknown until a re-send answers it.
  */
 export function isMoneyAnswer(
-	kind: 'record' | 'intent' | 'capture' | 'void' | 'refund' | 'submit' | 'cancel' | 'close',
+	kind:
+		'record' | 'intent' | 'capture' | 'void' | 'refund' | 'correct' | 'submit' | 'cancel' | 'close',
 	data: unknown
 ): boolean {
 	if (!isObject(data)) return false;

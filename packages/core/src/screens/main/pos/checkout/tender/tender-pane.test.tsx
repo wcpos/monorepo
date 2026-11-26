@@ -1478,6 +1478,50 @@ describe('split V1: the pane builds each payment', () => {
 		expect(screen.getByTestId('checkout-helpers')).toBeTruthy();
 	});
 
+	it('#3651: a leg is titled by the held method when no tile has it', () => {
+		const rows = [
+			row('a', '23.00'),
+			row('b', '15.00', 'example_terminal'),
+			row('c', '20.00', 'cheque'),
+		];
+		const byId = new Map([
+			['example_terminal', { ...method, id: 'example_terminal', title: 'Example terminal' }],
+		]);
+		const over = { rows, byId, paidMinor: 5800, balanceMinor: 12450 };
+		render(<TenderPane flow={splitFlow(over, { doneOpen: true })} format={String} />);
+		expect(text('checkout-plan-payment-1')).toContain('Example terminal · 1500');
+		expect(text('checkout-plan-payment-2')).toContain('cheque · 2000');
+		expect(document.body.textContent).not.toContain('example_terminal');
+	});
+
+	// A tender correction (#3647): R- and R+ are appended for the 55.00 cash leg, now card.
+	const corrected = [
+		row('a', '55.00'),
+		{ ...row('b', '-55.00'), reverses: 'a' },
+		{ ...row('c', '55.00', 'pos_card'), corrects: 'a' },
+	];
+	const cardById = new Map([['pos_card', { ...method, id: 'pos_card', title: 'Card' }]]);
+	it('#3651: a corrected leg with no plan is one payment, titled by the corrected method', () => {
+		const over = { rows: corrected, byId: cardById, paidMinor: 5500, balanceMinor: 3000 };
+		render(<TenderPane flow={splitFlow(over, { doneOpen: true })} format={String} />);
+		expect(text('checkout-label')).toContain('Payment 2 ·');
+		expect(text('checkout-plan-payment-0')).toContain('Card · 5500');
+		expect(screen.queryByTestId('checkout-plan-payment-1')).toBeNull();
+	});
+
+	it('#3651: a leg corrected before the plan is one leg: the payment now is leg 1, not 3', () => {
+		const over = {
+			rows: corrected,
+			byId: cardById,
+			paidMinor: 5500,
+			balanceMinor: 3000,
+			plan: { kind: 'even', ways: 3, from: 3 } as const,
+		};
+		render(<TenderPane flow={splitFlow(over, { entryMinor: 1000 })} format={String} />);
+		expect(text('checkout-plan-leg-1')).toBe('1000');
+		expect(screen.queryByTestId('checkout-plan-leg-3')).toBeNull();
+	});
+
 	it('runs of equal payments to come read Then n × amount', () => {
 		const flow = splitFlow({
 			plan: { kind: 'even', ways: 3, from: 0 },

@@ -1,5 +1,5 @@
 import {
-	countsTowardPaid,
+	countedLegs,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	roundedDue,
@@ -71,10 +71,10 @@ export function tenderFigures(facts: TenderFacts) {
 	const legs = split?.legs ?? [];
 	const done = legs.filter((leg) => leg.state === 'done');
 	// Payments are numbered across the bill: those taken before the plan count too (ruled 2026-11-08).
-	// `plan.from` indexes every ledger row; only the counted ones before it are payments.
-	const n = rows.filter(countsTowardPaid).length + 1;
-	const ways =
-		rows.slice(0, plan?.from ?? 0).filter(countsTowardPaid).length + (split?.label.ways ?? 0);
+	// `plan.from` indexes every ledger row; only the counted ones before it are payments, a
+	// corrected leg once, in its original's place (`countedLegs`, #3647).
+	const n = countedLegs(rows).length + 1;
+	const ways = countedLegs(rows, 0, plan?.from ?? 0).length + (split?.label.ways ?? 0);
 	const groupDone =
 		plan?.kind === 'items' && done.reduce((sum, leg) => sum + leg.minor, 0) >= plan.firstMinor;
 	const thisPaymentMinor = split?.thisPaymentMinor ?? balanceMinor;

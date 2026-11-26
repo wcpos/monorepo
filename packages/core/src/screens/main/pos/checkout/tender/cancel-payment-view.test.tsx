@@ -151,6 +151,42 @@ it.each([
 	expect(confirm.hasAttribute('disabled')).toBe(true);
 	expect(screen.getByTestId('checkout-cancel-keep-going').hasAttribute('disabled')).toBe(true);
 });
+it('lists only R+ on a corrected ledger, as a refund', () => {
+	const tc = { status: 'captured', capture_mode: 'manual', entry: 'tender_correction' } as const;
+	const o = row('o', { status: 'captured', kind: 'cash', capture_mode: 'manual', amount: '20' });
+	const minus = row('rminus', { ...tc, kind: 'cash', amount: '-20', reverses: 'o' });
+	const plus = row('rplus', { ...tc, kind: 'card', amount: '20', corrects: 'o' });
+	const meta_data = [{ key: '_wcpos_payments', value: { schema: 1, payments: [o, minus, plus] } }];
+	const { retained } = partitionVoidableRows(meta_data as never);
+	render(<CancelPaymentView flow={flow([o, minus, plus], retained)} format={format} />);
+	expect(screen.getByTestId('checkout-cancel-leg-rplus').textContent).toContain('refund_on_method');
+	expect(screen.queryByTestId('checkout-cancel-leg-rminus')).toBeNull();
+	expect(screen.queryByTestId('checkout-cancel-leg-o')).toBeNull();
+});
+
+// #3651: the tiles leave webview methods out, so a leg's title comes from the held methods first.
+it('#3651: a leg is titled by the held method when no tile has it', () => {
+	const terminal = row('t', {
+		status: 'captured',
+		kind: 'card',
+		capture_mode: 'server',
+		method_id: 'example_terminal',
+	});
+	const cheque = row('cheque', { status: 'pending', kind: 'card', capture_mode: 'manual' });
+	const byId = new Map([
+		['example_terminal', { id: 'example_terminal', title: 'Example terminal' }],
+	]);
+	render(
+		<CancelPaymentView
+			flow={{ ...flow([terminal, cheque], [terminal]), byId } as never}
+			format={format}
+		/>
+	);
+	const first = screen.getByTestId('checkout-cancel-leg-t').textContent;
+	expect(first).toContain('Example terminal');
+	expect(first).not.toContain('example_terminal');
+	expect(screen.getByTestId('checkout-cancel-leg-cheque').textContent).toContain('cheque');
+});
 
 // #3654: on a phone the buttons stack full width, Keep taking payment first; elsewhere they sit side by side.
 it.each([true, false])('on a phone (%s) the buttons stack full width', (phone) => {

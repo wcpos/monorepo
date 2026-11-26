@@ -1109,6 +1109,9 @@ describe('useTenderFlow', () => {
 			rerender();
 			const { format, ...view } = result.current.view;
 			expect(result.current.flow).toMatchObject(view);
+			// #3651: both carry the held methods, so a leg the tiles leave out is still titled.
+			for (const byId of [view.byId, result.current.flow.byId])
+				expect(byId?.get('pos_cash')?.title).toBe('Cash');
 			expect(view.paidMinor).toBe(5000);
 			expect(format(view.balanceMinor)).toBe('42.95');
 			expect(mockRecordManualPayment).not.toHaveBeenCalled();
