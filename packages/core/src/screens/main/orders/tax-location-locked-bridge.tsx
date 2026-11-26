@@ -3,6 +3,7 @@ import * as React from 'react';
 import { firstValueFrom, race, timer } from 'rxjs';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { resolveQueuedChange } from '@wcpos/query/mutations';
 import { ORDER_REFRESH_TIMEOUT_MS, readResidentOrder } from '@wcpos/query/record-readers';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { EngineEvent } from '@wcpos/sync-engine';
@@ -18,7 +19,6 @@ export function TaxLocationLockedBridge() {
 	const t = useT();
 	const notices = React.useRef(new Map<string, number>());
 	React.useEffect(() => {
-		const { engine } = runtime;
 		const handle = async (event: EngineEvent) => {
 			if (event.type !== 'write-rejected' || event.collection !== 'orders') return;
 			if (event.reason !== 'wcpos_tax_location_locked') return;
@@ -30,11 +30,11 @@ export function TaxLocationLockedBridge() {
 				logger.warn(message, { showToast: true, toast: { type: 'error' } });
 			}
 			try {
-				await engine.resolveConflict(mutationId, 'discard');
+				await resolveQueuedChange(runtime.engine, mutationId, 'discard');
 				const wooId = (await readResidentOrder(runtime, recordId))?.payload.id;
 				if (wooId)
 					await firstValueFrom(
-						race(engine.orderRevision.readopt(wooId), timer(ORDER_REFRESH_TIMEOUT_MS))
+						race(runtime.engine.orderRevision.readopt(wooId), timer(ORDER_REFRESH_TIMEOUT_MS))
 					);
 			} catch (error) {
 				logger.warn('Could not recover a refused tax address change', {
@@ -42,7 +42,7 @@ export function TaxLocationLockedBridge() {
 				});
 			}
 		};
-		return engine.events((event) => void handle(event));
+		return runtime.engine.events((event) => void handle(event));
 	}, [runtime, t]);
 	return null;
 }

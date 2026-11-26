@@ -36,7 +36,14 @@ jest.mock('@wcpos/query/record-readers', () => ({
 	...jest.requireActual('@wcpos/query/record-readers'),
 	readResidentOrder: jest.fn(),
 }));
-jest.mock('@wcpos/query/mutations', () => ({ patchEngineResident: jest.fn() }));
+jest.mock('@wcpos/query/mutations', () => ({
+	patchEngineResident: jest.fn(),
+	resolveQueuedChange: (
+		engine: { resolveConflict: (id: string, r: string) => Promise<void> },
+		id: string,
+		r: string
+	) => engine.resolveConflict(id, r),
+}));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 const warn = getLogger(['test']).warn;
 const resident = { payload: { id: 17, customer_note: 'not yet synced' } };
