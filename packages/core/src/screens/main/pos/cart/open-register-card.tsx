@@ -37,7 +37,7 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 	const places = Number(useDocField(store, (value) => value.price_num_decimals) ?? 2);
 	const phone = useIsPhone();
 	const credentials = useObservableSuspense(credentialsListResource(site));
-	const { time } = useStoreDayLabel(sessionStore.id);
+	const { time, dateTime } = useStoreDayLabel(sessionStore.id);
 	// A suggestion is shown as the cashier would count it: the server keeps money at four decimals
 	// ("63014.5600"), the count keeps the store's (at least cents), rounded half-up.
 	const countPlaces = countDecimals(useDocField(store, (value) => value.price_num_decimals));
@@ -131,12 +131,9 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 				/>
 			)}
 			{lastClosure && (
-				<Text className="text-muted-foreground">
+				<Text className="text-muted-foreground" testID="open-register-last-closure-line">
 					{t('register.last_closure')} {lastClosure.server_number ?? lastClosure.number} ·{' '}
-					{new Date(lastClosure.closed_at).toLocaleString([], {
-						dateStyle: 'short',
-						timeStyle: 'short',
-					})}
+					{dateTime(lastClosure.closed_at)}
 				</Text>
 			)}
 			<View className="gap-2">
