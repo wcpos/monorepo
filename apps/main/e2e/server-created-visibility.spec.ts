@@ -5,6 +5,7 @@ import {
 	getStoreVariant,
 	navigateToPage,
 	authenticatedTest as test,
+	waitForRequirePlaneIdle,
 } from './fixtures';
 import { resolveProbeAuthorization } from './probe-credential';
 import {
@@ -180,6 +181,9 @@ test('a product created on the server reaches the products grid without a search
 	await expect(screen.getByTestId('data-table-count')).toBeVisible({
 		timeout: 60_000,
 	});
+	// The require plane is serial: a browse armed while the startup lanes still drain can
+	// queue past its 60 s window (#3798, the class #3810 fixed). The queueing itself is #3340.
+	await waitForRequirePlaneIdle(page);
 	// Put the grid on another field first, so clicking Name deterministically selects ascending.
 	const priceProductsPending = page.waitForResponse(
 		(response) => {
@@ -349,6 +353,7 @@ test('an order created on the server reaches the orders grid without a search', 
 	await navigateToPage(page, 'orders');
 	const screen = page.getByTestId('screen-orders').filter({ visible: true });
 	await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 60_000 });
+	await waitForRequirePlaneIdle(page);
 
 	/**
 	 * Land the probe in the FIRST rendered rows: put the grid on `date_created_gmt`
@@ -511,6 +516,7 @@ test('a customer created on the server reaches the customers grid without a sear
 	await navigateToPage(page, 'customers');
 	const screen = page.getByTestId('screen-customers').filter({ visible: true });
 	await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 60_000 });
+	await waitForRequirePlaneIdle(page);
 
 	const customersBrowseResponse = (orderby: string, order: string) =>
 		page.waitForResponse(
