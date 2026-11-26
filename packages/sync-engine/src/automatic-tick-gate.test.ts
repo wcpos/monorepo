@@ -29,6 +29,35 @@ describe('createAutomaticTickGate', () => {
 		expect(recordTick).not.toHaveBeenCalled();
 	});
 
+	it('pauses pulls but keeps writes and resumes at the next tick', async () => {
+		let paused = true;
+		const tickLane = vi.fn(async (lane: EngineLane) => report(lane));
+		const onGatedSkip = vi.fn();
+		const recordTick = vi.fn();
+		const gate = createAutomaticTickGate({
+			isGated: () => false,
+			pullsPaused: () => paused,
+			connectivity: () => 'online',
+			now: () => 0,
+			diagnostics: vi.fn(),
+			onStatusChange: vi.fn(),
+			tickLane,
+			recordTick,
+			seedRetickLanes: [],
+			onGatedSkip,
+		});
+		await gate.runLane('scheduler-drain');
+		expect(tickLane).not.toHaveBeenCalled();
+		expect(recordTick).not.toHaveBeenCalled();
+		expect(onGatedSkip).toHaveBeenCalledExactlyOnceWith('scheduler-drain');
+		await gate.runLane('write-drain');
+		await gate.runLaneFresh('write-drain');
+		expect(tickLane.mock.calls).toEqual([['write-drain'], ['write-drain']]);
+		paused = false;
+		await gate.runLane('scheduler-drain');
+		expect(tickLane).toHaveBeenLastCalledWith('scheduler-drain');
+	});
+
 	it('does not announce a gated skip when the gate is open', async () => {
 		const onGatedSkip = vi.fn();
 		const gate = createAutomaticTickGate({

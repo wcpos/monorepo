@@ -18,12 +18,14 @@ function initialOnlineStatus(): OnlineStatus {
 	return 'online-website-available';
 }
 
-let appOnlineStatus: OnlineStatus = initialOnlineStatus();
+// Null while no provider is mounted: before the first report, and after sign-out, when the
+// cached engine still has sales to send and must not stay on the last status it was told.
+let appOnlineStatus: OnlineStatus | null = null;
 
-export function setAppOnlineStatus(status: OnlineStatus): void {
+export function setAppOnlineStatus(status: OnlineStatus | null): void {
 	appOnlineStatus = status;
 }
 
 export function getEngineConnectivity(): EngineConnectivity {
-	return engineConnectivityByOnlineStatus[appOnlineStatus];
+	return engineConnectivityByOnlineStatus[appOnlineStatus ?? initialOnlineStatus()];
 }
