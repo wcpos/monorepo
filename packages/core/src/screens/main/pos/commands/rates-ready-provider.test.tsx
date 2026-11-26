@@ -52,7 +52,7 @@ const ready = () => {
 	seen.subscribe((next) => (value = next))();
 	return value?.ready;
 };
-const wait = (key: string) => {
+const wait = (key?: string) => {
 	const outcome: { value: boolean | 'pending' } = { value: 'pending' };
 	void seen.whenReady(key).then((value) => (outcome.value = value));
 	return outcome;
@@ -108,4 +108,43 @@ it('T6b: a store switch on one engine shuts readiness until the new generation l
 	await flush();
 	expect(ready()).toBe(true);
 	expect(pick.value).toBe(true);
+});
+
+it('T8: a site switch settles keyed and unkeyed waits on the old engine as false', async () => {
+	manager.engine = makeEngine(false);
+	const view = render(
+		<RatesReadyProvider>
+			<Probe />
+		</RatesReadyProvider>
+	);
+	const keyed = wait('order');
+	const unkeyed = wait();
+	await flush();
+	expect([keyed.value, unkeyed.value]).toEqual(['pending', 'pending']);
+	const nextEngine = makeEngine(false);
+	manager.engine = nextEngine;
+	view.rerender(
+		<RatesReadyProvider>
+			<Probe />
+		</RatesReadyProvider>
+	);
+	await flush();
+	expect([keyed.value, unkeyed.value]).toEqual([false, false]);
+	await act(async () => nextEngine.coverage.next({ complete: true }));
+	await flush();
+	expect([keyed.value, unkeyed.value]).toEqual([false, false]);
+});
+
+it('T9: unmounting the provider settles keyed and unkeyed waits as false', async () => {
+	manager.engine = makeEngine(false);
+	const view = render(
+		<RatesReadyProvider>
+			<Probe />
+		</RatesReadyProvider>
+	);
+	const keyed = wait('order');
+	const unkeyed = wait();
+	view.unmount();
+	await flush();
+	expect([keyed.value, unkeyed.value]).toEqual([false, false]);
 });

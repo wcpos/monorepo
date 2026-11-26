@@ -59,10 +59,13 @@ export function RatesReadyProvider({ children }: { children: React.ReactNode }) 
 		[rates]
 	);
 	const value = React.useMemo(() => {
-		// True on the first ready verdict; false once a later call takes the key, the scope moves, or offline.
+		const waits = new Set<Subscription>();
+		// True on ready; false if superseded, the scope or engine moves, the provider unmounts, or offline.
 		const whenReady = (key?: string) =>
 			new Promise<boolean>((resolve) => {
 				const wait = new Subscription(() => resolve(false));
+				waits.add(wait);
+				wait.add(() => waits.delete(wait));
 				if (key) pending.get(key)?.unsubscribe();
 				if (key) pending.set(key, wait);
 				wait.add(
@@ -87,10 +90,11 @@ export function RatesReadyProvider({ children }: { children: React.ReactNode }) 
 					})
 				);
 			});
-		return { subscribe, whenReady };
+		return { context: { subscribe, whenReady }, waits };
 	}, [manager.engine, rates, online$, pending, t, subscribe]);
+	React.useEffect(() => () => value.waits.forEach((wait) => wait.unsubscribe()), [value]);
 	return (
-		<Context.Provider value={value}>
+		<Context.Provider value={value.context}>
 			{children}
 			{/* After the children: their layout effects (the coordinator's inputs) run first. */}
 			<Publish key={key} rates={rates} />
