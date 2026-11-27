@@ -387,7 +387,12 @@ type RequirementSubscriber = {
  */
 type RequirementDrainOverrides = Pick<
 	Parameters<typeof runEngineSchedulerDrain>[0],
-	'taskId' | 'referenceLanes' | 'maxRequestsPerTask' | 'refreshBrowseWindowKey' | 'nowMs'
+	| 'taskId'
+	| 'referenceLanes'
+	| 'refundHistory'
+	| 'maxRequestsPerTask'
+	| 'refreshBrowseWindowKey'
+	| 'nowMs'
 >;
 
 /**
@@ -561,16 +566,23 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// first drain, not at construction: a read-only engine may open on a host without Web Crypto.
 	let schedulerOwnerId: string | null = null;
 	let seq = 0;
-	// Three lanes, each one execution at a time. A typed search must not queue behind the
+	// Four lanes, each one execution at a time. A typed search must not queue behind the
 	// boot window or a refresh (live runs: >10 s with no search request on a slow host).
 	// Searches stay serial among themselves, so a newer search still supersedes the older
 	// one through release → abandonIfUnclaimed → abort (#1221). Running a search beside a
 	// durable execution is allowed: the demand plane is uncapped by ruling (#1134 item 2).
-	// Reference refreshes get their own lane so a full walk cannot hold a browse window (#3782).
-	type Lane = 'search' | 'durable' | 'reference';
-	const running: Record<Lane, boolean> = { search: false, durable: false, reference: false };
+	// A refund history refresh runs on its own lane so its walk holds neither a browse window nor a picker refresh (#3782).
+	type Lane = 'search' | 'durable' | 'reference' | 'refunds';
+	const running: Record<Lane, boolean> = {
+		search: false,
+		durable: false,
+		reference: false,
+		refunds: false,
+	};
 	const laneOf = (entry: QueuedRequirement): Lane => {
 		if (entry.requirement.kind === 'search') return 'search';
+		if (entry.requirement.kind === 'refresh' && entry.requirement.collection === 'refunds')
+			return 'refunds';
 		if (
 			entry.requirement.kind === 'refresh' &&
 			descriptorFor(entry.requirement.collection)?.shape === 'greedy-prunable'
@@ -591,6 +603,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		search: scopeBoundFailureStreak(deps.manager),
 		durable: scopeBoundFailureStreak(deps.manager),
 		reference: scopeBoundFailureStreak(deps.manager),
+		refunds: scopeBoundFailureStreak(deps.manager),
 	};
 	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
@@ -945,6 +958,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					signal: item.abortController.signal,
 					onProgress: progressObserver(item.requirement, onProgressActivity),
 					referenceLanes: 'exclude',
+					refundHistory: 'exclude',
 					...overrides,
 				});
 
@@ -1795,8 +1809,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	}
 
 	return {
-		hasPendingWork: () =>
-			running.search || running.durable || running.reference || queue.length > 0,
+		hasPendingWork: () => Object.values(running).some(Boolean) || queue.length > 0,
 		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
 		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
 		liveOrderBrowseQueryKeys: () => {

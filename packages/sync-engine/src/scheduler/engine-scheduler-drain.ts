@@ -305,6 +305,9 @@ export type RunEngineSchedulerDrainInput = {
 	taskId?: string;
 	/** #3782: a reference walk must not ride another requirement's drain. */
 	referenceLanes?: 'exclude' | 'only';
+	/** #3782: the refund history walk must not ride another requirement's drain. A drain that
+	 * names the history task by `taskId` still runs it. */
+	refundHistory?: 'exclude';
 	/** Override for an explicitly requested foreground drain. Background drains
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
@@ -587,14 +590,21 @@ export async function runEngineSchedulerDrain(
 			const supportedRepository = fetcherRegistry.supportedRepository(schedulerRepository);
 			const taskId = input.taskId;
 			const referenceLanes = input.referenceLanes;
+			const refundHistory = input.refundHistory;
 			const repository =
-				taskId === undefined && referenceLanes === undefined
+				taskId === undefined && referenceLanes === undefined && refundHistory === undefined
 					? supportedRepository
 					: {
 							...supportedRepository,
 							readRunnable: async (readAtMs: number) =>
 								(await supportedRepository.readRunnable(readAtMs)).filter((state) => {
 									if (taskId !== undefined && state.taskId !== taskId) return false;
+									if (
+										refundHistory === 'exclude' &&
+										taskId === undefined &&
+										parseRefundLaneQueryKey(state.queryKey)?.kind === 'history'
+									)
+										return false;
 									if (referenceLanes === undefined) return true;
 									return (
 										(parseReferenceLaneQueryKey(state.queryKey) !== null) ===
