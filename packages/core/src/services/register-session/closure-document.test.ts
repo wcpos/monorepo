@@ -438,6 +438,26 @@ it('falls back to capitalised tender keys when stored titles are unknown', () =>
 	expect(doc.closure.tenders[0].label).toBe('Cash');
 });
 
+// Revert: drop has_corrections, corrections_display, the zero check or has_corrections_line.
+it('a corrected tender carries its signed Corrections line, an uncorrected one none (#3647)', () => {
+	const payment_methods = {
+		cash: { method: 'cash', sales: '12.0000', refunds: '0.0000', corrections: '-12.0000' },
+		pos_card: { method: 'pos_card', sales: '0.0000', refunds: '0.0000', corrections: '12.0000' },
+		cheque: { method: 'cheque', sales: '5.0000', refunds: '0.0000', corrections: '0.0000' },
+	};
+	const [breakdowns, i18n] = [{ ...row.breakdowns, payment_methods }, { corrections: 'Fix' }];
+	const doc = buildClosureDocument({ ...row, breakdowns }, { ...context, i18n });
+	const template =
+		'{{#closure.breakdowns.payment_methods}}{{name}} {{sales_display}}' +
+		'{{#has_corrections}} {{i18n.corrections}} {{corrections_display}}{{/has_corrections}};' +
+		'{{/closure.breakdowns.payment_methods}}';
+	expect(renderLogiclessTemplate(template, doc)).toBe(
+		'Cash $12.00 Fix -$12.00;Pos_card $0.00 Fix $12.00;Cheque $5.00;'
+	);
+	expect(doc.closure.has_corrections_line).toBe(true);
+	expect(buildClosureDocument(row, context).closure.has_corrections_line).toBe(false);
+});
+
 // Without the hand-over flag/name the local paper renders an ordinary X-report.
 it('marks the hand-over as an unnumbered X-report naming the handing-over cashier', () => {
 	const session: RegisterSessionRow = {

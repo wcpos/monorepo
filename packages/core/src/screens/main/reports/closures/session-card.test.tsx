@@ -226,6 +226,16 @@ it('loads a remote counting session and prints its X document, retaining it offl
 	expect(screen.getByTestId('session-unavailable')).toBeTruthy();
 	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(true);
 });
+it('a card says nothing of its own failed read while the list has failed (#3623)', () => {
+	const register = { id: 'back', name: 'Back' };
+	const summary: SessionCardData = { session: null, closure: null, status: 'error' };
+	const view = render(<RemoteSessionCard register={register} summary={summary} listFailed />);
+	expect(screen.queryByTestId('session-error')).toBeNull();
+	expect(screen.queryByTestId('session-retry-back')).toBeNull();
+	view.rerender(<RemoteSessionCard register={register} summary={summary} />);
+	expect(screen.getByTestId('session-error')).toBeTruthy();
+	expect(screen.getByTestId('session-retry-back')).toBeTruthy();
+});
 // Revert: expose remote expected figures without the reports capability.
 it('does not expose remote expected figures to a blind cashier', async () => {
 	blind = true;

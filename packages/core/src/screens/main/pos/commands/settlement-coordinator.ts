@@ -70,6 +70,10 @@ export function needsTaxRepair(payload: OrderPayload, lastFlag: boolean | undefi
 export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 	let records: CurrentOrderRecord[] = [];
 	let inputs: CartConfigInputs;
+	// A pulled re-tax on an order with a refund belongs to the store (#3847).
+	const skips = (payload: OrderPayload, record: CurrentOrderRecord, ignoreCheckout = false) =>
+		!!payload.refunds?.length ||
+		orderLocked(payload, record, deps, inputs.settings.priceNumDecimals, { ignoreCheckout });
 	let rates: RatesReady = { ready: false, generation: 0 };
 	let epoch = 0;
 	let completionGeneration = 0;
@@ -107,7 +111,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 			readLedger(p.meta_data)
 				.filter(({ status }) => status === 'authorized' || status === 'captured')
 				.map(({ id, status, amount, refunded_amount }) => [id, status, amount, refunded_amount]),
-			orderLocked(p, record, deps, inputs.settings.priceNumDecimals, { ignoreCheckout }),
+			skips(p, record, ignoreCheckout),
 			inputs,
 			rates.generation,
 			completionGeneration,
@@ -150,7 +154,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					records.some((r) => r.uuid === uuid) &&
 					fingerprint(fresh, ignoreCheckout) === key &&
 					replayContentKey({ uuid, payload }) === content &&
-					!orderLocked(payload, fresh, deps, inputs.settings.priceNumDecimals, { ignoreCheckout });
+					!skips(payload, fresh, ignoreCheckout);
 				if (allowed(fresh.payload)) await settle(uuid, fresh, allowed, coupons, slot);
 			});
 		} catch (error) {
@@ -173,7 +177,8 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 					const fresh = record.getLatest();
 					const flag = wooMetaCarrier.vatExempt(fresh.payload.meta_data);
 					const key = fingerprint(fresh);
-					const repair = needsTaxRepair(fresh.payload, lastFlag.get(uuid));
+					const repair =
+						!fresh.payload.refunds?.length && needsTaxRepair(fresh.payload, lastFlag.get(uuid));
 					if (!repair) lastFlag.set(uuid, flag);
 					else if (repaired.get(uuid) !== key && (!needsReferences(fresh) || references.ready)) {
 						repaired.set(uuid, key);
@@ -188,15 +193,9 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 						continue;
 					}
 					if (hasCoupons(fresh)) {
-						if (orderLocked(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals)) {
+						if (skips(fresh.payload, fresh)) {
 							// Preserve the in-flight fence when checkout is the only new exclusion.
-							if (
-								flights.has(uuid) &&
-								!orderLocked(fresh.payload, fresh, deps, inputs.settings.priceNumDecimals, {
-									ignoreCheckout: true,
-								})
-							)
-								continue;
+							if (flights.has(uuid) && !skips(fresh.payload, fresh, true)) continue;
 							seen.delete(uuid);
 							flights.delete(uuid);
 							continue;
@@ -212,11 +211,7 @@ export function createSettlementCoordinator(deps: Deps): { stop(): void } {
 							if (!current()) return;
 							seen.set(uuid, fingerprint(fresh));
 							const allowed = (payload: OrderPayload, ignoreCheckout = false) =>
-								current() &&
-								!hasCoupons({ payload }) &&
-								!orderLocked(payload, fresh, deps, inputs.settings.priceNumDecimals, {
-									ignoreCheckout,
-								});
+								current() && !hasCoupons({ payload }) && !skips(payload, fresh, ignoreCheckout);
 							if (allowed(fresh.payload)) await settle(uuid, fresh, allowed, undefined, slot);
 						});
 					} catch (error) {

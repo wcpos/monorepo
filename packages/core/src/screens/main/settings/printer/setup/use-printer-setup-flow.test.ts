@@ -385,6 +385,23 @@ describe('trouble reason', () => {
 		expect(troubleReasonFor({ source: 'network', identity }, failure)).toBe(reason);
 	});
 
+	it.each([
+		[
+			"Could not connect to Epson printer at https://192.168.1.50:8043/cgi-bin/epos/service.cgi. The printer did not respond on Epson's HTTPS ePOS port. 1. Check the IP address and ensure ePOS is enabled. 2. HTTPS requires an SSL certificate on the printer — generate a self-signed certificate in the printer's web configuration, then visit https://192.168.1.50:8043 in this browser and accept the certificate warning. 3. If the printer only supports HTTP, set the port to 8008 and use Chrome or Edge with local network access permission.",
+			'lane',
+		],
+		[
+			"Could not connect to Epson printer at http://192.168.1.50:8008/cgi-bin/epos/service.cgi. The printer did not respond on Epson's HTTP ePOS port, or the browser blocked the request. 1. Check the IP address and ensure ePOS is enabled. 2. If your browser asked for permission to access devices on your local network, choose Allow and try again. 3. Plain-HTTP printing from a secure (HTTPS) page requires Chrome or Edge 142 or newer — other browsers block it. Otherwise, enable HTTPS on the printer instead.",
+			'lane',
+		],
+		[
+			'Could not connect to Epson printer at http://192.168.1.50:8008/cgi-bin/epos/service.cgi. The printer did not answer at http://192.168.1.50:8008/cgi-bin/epos/service.cgi before the request timed out. 1. Check that the printer is powered on and reachable at 192.168.1.50. 2. Confirm the IP address and port, and ensure ePOS is enabled.',
+			'unresponsive',
+		],
+	])('does not read a web connection failure as a permission (#3370) — %s', (failure, reason) => {
+		expect(troubleReasonFor({ source: 'network', identity }, failure)).toBe(reason);
+	});
+
 	it('sends a printer the phone has not paired to the Bluetooth settings line', () => {
 		expect(
 			troubleReasonFor(

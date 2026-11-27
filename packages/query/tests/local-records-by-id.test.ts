@@ -36,6 +36,27 @@ it('filters local records by Woo id, returning only the uuid and payload', async
 	}
 });
 
+it('selects a local customer by numeric Woo id against its stored remoteId', async () => {
+	const database = await createEngineDatabase(['customers']);
+	try {
+		await database.collections.customers.bulkInsert(
+			[12, 13].map((id) => ({
+				uuid: `customer-${id}`,
+				remoteId: String(id),
+				remoteKey: String(id),
+				payload: { id, first_name: 'Ana' },
+				sync: { revision: '1', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
+			}))
+		);
+		expect(
+			await firstValueFrom(observeLocalRecordsById(createFakeEngine(database), 'customers', [12]))
+		).toEqual([{ uuid: 'customer-12', payload: { id: 12, first_name: 'Ana' } }]);
+	} finally {
+		await database.close();
+	}
+});
+
 it('re-emits when a matching local record changes', async () => {
 	const database = await createEngineDatabase(['products']);
 	const seen: unknown[] = [];

@@ -66,7 +66,7 @@ export function PrintingSettings() {
 	const receiptTemplates = useActiveTemplates('receipt');
 	const reportTemplates = useActiveTemplates('report');
 	const closureTemplates = useActiveTemplates('closure');
-	const { printers, isLoading } = useAvailablePrinterProfiles();
+	const { printers, isLoading } = useAvailablePrinterProfiles({ refresh: true });
 
 	useEnsureSystemPrinter(storeDB);
 

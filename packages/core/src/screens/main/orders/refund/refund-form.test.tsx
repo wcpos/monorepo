@@ -912,6 +912,95 @@ describe('RefundOrderForm', () => {
 			);
 		});
 
+		describe('#3651: money recorded by hand against the gateway', () => {
+			// prettier-ignore
+			const leg = (id: string, overrides: Record<string, unknown> = {}) => ({
+				id, source: 'app', order_id: order.id, method_id: order.payment_method, provider: null,
+				kind: 'card', capture_mode: 'manual', transport: null, recorded_offline: false,
+				amount: '50.00', currency: 'EUR', tendered: null, change: null, tip: null,
+				status: 'captured', failure_reason: null, refunded_amount: '0.00', refunds: [],
+				provider_refs: {}, receipt: {}, cashier_id: 1, store_id: null, events: [],
+				created_at_gmt: '', captured_at_gmt: '', updated_at_gmt: '', ...overrides,
+			});
+			const corrected = leg('cash-leg', { method_id: 'pos_cash', kind: 'cash' });
+			const minus = leg('r-minus', {
+				method_id: 'pos_cash',
+				amount: '-50.00',
+				entry: 'tender_correction',
+				reverses: 'cash-leg',
+			});
+			const unverified = leg('r-plus', {
+				entry: 'tender_correction',
+				corrects: 'cash-leg',
+				unverified: true,
+			});
+			const withLedger = (payments: unknown[]) => ({
+				...order,
+				meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments } }],
+			});
+			const original = () => screen.getByTestId('refund-destination-original_method');
+			const destination = () => screen.getByRole('radiogroup');
+
+			async function submitsCash() {
+				await waitFor(() => expect(destination()).toHaveAttribute('data-value', 'cash'));
+				expect(original()).toBeDisabled();
+				expect(screen.getByText('orders.original_method_refund_unavailable')).toBeInTheDocument();
+				enterAmount('20');
+				await labelReads('orders.submit_refund_cash:€20.00');
+				fireEvent.click(processButton());
+				fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+				await waitFor(() =>
+					expect(mockRefundCall).toHaveBeenCalledWith(
+						expect.objectContaining({ refundDestination: 'cash' })
+					)
+				);
+			}
+
+			it('an unverified R+ disables the original method and the refund goes to cash', async () => {
+				mockGateways(Promise.resolve(supportedGateway));
+				render(<RefundOrderForm order={withLedger([corrected, minus, unverified])} />);
+				await submitsCash();
+			});
+
+			it('the same on a mixed sale with a verified provider leg', async () => {
+				mockGateways(Promise.resolve(supportedGateway));
+				const verified = leg('stripe-leg', { provider: 'stripe', capture_mode: 'terminal' });
+				render(<RefundOrderForm order={withLedger([verified, corrected, minus, unverified])} />);
+				await submitsCash();
+			});
+
+			it('a reversed unverified row leaves the original method the default', async () => {
+				mockGateways(Promise.resolve(supportedGateway));
+				const reversal = leg('r-minus-2', {
+					amount: '-50.00',
+					entry: 'tender_correction',
+					reverses: 'r-plus',
+				});
+				const cheque = leg('r-plus-2', {
+					method_id: 'pos_cheque',
+					entry: 'tender_correction',
+					corrects: 'r-plus',
+				});
+				render(
+					<RefundOrderForm order={withLedger([corrected, minus, unverified, reversal, cheque])} />
+				);
+				await waitFor(() => expect(destination()).toHaveAttribute('data-value', 'original_method'));
+				expect(original()).toBeEnabled();
+				expect(screen.queryByText('orders.original_method_refund_unavailable')).toBeNull();
+			});
+
+			it('a choice of the original method made before the row arrives becomes cash', async () => {
+				mockGateways(Promise.resolve(supportedGateway));
+				const { rerender } = render(<RefundOrderForm order={withLedger([corrected])} />);
+				await waitFor(() => expect(original()).toBeEnabled());
+				fireEvent.click(screen.getByTestId('refund-destination-cash'));
+				fireEvent.click(original());
+				await waitFor(() => expect(destination()).toHaveAttribute('data-value', 'original_method'));
+				rerender(<RefundOrderForm order={withLedger([corrected, minus, unverified])} />);
+				await submitsCash();
+			});
+		});
+
 		it('keeps Process Refund until there is an amount', async () => {
 			mockGateways(Promise.resolve({ data: [] }));
 			render(<RefundOrderForm order={cashOrder} />);
@@ -1232,6 +1321,37 @@ describe('RefundOrderForm', () => {
 				})
 			);
 			expect(success).not.toHaveBeenCalled();
+		});
+
+		it('a refund refused for a hand-recorded payment warns with its own line and keeps the form', async () => {
+			const failure = Object.assign(new Error('409'), {
+				response: {
+					status: 409,
+					data: {
+						code: 'wcpos_refund_unverified_payment',
+						message: 'x',
+						data: { status: 409, reason: 'unverified', payment_id: '17' },
+					},
+				},
+			});
+			await sendRefund(jest.fn().mockRejectedValue(failure));
+
+			await waitFor(() =>
+				expect(warn).toHaveBeenCalledWith(
+					'Refund failed',
+					expect.objectContaining({
+						showToast: true,
+						toast: {
+							title: 'orders.refund_unverified_payment',
+							text2: 'orders.refund_unverified_payment_check',
+						},
+						code: 'SYNC211',
+					})
+				)
+			);
+			expect(back).not.toHaveBeenCalled();
+			expect(success).not.toHaveBeenCalled();
+			expect(screen.getByTestId('refund-custom-amount')).toHaveValue('5');
 		});
 
 		it('another server error logs PAYMENT311 and stays on the form', async () => {

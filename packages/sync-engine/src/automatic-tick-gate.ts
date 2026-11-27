@@ -19,6 +19,7 @@ export type AutomaticTickGate = {
 
 export function createAutomaticTickGate(options: {
 	isGated: () => boolean;
+	pullsPaused?: () => boolean;
 	connectivity: () => EngineConnectivity;
 	now: () => number;
 	diagnostics: SyncObserver;
@@ -36,7 +37,7 @@ export function createAutomaticTickGate(options: {
 	let reconnectRetick: Promise<void> | null = null;
 	const laneRuns = new Map<EngineLane, Promise<void>>();
 	const run = async (tick: () => Promise<SyncReport>, lane?: EngineLane): Promise<void> => {
-		if (options.isGated()) {
+		if (options.isGated() || (lane !== 'write-drain' && options.pullsPaused?.() === true)) {
 			options.onGatedSkip?.(lane);
 			return;
 		}

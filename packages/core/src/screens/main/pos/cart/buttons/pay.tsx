@@ -91,6 +91,14 @@ export function PayButton() {
 				});
 				return;
 			}
+			// TaxLocationLockedBridge discards the write and shows the notice (#3847).
+			if (rejection.reason === 'wcpos_tax_location_locked') {
+				orderLogger.info(
+					'Checkout refused: the tax location is locked by a refund; the notice is shown elsewhere',
+					{ context: { orderId: uuid, orderNumber: currentOrderRecord.payload.number } }
+				);
+				return;
+			}
 			showOrderRefusedToast({ t, router, rejection });
 			orderLogger.error('Checkout refused', {
 				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,

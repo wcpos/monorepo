@@ -40,5 +40,6 @@ export const documentLabels = (t: (key: string) => string): Record<string, strin
 	paid_out: t('register.paid_out'),
 	no_sale: t('register.no_sale'),
 	void: t('register.void'),
+	corrections: t('register.cash_corrections'),
 	copy: t('reports.document.copy'),
 });

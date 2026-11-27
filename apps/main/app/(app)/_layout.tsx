@@ -24,6 +24,7 @@ import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data'
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { SaleCompletionBridge } from '@wcpos/core/screens/main/pos/checkout/completion-journal-bridge';
 import { NewCustomerLinkBridge } from '@wcpos/core/screens/main/pos/cart/new-customer-link-bridge';
+import { TaxLocationLockedBridge } from '@wcpos/core/screens/main/orders/tax-location-locked-bridge';
 import { TerminalPaymentsBridge } from '@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge';
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
@@ -41,6 +42,7 @@ import { StripeTerminalDriverRegistration } from '../../lib/payment-drivers';
 import { SyncConfigBridge } from '../../components/sync-config-bridge';
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
+import { setPullsPaused } from '../../lib/pulls-paused';
 import {
 	createAppSyncEngine,
 	createSessionFetcherOptions,
@@ -77,6 +79,12 @@ export const unstable_settings = {
 };
 
 function AppStack() {
+	// Signing out unmounts this stack, but the cached engine must keep sending sales.
+	React.useEffect(() => {
+		setPullsPaused(false);
+		return () => setPullsPaused(true);
+	}, []);
+
 	const screenBackgroundColor = useNavigationBackground();
 	const { storeDB, site, wpCredentials, store, userDB } = useStoreSession();
 	const { locale } = useLocale();
@@ -236,6 +244,9 @@ function AppStack() {
 				    their addresses; its Woo id is stamped onto the order whenever the
 				    create is acknowledged, which can be after a relaunch (#1523). */}
 				<NewCustomerLinkBridge />
+				{/* A queued address change can reach the store after a refund. Drop the refused
+				    write and take the store's order even if the cashier has left the cart. */}
+				<TaxLocationLockedBridge />
 				{/* A variable product's price range is recomputed from its children on
 				    every read, so an acknowledged variation write leaves the parent's row
 				    stale with nothing to pull it (#1495). Here, not on the Products
@@ -326,6 +337,8 @@ function EngineConnectivityBridge() {
 	// Keep the sync engine's non-React connectivity port aligned with the provider.
 	React.useEffect(() => {
 		setAppOnlineStatus(status);
+		// Signed out, the provider is gone: the engine falls back to the platform's own reading.
+		return () => setAppOnlineStatus(null);
 	}, [status]);
 
 	return null;

@@ -25,6 +25,7 @@ import {
 	useOpenOrdersHandle,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
+import { RatesReadyProvider } from '@wcpos/core/screens/main/pos/commands/rates-ready-provider';
 import { SettlementCoordinatorProvider } from '@wcpos/core/screens/main/pos/commands/settlement-coordinator-provider';
 import { CartConfigProvider } from '@wcpos/core/screens/main/pos/hooks/use-cart-config';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
@@ -153,43 +154,45 @@ function POSStack() {
 			<CustomerDisplaySnapshotSource />
 			<PosUrlMirror />
 			<CartConfigProvider>
-				<SettlementCoordinatorProvider />
-				<HeadlessAutoPrintHost />
-				{/* The till's `pos` host sits inside the CurrentOrderProvider and TaxRatesProvider, so
+				<RatesReadyProvider>
+					<SettlementCoordinatorProvider />
+					<HeadlessAutoPrintHost />
+					{/* The till's `pos` host sits inside the CurrentOrderProvider and TaxRatesProvider, so
 				    dialogs like add/edit product can access their context; every `DialogContent` in
 				    the till takes it unless it names another. */}
-				<OverlayHost name="pos">
-					{/* With no app strip above, the till takes only the desktop title-bar strip; its
+					<OverlayHost name="pos">
+						{/* With no app strip above, the till takes only the desktop title-bar strip; its
 					    columns pad their own system edges. EdgeSurface skips any inset the drawer owns. */}
-					<EdgeSurface edges={STRIP} className="bg-background flex-1">
-						<Stack
-							screenListeners={tillStackScreenListeners}
-							screenOptions={{
-								animation: 'none',
-								headerShown: false,
-								contentStyle: { backgroundColor: screenBackgroundColor },
-							}}
-						>
-							<Stack.Screen name="index" />
-							<Stack.Screen
-								name="(modals)/cart/[orderId]/checkout"
-								options={{
-									presentation: 'containedTransparentModal',
-									animation: 'fade',
-									contentStyle: { backgroundColor: 'transparent' },
+						<EdgeSurface edges={STRIP} className="bg-background flex-1">
+							<Stack
+								screenListeners={tillStackScreenListeners}
+								screenOptions={{
+									animation: 'none',
+									headerShown: false,
+									contentStyle: { backgroundColor: screenBackgroundColor },
 								}}
-							/>
-							<Stack.Screen
-								name="(modals)/cart/receipt/[orderId]"
-								options={{
-									presentation: 'containedTransparentModal',
-									animation: 'fade',
-									contentStyle: { backgroundColor: 'transparent' },
-								}}
-							/>
-						</Stack>
-					</EdgeSurface>
-				</OverlayHost>
+							>
+								<Stack.Screen name="index" />
+								<Stack.Screen
+									name="(modals)/cart/[orderId]/checkout"
+									options={{
+										presentation: 'containedTransparentModal',
+										animation: 'fade',
+										contentStyle: { backgroundColor: 'transparent' },
+									}}
+								/>
+								<Stack.Screen
+									name="(modals)/cart/receipt/[orderId]"
+									options={{
+										presentation: 'containedTransparentModal',
+										animation: 'fade',
+										contentStyle: { backgroundColor: 'transparent' },
+									}}
+								/>
+							</Stack>
+						</EdgeSurface>
+					</OverlayHost>
+				</RatesReadyProvider>
 			</CartConfigProvider>
 		</TaxRatesProvider>
 	);

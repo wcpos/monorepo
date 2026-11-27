@@ -26,6 +26,9 @@ const currentOrderRecord = {
 
 // No provider is mounted here; avoid loading the settings provider's ESM-only dependencies.
 // The form's error band is a Notice, which loads ESM uniwind and expo-linking.
+jest.mock('../commands/rates-ready-provider', () => ({
+	useWhenRatesReady: () => async () => true,
+}));
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../contexts/ui-settings', () => ({ useUISettings: jest.fn() }));
 
@@ -55,10 +58,12 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: null }),
 	useStoreSession: () => ({ storeDB: mockStoreDB }),
 }));
 
 jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	OPEN_ORDER_STATUSES: jest.requireActual('@wcpos/query').OPEN_ORDER_STATUSES,
 	useQueryRuntime: () => ({ engine: { status: () => ({ activeScopeId: 'scope-1' }) } }),
 }));

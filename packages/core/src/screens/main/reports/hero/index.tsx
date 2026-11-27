@@ -227,7 +227,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 	const host = usePageSheetHost();
 	const t = useT();
 	const phone = useIsPhone();
-	const { figures } = useReportsData();
+	const { figures, cashierNames } = useReportsData();
 	const { statusMode } = useReportsScope();
 	const formats = useReportFormats(storeId);
 	const { allStores, names, namesReady } = useReportsFilterScope();
@@ -238,7 +238,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		{
 			figures,
 			registerNames: names.register,
-			cashierNames: names.cashier,
+			cashierNames: cashierNames.names,
 			storeNames: allStores ? names.store : undefined,
 		},
 		t,
@@ -255,7 +255,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		dataReady:
 			!!formats.store &&
 			cashier.ready &&
-			(figures.byCashier.length < 2 || namesReady.cashier) &&
+			(figures.byCashier.length < 2 || cashierNames.ready) &&
 			(allStores ||
 				namesReady.register ||
 				!online ||

@@ -26,12 +26,18 @@ export function SessionCards({
 	localRegisterId,
 	onSessions,
 	cashier,
+	listFailed,
+	retryKey,
 }: {
 	registers: { id: string; name: string }[];
 	storeId?: number;
 	localRegisterId?: string | null;
 	onSessions?: (sessions: SessionSummary[]) => void;
 	cashier?: number;
+	/** The list already shows the read error and its Retry. */
+	listFailed?: boolean;
+	/** A change re-runs the sessions read. */
+	retryKey?: number;
 }) {
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -92,7 +98,7 @@ export function SessionCards({
 				},
 			});
 		return () => subscription.unsubscribe();
-	}, [http, online, registerIds, storeId, attempt]);
+	}, [http, online, registerIds, storeId, attempt, retryKey]);
 	// Combine resolved batch data with the bound till's local session (also available offline).
 	React.useEffect(() => {
 		onSessions?.(
@@ -113,12 +119,14 @@ export function SessionCards({
 						summary={cards[register.id] ?? loading}
 						reload={retry}
 						onSessions={setLocalSessions}
+						listFailed={listFailed}
 						cashier={cashier}
 					/>
 				) : (
 					<RemoteSessionCard
 						key={register.id}
 						register={register}
+						listFailed={listFailed}
 						storeId={storeId}
 						summary={cards[register.id] ?? loading}
 						reload={retry}

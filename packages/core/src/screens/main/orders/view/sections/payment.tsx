@@ -9,6 +9,7 @@ import { isPaidStatus } from '@wcpos/sync-core';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { Section } from './_section';
+import { useChangeTender } from './change-tender';
 import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
 import { useStoreDayLabel } from '../../../../../hooks/use-store-day-label';
@@ -22,10 +23,18 @@ import { useLedgerView } from '../../../pos/checkout/tender/use-ledger-view';
  * closing on Total · Paid · Remaining while money is owed. An order with no POS journal (paid
  * online, or older than the journal) gets one row in the leg recipe from Woo's own fields.
  */
-export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
+export function PaymentSection({
+	order,
+	canChangeTender = false,
+}: {
+	order: EngineRecord<'orders'>;
+	/** Pro and healthy storage (the modal's `readOnly`, `storageDegraded`); off unless passed. */
+	canChangeTender?: boolean;
+}) {
 	const t = useT();
 	const payload = useRecordField(order, (record) => record.payload);
 	const view = useLedgerView(order);
+	const change = useChangeTender(order, view, payload.meta_data, canChangeTender);
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const { dateTime } = useStoreDayLabel();
 	const method = payload.payment_method_title || payload.payment_method;
@@ -55,7 +64,15 @@ export function PaymentSection({ order }: { order: EngineRecord<'orders'> }) {
 					: t('common.payment', { _: 'Payment' })
 			}
 		>
-			{legs || owing ? <LedgerLegs view={view} format={view.format} closing={closing} /> : null}
+			{legs || owing ? (
+				<LedgerLegs
+					view={view}
+					format={view.format}
+					closing={closing}
+					legAction={change.legAction}
+				/>
+			) : null}
+			{change.sheet}
 			{fallback ? (
 				<View testID="order-modal-payment" className="border-border gap-1 border-b py-2">
 					<View className="flex-row items-center justify-between gap-2">

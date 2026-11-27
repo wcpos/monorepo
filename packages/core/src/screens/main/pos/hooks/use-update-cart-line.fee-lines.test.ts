@@ -144,6 +144,39 @@ describe('useUpdateCartLine — fee_lines', () => {
 		mockLocalPatch.mockResolvedValue(true);
 	});
 
+	describe('a blank fee name', () => {
+		beforeEach(() => {
+			mockFeeLines = [
+				{ name: 'Surcharge', meta_data: [{ key: '_woocommerce_pos_uuid', value: 'fee-1' }] },
+			];
+		});
+
+		it.each([
+			['N1: empty name', { name: '' }, 'pos_cart.fee'],
+			['N2: whitespace-only name', { name: '   ' }, 'pos_cart.fee'],
+			['N3: zero string', { name: '0' }, 'pos_cart.fee'],
+			['N4: real name', { name: 'Tip' }, 'Tip'],
+			['N5: null tombstone', { name: null }, null],
+			['N6: amount-only edit', { amount: '5' }, 'Surcharge'],
+		] as const)('%s', async (_label, changes, expected) => {
+			const { result } = renderHook(() => useUpdateCartLine());
+			await act(async () => result.current.updateCartLine('fee_lines', 'fee-1', changes));
+			expect(mockLocalPatch.mock.calls[0][0].data.fee_lines[0].name).toBe(expected);
+		});
+
+		it('N7: hook rewrites a real name to blank', async () => {
+			registerActionHook(
+				'cart.line.update',
+				async (_ctx, event, next) =>
+					next({ ...event, payload: { ...event.payload, changes: { name: '' } } }),
+				{ id: 'test.blank-fee-name', tier: 'extension' }
+			);
+			const { result } = renderHook(() => useUpdateCartLine());
+			await act(async () => result.current.updateCartLine('fee_lines', 'fee-1', { name: 'Tip' }));
+			expect(mockLocalPatch.mock.calls[0][0].data.fee_lines[0].name).toBe('pos_cart.fee');
+		});
+	});
+
 	it('dispatches cart.line.update typed fee_lines, and a rewritten change reaches the write', async () => {
 		mockFeeLines = [
 			{ name: 'Handling', meta_data: [{ key: '_woocommerce_pos_uuid', value: 'fee-1' }] },

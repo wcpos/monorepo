@@ -69,6 +69,7 @@ import {
 } from '@wcpos/utils/unsent-changes';
 
 import { getEngineConnectivity } from './connectivity';
+import { getPullsPaused, setPullsPaused } from './pulls-paused';
 import { createE2eEngineLedgerObserver } from './e2e-engine-ledger';
 import {
 	createEngineFetcher,
@@ -693,6 +694,8 @@ export async function switchAppEngineScope(
 
 /** Create or reuse the app sync engine for the requested store scope. */
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
+	// A store is being opened: a new engine's cold-start seeds must not meet a pause left by sign-out.
+	setPullsPaused(false);
 	const cacheKey = scopeCacheKey(options.scope);
 	const siteKey = canonicalSite(options.scope.site);
 	if (cachedEngine && cachedEngine.site === siteKey) {
@@ -927,6 +930,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			lastUserActivityMs,
 			onUserActivity,
 			hostVisible: hostIsVisible,
+			pullsPaused: getPullsPaused,
 			onHostVisibilityChange,
 			diagnostics: composeObservers(
 				appMetricsObserver,

@@ -385,3 +385,23 @@ it('leaves the known-gone refusal to the settler without a generic toast or erro
 		{ context: { orderId: 'order-1', orderNumber: undefined } }
 	);
 });
+
+it('leaves the tax-location refusal to its bridge without a generic toast or error (#3847)', async () => {
+	mockSave.mockResolvedValue({
+		outcome: 'rejected',
+		rejection: {
+			status: 422,
+			reason: 'wcpos_tax_location_locked',
+			message: 'The tax location cannot change once the order has a refund.',
+		},
+	});
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockLeave).toHaveBeenCalledWith('order-1'));
+	expect(mockRefusal).not.toHaveBeenCalled();
+	expect(mockError).not.toHaveBeenCalled();
+	expect(mockInfo).toHaveBeenCalledWith(
+		'Checkout refused: the tax location is locked by a refund; the notice is shown elsewhere',
+		{ context: { orderId: 'order-1', orderNumber: undefined } }
+	);
+});

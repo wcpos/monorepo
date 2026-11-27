@@ -3,7 +3,7 @@ import * as React from 'react';
 
 import { render, screen, within } from '@testing-library/react';
 
-import type { PaymentRow } from '@wcpos/order-math';
+import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import { BalanceHeadline, LedgerLegs, LedgerLines } from './ledger-pane';
 import { splitWith } from './tender-figures.test-utils';
@@ -246,4 +246,98 @@ it('leads with the balance under its caption, and what was paid of the total onc
 	rerender(<BalanceHeadline flow={view as never} format={format} compact />);
 	expect(screen.getByTestId('checkout-balance').textContent).toBe('£10');
 	expect(document.body.textContent).toContain('Remaining£10');
+});
+// #3647 test 11: Change tender is the order modal's alone; the checkout pane's legs draw none.
+it('draws no Change tender by default, and a corrected pair as Corrected with no R- leg', () => {
+	const minus = {
+		...row,
+		id: 'r-minus',
+		amount: '-10',
+		entry: 'tender_correction',
+		reverses: 'cash',
+	};
+	const plus = { ...row, id: 'r-plus', method_id: 'card', kind: 'card', corrects: 'cash' };
+	render(
+		<LedgerLegs view={{ ...view, rows: [row, minus, plus] as PaymentRow[] }} format={format} />
+	);
+	expect(document.querySelector('[data-testid^="order-payment-change-tender-"]')).toBeNull();
+	expect(screen.queryByTestId('checkout-leg-r-minus')).toBeNull();
+	expect(screen.getByTestId('checkout-leg-corrected-cash').textContent).toBe('Corrected');
+	expect(screen.getByTestId('checkout-leg-corrected-from-r-plus').textContent).toBe(
+		'Corrected from cash'
+	);
+});
+// #3651: an R+ the store recorded by hand against a provider method says so.
+it('tags an unverified R+ Recorded manually, and neither a plain R+ nor an ordinary row', () => {
+	const unverified = {
+		...row,
+		id: 'r-gateway',
+		method_id: 'stripe',
+		kind: 'card',
+		entry: 'tender_correction',
+		corrects: 'card',
+		unverified: true,
+	};
+	const plain = { ...row, id: 'r-plain', method_id: 'cheque', corrects: 'cash' };
+	render(
+		<LedgerLegs
+			view={{ ...view, rows: [row, unverified, plain] as PaymentRow[] }}
+			format={format}
+		/>
+	);
+	expect(screen.getByTestId('checkout-leg-recorded-manually-r-gateway').textContent).toBe(
+		'Recorded manually'
+	);
+	for (const id of ['r-plain', 'cash'])
+		expect(screen.queryByTestId(`checkout-leg-recorded-manually-${id}`)).toBeNull();
+});
+// #3651: the tiles leave webview methods out, so a leg's title comes from the held methods.
+it('#3651: a leg is titled by the held method when no tile has it', () => {
+	const original = { ...row, id: 'o-cash', method_id: 'pos_cash' };
+	const minus = {
+		...original,
+		id: 'r-minus',
+		amount: '-10',
+		entry: 'tender_correction',
+		reverses: 'o-cash',
+	};
+	const plus = {
+		...row,
+		id: 'r-plus',
+		method_id: 'example_terminal',
+		kind: 'card',
+		corrects: 'o-cash',
+	};
+	const unheld = { ...row, id: 'r-unheld', method_id: 'cheque' };
+	const byId = new Map(
+		[
+			{ id: 'example_terminal', title: 'Example terminal' },
+			{ id: 'pos_cash', title: 'Cash' },
+		].map((method) => [method.id, method as PaymentMethodDescriptor])
+	);
+	render(
+		<LedgerLegs
+			view={{ ...view, tiles: [], byId, rows: [original, minus, plus, unheld] as PaymentRow[] }}
+			format={format}
+		/>
+	);
+	expect(
+		within(screen.getByTestId('checkout-leg-r-plus')).getByText('Example terminal')
+	).toBeTruthy();
+	expect(within(screen.getByTestId('checkout-leg-o-cash')).getByText('Cash')).toBeTruthy();
+	expect(screen.getByTestId('checkout-leg-corrected-from-r-plus').textContent).toBe(
+		'Corrected from Cash'
+	);
+	expect(within(screen.getByTestId('checkout-leg-r-unheld')).getByText('cheque')).toBeTruthy();
+	expect(document.body.textContent).not.toContain('example_terminal');
+	expect(document.body.textContent).not.toContain('pos_cash');
+});
+// #3651: a malformed ledger row whose `corrects` is not a string renders as a plain leg.
+it('#3651: renders a leg whose `corrects` is a number instead of crashing the pane', () => {
+	const odd = { ...row, id: 'r-odd', method_id: 'cheque', corrects: 5 as unknown as string };
+	render(<LedgerLegs view={{ ...view, rows: [row, odd] as PaymentRow[] }} format={format} />);
+	const leg = within(screen.getByTestId('checkout-leg-r-odd'));
+	expect(leg.getByText('cheque')).toBeTruthy();
+	expect(leg.getByText('£10')).toBeTruthy();
+	expect(screen.queryByTestId('checkout-leg-corrected-from-r-odd')).toBeNull();
 });

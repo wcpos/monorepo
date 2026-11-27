@@ -174,8 +174,8 @@ function EditPrinterDialog({
 		connectionType === 'bluetooth' && discoveryError?.code === 'usb-none-found';
 
 	const vendorOptions: VendorOption[] = [
-		{ value: 'epson', label: 'Epson' },
-		{ value: 'star', label: 'Star Micronics' },
+		{ value: 'epson', label: t('settings.printer_vendor_epson') },
+		{ value: 'star', label: t('settings.printer_vendor_star') },
 		{ value: 'generic', label: t('settings.printer_vendor_generic') },
 	];
 

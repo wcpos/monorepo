@@ -7,7 +7,13 @@ import { MoneyList } from '@wcpos/components/money-list';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { isOfflineDeviceAuthorization, isSettledPaymentRow, toMinor } from '@wcpos/order-math';
+import {
+	correctionOf,
+	isOfflineDeviceAuthorization,
+	isSettledPaymentRow,
+	samePaymentId,
+	toMinor,
+} from '@wcpos/order-math';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { statusLabel, statusVariant } from './labels';
@@ -132,16 +138,20 @@ export function BalanceHeadline({
  * The payments, one plain row per leg. `closing` ends the block with the cart's closing rows
  * (Total, Paid, then Remaining or "Paid in full" as the lead row): the stilled cart states
  * the balance once, here. The phone pane omits it; its `BalanceHeadline` is its closing.
+ * `legAction` draws a leg's own action (the order modal's Change tender); the checkout has none.
+ * A tender correction's R- is bookkeeping and is never drawn (#3647).
  */
 export function LedgerLegs({
 	view,
 	format,
 	closing = false,
+	legAction,
 	storeTender,
 }: {
 	view: LedgerView;
 	format: Props['format'];
 	closing?: boolean;
+	legAction?: (row: PaymentRow) => React.ReactNode;
 	/** What the store took with no till record (`storeSettledTender`, #3755): drawn only with no rows. */
 	storeTender?: { amountMinor: number; title: string };
 }) {
@@ -180,16 +190,19 @@ export function LedgerLegs({
 						<Text className="text-sm tabular-nums">{format(store.amountMinor)}</Text>
 					</HStack>
 				) : null}
-				{view.rows.map((row, index) => (
-					<LedgerLeg
-						key={row.id}
-						index={index}
-						row={row}
-						view={view}
-						format={format}
-						next={row === firstPending}
-					/>
-				))}
+				{view.rows.map((row, index) =>
+					row.reverses ? null : (
+						<LedgerLeg
+							key={row.id}
+							index={index}
+							row={row}
+							view={view}
+							format={format}
+							next={row === firstPending}
+							action={legAction?.(row)}
+						/>
+					)
+				)}
 				{paidInFull && !closing ? (
 					<Text className="text-success text-sm">{paidInFullText}</Text>
 				) : null}
@@ -231,17 +244,27 @@ function LedgerLeg({
 	view,
 	format,
 	next,
+	action,
 }: {
 	index: number;
 	next: boolean;
 	row: PaymentRow;
 	view: LedgerView;
 	format: (minor: number) => string;
+	action?: React.ReactNode;
 }) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const time = row.events?.[0]?.t;
-	const title = view.tiles.find(({ method }) => method.id === row.method_id)?.method.title;
+	const titleOf = (id: string) =>
+		view.byId?.get(id)?.title ?? view.tiles.find(({ method }) => method.id === id)?.method.title;
+	const title = titleOf(row.method_id);
+	// The original of a tender correction keeps its leg under a Corrected badge; its R+ names it.
+	const corrected = correctionOf(row, view.rows) !== null;
+	const original =
+		typeof row.corrects === 'string' && row.corrects
+			? view.rows.find(({ id }) => samePaymentId(id, row.corrects ?? ''))
+			: undefined;
 	// Only cash carries a tendered figure, and only then is change worth a line.
 	const tendered =
 		row.kind === 'cash' && row.tendered
@@ -275,6 +298,12 @@ function LedgerLeg({
 					<Text variant="help" testID={`checkout-payment-${index}-cancelled`}>
 						{t('pos_checkout.cancelled')}
 					</Text>
+				) : corrected ? (
+					<StatusBadge
+						testID={`checkout-leg-corrected-${row.id}`}
+						label={t('orders.change_tender_corrected')}
+						variant="muted"
+					/>
 				) : (
 					<StatusBadge
 						label={statusLabel(row.status, t, row.kind)}
@@ -282,6 +311,18 @@ function LedgerLeg({
 					/>
 				)}
 			</HStack>
+			{original ? (
+				<Text variant="help" testID={`checkout-leg-corrected-from-${row.id}`} decodeHtml>
+					{t('orders.change_tender_corrected_from', {
+						method: titleOf(original.method_id) ?? original.method_id,
+					})}
+				</Text>
+			) : null}
+			{row.unverified === true ? (
+				<Text variant="help" testID={`checkout-leg-recorded-manually-${row.id}`}>
+					{t('orders.change_tender_recorded_manually')}
+				</Text>
+			) : null}
 			{time ? (
 				<Text variant="help" tabular>
 					{formatDate(new Date(time), 'p')}
@@ -308,6 +349,7 @@ function LedgerLeg({
 						: t('pos_checkout.recorded_offline')}
 				</Text>
 			) : null}
+			{action ? <HStack className="justify-end">{action}</HStack> : null}
 		</VStack>
 	);
 }

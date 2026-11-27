@@ -18,6 +18,9 @@ const mockGuestCustomer = {
 };
 const mockStore = { uuid: 'store-uuid' };
 
+jest.mock('../commands/rates-ready-provider', () => ({
+	useWhenRatesReady: () => async () => true,
+}));
 jest.mock('@wcpos/utils/logger', () => {
 	const logger = {
 		get success() {

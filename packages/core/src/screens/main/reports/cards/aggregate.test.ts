@@ -340,6 +340,37 @@ describe('tenders', () => {
 		]);
 		expect(tenders(rows, totals(rows), 2)).toMatchObject([{ key: 'sumup', amount: 7, orders: 1 }]);
 	});
+	it('B2: a card leg corrected to cash is one cash tender, with no card part', () => {
+		const rows = orders([
+			{
+				total: '20',
+				meta_data: ledger([
+					{ id: 'o', kind: 'card', method_id: 'pos_card', status: 'captured', amount: '20' },
+					{
+						id: 'm',
+						kind: 'card',
+						method_id: 'pos_card',
+						status: 'captured',
+						amount: '-20',
+						entry: 'tender_correction',
+						reverses: 'o',
+					},
+					{
+						id: 'p',
+						kind: 'cash',
+						method_id: 'pos_cash',
+						status: 'captured',
+						amount: '20',
+						entry: 'tender_correction',
+						corrects: 'o',
+					},
+				]),
+			},
+		]);
+		expect(tenders(rows, totals(rows), 2)).toEqual([
+			{ key: 'cash', label: '', amount: 20, orders: 1, share: 1 },
+		]);
+	});
 });
 // The card, the panel and the paper name a tender through this one rule.
 it('tenderLabel keeps a title and names cash, unpaid and anything else', () => {

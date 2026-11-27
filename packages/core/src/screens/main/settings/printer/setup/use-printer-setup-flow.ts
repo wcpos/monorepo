@@ -18,6 +18,7 @@ import type {
 } from '@wcpos/printer';
 import { capturePrinterOutcome, getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
+import { WEB_CONNECTION_FAILURE_RE } from '../describe-printer-error';
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
 import { isWindowsPlatform } from '../dialog/connection/is-windows';
 import { buildPrinterProfileFields } from '../profile-config';
@@ -93,7 +94,8 @@ export function troubleReasonFor(
 	if (saysPaperTrouble(status)) return 'paper';
 	if (selected?.identity?.securePrinting) return 'secure';
 	if (selected?.identity?.ports?.some((port) => port.httpStatus === 503)) return 'held';
-	if (PERMISSION_RE.test(failure)) return 'permission';
+	// A web connection failure only mentions the browser's permission prompt (#3370).
+	if (!WEB_CONNECTION_FAILURE_RE.test(failure) && PERMISSION_RE.test(failure)) return 'permission';
 	if (UNPAIRED_RE.test(failure)) return 'unpaired';
 	if (selected?.source === 'bluetooth' && PAIRING_RE.test(failure)) return 'pairing';
 	if (UNRESPONSIVE_RE.test(failure)) return 'unresponsive';

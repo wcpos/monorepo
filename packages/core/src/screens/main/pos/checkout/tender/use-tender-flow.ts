@@ -1828,6 +1828,7 @@ export function useTenderFlow(
 			online,
 			// A sent, unanswered command offers no tile and no close: only Try again.
 			tiles: unansweredCommand ? [] : tiles,
+			byId,
 			legacyMethods,
 			method,
 			busy,
@@ -1873,6 +1874,7 @@ export function useTenderFlow(
 			retainedRows,
 			online,
 			tiles,
+			byId,
 			legacyMethods,
 			method,
 			busy,

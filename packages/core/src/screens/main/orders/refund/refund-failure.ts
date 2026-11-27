@@ -116,6 +116,17 @@ export function classifyRefundFailure(error: unknown, t: Translate): RefundFailu
 			refunded: true,
 		};
 	}
+	const body = response?.data as { code?: unknown; data?: { reason?: unknown } } | undefined;
+	// The store refused before creating a refund: the provider can't refund a hand-recorded payment.
+	// The cashier can choose another destination without refunding twice (woocommerce-pos#2838).
+	if (body?.code === 'wcpos_refund_unverified_payment' && body.data?.reason === 'unverified') {
+		return {
+			level: 'warn',
+			code: ERROR_CODES.RECORD_INVALID_FIELD,
+			title: t('orders.refund_unverified_payment'),
+			text2: t('orders.refund_unverified_payment_check'),
+		};
+	}
 	if (response && isRefusal(status)) {
 		// The HTTP client's mapped WordPress code (a missing route, a specific auth
 		// refusal) says more than the status does; fall back on the status only.

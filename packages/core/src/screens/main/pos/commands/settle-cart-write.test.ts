@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import {
+	calculateCartLine,
 	type CartConfig,
 	type CouponInput,
 	createCartConfig,
@@ -10,6 +11,8 @@ import { toOrderWirePayload } from '@wcpos/sync-core';
 
 import { config, resolveCartWrite } from '../../../../../jest/cart-write';
 import { compareOrderMoney } from '../../../../../../sync-engine/src/write-path/order-money-divergence';
+import { cartConfigForOrder, type OrderPayload } from './cart-config-for-order';
+import { retaxForCustomerWrite } from './retax-for-customer-write';
 import { type BoundaryCommit, type CartWriteCoupons, settleCartWrite } from './settle-cart-write';
 
 import type { CurrentOrderRecord } from '../contexts/current-order';
@@ -29,6 +32,42 @@ const record = (value = payload) =>
 			return this;
 		},
 	}) as unknown as CurrentOrderRecord;
+
+it('C3 settles a cashier quantity change on a refunded open order', async () => {
+	const rate = { id: 1, rate: '20', class: 'standard', country: 'AU' };
+	const taxable = createCartConfig({ ...config, rates: [rate], allRates: [rate], calcTaxes: true });
+	const product = {
+		product_id: 1,
+		quantity: 1,
+		meta_data: [
+			{ key: '_woocommerce_pos_data', value: JSON.stringify({ price: 10, tax_status: 'taxable' }) },
+		],
+	};
+	const priced = (quantity: number) =>
+		calculateCartLine({ kind: 'line_item', line: product, changes: { quantity } }, taxable).line;
+	const document = record();
+	Object.assign(document.payload, {
+		refunds: [{ id: 7 }],
+		meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }],
+		total: '12',
+		total_tax: '2',
+		line_items: [priced(1)],
+	});
+	const patch = jest.fn();
+	await settleCartWrite(
+		{ document, data: { line_items: [priced(2)] } },
+		{
+			localPatch: resolveCartWrite(patch),
+			configForOrder: () => taxable,
+			serverOwnsMoney: () => false,
+		}
+	);
+	expect(patch.mock.lastCall![0].data).toMatchObject({
+		total: '24',
+		total_tax: '4',
+		line_items: [{ quantity: 2, total_tax: '4', taxes: [{ id: 1, total: '4.000000' }] }],
+	});
+});
 
 it('settles the latest post-intent payload in one write, without changing outbound intent', async () => {
 	const latest = record();
@@ -415,6 +454,57 @@ describe('a coupon write settles the total it priced', () => {
 			expect(commitAtBoundary.mock.calls[0][2]?.context).toBe(coupons.context);
 		}
 	);
+});
+
+it('a pos-partial order re-taxes its lines on a customer write (#1875)', async () => {
+	const rates = [
+		{ id: 1, country: 'AU', rate: '10', class: 'standard', shipping: true, priority: 1 },
+		{ id: 2, country: 'NZ', rate: '15', class: 'standard', shipping: true, priority: 1 },
+	];
+	const configForOrder = (o: OrderPayload) =>
+		cartConfigForOrder({
+			settings: { ...config, calcTaxes: true, priceNumDecimals: 2, taxBasedOn: 'shipping' },
+			rates,
+			baseLocation: { country: 'AU' },
+			order: o,
+		} as never);
+	const taxes = [{ id: 1, total: '10', subtotal: '10' }];
+	const taxed = { ...line, total: '100', subtotal: '100', total_tax: '10', subtotal_tax: '10' };
+	const cash = { id: 'cash', status: 'captured', amount: '50', refunded_amount: '0' };
+	const order = record({
+		...payload,
+		status: 'pos-partial',
+		line_items: [{ ...taxed, quantity: 1, taxes }],
+		total: '110',
+		meta_data: [{ key: '_wcpos_payments', value: { schema: 1, payments: [cash] } }],
+	} as never);
+	const intent = { billing: { country: 'NZ' }, shipping: { country: 'NZ' } };
+	const deps = { configForOrder, ownedElsewhere: false, taxStatusFor: () => undefined };
+	// The customer write as use-set-cart-customer builds it.
+	const data = (current: OrderPayload) => ({
+		...intent,
+		...retaxForCustomerWrite(current, intent, deps).lines,
+	});
+	const writes: object[] = [];
+	const result = await settleCartWrite(
+		{ document: order, data, queue: {} as never },
+		{
+			localPatch: ({ changes }) => {
+				writes.push(changes(order.payload));
+				return Promise.resolve(order);
+			},
+			commitAtBoundary: jest.fn(),
+			configForOrder,
+			serverOwnsMoney: () => false,
+		}
+	);
+	expect(result).toBe(order);
+	expect(writes).toEqual([
+		expect.objectContaining({
+			line_items: [expect.objectContaining({ total: '100', total_tax: '15' })],
+			total: '115',
+		}),
+	]);
 });
 
 describe('an order queued for deletion', () => {

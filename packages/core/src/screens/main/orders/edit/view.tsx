@@ -133,7 +133,7 @@ export function OrderView({
 				</View>
 				<LineItemsSection order={payload} />
 				<TotalsSection order={payload} />
-				<PaymentSection order={order} />
+				<PaymentSection order={order} canChangeTender={!readOnly && !actions.storageDegraded} />
 				{payload.id ? (
 					<RefundsBoundary order={payload} orderUuid={order.uuid} orderId={payload.id} />
 				) : null}

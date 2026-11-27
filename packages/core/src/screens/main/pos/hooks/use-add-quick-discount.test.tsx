@@ -233,7 +233,7 @@ it('names the coupon type when an applied catalog coupon is of a type the POS ca
 	const { result } = renderHook(() => useAddQuickDiscount());
 	await expect(
 		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
-	).resolves.toEqual({ success: false, error: 'pos_cart.coupon_type_unsupported' });
+	).resolves.toEqual({ success: false, error: 'pos_cart.coupon_type_unsupported_store_checkout' });
 	expect(recalculate).not.toHaveBeenCalled();
 	expect(localPatch).not.toHaveBeenCalled();
 });

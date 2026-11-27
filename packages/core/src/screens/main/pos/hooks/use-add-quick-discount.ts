@@ -92,7 +92,7 @@ export const useAddQuickDiscount = () => {
 						if (unsupported) {
 							return {
 								success: false,
-								error: t('pos_cart.coupon_type_unsupported', {
+								error: t('pos_cart.coupon_type_unsupported_store_checkout', {
 									code: unsupported,
 									type: coupons.unsupportedTypes.get(unsupported.toLowerCase()),
 								}),

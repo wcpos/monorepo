@@ -203,6 +203,36 @@ it('shows only the Counted tile and keeps blind ladder labels and counts without
 	expect(ladder.textContent).toContain('Cash sales');
 	expect(within(ladder).getByText('1')).toBeTruthy();
 });
+it('draws a Corrections row from the cash tender’s corrections and none when absent', () => {
+	const props = { doc, ...deriveSettled(row, []), corrections: [], blind: false, context };
+	const { unmount } = render(<ClosureBody row={row} {...props} />);
+	expect(screen.queryByTestId('closure-drawer-corrections')).toBeNull();
+	unmount();
+	const cash = { sales: '30', refunds: '10', corrections: '-10.0000' };
+	const corrected = { ...row, breakdowns: { ...row.breakdowns, payment_methods: { cash } } };
+	render(<ClosureBody row={corrected} {...props} />);
+	expect(screen.getByTestId('closure-drawer-corrections').textContent).toBe('Corrections−$10.00');
+});
+
+// Float 80 + sales 30 − refunds 10 − correction 10 + in 5 − out 5 = the 90 the server stores.
+const tenders = { cash: { method: 'cash', sales: '30', refunds: '10', corrections: '-10.0000' } };
+it.each([tenders, Object.values(tenders)])(
+	'the drawer lines of a corrected closure add up to expected, map or list',
+	(payment_methods) => {
+		const breakdowns = { ...row.breakdowns, payment_methods };
+		const closed = { ...row, expected: { cash: '90' }, breakdowns };
+		const props = { doc, context, corrections: [], blind: false, ...deriveSettled(closed, []) };
+		render(<ClosureBody row={closed} {...props} />);
+		const ladder = screen.getByTestId('closure-drawer').children;
+		const lines = Array.from(ladder, (line) => String(line.textContent));
+		const label = createTestT()('register.expected_in_drawer');
+		const at = lines.findIndex((line) => line.startsWith(label));
+		const signed = (line: string) =>
+			Number(/−?\$[\d.]+$/.exec(line)?.[0].replace('−', '-').replaceAll('$', '') ?? 0);
+		expect(lines.slice(0, at).reduce((sum, line) => sum + signed(line), 0)).toBe(90);
+		expect(signed(lines[at])).toBe(90);
+	}
+);
 
 // Confusing the signature with the opener, local time with store time, or numbering precedence is visible here.
 it('names the closer in bold and the opener beside Float in the store zone', () => {

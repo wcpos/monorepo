@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render as rtlRender } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -15,11 +15,14 @@ import { settleCartWrite } from './settle-cart-write';
 import { commitAtBoundary, retryable } from './boundary-commit';
 import { config } from '../../../../../jest/cart-write';
 import { SettlementCoordinatorProvider } from './settlement-coordinator-provider';
+import { RatesReadyProvider } from './rates-ready-provider';
 import { quickDiscountCouponInput } from '../hooks/quick-discount';
 import { createSettlementCoordinator } from './settlement-coordinator';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
+
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: RatesReadyProvider });
 
 jest.mock('@wcpos/order-math', () => ({
 	...jest.requireActual('@wcpos/order-math'),
@@ -364,6 +367,28 @@ it('#952 replays a quick discount after a line edit without demanding catalog re
 	} finally {
 		view.unmount();
 	}
+});
+
+it.each([
+	['C1', true],
+	['C2', false],
+] as const)('%s handles a store re-tax (refunded: %s)', async (_, refunded) => {
+	const refunds = refunded ? [{ id: 7 }] : [];
+	orders.next({ ready: true, hits: [{ record: record({ billing: { country: 'US' }, refunds }) }] });
+	render(<SettlementCoordinatorProvider />);
+	await flush();
+	writes.length = 0;
+	const pulled = record({
+		billing: { country: 'GB' },
+		total: '12',
+		total_tax: '2',
+		tax_lines: [{ rate_id: 2, tax_total: '2' }],
+		refunds,
+	});
+	act(() => orders.next({ ready: true, hits: [{ record: pulled }] }));
+	await flush();
+	if (refunded) expect(writes).toEqual([]);
+	else expect(writes).toEqual([expect.objectContaining({ total: '10', total_tax: '0' })]);
 });
 
 it('#1472 bind settles stale money; a subsequent bind with correct totals writes nothing', async () => {

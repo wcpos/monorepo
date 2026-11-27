@@ -100,8 +100,9 @@ describe('TestPrintError', () => {
 	it('shows one actionable line instead of the attempt, reason and numbered suggestions', () => {
 		render(<TestPrintError error={failureWithDiagnostics} />);
 
+		// A connection failure is a printer that did not answer, never a system-settings denial (#3370).
 		expect(screen.getByTestId('add-printer-test-error-title')).toHaveTextContent(
-			'The printer did not accept the job.'
+			'The printer did not answer. Check it is on and connected, then try again.'
 		);
 		expect(screen.queryByText('We tried')).not.toBeInTheDocument();
 		expect(screen.queryByText('Likely reason')).not.toBeInTheDocument();

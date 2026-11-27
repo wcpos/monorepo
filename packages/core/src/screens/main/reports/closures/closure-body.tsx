@@ -149,9 +149,10 @@ export function ClosureBody({
 		{ counted?: string | null; expected?: string } | undefined;
 	const methods = (breakdowns.payment_methods ?? {}) as Record<
 		string,
-		{ method?: string; sales?: string; refunds?: string; count?: number }
+		{ method?: string; sales?: string; refunds?: string; corrections?: string; count?: number }
 	>;
 	const cash = Object.values(methods).find((method) => method.method === 'cash') ?? methods.cash;
+	const cashCorrections = cash?.corrections ?? '0';
 	const movements = (breakdowns.movements ?? []) as {
 		id: string;
 		type: string;
@@ -266,6 +267,12 @@ export function ClosureBody({
 						{term(t('register.cash_refunds'), undefined, !Number(cash?.refunds))}
 						{amount(minus(cash?.refunds ?? '0'), !Number(cash?.refunds))}
 					</View>
+					{!!Number(cashCorrections) && (
+						<View testID="closure-drawer-corrections" className={STATIC_ROW}>
+							{term(t('register.cash_corrections'))}
+							{amount((Number(cashCorrections) < 0 ? minus : context.formatMoney)(cashCorrections))}
+						</View>
+					)}
 					{(['paid_in', 'paid_out'] as const).map((type) => {
 						const entries = active.filter((m) => m.type === type);
 						const total = fromMinor(
