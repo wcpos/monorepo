@@ -200,9 +200,17 @@ test('an order completed on the server reaches the open Reports total', async ({
 		// still across MOUNT_SETTLE_MS with no download line before or after.
 		const progress = screen.getByTestId('reports-sync-progress').filter({ visible: true });
 		let baseline = Number.NaN;
+		// The race below lets the named expect fail just before toPass's own deadline.
+		const settleEnds = Date.now() + MOUNT_SETTLE_TIMEOUT_MS - 2_000;
 		await expect(async () => {
 			expect(
-				await onHoldReceived,
+				await Promise.race([
+					onHoldReceived,
+					page.waitForTimeout(Math.max(0, settleEnds - Date.now())).then(
+						() => null,
+						() => null
+					),
+				]),
 				'the app must receive the order as on-hold before the baseline'
 			).not.toBeNull();
 			expect(await progress.count(), 'no Reports download may be in flight').toBe(0);
