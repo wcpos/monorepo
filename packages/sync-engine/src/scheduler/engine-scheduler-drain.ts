@@ -84,7 +84,9 @@ export const ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
 
 const SUPPORTED_ORDER_QUERY_KEY = 'orders:custom-pull';
 const SUPPORTED_TARGETED_ORDER_QUERY_KEY_PREFIX = 'orders:ids:';
-// Write-path repulls (persistOrderRepull, repullOrdersNow) seed at 1000 and keep their early ride.
+// Every orders:ids: state with priority >= 1000 can run in other drains.
+// Write-path repulls (persistOrderRepull, repullOrdersNow) seed at 1000. A task already
+// queued below 1000 keeps its stored priority and waits for maintenance or a targeted walk.
 const WRITE_PATH_ORDER_REPULL_PRIORITY = 1000;
 const SUPPORTED_TARGETED_PRODUCT_QUERY_KEY_PREFIX = 'products:ids:';
 const SUPPORTED_PRODUCT_SEARCH_QUERY_KEY_PATTERN = /^products:search:.+$/;

@@ -1457,7 +1457,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						const drainResult = await withOrderReadopt(
 							database,
 							item.requirement.readopt ? remaining : [],
-							// A targeted walk drains its own tasks.
+							// A targeted walk drains every runnable orders:ids: task, including
+							// any left behind by an earlier walk that was released.
 							() => drainScheduler({ nowMs, targetedOrders: undefined })
 						);
 						appliedRecordIds.push(
