@@ -178,6 +178,8 @@ test('a product created on the server reaches the products grid without a search
 
 	// The default name window can finish before we click Name again. During completed-window
 	// dedupe, the grid sorts locally without another request, so record browses from navigation.
+	// A click after dedupe expires re-enqueues the browse, so wait for the require plane
+	// to settle before creating the probe.
 	const nameBrowses: { response: Response; order: string }[] = [];
 	const recordNameBrowse = (response: Response) => {
 		if (!response.ok() || response.request().method() !== 'GET') return;
@@ -223,19 +225,19 @@ test('a product created on the server reaches the products grid without a search
 
 	const beforeNameClick = nameBrowses.length;
 	await screen.getByTestId('data-table-header-name').first().click();
-	let sortedProducts!: Response;
+	let sortedDirection: string;
 	await expect
 		.poll(
 			async () => {
 				if (nameBrowses.length > beforeNameClick) {
-					sortedProducts = nameBrowses[nameBrowses.length - 1].response;
+					sortedDirection = nameBrowses[nameBrowses.length - 1].order;
 					return 'ready';
 				}
 				for (const direction of ['asc', 'desc']) {
 					if (await screen.getByTestId(`data-table-sort-name-${direction}`).first().isVisible()) {
-						const match = [...nameBrowses].reverse().find(({ order }) => order === direction);
+						const match = nameBrowses.some(({ order }) => order === direction);
 						if (!match) return `No post-click name browse or recorded ${direction} name browse`;
-						sortedProducts = match.response;
+						sortedDirection = direction;
 						return 'ready';
 					}
 				}
@@ -244,6 +246,10 @@ test('a product created on the server reaches the products grid without a search
 			{ timeout: 60_000 }
 		)
 		.toBe('ready');
+	await waitForRequirePlaneIdle(page);
+	const sortedProducts = [...nameBrowses]
+		.reverse()
+		.find(({ order }) => order === sortedDirection)!.response;
 	page.off('response', recordNameBrowse);
 	const sortedUrl = new URL(sortedProducts.url());
 	const order = sortedUrl.searchParams.get('order');
