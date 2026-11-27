@@ -71,10 +71,101 @@ async function measureStorageCall<Result>(
 		);
 	}
 }
+// One logcat line per raw call that took at least this long from enqueue to settle: well under the
+// 1.5 s fast-add total, and far above a normal write.
+export const STORAGE_WAIT_TRACE_MS = 250;
+// Logcat prefix of a FIFO trace line; grep it in the native E2E artifacts.
+export const STORAGE_WAIT_PREFIX = 'WCPOS_E2E_STORAGE_WAIT ';
+// Ahead writes listed per line; aheadMore and aheadByCollection still count all of them.
+export const STORAGE_WAIT_AHEAD_LIMIT = 10;
+interface TraceRecord {
+	seq: number;
+	collection: string;
+	rows: number;
+	ctx: string | null;
+	enqueuedAt: number;
+	endedAt?: number;
+}
+let traceSeq = 0;
+const databaseOrdinals = new Map<string, number>();
+const inFlightByDatabase = new Map<string, TraceRecord[]>();
+// Raw-layer FIFO trace (probe bundles only). Date.now(), never performance.now(): epoch times line
+// up with ledger lines. Logs collection names, rxdb context strings, counts and timings only.
+function traceStorageInstance<RxDocType, Internals, InstanceCreationOptions>(
+	instance: RxStorageInstance<RxDocType, Internals, InstanceCreationOptions>,
+	collection: string,
+	databaseName: string
+): void {
+	const db = databaseOrdinals.get(databaseName) ?? databaseOrdinals.size + 1;
+	databaseOrdinals.set(databaseName, db);
+	const inFlight = inFlightByDatabase.get(databaseName) ?? [];
+	inFlightByDatabase.set(databaseName, inFlight);
+	// Returns the settle callback; neither half can throw into storage.
+	const begin = (op: StorageTimingMethod, args: unknown[]) => {
+		try {
+			const enqueuedAt = Date.now();
+			const isWrite = op === 'bulkWrite';
+			const ctx = isWrite ? String(args[1]).slice(0, 64) : null;
+			const rows = op === 'count' ? 1 : op === 'query' ? 0 : (args[0] as unknown[]).length;
+			const record: TraceRecord = { seq: ++traceSeq, collection, rows, ctx, enqueuedAt };
+			const ahead = [...inFlight];
+			if (isWrite) inFlight.push(record);
+			return (result?: unknown) => {
+				try {
+					const endedAt = (record.endedAt = Date.now());
+					if (isWrite) inFlight.splice(inFlight.indexOf(record), 1);
+					const totalMs = endedAt - enqueuedAt;
+					if (totalMs < STORAGE_WAIT_TRACE_MS) return;
+					const startedAt = Math.max(enqueuedAt, ...ahead.map((a) => a.endedAt ?? 0));
+					const aheadByCollection: Record<string, [number, number]> = {};
+					for (const a of ahead) {
+						const [n, r] = aheadByCollection[a.collection] ?? [0, 0];
+						aheadByCollection[a.collection] = [n + 1, r + a.rows];
+					}
+					const listed = ahead.slice(0, STORAGE_WAIT_AHEAD_LIMIT);
+					const line = `${STORAGE_WAIT_PREFIX}${JSON.stringify({
+						db,
+						seq: record.seq,
+						op,
+						collection,
+						rows: (result as { documents?: unknown[] })?.documents?.length ?? rows,
+						ctx,
+						enqueuedAt,
+						waitMs: isWrite ? startedAt - enqueuedAt : null,
+						runMs: isWrite ? endedAt - startedAt : null,
+						totalMs,
+						aheadCount: ahead.length,
+						ahead: listed.map((a) => ({ ...a, endedAt: a.endedAt ?? null })),
+						aheadMore: ahead.length - listed.length,
+						aheadByCollection,
+					})}`;
+					const hook: unknown = Reflect.get(globalThis, 'nativeLoggingHook');
+					if (typeof hook === 'function') hook(line, 1);
+					else console.warn(line);
+				} catch {
+					// Diagnostics only: the trace never changes a result or an error.
+				}
+			};
+		} catch {
+			return () => undefined;
+		}
+	};
+	for (const op of ['bulkWrite', 'query', 'findDocumentsById', 'count'] as const) {
+		const call = instance[op].bind(instance) as (...args: unknown[]) => Promise<unknown>;
+		Reflect.set(instance, op, (...args: unknown[]) => {
+			const end = begin(op, args);
+			const settled = call(...args);
+			// A side chain: the caller gets the original promise, result and error untouched.
+			void settled.then(end, () => end());
+			return settled;
+		});
+	}
+}
 function wrapStorageInstance<RxDocType, Internals, InstanceCreationOptions>(
 	instance: RxStorageInstance<RxDocType, Internals, InstanceCreationOptions>,
 	layer: StorageTimingLayer,
-	collectionName: string
+	collectionName: string,
+	databaseName: string
 ): void {
 	const measure = <Result>(
 		method: StorageTimingMethod,
@@ -102,6 +193,7 @@ function wrapStorageInstance<RxDocType, Internals, InstanceCreationOptions>(
 		measure('findDocumentsById', ids.length, () => findDocumentsById(ids, withDeleted));
 	const count = instance.count.bind(instance);
 	instance.count = (preparedQuery) => measure('count', 1, () => count(preparedQuery));
+	if (layer === 'raw') traceStorageInstance(instance, collectionName, databaseName);
 }
 export function withStorageTimingProbe<Internals, InstanceCreationOptions>(
 	storage: RxStorage<Internals, InstanceCreationOptions>,
@@ -114,7 +206,7 @@ export function withStorageTimingProbe<Internals, InstanceCreationOptions>(
 			params: RxStorageInstanceCreationParams<RxDocType, InstanceCreationOptions>
 		) {
 			const instance = await createStorageInstance(params);
-			wrapStorageInstance(instance, layer, params.collectionName);
+			wrapStorageInstance(instance, layer, params.collectionName, params.databaseName);
 			return instance;
 		},
 	};

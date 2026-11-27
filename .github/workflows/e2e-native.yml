@@ -578,6 +578,7 @@ jobs:
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
           EXPO_PUBLIC_WCPOS_E2E: '1'
+          EXPO_PUBLIC_WCPOS_STORAGE_PROBE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
           EXPO_NO_METRO_LAZY: '1'
         run: |
           # This checkout is immutable during CI. Reuse its exact runtime: the

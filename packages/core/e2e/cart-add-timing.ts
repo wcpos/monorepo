@@ -9,6 +9,7 @@ export interface CartAddTiming {
 	quantity: number;
 	durationMs: number | null;
 	marks?: Partial<Record<CartAddMark, number>>;
+	startedAtEpochMs?: number;
 }
 let snapshot: CartAddTiming = {
 	sequence: 0,
@@ -57,6 +58,7 @@ export function beginCartAddTiming(
 		productId,
 		quantity: quantity + 1,
 		durationMs: null,
+		startedAtEpochMs: Math.round(Date.now() - (performance.now() - start)),
 	});
 	return sequence;
 }
