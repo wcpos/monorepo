@@ -173,6 +173,16 @@ test('an order completed on the server reaches the open Reports total', async ({
 	try {
 		// 2. Parked on-hold, which Reports does not count.
 		await putStatus(request, storeUrl, writer, orderId, 'on-hold');
+		// The baseline must exclude this order. A queued Reports read can still carry it as paid,
+		// so wait for the app to receive the on-hold status before reading the total.
+		const onHoldReceived = page.waitForResponse(hasOnHoldOrder, { timeout: 0 }).catch(() => null);
+		async function hasOnHoldOrder(response: import('@playwright/test').Response) {
+			if (!response.ok() || response.request().method() !== 'GET') return false;
+			if (!new URL(response.url()).pathname.endsWith('/wcpos/v2/orders')) return false;
+			const rows = (await response.json().catch(() => null))?.data;
+			if (!Array.isArray(rows)) return false;
+			return rows.some((row) => row?.status === 'on-hold' && Number(row.id) === orderId);
+		}
 
 		// 3. The Reports screen and its baseline, once the mount read has settled.
 		const dismissReceipt = page
@@ -190,7 +200,19 @@ test('an order completed on the server reaches the open Reports total', async ({
 		// still across MOUNT_SETTLE_MS with no download line before or after.
 		const progress = screen.getByTestId('reports-sync-progress').filter({ visible: true });
 		let baseline = Number.NaN;
+		// The race below lets the named expect fail just before toPass's own deadline.
+		const settleEnds = Date.now() + MOUNT_SETTLE_TIMEOUT_MS - 2_000;
 		await expect(async () => {
+			expect(
+				await Promise.race([
+					onHoldReceived,
+					page.waitForTimeout(Math.max(0, settleEnds - Date.now())).then(
+						() => null,
+						() => null
+					),
+				]),
+				'the app must receive the order as on-hold before the baseline'
+			).not.toBeNull();
 			expect(await progress.count(), 'no Reports download may be in flight').toBe(0);
 			const first = await heroTotal(hero);
 			await page.waitForTimeout(MOUNT_SETTLE_MS);

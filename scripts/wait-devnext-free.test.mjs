@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
 	blockersFor,
+	listQueueRuns,
 	MAX_CONSECUTIVE_ERRORS,
 	MAX_WAIT_MS,
 	POLL_INTERVAL_MS,
@@ -227,4 +228,38 @@ test('each blocked poll logs its queue position and the holder run', async () =>
 test('Q6: main mode polls only deploy.yml; the default polls every queue workflow', () => {
 	assert.deepEqual(queueWorkflows(true), ['deploy.yml']);
 	assert.deepEqual(queueWorkflows(false), QUEUE_WORKFLOWS);
+});
+
+function listMainRuns(byStatus) {
+	const get = async (url) => ({
+		workflow_runs: byStatus[new URL(url).searchParams.get('status')] ?? [],
+	});
+	return listQueueRuns(get, 'https://api.github.test/actions', queueWorkflows(true));
+}
+
+test('a pending main push still holds the store while its shards are queued', async () => {
+	const push = { ...holder, event: 'push' };
+	const listRuns = () => listMainRuns({ pending: [push] });
+	assert.deepEqual(await listRuns(), [push]);
+	const fake = fakeQueue([], {
+		allEvents: true,
+		listRuns,
+		listJobs: async () => push.jobs,
+		maxWaitMs: 1500,
+	});
+	const result = await fake.run();
+	assert.equal(result.admitted, false);
+	assert.deepEqual(result.blockers, [{ id: push.id, state: 'holding', url: push.html_url }]);
+});
+
+test('a run listed under two statuses is kept only on its first appearance', async () => {
+	const duplicate = { ...holder, id: String(holder.id) };
+	assert.deepEqual(await listMainRuns({ in_progress: [holder], pending: [duplicate] }), [holder]);
+});
+
+test('of two pending waiters only the newer is blocked, and only by the older', async () => {
+	const runs = await listMainRuns({ pending: [waiter(100), waiter(101)] });
+	const waiting = runs.map(({ id, jobs }) => ({ id, state: queueState(jobs) }));
+	assert.deepEqual(blockersFor(101, waiting), [{ id: 100, state: 'waiting' }]);
+	assert.deepEqual(blockersFor(100, waiting), []);
 });

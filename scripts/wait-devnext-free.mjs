@@ -18,6 +18,8 @@ import { pathToFileURL } from 'node:url';
 
 export const QUEUE_STEP_NAME = process.env.QUEUE_STEP_NAME || '🚦 Queue for dev-next';
 export const QUEUE_WORKFLOWS = ['deploy.yml', 'e2e-native.yml'];
+// On 27 Nov GitHub reported main's lap as pending while 3 shards waited in a store concurrency queue. Look for holders in every non-completed status.
+export const RUN_STATUSES = ['in_progress', 'pending', 'queued', 'waiting'];
 export function queueWorkflows(allEvents) {
 	return allEvents ? ['deploy.yml'] : QUEUE_WORKFLOWS;
 }
@@ -27,6 +29,19 @@ export const POLL_INTERVAL_MS = 90_000;
 export const MAX_WAIT_MS = 240 * 60_000;
 /** A broken token or API outage fails the step instead of waiting 4 h. */
 export const MAX_CONSECUTIVE_ERRORS = 5;
+
+export async function listQueueRuns(get, base, workflows) {
+	const runs = new Map();
+	for (const file of workflows) {
+		for (const status of RUN_STATUSES) {
+			const { workflow_runs } = await get(
+				`${base}/workflows/${file}/runs?status=${status}&per_page=100`
+			);
+			for (const run of workflow_runs) if (!runs.has(Number(run.id))) runs.set(Number(run.id), run);
+		}
+	}
+	return [...runs.values()];
+}
 
 export function queueState(jobs, stepName = QUEUE_STEP_NAME) {
 	const step = jobs.flatMap((job) => job.steps ?? []).find(({ name }) => name === stepName);
@@ -147,14 +162,7 @@ async function main() {
 	}
 	const result = await waitForDevNext({
 		ownRunId: Number(GITHUB_RUN_ID),
-		listRuns: async () => {
-			const runs = [];
-			for (const file of queueWorkflows(allEvents)) {
-				const data = await get(`${base}/workflows/${file}/runs?status=in_progress&per_page=100`);
-				runs.push(...data.workflow_runs);
-			}
-			return runs;
-		},
+		listRuns: () => listQueueRuns(get, base, queueWorkflows(allEvents)),
 		listJobs: async (id) => (await get(`${base}/runs/${id}/jobs?filter=latest&per_page=100`)).jobs,
 		sleep,
 		now: Date.now,
