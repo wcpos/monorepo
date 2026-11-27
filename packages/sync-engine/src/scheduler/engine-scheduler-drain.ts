@@ -84,6 +84,8 @@ export const ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
 
 const SUPPORTED_ORDER_QUERY_KEY = 'orders:custom-pull';
 const SUPPORTED_TARGETED_ORDER_QUERY_KEY_PREFIX = 'orders:ids:';
+// Write-path repulls (persistOrderRepull, repullOrdersNow) seed at 1000 and keep their early ride.
+const WRITE_PATH_ORDER_REPULL_PRIORITY = 1000;
 const SUPPORTED_TARGETED_PRODUCT_QUERY_KEY_PREFIX = 'products:ids:';
 const SUPPORTED_PRODUCT_SEARCH_QUERY_KEY_PATTERN = /^products:search:.+$/;
 const SUPPORTED_VARIATION_SEARCH_QUERY_KEY_PATTERN = /^variations:search:.+$/;
@@ -308,6 +310,8 @@ export type RunEngineSchedulerDrainInput = {
 	/** #3782: the refund history walk must not ride another requirement's drain. A drain that
 	 * names the history task by `taskId` still runs it. */
 	refundHistory?: 'exclude';
+	/** An abandoned targeted orders walk must not ride another requirement's drain. */
+	targetedOrders?: 'exclude' | undefined;
 	/** Override for an explicitly requested foreground drain. Background drains
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
@@ -591,14 +595,25 @@ export async function runEngineSchedulerDrain(
 			const taskId = input.taskId;
 			const referenceLanes = input.referenceLanes;
 			const refundHistory = input.refundHistory;
+			const targetedOrders = input.targetedOrders;
 			const repository =
-				taskId === undefined && referenceLanes === undefined && refundHistory === undefined
+				taskId === undefined &&
+				referenceLanes === undefined &&
+				refundHistory === undefined &&
+				targetedOrders === undefined
 					? supportedRepository
 					: {
 							...supportedRepository,
 							readRunnable: async (readAtMs: number) =>
 								(await supportedRepository.readRunnable(readAtMs)).filter((state) => {
 									if (taskId !== undefined && state.taskId !== taskId) return false;
+									if (
+										targetedOrders === 'exclude' &&
+										taskId === undefined &&
+										state.queryKey.startsWith(SUPPORTED_TARGETED_ORDER_QUERY_KEY_PREFIX) &&
+										state.priority < WRITE_PATH_ORDER_REPULL_PRIORITY
+									)
+										return false;
 									if (
 										refundHistory === 'exclude' &&
 										taskId === undefined &&

@@ -7,7 +7,9 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { engineCollectionCreators } from '../collections/engine-collections';
 import { createLocalCoverage } from '../local-coverage/local-coverage';
+import { remoteId } from '../testing';
 import { runEngineSchedulerDrain } from './engine-scheduler-drain';
+import { seedTargetedOrderSchedulerTask } from './rx-order-scheduler-task-seeder';
 import { seedProductBrowseWindowSchedulerTask } from './rx-scheduler-product-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
 
@@ -82,5 +84,46 @@ describe('engine scheduler drain clock', () => {
 
 		abortController.abort(new Error('test complete'));
 		await expect(run).rejects.toThrow('test complete');
+	});
+});
+
+describe('a drain excluding targeted orders', () => {
+	it.each([
+		{ priority: 500, named: false, fetched: false },
+		{ priority: 500, named: true, fetched: true },
+		{ priority: 1000, named: false, fetched: true },
+	])('priority $priority, named=$named: fetched=$fetched', async ({ priority, named, fetched }) => {
+		database = await createRxDatabase({
+			name: `targetedorders${priority}${named}`,
+			storage: getRxStorageMemory(),
+			multiInstance: false,
+		});
+		await database.addCollections(engineCollectionCreators() as never);
+		const coverage = createLocalCoverage({
+			database: database as never,
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		const { taskIds } = await seedTargetedOrderSchedulerTask({
+			database: database as never,
+			remoteIds: [remoteId(7)],
+			priority,
+			nowMs: 1_000,
+		});
+		const urls: string[] = [];
+		await runEngineSchedulerDrain({
+			db: database as never,
+			coverage,
+			baseUrl: 'https://orders.example.test',
+			ownerId: 'tab-a',
+			fetcher: async (url) => {
+				urls.push(url);
+				return Response.json([]);
+			},
+			nowMs: 1_000,
+			targetedOrders: 'exclude',
+			...(named ? { taskId: taskIds[0]! } : {}),
+		});
+		expect(urls.some((url) => new URL(url).searchParams.has('include'))).toBe(fetched);
 	});
 });
