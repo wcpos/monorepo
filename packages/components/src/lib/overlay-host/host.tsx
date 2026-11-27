@@ -4,7 +4,7 @@ import { Platform, View, type ViewInstance } from 'react-native';
 import { ErrorBoundary } from '../../error-boundary';
 import { PortalHost } from '../../portal';
 import { registerPortalContainer } from '../portal-container';
-import { OverlayHostProvider } from './index';
+import { OverlayHostProvider, traceOverlay } from './index';
 
 /**
  * A layout's portal host, in one place: it registers its view as the web container of `name`
@@ -18,6 +18,10 @@ export function OverlayHost({
 	active = true,
 	children,
 }: React.PropsWithChildren<{ name: string; phoneUsesRoot?: boolean; active?: boolean }>) {
+	React.useEffect(() => {
+		traceOverlay('host', { name, active });
+		return () => traceOverlay('host-off', { name, active });
+	}, [name, active]);
 	const register = React.useCallback(
 		(node: ViewInstance | null) => {
 			registerPortalContainer(

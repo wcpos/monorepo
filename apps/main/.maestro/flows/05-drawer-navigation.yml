@@ -6,6 +6,11 @@ appId: com.wcpos.main.dev
 # and, on a large screen's permanent rail, only confirms the items are there.
 - runFlow:
     file: ../subflows/ensure-pos-ready.yml
+# DIAGNOSTIC (#3886), never merges.
+- runFlow:
+    file: ../subflows/diag-settings-open.yml
+    env:
+      LABEL: before-trip
 - runFlow:
     file: ../subflows/open-drawer.yml
 - tapOn:
@@ -14,6 +19,28 @@ appId: com.wcpos.main.dev
     visible:
       id: "screen-products"
     timeout: 60000
+# DIAGNOSTIC (#3886), never merges.
+- runFlow:
+    file: ../subflows/open-drawer.yml
+- tapOn:
+    id: "drawer-item-pos"
+- runFlow:
+    when:
+      notVisible:
+        id: "drawer-panel-permanent"
+    commands:
+      - extendedWaitUntil:
+          notVisible:
+            id: "drawer-item-pos"
+          timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 60000
+- runFlow:
+    file: ../subflows/diag-settings-open.yml
+    env:
+      LABEL: after-products-hop
 - runFlow:
     file: ../subflows/open-drawer.yml
 - tapOn:
@@ -53,3 +80,14 @@ appId: com.wcpos.main.dev
     visible:
       id: "search-products"
     timeout: 60000
+# DIAGNOSTIC (#3886), never merges.
+- runFlow:
+    file: ../subflows/diag-settings-open.yml
+    env:
+      LABEL: after-full-trip
+- runFlow:
+    file: ../subflows/relaunch-to-pos.yml
+- runFlow:
+    file: ../subflows/diag-settings-open.yml
+    env:
+      LABEL: after-relaunch

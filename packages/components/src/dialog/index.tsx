@@ -26,7 +26,7 @@ import {
 	useOverlayPresentation,
 	useSheetInset,
 } from '../lib/overlay';
-import { useOverlayHost } from '../lib/overlay-host';
+import { OverlayMountTrace, traceOverlay, useOverlayHost } from '../lib/overlay-host';
 import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
@@ -118,6 +118,9 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element |
 	const ambient = useOverlayHost();
 	const host = portalHost === undefined ? ambient : (portalHost ?? undefined);
 	const container = usePortalContainer(host);
+	React.useEffect(() => {
+		traceOverlay('dialog-content', { testID: testID ?? null, open, host: host ?? null, route });
+	}, [testID, open, host, route]);
 	if (!open && !route && !OVERLAY_EXIT_MOUNTED) return null;
 	const shell = (
 		<OverlayShell
@@ -209,6 +212,7 @@ function DialogPanel(allProps: DialogContentProps) {
 			{...EXIT_MARK}
 			{...props}
 		>
+			<OverlayMountTrace label={'dialog-panel:' + (testID ?? '?')} />
 			{children}
 			<View
 				className={cn(

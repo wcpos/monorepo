@@ -1,0 +1,37 @@
+appId: com.wcpos.main.dev
+---
+# DIAGNOSTIC (#3886): does the products settings dialog open here? Logs only, never fails.
+- runFlow:
+    when:
+      visible:
+        id: "products-settings-button"
+    commands:
+      - evalScript: ${console.log('WCPOS_E2E_DIAG settings-open ' + LABEL + ' tap')}
+      - tapOn:
+          id: "products-settings-button"
+      - extendedWaitUntil:
+          visible:
+            id: "ui-settings-close"
+          timeout: 8000
+          optional: true
+      - runFlow:
+          when:
+            visible:
+              id: "ui-settings-close"
+          commands:
+            - evalScript: ${console.log('WCPOS_E2E_DIAG settings-open ' + LABEL + ' OPENED')}
+            - takeScreenshot: diag-${LABEL}-opened
+            - tapOn:
+                id: "ui-settings-close"
+            - extendedWaitUntil:
+                notVisible:
+                  id: "ui-settings-close"
+                timeout: 5000
+                optional: true
+      - runFlow:
+          when:
+            notVisible:
+              id: "ui-settings-close"
+          commands:
+            - evalScript: ${console.log('WCPOS_E2E_DIAG settings-open ' + LABEL + ' result-closed')}
+            - takeScreenshot: diag-${LABEL}-closed

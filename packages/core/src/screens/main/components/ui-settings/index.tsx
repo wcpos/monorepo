@@ -15,6 +15,7 @@ import {
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Form, useFormChangeHandler } from '@wcpos/components/form';
 import { IconButton } from '@wcpos/components/icon-button';
+import { traceOverlay } from '@wcpos/components/lib/overlay-host';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
@@ -129,9 +130,21 @@ function UISettingsDialog({
 
 	return (
 		<ErrorBoundary>
-			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
+			<Dialog
+				open={openDialog}
+				onOpenChange={(next) => {
+					traceOverlay('settings-open-change', { testID: triggerTestID, open: next });
+					setOpenDialog(next);
+				}}
+			>
 				<Tooltip>
-					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
+					<TooltipTrigger
+						asChild
+						onPress={() => {
+							traceOverlay('settings-press', { testID: triggerTestID });
+							setOpenDialog(true);
+						}}
+					>
 						<IconButton
 							name="filters"
 							testID={triggerTestID}

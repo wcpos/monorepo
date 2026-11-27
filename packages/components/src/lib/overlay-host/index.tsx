@@ -6,6 +6,20 @@ type ProvidedHost = { name: string; phoneUsesRoot: boolean; outer: ProvidedHost 
 
 const OverlayHostContext = React.createContext<ProvidedHost | undefined>(undefined);
 
+export function traceOverlay(event: string, data: Record<string, unknown>): void {
+	if (process.env.EXPO_PUBLIC_WCPOS_E2E === '1') {
+		console.log('WCPOS_E2E_OVERLAY ' + JSON.stringify({ t: Date.now(), event, ...data }));
+	}
+}
+
+export function OverlayMountTrace({ label }: { label: string }): null {
+	React.useEffect(() => {
+		traceOverlay('mount', { label });
+		return () => traceOverlay('unmount', { label });
+	}, [label]);
+	return null;
+}
+
 /**
  * Names the host the overlays below render on, without mounting it: `OverlayHost` (`./host`, kept
  * apart because it brings the error boundary and the native portal) names its own, and a surface

@@ -11,6 +11,7 @@ import {
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
+import { OverlayMountTrace, traceOverlay } from '@wcpos/components/lib/overlay-host';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 
@@ -42,7 +43,7 @@ export function AddCartItemsMenu() {
 
 	return (
 		<>
-			<DropdownMenu>
+			<DropdownMenu onOpenChange={(open) => traceOverlay('add-menu-open-change', { open })}>
 				<DropdownMenuTrigger asChild>
 					<IconButton
 						name="plus"
@@ -51,6 +52,7 @@ export function AddCartItemsMenu() {
 					/>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end" portalHost="pos">
+					<OverlayMountTrace label="add-menu-content" />
 					{isPro && caps.canCreateCustomers ? (
 						<DropdownMenuItem testID="menu-add-customer" onPress={() => setOpenDialog('customer')}>
 							<Icon name="addCustomer" />
