@@ -407,8 +407,9 @@ describe('useAddCoupon engine reads', () => {
 			});
 		});
 
-		it('refuses a declared store-calculated coupon offline without dispatching', async () => {
-			mockStatus = 'offline';
+		const refusalCase = 'refuses a declared store-calculated coupon when %s without dispatching';
+		it.each(['offline', 'online-website-unavailable'] as const)(refusalCase, async (status) => {
+			mockStatus = status;
 			const { result } = renderHook(() => useAddCoupon(), { wrapper });
 			await expect(result.current.addCoupon(' CREDIT ')).resolves.toEqual({
 				success: false,

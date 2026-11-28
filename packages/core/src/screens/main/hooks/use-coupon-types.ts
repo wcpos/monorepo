@@ -4,7 +4,7 @@ import { useDocField } from '@wcpos/query';
 
 import { ExtraDataContext } from '../contexts/extra-data/context';
 
-/** ~/agent/handoff/smart-coupons-design-b/CONTRACT.md §(a): a missing or bad declaration means today's refusal. */
+/** Store-credit contract §(a) (coupon types a plugin declares): a missing or bad declaration means today's refusal. */
 export function storeCalculatedCouponTypes(value: unknown): ReadonlySet<string> {
 	const types = new Set<string>();
 	if (!value || typeof value !== 'object') return types;

@@ -15,6 +15,10 @@ it.each([
 	expect(storeCalculatedCouponTypes(value)).toEqual(new Set());
 });
 
+it('admits nothing from a declaration with an empty list', () => {
+	expect(storeCalculatedCouponTypes({ schema: 1, coupon_types: [] }).size).toBe(0);
+});
+
 it('admits only non-core store-calculated types with offline none', () => {
 	const coupon_types = [
 		null,
