@@ -404,6 +404,7 @@
 	"pos_checkout.order_not_on_store_yet": "The order hasn't reached the store yet. Try again in a moment.",
 	"pos_checkout.order_changed_retry": "The order changed while you were paying. Check the amount and try again.",
 	"pos_checkout.payment_vetoed": "The store refused this payment. Check the new total and try again.",
+	"pos_checkout.payment_vetoed_hold": "The store refused this payment. The card was not charged, but the hold is still on it. The till keeps trying to release it.",
 	"pos_checkout.terminal_starting": "Starting the terminal…",
 	"pos_checkout.waiting_for_terminal": "Waiting for the customer on the terminal",
 	"pos_checkout.terminal_capturing": "Capturing…",

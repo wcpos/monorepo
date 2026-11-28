@@ -18,6 +18,7 @@ import { describeEvent, type EventTone, failureReasonLabel, providerErrorMessage
 import { CapturedUnfinishedNotice } from './captured-unfinished-notice';
 import { primaryServerHardware } from './tiles';
 import { useDriverStatus } from './use-driver-status';
+import { vetoSentence } from '../veto-sentence';
 import { readerName } from '../../../settings/card-readers/reader-name';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { useT } from '../../../../../contexts/translations';
@@ -86,8 +87,15 @@ export function TerminalLegView({
 	const failureReason = row.failure_reason ?? legReason;
 	const reason = providerErrorMessage(leg.error) ?? failureReasonLabel(failureReason, t);
 	let status = t('pos_checkout.waiting_for_terminal');
-	let action: 'cancel' | 'capture' | 'cancelling' | 'release' | 'final' | 'none' = 'cancel';
-	if (final && ['failed', 'voided', 'released'].includes(leg.outcome ?? '')) {
+	let action: 'cancel' | 'capture' | 'cancelling' | 'release' | 'final' | 'vetoed' | 'none' =
+		'cancel';
+	if (leg.veto && !final) {
+		status = leg.veto.held ? t('pos_checkout.payment_vetoed_hold') : vetoSentence(leg.veto, t)!;
+		action = 'none';
+	} else if (leg.veto && final && leg.outcome !== 'captured') {
+		status = vetoSentence(leg.veto, t)!;
+		action = 'vetoed';
+	} else if (final && ['failed', 'voided', 'released'].includes(leg.outcome ?? '')) {
 		// Timed out: the till's deadline, or the reader's own collect window running out.
 		status = failed
 			? t('pos_checkout.payment_failed_reason', { reason })
@@ -202,7 +210,7 @@ export function TerminalLegView({
 			<StatusBadge
 				testID="checkout-terminal-status"
 				label={status}
-				variant={failed || leg.captureFailed ? 'bad' : 'muted'}
+				variant={action === 'vetoed' || failed || leg.captureFailed ? 'bad' : 'muted'}
 			/>
 			{/* Flat on the pane: no card around the reader, no box around the log (owner, 2026-10-06). */}
 			<VStack className="w-full max-w-md" space="md">
@@ -303,16 +311,18 @@ export function TerminalLegView({
 						<ButtonText>{t('pos_checkout.release_this_payment')}</ButtonText>
 					</Button>
 				) : null}
-				{action === 'final' ? (
+				{action === 'final' || action === 'vetoed' ? (
 					<>
-						<Button
-							variant="default"
-							size="lg"
-							testID="checkout-terminal-retry"
-							onPress={flow.terminal.retryTerminalLeg}
-						>
-							<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
-						</Button>
+						{action === 'final' ? (
+							<Button
+								variant="default"
+								size="lg"
+								testID="checkout-terminal-retry"
+								onPress={flow.terminal.retryTerminalLeg}
+							>
+								<ButtonText>{t('pos_checkout.try_again')}</ButtonText>
+							</Button>
+						) : null}
 						<Button
 							variant="outline"
 							testID="checkout-terminal-another"

@@ -147,7 +147,37 @@ const base: TerminalLegState = {
 	orderNumber: '42',
 };
 const actions = ['cancel', 'capture-retry', 'release', 'retry', 'another'];
-const cases: [Partial<TerminalLegState>, string, string[]][] = [
+const cases: [Partial<TerminalLegState>, string, string[], string?][] = [
+	[
+		{ veto: { message: 'Store says no', held: false }, phase: 'cancelling' },
+		'Store says no',
+		[],
+		'V1',
+	],
+	[
+		{ veto: { message: null, held: true }, cancelRequested: true },
+		'The store refused this payment. The card was not charged, but the hold is still on it. The till keeps trying to release it.',
+		[],
+		'V2',
+	],
+	[
+		{ phase: 'final', outcome: 'voided', veto: { message: 'Store says no', held: false } },
+		'Store says no',
+		['another'],
+		'V3',
+	],
+	[
+		{ phase: 'final', outcome: 'failed', veto: { message: null, held: false } },
+		'The store refused this payment. Check the new total and try again.',
+		['another'],
+		'V4',
+	],
+	[
+		{ phase: 'final', outcome: 'captured', veto: { message: 'Store says no', held: false } },
+		'',
+		[],
+		'V5',
+	],
 	[{ phase: 'creating' }, 'Starting the terminal…', ['cancel']],
 	[{}, 'Waiting for the customer on the terminal', ['cancel']],
 	[{ unstable: true }, 'Waiting for the customer on the terminal', ['cancel']],
@@ -216,7 +246,9 @@ function renderLeg(changes: Partial<TerminalLegState> = {}, extra: Partial<Tende
 		},
 	});
 }
-it.each(cases)('renders the terminal state %j', (changes, status, present) => {
+it.each(
+	cases.map(([changes, status, present, id]) => ({ changes, status, present, id: id ?? '' }))
+)('$id renders the terminal state $changes', ({ changes, status, present }) => {
 	renderLeg(changes);
 	expect(screen.queryByTestId('checkout-terminal-status')?.textContent ?? '').toBe(status);
 	for (const action of actions) {

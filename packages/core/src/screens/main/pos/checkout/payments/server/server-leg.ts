@@ -13,6 +13,8 @@ import type {
 import { legFinality, refusedBeforeSend, terminalBeforeSend } from '../leg-finality';
 
 const POLL_CADENCE_MS = 2000; // Wait after each response, not on a fixed interval.
+/** A void the store refused after a veto is re-sent this often: the card hold must be released (M18b). */
+export const VETO_VOID_RETRY_MS = 10000;
 const BACKOFF_MS = [2000, 4000, 8000, 15000]; // Bound transport pressure without giving up.
 const UNSTABLE_AFTER = 3; // Surface sustained connection loss to the cashier.
 const DEADLINE_MS = 300_000; // Check finality before requesting cancellation at five minutes.
@@ -39,6 +41,8 @@ export interface ServerLegState {
 	deadlineHandled: boolean;
 	capturing: boolean;
 	captureFailed: boolean;
+	/** A capture the store vetoed (contract M18): its sentence, and whether the hold is unreleased. */
+	veto?: { message: string | null; held: boolean };
 	error: { code: string; message: string } | null;
 	clientEvents: PaymentEvent[];
 }
@@ -67,7 +71,7 @@ function errorResponse(error: unknown) {
 		? (response as {
 				status?: number;
 				data?: PaymentRefusalBody & {
-					data: PaymentRefusalBody['data'] & { payment_id?: unknown };
+					data: PaymentRefusalBody['data'] & { payment_id?: unknown; vetoed?: boolean };
 				};
 			})
 		: undefined;
@@ -190,6 +194,12 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		return current(seq);
 	};
 	const afterResponse = async (route: Route) => {
+		// A vetoed leg ends only on a final row the store answered (M18b): until then it is held and re-sends its void.
+		if (state.veto && !isFinalPaymentStatus(state.row.status)) {
+			setState({ veto: { ...state.veto, held: true }, phase: 'polling', capturing: false });
+			schedule(VETO_VOID_RETRY_MS, 'void');
+			return;
+		}
 		if (deadlineRead && route === 'status') {
 			deadlineRead = false;
 			if (!state.cancelRequested) {
@@ -323,6 +333,17 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			};
 		}
 
+		if (route === 'capture' && body?.data?.vetoed === true) {
+			setState({
+				veto: { message: body.message ?? null, held: false },
+				error: changes.error ?? null,
+				capturing: false,
+				captureFailed: false,
+			});
+			event(body.message ?? 'vetoed', 'error');
+			await cancel('vetoed');
+			return;
+		}
 		if (
 			body?.data?.payment &&
 			!(await applyResponse(
@@ -336,6 +357,19 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (!current(seq)) return;
 		// A poll that failed while a cancel waited on it: the void answers either way.
 		if (route === 'status' && (await voidAfterAnswer())) return;
+		const definitive = route === 'status' || isDefinitiveMoneyRefusal(moneyRefusalOf(error));
+		if (
+			state.veto &&
+			route === 'void' &&
+			definitive &&
+			code !== 'wcpos_payment_not_found' &&
+			code !== 'wcpos_invalid_transition'
+		) {
+			const veto = { ...state.veto, held: true };
+			setState({ ...changes, veto, phase: 'polling', capturing: false });
+			schedule(VETO_VOID_RETRY_MS, 'void');
+			return;
+		}
 		const inMotion = moneyInMotionOf(moneyRefusalOf(error));
 		if (route === 'intent' && inMotion?.kind === 'payment') {
 			// A definitive answer (the poster settled this intent): the leg follows the live one.
@@ -402,9 +436,9 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		// the rule its journal uses (sync-core `isDefinitiveMoneyRefusal`): an answer the journal
 		// keeps for a re-send (a 426, a proxy's bare 4xx) must not end the leg, or a later re-send
 		// could authorize after the cashier was told it failed. A status read is no command.
-		const definitive = route === 'status' || isDefinitiveMoneyRefusal(moneyRefusalOf(error));
 		if (
 			definitive &&
+			!(state.veto && route === 'status') &&
 			(code?.startsWith('wcpos_') || refusedIntent) &&
 			response?.status !== undefined &&
 			response.status >= 400 &&
@@ -443,6 +477,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		setState({
 			capturing: false,
 			consecutiveErrors: count,
+			...(state.veto && route === 'void' && { veto: { ...state.veto, held: true } }),
 			unstable: count >= UNSTABLE_AFTER,
 			phase: route === 'intent' ? 'creating' : resend ? 'cancelling' : 'polling',
 		});

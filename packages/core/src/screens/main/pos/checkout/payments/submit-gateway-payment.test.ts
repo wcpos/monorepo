@@ -6,6 +6,7 @@ import {
 	withAwaitingCustomer,
 	withGatewayAttempt,
 } from '@wcpos/order-math';
+import { MoneyCommandError } from '@wcpos/query';
 
 import {
 	cancelGatewayAttempt,
@@ -93,6 +94,17 @@ function harness(meta: MetaDataEntry[] = []) {
 const input = { attemptId: 'attempt-1', values: { email: 'new@b.c', save: true } };
 
 describe('submitGatewayPayment', () => {
+	it('N4 propagates the vetoed submit unchanged without settling', async () => {
+		const { post, order, deps } = harness();
+		const error = new MoneyCommandError('order_changed', {} as never, summary('pos-open'), {
+			cause: refusal(409, 'wcpos_payment_vetoed', { vetoed: true }),
+			veto: { message: 'Store says no' },
+		});
+		post.mockRejectedValueOnce(error);
+		await expect(submitGatewayPayment(order, 'g', input, deps)).rejects.toBe(error);
+		expect(error.veto?.message).toBe('Store says no');
+		expect(post.settle).not.toHaveBeenCalled();
+	});
 	it('sent: writes the stamp with the destination and the summary status, no row', async () => {
 		const { post, mirror, order, deps } = harness();
 		post.mockResolvedValue({ data: { outcome: 'sent', payment: null, order: summary('pending') } });

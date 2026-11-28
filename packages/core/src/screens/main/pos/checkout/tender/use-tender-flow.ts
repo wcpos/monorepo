@@ -53,6 +53,7 @@ import {
 } from '../../../../../services/terminal-payments';
 import { presentSessionRequired } from '../session-required';
 import { presentTenderRefusal } from '../present-tender-refusal';
+import { vetoSentence } from '../veto-sentence';
 import {
 	type CompletionResult,
 	persistSaleProvenance,
@@ -235,12 +236,6 @@ function withFees(latest: OrderPayload, dp: number, edit: (fees: FeeLines) => Fe
 	const fee_lines = edit(fees);
 	const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines, dp) - feeMinor(fees, dp);
 	return { fee_lines, total: fromMinor(totalMinor, dp) };
-}
-function vetoSentence(
-	veto: { message: string | null } | undefined,
-	t: ReturnType<typeof useT>
-): string | null {
-	return veto ? (veto.message ?? t('pos_checkout.payment_vetoed')) : null;
 }
 /** A zero balance the store did not close: say why, and what is due when it said. */
 function closeMessage(
