@@ -18,6 +18,7 @@ import { SettlementCoordinatorProvider } from './settlement-coordinator-provider
 import { RatesReadyProvider } from './rates-ready-provider';
 import { quickDiscountCouponInput } from '../hooks/quick-discount';
 import { createSettlementCoordinator } from './settlement-coordinator';
+import { readCouponContext } from '../hooks/use-coupon-context';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 import type { OrderPayload } from './cart-config-for-order';
@@ -289,7 +290,34 @@ jest.mock('./coupon-continuation', () => ({
 	...jest.requireActual('./coupon-continuation'),
 	couponReferences: () => references,
 }));
-jest.mock('../hooks/use-coupon-context', () => ({ readCouponContext: async () => context }));
+jest.mock('../hooks/use-coupon-context', () => ({
+	readCouponContext: jest.fn(async () => context),
+}));
+
+let mockStoreTypes: ReadonlySet<string> = new Set();
+jest.mock('../../hooks/use-coupon-types', () => ({
+	useStoreCalculatedCouponTypes: () => mockStoreTypes,
+}));
+
+it('reads the latest coupon declaration without restarting the coordinator', async () => {
+	const view = render(<SettlementCoordinatorProvider />);
+	const [{ readCoupons }] = jest.mocked(createSettlementCoordinator).mock.lastCall!;
+	const declared = new Set(['acme_credit']);
+	mockStoreTypes = declared;
+	try {
+		view.rerender(<SettlementCoordinatorProvider />);
+		await readCoupons({});
+		expect(readCouponContext).toHaveBeenLastCalledWith(manager, {
+			lineItems: [],
+			couponLines: [],
+			storeCalculatedTypes: declared,
+		});
+		expect(createSettlementCoordinator).toHaveBeenCalledTimes(1);
+	} finally {
+		mockStoreTypes = new Set();
+		view.unmount();
+	}
+});
 
 it.each(['valid', 'missing', 'boundary'])(
 	'#963 replays a %s coupon only after references, once, with a translated failure toast',

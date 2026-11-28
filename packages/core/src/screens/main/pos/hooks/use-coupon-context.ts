@@ -12,6 +12,7 @@ import { wooIdOf } from '@wcpos/sync-core';
 import type { CouponContext, CouponInput, LineItemInput, TaxStatus } from '@wcpos/order-math';
 
 import { quickDiscountCouponInput, readQuickDiscountIntent } from './quick-discount';
+import { useStoreCalculatedCouponTypes } from '../../hooks/use-coupon-types';
 type QueryRuntime = ReturnType<typeof useQueryRuntime>;
 type CouponLine = import('@wcpos/query').OrderCouponLine;
 
@@ -68,6 +69,8 @@ function buildCategoryParents(
  */
 export type PosCouponContext = CouponContext & {
 	unsupportedTypes: ReadonlyMap<string, string>;
+	/** The store prices these lines; the till writes them at 0. */
+	storeCalculated: ReadonlyMap<string, string>;
 };
 
 /** Read raw CouponContext inputs; order-math owns eligibility and ancestry. */
@@ -76,9 +79,11 @@ export async function readCouponContext(
 	{
 		lineItems,
 		couponLines,
+		storeCalculatedTypes = new Set<string>(),
 	}: {
 		lineItems: readonly LineItemInput[];
 		couponLines: readonly CouponLine[];
+		storeCalculatedTypes?: ReadonlySet<string>;
 	}
 ): Promise<PosCouponContext> {
 	const productIds = lineItems
@@ -92,13 +97,25 @@ export async function readCouponContext(
 
 	const coupons = new Map<string, CouponInput>();
 	const unsupportedTypes = new Map<string, string>();
+	const storeCalculated = new Map<string, string>();
 	for (const record of couponRecords) {
 		const payload = record.payload;
 		if (typeof payload.code !== 'string') continue;
 		if (!isDiscountType(payload.discount_type)) {
 			const type: unknown = payload.discount_type;
 			if (typeof type === 'string' && type !== '') {
-				unsupportedTypes.set(payload.code.toLowerCase(), type);
+				const code = payload.code.toLowerCase();
+				if (storeCalculatedTypes.has(type)) {
+					coupons.set(code, {
+						...payload,
+						code: payload.code,
+						discount_type: 'fixed_cart',
+						amount: '0',
+					});
+					storeCalculated.set(code, type);
+				} else {
+					unsupportedTypes.set(code, type);
+				}
 			}
 			continue;
 		}
@@ -135,15 +152,17 @@ export async function readCouponContext(
 		categoryParents,
 		taxStatusFor: await readCatalogTaxStatuses(runtime.engine, lineItems),
 		unsupportedTypes,
+		storeCalculated,
 	};
 }
 
 export const useCouponContext = () => {
 	const runtime = useQueryRuntime();
+	const storeCalculatedTypes = useStoreCalculatedCouponTypes();
 	const getCouponContext = React.useCallback(
 		(lineItems: readonly LineItemInput[], couponLines: readonly CouponLine[] = []) =>
-			readCouponContext(runtime, { lineItems, couponLines }),
-		[runtime]
+			readCouponContext(runtime, { lineItems, couponLines, storeCalculatedTypes }),
+		[runtime, storeCalculatedTypes]
 	);
 	return { getCouponContext };
 };

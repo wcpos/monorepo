@@ -176,6 +176,33 @@ it('memoizes deps and waits for references using the runtime engine', async () =
 	}
 });
 
+it('reads coupons with the current declaration for a tax-exempt change', async () => {
+	const couponTypes = await import('../../hooks/use-coupon-types');
+	const couponContext = await import('../hooks/use-coupon-context');
+	const declared = new Set(['acme_credit']);
+	const types = jest.spyOn(couponTypes, 'useStoreCalculatedCouponTypes').mockReturnValue(new Set());
+	const read = jest.spyOn(couponContext, 'readCouponContext').mockResolvedValue({
+		coupons: new Map(),
+		productCategories: new Map(),
+		unsupportedTypes: new Map(),
+		storeCalculated: new Map(),
+	});
+	try {
+		const { result, rerender } = renderHook(() => useTaxExemptDeps());
+		types.mockReturnValue(declared);
+		rerender();
+		await result.current.readCoupons({});
+		expect(read).toHaveBeenLastCalledWith(runtime, {
+			lineItems: [],
+			couponLines: [],
+			storeCalculatedTypes: declared,
+		});
+	} finally {
+		types.mockRestore();
+		read.mockRestore();
+	}
+});
+
 it('resolves tax statuses by Woo product/variation ids rather than object identity', async () => {
 	jest.mocked(observeCatalogByWooIds).mockReturnValueOnce(
 		of({

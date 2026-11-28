@@ -10,6 +10,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { couponReferences } from './coupon-continuation';
 import { useRepairTaxExempt } from './use-tax-exempt';
 import { readCouponContext } from '../hooks/use-coupon-context';
+import { useStoreCalculatedCouponTypes } from '../../hooks/use-coupon-types';
 import { writeOrderChanges } from './write-order-changes';
 import { useRatesReady } from './rates-ready-provider';
 import { settleOpenOrder } from './settle-open-order';
@@ -47,6 +48,7 @@ export function SettlementCoordinatorProvider() {
 	const { storeDB } = useSaleContext();
 	const handle = useOpenOrdersHandle(cashier, storeId, registerId);
 	const inputs = useCartConfigInputs();
+	const storeCalculatedTypes = useStoreCalculatedCouponTypes();
 	// The save-state and checkout readers are module-stable; only the money reader can change.
 	const { serverOwnsMoney, orderSaveState, inCheckout } = useOrderLockReaders();
 	const configForOrder = useCartConfigReader();
@@ -56,6 +58,7 @@ export function SettlementCoordinatorProvider() {
 	const t = useT();
 	// Read when the coordinator calls: a reader, binding or translation change never restarts it.
 	const latest = React.useEffectEvent(() => ({
+		storeCalculatedTypes,
 		serverOwnsMoney,
 		configForOrder,
 		commit,
@@ -90,6 +93,7 @@ export function SettlementCoordinatorProvider() {
 				readCouponContext(manager, {
 					lineItems: payload.line_items ?? [],
 					couponLines: payload.coupon_lines ?? [],
+					storeCalculatedTypes: latest().storeCalculatedTypes,
 				}),
 			serverOwnsMoney: (uuid) => latest().serverOwnsMoney(uuid),
 			orderSaveState,

@@ -58,7 +58,7 @@ export function cacheTranslations(
 
 export function setExtraData(
 	storeDB: StoreDatabase,
-	key: 'taxClasses' | 'shippingMethods' | 'orderStatuses' | 'paymentMethods',
+	key: 'taxClasses' | 'shippingMethods' | 'orderStatuses' | 'paymentMethods' | 'couponTypes',
 	value: unknown
 ): Promise<void> {
 	return storeDB.states.data_v2.set(key, () => value);
