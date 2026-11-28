@@ -390,6 +390,7 @@ type RequirementDrainOverrides = Pick<
 	| 'taskId'
 	| 'referenceLanes'
 	| 'refundHistory'
+	| 'targetedOrders'
 	| 'maxRequestsPerTask'
 	| 'refreshBrowseWindowKey'
 	| 'nowMs'
@@ -959,6 +960,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					onProgress: progressObserver(item.requirement, onProgressActivity),
 					referenceLanes: 'exclude',
 					refundHistory: 'exclude',
+					targetedOrders: 'exclude',
 					...overrides,
 				});
 
@@ -1455,7 +1457,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						const drainResult = await withOrderReadopt(
 							database,
 							item.requirement.readopt ? remaining : [],
-							() => drainScheduler({ nowMs })
+							// A targeted walk drains every runnable orders:ids: task, including
+							// any left behind by an earlier walk that was released.
+							() => drainScheduler({ nowMs, targetedOrders: undefined })
 						);
 						appliedRecordIds.push(
 							...drainResult.tasks
