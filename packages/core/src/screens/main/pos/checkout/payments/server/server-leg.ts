@@ -194,6 +194,12 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		return current(seq);
 	};
 	const afterResponse = async (route: Route) => {
+		// A vetoed leg ends only on a final row the store answered (M18b): until then it is held and re-sends its void.
+		if (state.veto && !isFinalPaymentStatus(state.row.status)) {
+			setState({ veto: { ...state.veto, held: true }, phase: 'polling', capturing: false });
+			schedule(VETO_VOID_RETRY_MS, 'void');
+			return;
+		}
 		if (deadlineRead && route === 'status') {
 			deadlineRead = false;
 			if (!state.cancelRequested) {
@@ -352,7 +358,13 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		// A poll that failed while a cancel waited on it: the void answers either way.
 		if (route === 'status' && (await voidAfterAnswer())) return;
 		const definitive = route === 'status' || isDefinitiveMoneyRefusal(moneyRefusalOf(error));
-		if (state.veto && route === 'void' && definitive && code !== 'wcpos_payment_not_found') {
+		if (
+			state.veto &&
+			route === 'void' &&
+			definitive &&
+			code !== 'wcpos_payment_not_found' &&
+			code !== 'wcpos_invalid_transition'
+		) {
 			const veto = { ...state.veto, held: true };
 			setState({ ...changes, veto, phase: 'polling', capturing: false });
 			schedule(VETO_VOID_RETRY_MS, 'void');

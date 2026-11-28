@@ -154,7 +154,15 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		try {
 			const response = await deps.post(url('void'), { reason: 'vetoed' });
 			await apply(response.data as ServerLegResponse);
+			if (active() && state.veto) {
+				set({ veto: { ...state.veto, held: true } });
+				vetoTimer = deps.setTimeout(() => void confirm(), VETO_VOID_RETRY_MS);
+			}
 		} catch (error) {
+			if (!active()) return;
+			const body = (error as { response?: { data?: PaymentRefusalBody } })?.response?.data;
+			if (body?.data?.payment) await apply({ payment: body.data.payment, order: body.data.order });
+			else if (body?.code === 'wcpos_invalid_transition' && (await settledOnStore())) return;
 			if (!active()) return;
 			set({ veto: { ...state.veto, held: true } });
 			const delay = isDefinitiveMoneyRefusal(moneyRefusalOf(error))

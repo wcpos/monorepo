@@ -211,6 +211,46 @@ it('DV5 a non-vetoed capture refusal still offers confirmation retry and sends n
 	expect(c.leg.getState().veto).toBeUndefined();
 	expect(c.routes()).toEqual(['intent', 'capture']);
 });
+
+it('DV6 a non-final void answer stays held until the timed void retry succeeds', async () => {
+	const c = refusedCapture('authorized');
+	c.post.mockResolvedValueOnce({ data: { payment: { ...row, status: 'authorized' } } });
+	await c.leg.start();
+	expect(c.leg.getState()).toMatchObject({ phase: 'confirming', veto: { held: true } });
+	expect(c.onFinal).not.toHaveBeenCalled();
+	await jest.advanceTimersByTimeAsync(VETO_VOID_RETRY_MS - 1);
+	expect(c.routes()).toEqual(['intent', 'capture', 'void']);
+	await jest.advanceTimersByTimeAsync(1);
+	expect(c.routes()).toEqual(['intent', 'capture', 'void', 'void']);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
+it('DV7 an invalid void transition without a payment finishes on the status row', async () => {
+	const c = refusedCapture('authorized');
+	c.post.mockRejectedValueOnce({
+		response: { status: 409, data: { code: 'wcpos_invalid_transition' } },
+	});
+	c.get.mockResolvedValueOnce({ data: { payment: { ...row, status: 'voided' } } });
+	await c.leg.start();
+	expect(c.routes()).toEqual(['intent', 'capture', 'void']);
+	expect(c.get).toHaveBeenCalledWith('orders/42/payments/leg/status');
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
+it('DV8 a void refusal carrying the final row finishes without reading status', async () => {
+	const c = refusedCapture('authorized');
+	c.post.mockRejectedValueOnce({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_invalid_transition', data: { payment: { ...row, status: 'voided' } } },
+		},
+	});
+	await c.leg.start();
+	expect(c.routes()).toEqual(['intent', 'capture', 'void']);
+	expect(c.get).not.toHaveBeenCalled();
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
 it('mirrors intent before collect and sends exactly the driver context for server verification', async () => {
 	const c = setup();
 	const start = c.leg.start();

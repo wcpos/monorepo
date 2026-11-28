@@ -152,6 +152,7 @@ it('SV1 voids the vetoed authorization and finishes on the voided row', async ()
 	expect(c.leg.getState()).toMatchObject({
 		phase: 'final',
 		outcome: 'voided',
+		captureFailed: false,
 		veto: { message: 'Refused', held: false },
 	});
 	expect(c.onFinal).toHaveBeenCalledTimes(1);
@@ -181,7 +182,7 @@ it.each([502, 422])(
 	}
 );
 
-it('SV3 an unanswered void leaves the authorization held without another capture', async () => {
+it('SV3 an unanswered void is re-sent after status confirms the authorization is still held', async () => {
 	const c = vetoedCapture();
 	c.fail('void', new Error('timeout'));
 	await tick();
@@ -192,10 +193,13 @@ it('SV3 an unanswered void leaves the authorization held without another capture
 		row: { status: 'authorized' },
 	});
 	c.answer('status', response({ status: 'authorized' }));
-	c.fail('status', refusal(404, 'wcpos_payment_not_found'));
-	await tick(600000);
+	await tick(2000);
+	expect(c.count('status')).toBe(2);
+	c.answer('void', response({ status: 'voided' }));
+	await tick(VETO_VOID_RETRY_MS);
+	expect(c.count('void')).toBe(2);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
 	expect(c.count('capture')).toBe(1);
-	expect(c.count('void')).toBe(1);
 	expect(c.mirror).not.toHaveBeenCalledWith(
 		expect.objectContaining({ payment: expect.objectContaining({ status: 'failed' }) })
 	);
@@ -217,6 +221,45 @@ it('SV5 a veto with a resendable code voids instead of resending capture', async
 	await tick(600000);
 	expect(c.count('capture')).toBe(1);
 	expect(c.count('void')).toBe(1);
+});
+
+it('SV6 an invalid void transition reads the final row without re-sending the void', async () => {
+	const c = vetoedCapture();
+	c.fail('void', refusal(409, 'wcpos_invalid_transition'));
+	c.answer('status', response({ status: 'voided' }));
+	await tick(1);
+	expect(c.count('status')).toBe(2);
+	expect(c.count('void')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
+it('SV7 a non-final void answer stays held until the timed void retry succeeds', async () => {
+	const c = vetoedCapture();
+	c.answer('void', response({ status: 'authorized', void_requested_at: '2026-01-01T00:00:00Z' }));
+	await tick();
+	expect(c.leg.getState()).toMatchObject({ phase: 'polling', veto: { held: true } });
+	expect(c.onFinal).not.toHaveBeenCalled();
+	await tick(VETO_VOID_RETRY_MS - 1);
+	expect(c.count('void')).toBe(1);
+	c.answer('void', response({ status: 'voided' }));
+	await tick(1);
+	expect(c.count('void')).toBe(2);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
+it('SV8 checking a held authorization still re-sends the refused void', async () => {
+	const c = vetoedCapture();
+	c.fail('void', refusal(502, 'wcpos_provider_error'));
+	await tick();
+	expect(c.leg.getState().veto?.held).toBe(true);
+	c.answer('status', response({ status: 'authorized' }));
+	await c.leg.checkNow();
+	expect(c.count('status')).toBe(2);
+	c.answer('void', response({ status: 'voided' }));
+	await tick(VETO_VOID_RETRY_MS);
+	expect(c.count('void')).toBe(2);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+	expect(c.count('capture')).toBe(1);
 });
 
 function setupRejoin() {
