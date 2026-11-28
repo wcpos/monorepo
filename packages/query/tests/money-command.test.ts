@@ -416,8 +416,13 @@ describe('sendMoneyCommand: store vetoes', () => {
 	const message = 'There is not enough store credit.';
 	const currentRevision = 'sha256:credit';
 	const order = { status: 'pos-open', total: '80.00', paid: '0.00', balance: '80.00' };
-	function refuse(vetoed = true, sentence = message) {
-		const refusal = httpError(409, 'wcpos_store_credit_insufficient', {
+	function refuse(
+		vetoed = true,
+		sentence = message,
+		code = 'wcpos_store_credit_insufficient',
+		status = 409
+	) {
+		const refusal = httpError(status, code, {
 			...(vetoed && { vetoed: true }),
 			current: { ...store.document(), total: '80.00' },
 			currentRevision,
@@ -470,6 +475,37 @@ describe('sendMoneyCommand: store vetoes', () => {
 			veto: { message: null },
 		});
 		expect((await residentJSON()).payload.total).toBe('80.00');
+	});
+
+	it('a vetoed stale close adopts the current order and returns the veto message', async () => {
+		const cause = refuse(true, message, 'wcpos_revision_stale');
+		await expect(send('orders/5/close')).rejects.toMatchObject({
+			reason: 'order_changed',
+			veto: { message },
+			cause,
+		});
+		expect(await residentJSON()).toMatchObject({
+			payload: { total: '80.00' },
+			sync: { revision: currentRevision },
+		});
+	});
+
+	it('a vetoed payment lock on record rethrows the refusal', async () => {
+		const refusal = refuse(true, message, 'wcpos_payment_locked');
+		await expect(send('orders/5/payments', { payment: cash() })).rejects.toBe(refusal);
+	});
+
+	it('a vetoed provider error on submit adopts the current order without resending', async () => {
+		const cause = refuse(true, message, 'wcpos_provider_error', 502);
+		await expect(send('orders/5/payment-methods/cod/submit')).rejects.toMatchObject({
+			reason: 'order_changed',
+			veto: { message },
+			cause,
+		});
+		expect(await residentJSON()).toMatchObject({
+			payload: { total: '80.00' },
+			sync: { revision: currentRevision },
+		});
 	});
 
 	it("a vetoed capture adopts the store's order and rethrows the refusal", async () => {

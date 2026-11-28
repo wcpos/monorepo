@@ -46,6 +46,17 @@ describe('the money command answer rule', () => {
 		expect(isDefinitiveMoneyRefusal(moneyRefusalOf(wpError(status, code)))).toBe(false);
 	});
 
+	it.each([
+		[409, 'wcpos_revision_stale'],
+		[409, 'wcpos_payment_locked'],
+		[409, 'woo_rxdb_sync_record_locked'],
+		[403, 'wcpos_payment_locked'],
+		[429, 'wcpos_rate_limited'],
+	])('a vetoed answer is definitive whatever its code: %i %s', (status, code) => {
+		const refusal = moneyRefusalOf(answer(status, { code, message: code, data: { vetoed: true } }));
+		expect(isDefinitiveMoneyRefusal(refusal)).toBe(true);
+	});
+
 	it('a network failure or a non-JSON body is not definitive', () => {
 		expect(moneyRefusalOf(new Error('Network Error'))).toBeNull();
 		expect(isDefinitiveMoneyRefusal(moneyRefusalOf(new Error('Network Error')))).toBe(false);

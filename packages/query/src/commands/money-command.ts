@@ -293,7 +293,8 @@ export async function sendMoneyCommand(
 			return { data: data as Record<string, unknown>, sentRevision: revision };
 		} catch (error) {
 			const failure = moneyRefusalOf(error);
-			const stalled = failure?.code === MONEY_ANSWER_CODES.revisionStale && !stale;
+			const vetoed = failure?.data?.vetoed === true;
+			const stalled = !vetoed && failure?.code === MONEY_ANSWER_CODES.revisionStale && !stale;
 			// A sender whose lease lapsed while its answer was on the way, and whose command another
 			// poster has claimed since, leaves it to that poster: no adoption, re-send or settle.
 			const claimant = entry.claimedBy ?? null;
@@ -307,7 +308,12 @@ export async function sendMoneyCommand(
 			// dispatch, its attempt left `sent`. Re-sent once, a stored `sent` replays; a refused attempt
 			// is answered `wcpos_payment_conflict`, and the gateway's own refusal then stands. An
 			// attempt still in flight (409 `wcpos_payment_in_flight`) is the truer answer: it is thrown.
-			if (failure?.code === 'wcpos_provider_error' && entry.kind === 'submit' && !stale) {
+			if (
+				!vetoed &&
+				failure?.code === 'wcpos_provider_error' &&
+				entry.kind === 'submit' &&
+				!stale
+			) {
 				refusal = error;
 				continue;
 			}
@@ -335,9 +341,8 @@ export async function sendMoneyCommand(
 			}
 			// Every named 4xx refusal is the server's decision (sync-core's money answer rule).
 			if (isDefinitiveMoneyRefusal(failure)) {
-				const veto = failure?.data?.vetoed === true;
 				const current = failure?.data?.current;
-				if (veto && current && typeof current === 'object')
+				if (vetoed && current && typeof current === 'object')
 					await runtime.engine.adoptOrderSnapshot({
 						...current,
 						_rxdb_revision: failure.data?.currentRevision,
@@ -346,7 +351,7 @@ export async function sendMoneyCommand(
 				if (payment)
 					await mirrorMoneyAnswer(runtime, entry.orderUuid, { payment, sentRevision: revision });
 				await settleCommand(storeDB, entry.orderUuid, entry.id, undefined, claimant);
-				if (veto && APPROVED_KINDS.has(entry.kind))
+				if (vetoed && APPROVED_KINDS.has(entry.kind))
 					throw new MoneyCommandError(
 						'order_changed',
 						entry,
