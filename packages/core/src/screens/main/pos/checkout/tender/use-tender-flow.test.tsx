@@ -1531,6 +1531,32 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it.each([
+		['There is not enough store credit.', 'There is not enough store credit.'],
+		[null, 'pos_checkout.payment_vetoed'],
+	])('a vetoed tender with message %p shows %s', async (message, expected) => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockRecordManualPayment.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('money_command_order_changed'), {
+				reason: 'order_changed',
+				veto: { message },
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		act(() => result.current.commands.pickMethod('pos_cash'));
+		await act(async () => result.current.commands.takeTender());
+
+		expect(mockError).toHaveBeenCalledTimes(1);
+		expect(mockError).toHaveBeenCalledWith(
+			expected,
+			expect.objectContaining({ code: 'PAYMENT213', showToast: true, toast: { title: expected } })
+		);
+		expect(mockError).not.toHaveBeenCalledWith(
+			'pos_checkout.payment_not_recorded',
+			expect.anything()
+		);
+	});
+
 	// POS-338: a record the store refused because it had closed the order comes back `refused`;
 	// its attention row told the story, so the false "nothing was taken" toast never joins it.
 	it('a cash record refused because the order was closed shows no PAYMENT213 refusal toast', async () => {

@@ -1339,6 +1339,17 @@ export function useTenderFlow(
 				});
 				return;
 			}
+			// The store refused; the new order is already adopted, so the cashier approves the new due.
+			const vetoed = error instanceof MoneyCommandError ? vetoSentence(error.veto, t) : null;
+			if (vetoed) {
+				logger.error(vetoed, {
+					code: ERROR_CODES.PAYMENT_RECORD_REFUSED,
+					showToast: true,
+					toast: { title: vetoed },
+					context: { ...orderContext, method: method?.id ?? null, serverCode: 'vetoed' },
+				});
+				return;
+			}
 			// A pre-flight can adopt a changed order: a leg captured elsewhere is in its latest ledger.
 			const noLiveLeg =
 				liveRows.length === 0 &&
