@@ -57,6 +57,40 @@ function decodeRefundHistoryCheckpoint(
 	return { lastWalkStartedAtMs, lastFullWalkStartedAtMs };
 }
 
+function decodeWalk(raw: string | null, taskId: string, perPage: number, nowMs: number) {
+	if (raw === null) return null;
+	try {
+		const { v, walk } = JSON.parse(raw);
+		if (v !== 1 || walk?.taskId !== taskId || walk.perPage !== perPage) return null;
+		const { page, after, ids, startedAtMs, lastFullWalkStartedAtMs }: Record<string, unknown> =
+			walk;
+		const resumeAfterRowId: unknown = walk.lastRowId;
+		if (
+			typeof page !== 'number' ||
+			!Number.isSafeInteger(page) ||
+			page < 1 ||
+			typeof after !== 'string' ||
+			!Array.isArray(ids) ||
+			!ids.every((id) => typeof id === 'string') ||
+			typeof resumeAfterRowId !== 'number' ||
+			!Number.isSafeInteger(resumeAfterRowId) ||
+			typeof startedAtMs !== 'number' ||
+			!Number.isFinite(startedAtMs) ||
+			typeof lastFullWalkStartedAtMs !== 'number' ||
+			!Number.isFinite(lastFullWalkStartedAtMs) ||
+			lastFullWalkStartedAtMs > startedAtMs ||
+			startedAtMs > nowMs ||
+			nowMs - startedAtMs >= REFUND_HISTORY_FULL_WALK_EVERY_MS ||
+			(lastFullWalkStartedAtMs < startedAtMs &&
+				nowMs - lastFullWalkStartedAtMs >= REFUND_HISTORY_FULL_WALK_EVERY_MS)
+		)
+			return null;
+		return { page, perPage, after, ids, startedAtMs, lastFullWalkStartedAtMs, resumeAfterRowId };
+	} catch {
+		return null;
+	}
+}
+
 export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDocument> & {
 	/** Persisted history walk checkpoint (#3340); absent means every history walk is full. */
 	historyCheckpoint?: RefundHistoryCheckpointStore;
@@ -118,11 +152,13 @@ export function createRefundsSchedulerFetcher(
 		string,
 		{
 			page: number;
+			resumeAfterRowId?: number;
 			perPage: number;
 			after: string;
 			ids: string[];
 			startedAtMs: number;
 			failed: boolean;
+			last: RefundHistoryCheckpoint | null;
 			lastFullWalkStartedAtMs: number; // this walk's start when it is full
 		}
 	>();
@@ -145,9 +181,9 @@ export function createRefundsSchedulerFetcher(
 		if (!walk) {
 			const startedAtMs = input.nowMs?.() ?? Date.now();
 			const windowStartMs = startedAtMs - HISTORY_DAYS * 86400000;
-			const last = historyCheckpoint
-				? decodeRefundHistoryCheckpoint(await historyCheckpoint.get(), startedAtMs)
-				: null;
+			const raw = (await historyCheckpoint?.get()) ?? null;
+			const last = decodeRefundHistoryCheckpoint(raw, startedAtMs);
+			const perPage = Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
 			// Delta only while a full walk started less than a day ago; otherwise walk the window.
 			const delta =
 				last !== null &&
@@ -159,12 +195,15 @@ export function createRefundsSchedulerFetcher(
 				: windowStartMs;
 			walk = {
 				page: 1,
-				perPage: Math.min(task.limit, WOO_REST_MAX_PER_PAGE),
+				perPage,
 				ids: [],
 				after: wooGmtDate(Math.floor(afterMs / 1000)),
 				startedAtMs,
 				failed: false,
 				lastFullWalkStartedAtMs: delta?.lastFullWalkStartedAtMs ?? startedAtMs,
+				last,
+				// Resume with one page of overlap so deletions cannot skip rows shifted back a page (#3782).
+				...decodeWalk(raw, task.id, perPage, startedAtMs),
 			};
 		}
 		const query = new URLSearchParams({
@@ -177,16 +216,23 @@ export function createRefundsSchedulerFetcher(
 		});
 		let applied: readonly LocalRefundDocument[];
 		let completed: boolean;
+		let restart: boolean;
 		try {
 			const response = await httpGet(input, `${input.baseUrl}/refunds?${query}`, context);
 			if (!response.ok) throw new Error(`Woo REST refunds request failed: ${response.status}`);
 			const rows = (await response.json()) as WooRefundPayload[];
 			applied = await admitRefundPage(input, rows);
 			const pageIds = applied.map((document) => document.uuid);
-			walk.ids.push(...pageIds);
+			const ids = [...new Set([...walk.ids, ...pageIds])];
+			// #3782: IDs ascend and new refunds append; a first ID above the marker means deletions shifted unseen rows back past this page.
+			restart =
+				walk.page > 1 &&
+				walk.resumeAfterRowId !== undefined &&
+				(rows.length === 0 || rows[0].id > walk.resumeAfterRowId);
 			// WooCommerce always sends the page count; a short page is the end only when it does not.
 			const totalPages = Number(response.headers.get('X-WP-TotalPages'));
-			completed = totalPages > 0 ? walk.page >= totalPages : rows.length < walk.perPage;
+			completed =
+				!restart && (totalPages > 0 ? walk.page >= totalPages : rows.length < walk.perPage);
 			await recordCoverage(
 				'refunds',
 				input,
@@ -194,9 +240,31 @@ export function createRefundsSchedulerFetcher(
 				pageIds,
 				completed,
 				undefined,
-				completed ? walk.ids : undefined
+				completed ? ids : undefined
 			);
+			if (!completed && historyCheckpoint && !walk.failed && (restart || rows.length > 0)) {
+				const { after, perPage, page, startedAtMs, lastFullWalkStartedAtMs } = walk;
+				await historyCheckpoint.set(
+					JSON.stringify({
+						v: 1,
+						...walk.last,
+						walk: {
+							taskId: task.id,
+							after,
+							perPage,
+							page: restart ? 1 : page,
+							lastRowId: restart ? walk.resumeAfterRowId : rows[rows.length - 1].id,
+							startedAtMs,
+							lastFullWalkStartedAtMs,
+							ids,
+						},
+					})
+				);
+			}
+			walk.ids = ids;
+			delete walk.resumeAfterRowId;
 		} catch (error) {
+			if (context?.signal?.aborted) throw error;
 			// A failed walk never writes the checkpoint, so the walk after it is full (#3340).
 			if (historyCheckpoint) {
 				walk.failed = true;
@@ -216,7 +284,7 @@ export function createRefundsSchedulerFetcher(
 		}
 		if (completed) walks.delete(task.id);
 		else {
-			walk.page += 1;
+			walk.page = restart ? 1 : walk.page + 1;
 			walks.set(task.id, walk);
 		}
 		return { taskId: task.id, documentCount: applied.length, requestCount: 1, completed };
