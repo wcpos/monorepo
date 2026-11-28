@@ -725,6 +725,22 @@ describe('useTenderFlow', () => {
 		);
 	});
 
+	it.each([
+		['There is not enough store credit.', 'There is not enough store credit.'],
+		[null, 'pos_checkout.payment_vetoed'],
+	])('Try again on a veto with message %p shows %s', async (message, expected) => {
+		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+		mockResend.mockRejectedValueOnce(
+			Object.assign(new MoneyCommandError('money_command_order_changed'), {
+				reason: 'order_changed',
+				veto: { message },
+			})
+		);
+		const { result } = renderHook(() => useTenderFlow(order, hostAtWidth()));
+		await act(async () => result.current.commands.retryCommand());
+		expect(mockInfo).toHaveBeenCalledWith(expected, expect.objectContaining({ showToast: true }));
+	});
+
 	it('Try again while the first send is still running says it is still sending, never unanswered (POS-34W)', async () => {
 		const { MoneyCommandError } = jest.requireMock('@wcpos/query');
 		mockResend.mockRejectedValueOnce(

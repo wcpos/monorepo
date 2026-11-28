@@ -236,13 +236,20 @@ function withFees(latest: OrderPayload, dp: number, edit: (fees: FeeLines) => Fe
 	const totalMinor = toMinor(latest.total, dp) + feeMinor(fee_lines, dp) - feeMinor(fees, dp);
 	return { fee_lines, total: fromMinor(totalMinor, dp) };
 }
+function vetoSentence(
+	veto: { message: string | null } | undefined,
+	t: ReturnType<typeof useT>
+): string | null {
+	return veto ? (veto.message ?? t('pos_checkout.payment_vetoed')) : null;
+}
 /** A zero balance the store did not close: say why, and what is due when it said. */
 function closeMessage(
 	closed: Exclude<CloseOutcome, { kind: 'answered' | 'unanswered' }>,
 	t: ReturnType<typeof useT>
 ): string {
 	if (closed.kind === 'refused') return closed.message;
-	if (closed.kind === 'order_changed') return t('pos_checkout.order_changed_retry');
+	if (closed.kind === 'order_changed')
+		return vetoSentence(closed.veto, t) ?? t('pos_checkout.order_changed_retry');
 	if (closed.kind === 'outstanding')
 		return t('pos_checkout.close_balance_outstanding', { balance: closed.order?.balance ?? '' });
 	return t('pos_checkout.close_needs_connection');
@@ -812,7 +819,7 @@ export function useTenderFlow(
 			const inMotion = moneyInMotionOf(refusal);
 			// The store stored nothing and the order moved: the cashier approves it again.
 			if (error instanceof MoneyCommandError && error.reason === 'order_changed')
-				logger.info(t('pos_checkout.order_changed_retry'), {
+				logger.info(vetoSentence(error.veto, t) ?? t('pos_checkout.order_changed_retry'), {
 					showToast: true,
 					context: { ...orderContext, retry: 'order_changed' },
 				});

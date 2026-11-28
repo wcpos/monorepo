@@ -63,3 +63,12 @@ it.each([
 ])('a %s refused with %p ends its leg: %p', (route, error, code) => {
 	expect(terminalBeforeSend(route, error)?.code ?? null).toBe(code);
 });
+
+it("a vetoed intent ends its leg with the store's message", () => {
+	const veto = { message: 'There is not enough store credit.' };
+	const error = new MoneyCommandError('order_changed', {} as never, undefined, { veto });
+	expect(terminalBeforeSend('intent', error)).toEqual({
+		code: 'order_changed',
+		message: veto.message,
+	});
+});

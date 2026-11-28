@@ -412,6 +412,83 @@ describe('sendMoneyCommand: the envelope', () => {
 	});
 });
 
+describe('sendMoneyCommand: store vetoes', () => {
+	const message = 'There is not enough store credit.';
+	const currentRevision = 'sha256:credit';
+	const order = { status: 'pos-open', total: '80.00', paid: '0.00', balance: '80.00' };
+	function refuse(vetoed = true, sentence = message) {
+		const refusal = httpError(409, 'wcpos_store_credit_insufficient', {
+			...(vetoed && { vetoed: true }),
+			current: { ...store.document(), total: '80.00' },
+			currentRevision,
+			order,
+		});
+		Object.assign(refusal.response.data, { message: sentence });
+		store.post.mockRejectedValueOnce(refusal);
+		return refusal;
+	}
+
+	afterEach(async () => {
+		expect(store.post).toHaveBeenCalledTimes(1);
+		expect(await entries()).toEqual([]);
+	});
+
+	it("a vetoed record adopts the store's order, settles, and rethrows the refusal", async () => {
+		const refusal = refuse();
+		await expect(send('orders/5/payments', { payment: cash() })).rejects.toBe(refusal);
+		expect(await residentJSON()).toMatchObject({
+			payload: { total: '80.00' },
+			sync: { revision: currentRevision },
+		});
+	});
+
+	it.each([
+		['intent', 'orders/5/payments/leg-1/intent'],
+		['submit', 'orders/5/payment-methods/cod/submit'],
+		['close', 'orders/5/close'],
+	])(
+		"a vetoed %s adopts the store's order and ends as order_changed with the store's message",
+		async (_, url) => {
+			const cause = refuse();
+			await expect(send(url)).rejects.toMatchObject({
+				reason: 'order_changed',
+				veto: { message },
+				order,
+				cause,
+			});
+			expect(await residentJSON()).toMatchObject({
+				payload: { total: '80.00' },
+				sync: { revision: currentRevision },
+			});
+		}
+	);
+
+	it('a vetoed close with an empty store message carries a null veto message', async () => {
+		refuse(true, '');
+		await expect(send('orders/5/close')).rejects.toMatchObject({
+			reason: 'order_changed',
+			veto: { message: null },
+		});
+		expect((await residentJSON()).payload.total).toBe('80.00');
+	});
+
+	it("a vetoed capture adopts the store's order and rethrows the refusal", async () => {
+		const refusal = refuse();
+		await expect(send('orders/5/payments/leg-1/capture')).rejects.toBe(refusal);
+		expect(await residentJSON()).toMatchObject({
+			payload: { total: '80.00' },
+			sync: { revision: currentRevision },
+		});
+	});
+
+	it('a definitive refusal that is not a veto adopts nothing', async () => {
+		const refusal = refuse(false);
+		await expect(send('orders/5/close')).rejects.toBe(refusal);
+		expect(runtime.engine.adoptOrderSnapshot).not.toHaveBeenCalled();
+		expect((await residentJSON()).payload.total).toBe('100.00');
+	});
+});
+
 describe('sendMoneyCommand: the pre-flight', () => {
 	it('a path that is not a money route is a programming error: preflight_failed, nothing sent', async () => {
 		const entry: MoneyCommandEntry = {

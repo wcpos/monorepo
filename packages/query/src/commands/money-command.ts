@@ -68,15 +68,17 @@ export type MoneyCommandErrorReason =
 export class MoneyCommandError extends Error {
 	/** The phase before this send: `unsent` = the store holds nothing from it. */
 	public readonly phase: CommandPhase;
+	public readonly veto?: { message: string | null };
 	public constructor(
 		public readonly reason: MoneyCommandErrorReason,
 		entry: MoneyCommandEntry,
 		public readonly order?: OrderPaymentSummary,
-		options?: { cause?: unknown }
+		options?: { cause?: unknown; veto?: { message: string | null } }
 	) {
 		super(`money_command_${reason}`, options);
 		this.name = 'MoneyCommandError';
 		this.phase = phaseOf(entry);
+		this.veto = options?.veto;
 	}
 }
 export type MoneyCommandPoster = Post & {
@@ -333,10 +335,24 @@ export async function sendMoneyCommand(
 			}
 			// Every named 4xx refusal is the server's decision (sync-core's money answer rule).
 			if (isDefinitiveMoneyRefusal(failure)) {
+				const veto = failure?.data?.vetoed === true;
+				const current = failure?.data?.current;
+				if (veto && current && typeof current === 'object')
+					await runtime.engine.adoptOrderSnapshot({
+						...current,
+						_rxdb_revision: failure.data?.currentRevision,
+					});
 				const payment = failure?.data?.payment as PaymentRow | undefined;
 				if (payment)
 					await mirrorMoneyAnswer(runtime, entry.orderUuid, { payment, sentRevision: revision });
 				await settleCommand(storeDB, entry.orderUuid, entry.id, undefined, claimant);
+				if (veto && APPROVED_KINDS.has(entry.kind))
+					throw new MoneyCommandError(
+						'order_changed',
+						entry,
+						failure.data?.order as OrderPaymentSummary,
+						{ cause: error, veto: { message: failure.message || null } }
+					);
 				throw failure?.code === MONEY_ANSWER_CODES.paymentInFlight ? error : (refusal ?? error);
 			}
 			throw error;
