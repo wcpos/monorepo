@@ -43,6 +43,7 @@ const mockRequest = jest.fn(
 	})
 );
 const mockSetOffline = jest.fn();
+let mockOnlineStatus: string = 'online';
 const mockUseHttpClient = jest.fn(
 	(_handlers: unknown, _onUpdateRequired?: (details: unknown) => void) => ({ request: mockRequest })
 );
@@ -74,7 +75,7 @@ jest.mock('@wcpos/hooks/use-http-client/create-token-refresh-handler', () => ({
 	createTokenRefreshHandler: () => jest.fn(),
 }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
-	useOnlineStatus: () => ({ status: 'online' }),
+	useOnlineStatus: () => ({ status: mockOnlineStatus }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ debug: jest.fn(), info: jest.fn(), error: jest.fn(), warn: jest.fn() }),
@@ -110,6 +111,7 @@ describe('useRestHttpClient methods', () => {
 	beforeEach(() => {
 		jest.restoreAllMocks();
 		jest.clearAllMocks();
+		mockOnlineStatus = 'online';
 		clearUpdateRequired(mockSite.wp_api_url);
 		mockSite.use_instance_header = undefined;
 		mockSite.use_jwt_as_param = false;
@@ -118,6 +120,21 @@ describe('useRestHttpClient methods', () => {
 		mockSite.wcpos_version = '';
 		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2';
 		mockSite.wp_api_url = 'https://example.com/wp-json/';
+	});
+
+	it('H1 returns a new client when the store becomes reachable again (store credit M29)', () => {
+		const appState = jest.requireMock('../../../../contexts/app-state');
+		const session = appState.useStoreSession();
+		jest.spyOn(appState, 'useStoreSession').mockReturnValue(session);
+		const http = { request: mockRequest };
+		mockUseHttpClient.mockReturnValueOnce(http).mockReturnValueOnce(http);
+		mockOnlineStatus = 'offline';
+		const { result, rerender } = renderHook(() => useRestHttpClient());
+		const offlineClient = result.current;
+
+		mockOnlineStatus = 'online-website-available';
+		rerender();
+		expect(result.current).not.toBe(offlineClient);
 	});
 
 	it.each([

@@ -1101,6 +1101,56 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	);
 
+	it('W1 pushes an acked store-credit coupon line exactly as the resident holds it', async () => {
+		const server = createFakeWriteServer();
+		const revision = 'sha256:base-r1';
+		const couponLine = {
+			id: 2,
+			code: 'sc50',
+			discount: '50.000000',
+			discount_tax: '0.000000',
+			meta_data: [
+				{ key: 'coupon_info', value: '[2,"sc50","smart_coupon",50]' },
+				{ key: '_woocommerce_pos_uuid', value: 'line-sc' },
+			],
+		};
+		const payload = {
+			id: 42,
+			status: 'processing',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			line_items: [{ id: 1, product_id: 123, quantity: 1 }],
+			coupon_lines: [couponLine],
+		};
+		server.seed(UUID_A, { id: 42, revision });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision });
+			const database = engine.active()!.database;
+			const resident = await database.collections.orders.findOne(UUID_A).exec();
+			await resident!.incrementalModify((data: Record<string, unknown>) => ({ ...data, payload }));
+			await queueFor(database).enqueue({
+				mutationId: 'acked-store-credit-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload,
+				baseRevision: revision,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await engine.sync('write-drain');
+			const pushed = server.received.find((envelope) => envelope.operation === 'update');
+			if (!pushed?.payload) throw new Error('No update payload was pushed');
+			expect(pushed.payload.coupon_lines).toEqual([couponLine]);
+			expect(JSON.stringify(pushed.payload)).not.toContain('fixed_cart');
+			expect(pushed.payload.coupon_lines).not.toHaveProperty('0.amount');
+			expect(pushed.payload.coupon_lines).not.toHaveProperty('0.discount_type');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('grafts server line identity onto a successor queued behind an IN-FLIGHT create (#818)', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_106 });
 		const LINE_UUID = '44444444-4444-4444-8444-444444444444';
