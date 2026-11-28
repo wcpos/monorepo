@@ -9,7 +9,11 @@ import { type EngineRecord, observeCatalogChanges, readCatalogGeneration } from 
 import { findOpenSession, RegisterSessionRequiredError } from '@wcpos/query/register-session';
 import { resolveCompletionAttempt } from '@wcpos/query/store-local';
 
-import { CHOOSE_REGISTER_REASON, SESSION_REQUIRED_REASON } from '../checkout/tender/tender-guards';
+import {
+	CHOOSE_REGISTER_REASON,
+	SESSION_REQUIRED_REASON,
+	STORE_CREDIT_NEEDS_CONNECTION_REASON,
+} from '../checkout/tender/tender-guards';
 import { conditionRules } from '../conditions/evaluate';
 import { countConditionsInSlot } from '../conditions/snapshot';
 import {
@@ -103,6 +107,7 @@ export async function commitAtBoundary(
 			order,
 			methodId: null,
 			bindingStatus: ctx.bindingStatus,
+			reachable: ctx.closeSale.online(),
 			amounts: { kind: 'retained-captures' },
 		},
 		async (
@@ -236,6 +241,8 @@ export async function commitAtBoundary(
 		{ queue, source: ctx.source }
 	).finally(() => catalog.unsubscribe());
 	if (!isActionRefusal(outcome)) return outcome;
+	// The coordinator retries an offline boundary on reconnect.
+	if (outcome.deny.reasonKey === STORE_CREDIT_NEEDS_CONNECTION_REASON) return { kind: 'offline' };
 	logger.warn('settlement.boundary-deferred', {
 		context: { orderId: order.uuid, reason: outcome.deny.reasonKey },
 	});

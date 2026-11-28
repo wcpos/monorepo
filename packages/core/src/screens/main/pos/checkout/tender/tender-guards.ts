@@ -10,6 +10,8 @@ import {
 /** The reasons the two gates refuse with; callers present them as the cashier's next step. */
 export const CHOOSE_REGISTER_REASON = 'pos_checkout.choose_register_first';
 export const SESSION_REQUIRED_REASON = 'pos_checkout.open_register_first';
+export const STORE_CREDIT_NEEDS_CONNECTION_REASON = 'pos_cart.store_credit_needs_connection';
+export const STORE_CREDIT_EMPTY_REASON = 'pos_checkout.store_credit_empty';
 
 /**
  * Only a completing sale needs a chosen register: a store with several and none picked cannot start
@@ -40,7 +42,24 @@ export const conditionsGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (_ct
 	return { deny: { reasonKey, params, detail: { event: e.event, lineUuid } } };
 };
 
-const [REGISTER_GATE_ID, SESSION_GATE_ID, CONDITIONS_GATE_ID] = TENDER_GUARD_IDS;
+export const storeCreditGate: ActionHook<typeof TENDER_COMMIT_EVENT> = async (_ctx, e, next) => {
+	const facts = e.payload.storeCredit;
+	if (facts?.needsConnection)
+		return {
+			deny: { reasonKey: STORE_CREDIT_NEEDS_CONNECTION_REASON, detail: { event: e.event } },
+		};
+	if (facts?.emptyCodes.length)
+		return {
+			deny: {
+				reasonKey: STORE_CREDIT_EMPTY_REASON,
+				detail: { event: e.event, codes: facts.emptyCodes },
+			},
+		};
+	return next(e);
+};
+
+const [REGISTER_GATE_ID, SESSION_GATE_ID, CONDITIONS_GATE_ID, STORE_CREDIT_GATE_ID] =
+	TENDER_GUARD_IDS;
 registerActionHook(TENDER_COMMIT_EVENT, registerGate, {
 	id: REGISTER_GATE_ID,
 	tier: 'guard',
@@ -55,4 +74,9 @@ registerActionHook(TENDER_COMMIT_EVENT, conditionsGate, {
 	id: CONDITIONS_GATE_ID,
 	tier: 'guard',
 	order: 2,
+});
+registerActionHook(TENDER_COMMIT_EVENT, storeCreditGate, {
+	id: STORE_CREDIT_GATE_ID,
+	tier: 'guard',
+	order: 3,
 });

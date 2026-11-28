@@ -257,7 +257,7 @@ describe('ExtraDataProvider API services', () => {
 		);
 	});
 
-	it('requests coupon types again when only the HTTP client changes', async () => {
+	it('requests coupon types again when only the HTTP client changes, as on reconnect (store credit M29)', async () => {
 		const view = render(<ExtraDataProvider>content</ExtraDataProvider>);
 		await act(async () => Promise.resolve());
 		expect(mockGet).toHaveBeenCalledWith('/coupon-types', { quietErrors: true });

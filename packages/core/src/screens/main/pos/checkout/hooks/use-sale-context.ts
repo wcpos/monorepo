@@ -4,6 +4,7 @@ import { useDocField, useQueryRuntime } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { usePushDocument } from '../../../contexts/use-push-document';
+import { useStoreCalculatedCouponTypes } from '../../../hooks/use-coupon-types';
 import { useOrderLedgerWrite } from '../../commands/use-order-ledger-write';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useActionContext } from '../../hooks/use-action-context';
@@ -17,6 +18,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 	// The latest store document, not the session's snapshot (see use-tender-flow).
 	const dp = useDocField(store, (value) => value.price_num_decimals) ?? 2;
 	const runtime = useQueryRuntime();
+	const storeCalculatedTypes = useStoreCalculatedCouponTypes();
 	const { stampCompletion } = useOrderLedgerWrite();
 	const pushDocument = usePushDocument();
 	const { stockAdjustment } = useStockAdjustment();
@@ -35,6 +37,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			storeId: store.id,
 			sessionsOn,
 			runtime,
+			storeCalculatedTypes,
 			dp,
 			actor,
 			actionCtx,
@@ -51,6 +54,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 			dp,
 			sessionsOn,
 			runtime,
+			storeCalculatedTypes,
 			actor,
 			actionCtx,
 			actionActor,

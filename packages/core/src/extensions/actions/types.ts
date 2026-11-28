@@ -29,7 +29,12 @@ export const ACTION_EVENTS = [
 type MissingFromActionEvents = Exclude<ActionEvent, (typeof ACTION_EVENTS)[number]>;
 export const ACTION_EVENTS_COMPLETE: MissingFromActionEvents extends never ? true : never = true;
 /** The guards a tender commit must have registered; the dispatch refuses without them. */
-export const TENDER_GUARD_IDS = ['register.gate', 'session.gate', 'conditions.gate'] as const;
+export const TENDER_GUARD_IDS = [
+	'register.gate',
+	'session.gate',
+	'conditions.gate',
+	'store-credit.gate',
+] as const;
 export type ActionEvent = keyof ActionContracts;
 export type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 type PlainLine = Record<string, unknown>;
@@ -88,6 +93,8 @@ export interface ActionContracts {
 					lineUuid: string;
 				}[];
 			};
+			/** Read in the dispatcher's slot (store credit, contract T3/T4); `store-credit.gate` judges it; null when the order has no declared line. */
+			storeCredit: { needsConnection: boolean; emptyCodes: string[] } | null;
 		};
 		result: unknown;
 	};

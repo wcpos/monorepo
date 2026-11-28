@@ -647,6 +647,7 @@ it('passes tender register and session rewrites to bottom', async () => {
 				registerId: null,
 				sessionId: null,
 				conditions: { unmet: [] },
+				storeCredit: null,
 			},
 		},
 	});

@@ -245,6 +245,44 @@ describe('settleCart', () => {
 		});
 	});
 
+	describe('a store-calculated coupon line (store credit)', () => {
+		it.each([
+			{ title: 'S1: matching product', productId: 1 },
+			{ title: 'S2: nonmatching product', productId: 2 },
+		])('$title keeps the till-written line', ({ productId }) => {
+			const lineItem = makePosLineItem(1, 100);
+			const couponLine = {
+				code: 'sc50',
+				discount: '0',
+				discount_tax: '0',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-sc' }],
+			};
+			const snapshot = { line_items: [lineItem], coupon_lines: [clone(couponLine)] };
+			const context = makeCouponContext([
+				makeCouponInput({
+					code: 'sc50',
+					discount_type: 'fixed_cart',
+					amount: '0',
+					product_ids: [productId],
+				}),
+			]);
+			const result = settleCart(snapshot, makeConfig(), { coupons: context });
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			const [settled] = result.patch.coupon_lines ?? snapshot.coupon_lines;
+			expect(settled.code).toBe(couponLine.code);
+			expect(Number(settled.discount)).toBe(0);
+			expect(Number(settled.discount_tax)).toBe(0);
+			expect(settled.meta_data).toEqual(couponLine.meta_data);
+			expect(settled).not.toHaveProperty('discount_type');
+			expect(settled).not.toHaveProperty('amount');
+			expect(JSON.stringify(result.patch)).not.toContain('fixed_cart');
+			const [settledItem] = result.patch.line_items ?? snapshot.line_items;
+			expect(Number(settledItem.total)).toBe(Number(lineItem.subtotal));
+		});
+	});
+
 	// -----------------------------------------------------------------------
 	// 3. Replay parity with recalculateCoupons
 	// -----------------------------------------------------------------------
