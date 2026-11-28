@@ -4,6 +4,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 
 import { RETIRE_RETRY_MS } from '../leg-finality';
+import { VETO_VOID_RETRY_MS } from '../server/server-leg';
 import { createDeviceLeg, type DeviceLegState } from './device-leg';
 import { method, row } from './fixtures.test-utils';
 
@@ -146,7 +147,7 @@ it('DV1 voids a vetoed reader authorization and finishes on the answered row', a
 	});
 });
 
-it('DV2 a definitive void refusal stays held; manual confirmation retries only the void', async () => {
+it('DV2 a definitive void refusal stays held until the slower void retry succeeds', async () => {
 	const c = refusedCapture('authorized');
 	c.post.mockRejectedValueOnce(providerRefusal);
 	await c.leg.start();
@@ -158,6 +159,17 @@ it('DV2 a definitive void refusal stays held; manual confirmation retries only t
 	});
 	await jest.advanceTimersByTimeAsync(RETIRE_RETRY_MS);
 	expect(c.routes()).toEqual(['intent', 'capture', 'void']);
+	await jest.advanceTimersByTimeAsync(VETO_VOID_RETRY_MS - RETIRE_RETRY_MS - 1);
+	expect(c.routes()).toEqual(['intent', 'capture', 'void']);
+	await jest.advanceTimersByTimeAsync(1);
+	expect(c.routes()).toEqual(['intent', 'capture', 'void', 'void']);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
+it('DV2 manual confirmation while held retries only the void', async () => {
+	const c = refusedCapture('authorized');
+	c.post.mockRejectedValueOnce(providerRefusal);
+	await c.leg.start();
 	await c.leg.capture();
 	expect(c.routes()).toEqual(['intent', 'capture', 'void', 'void']);
 });

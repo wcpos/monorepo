@@ -6,6 +6,7 @@ import { isFinalPaymentStatus } from '@wcpos/order-math';
 import type { PaymentRefusalBody, PaymentRow } from '@wcpos/order-math';
 
 import { legFinality, RETIRE_RETRY_MS, terminalBeforeSend } from '../leg-finality';
+import { VETO_VOID_RETRY_MS } from '../server/server-leg';
 
 import type {
 	CollectInput,
@@ -156,8 +157,10 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		} catch (error) {
 			if (!active()) return;
 			set({ veto: { ...state.veto, held: true } });
-			if (!isDefinitiveMoneyRefusal(moneyRefusalOf(error)))
-				vetoTimer = deps.setTimeout(() => void confirm(), RETIRE_RETRY_MS);
+			const delay = isDefinitiveMoneyRefusal(moneyRefusalOf(error))
+				? VETO_VOID_RETRY_MS
+				: RETIRE_RETRY_MS;
+			vetoTimer = deps.setTimeout(() => void confirm(), delay);
 		} finally {
 			inFlight = false;
 		}

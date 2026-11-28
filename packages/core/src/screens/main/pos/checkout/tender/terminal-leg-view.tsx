@@ -92,7 +92,7 @@ export function TerminalLegView({
 	if (leg.veto && !final) {
 		status = leg.veto.held ? t('pos_checkout.payment_vetoed_hold') : vetoSentence(leg.veto, t)!;
 		action = 'none';
-	} else if (leg.veto && final) {
+	} else if (leg.veto && final && leg.outcome !== 'captured') {
 		status = vetoSentence(leg.veto, t)!;
 		action = 'vetoed';
 	} else if (final && ['failed', 'voided', 'released'].includes(leg.outcome ?? '')) {

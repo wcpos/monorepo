@@ -13,6 +13,8 @@ import type {
 import { legFinality, refusedBeforeSend, terminalBeforeSend } from '../leg-finality';
 
 const POLL_CADENCE_MS = 2000; // Wait after each response, not on a fixed interval.
+/** A void the store refused after a veto is re-sent this often: the card hold must be released (M18b). */
+export const VETO_VOID_RETRY_MS = 10000;
 const BACKOFF_MS = [2000, 4000, 8000, 15000]; // Bound transport pressure without giving up.
 const UNSTABLE_AFTER = 3; // Surface sustained connection loss to the cashier.
 const DEADLINE_MS = 300_000; // Check finality before requesting cancellation at five minutes.
@@ -353,7 +355,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (state.veto && route === 'void' && definitive && code !== 'wcpos_payment_not_found') {
 			const veto = { ...state.veto, held: true };
 			setState({ ...changes, veto, phase: 'polling', capturing: false });
-			schedule(POLL_CADENCE_MS);
+			schedule(VETO_VOID_RETRY_MS, 'void');
 			return;
 		}
 		const inMotion = moneyInMotionOf(moneyRefusalOf(error));

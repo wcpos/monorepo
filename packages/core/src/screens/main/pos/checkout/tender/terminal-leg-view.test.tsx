@@ -172,6 +172,12 @@ const cases: [Partial<TerminalLegState>, string, string[], string?][] = [
 		['another'],
 		'V4',
 	],
+	[
+		{ phase: 'final', outcome: 'captured', veto: { message: 'Store says no', held: false } },
+		'',
+		[],
+		'V5',
+	],
 	[{ phase: 'creating' }, 'Starting the terminal…', ['cancel']],
 	[{}, 'Waiting for the customer on the terminal', ['cancel']],
 	[{ unstable: true }, 'Waiting for the customer on the terminal', ['cancel']],

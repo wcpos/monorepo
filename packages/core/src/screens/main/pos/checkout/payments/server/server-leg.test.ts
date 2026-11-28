@@ -5,7 +5,7 @@ import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 import { MoneyCommandError } from '@wcpos/query';
 
 import { RETIRE_RETRY_MS } from '../leg-finality';
-import { createServerLeg } from './server-leg';
+import { createServerLeg, VETO_VOID_RETRY_MS } from './server-leg';
 
 jest.mock('@wcpos/database/live-tab', () => ({
 	...jest.requireActual('@wcpos/database/live-tab'),
@@ -158,7 +158,7 @@ it('SV1 voids the vetoed authorization and finishes on the voided row', async ()
 });
 
 it.each([502, 422])(
-	'SV2 a refused void (%i) stays held until a status read confirms the void',
+	'SV2 a refused void (%i) stays held until the retried void succeeds',
 	async (status) => {
 		const c = vetoedCapture();
 		c.fail('void', refusal(status, 'wcpos_provider_error'));
@@ -170,10 +170,14 @@ it.each([502, 422])(
 			row: { status: 'authorized' },
 		});
 		expect(c.onFinal).not.toHaveBeenCalled();
-		c.answer('status', response({ status: 'voided' }));
-		await tick(2000);
+		await tick(VETO_VOID_RETRY_MS - 1);
+		expect(c.count('void')).toBe(1);
+		c.answer('void', response({ status: 'voided' }));
+		await tick(1);
+		expect(c.count('void')).toBe(2);
 		expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
 		expect(c.count('capture')).toBe(1);
+		expect(c.onFinal).toHaveBeenCalledTimes(1);
 	}
 );
 
