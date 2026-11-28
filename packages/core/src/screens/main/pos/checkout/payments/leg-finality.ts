@@ -11,7 +11,7 @@ export const RETIRE_RETRY_MS = 2000;
 export function refusedBeforeSend(error: unknown): LegError {
 	return error instanceof MoneyCommandError &&
 		(error.reason === 'order_changed' || error.reason === 'preflight_failed')
-		? { code: error.reason, message: error.message }
+		? { code: error.reason, message: error.veto?.message ?? error.message }
 		: null;
 }
 

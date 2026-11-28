@@ -88,6 +88,15 @@ it('a zero-balance close carries the approval and is refused when the covered to
 	expect(mockMirror).not.toHaveBeenCalled();
 });
 
+it("a vetoed close is order_changed with the store's message", async () => {
+	const { MoneyCommandError } = jest.requireMock('@wcpos/query');
+	const veto = { message: 'There is not enough store credit.' };
+	const post = jest
+		.fn()
+		.mockRejectedValue(Object.assign(new MoneyCommandError('order_changed'), { veto }));
+	await expect(closeSale(ctx, order, deps(post))).resolves.toEqual({ kind: 'order_changed', veto });
+});
+
 // The completion judges the answer with the resident (sale-completion.test.ts, `zero-balance`).
 it('a 2xx with a completion is answered, mirroring the summary under the sent revision', async () => {
 	const summary = { status: 'completed' };

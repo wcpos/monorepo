@@ -200,6 +200,8 @@ export function isMoneyAnswer(
 /** Whether the answer settles the command (the server decided; a re-send repeats it). */
 export function isDefinitiveMoneyRefusal(refusal: MoneyRefusal | null): boolean {
 	if (!refusal?.code || refusal.status === undefined) return false;
+	// The store's veto (store-credit contract (b), desk ruling) is its decision whatever the code and is never re-sent.
+	if (refusal.data?.vetoed === true) return refusal.status >= 400;
 	if (refusal.status >= 500) return DEFINITIVE_SERVER_ERROR_CODES.includes(refusal.code);
 	if (refusal.status < 400) return false;
 	if (RESENDABLE_MONEY_CODES.includes(refusal.code)) return false;

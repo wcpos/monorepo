@@ -39,7 +39,7 @@ export type CloseOutcome =
 	/** A gateway attempt on this sale has no outcome yet (409 `wcpos_payment_in_flight`). */
 	| { kind: 'unanswered'; attemptId: string }
 	| { kind: 'refused'; code: string; message: string }
-	| { kind: 'order_changed' }
+	| { kind: 'order_changed'; veto?: { message: string | null } }
 	| { kind: 'offline' }; // PR B: { kind: 'queued' }
 
 /**
@@ -91,7 +91,7 @@ export async function closeSale(
 		return { kind: 'answered', order: summary, notMirrored };
 	} catch (error) {
 		if (error instanceof MoneyCommandError && error.reason === 'order_changed')
-			return { kind: 'order_changed' };
+			return { kind: 'order_changed', ...(error.veto && { veto: error.veto }) };
 		const refusal = moneyRefusalOf(error);
 		if (refusal?.code === MONEY_ANSWER_CODES.balanceOutstanding) {
 			const summary = refusal.data?.order as OrderPaymentSummary | undefined;
