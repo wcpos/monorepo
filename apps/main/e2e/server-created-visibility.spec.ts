@@ -1,10 +1,11 @@
-import { expect } from '@playwright/test';
+import { expect, type Response } from '@playwright/test';
 
 import {
 	getStoreUrl,
 	getStoreVariant,
 	navigateToPage,
 	authenticatedTest as test,
+	waitForRequirePlaneIdle,
 } from './fixtures';
 import { resolveProbeAuthorization } from './probe-credential';
 import {
@@ -175,11 +176,34 @@ test('a product created on the server reaches the products grid without a search
 	const authorization =
 		writer ?? (await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 
+	// The default name window can finish before we click Name again. During completed-window
+	// dedupe, the grid sorts locally without another request, so record browses from navigation.
+	// A click after dedupe expires re-enqueues the browse, so wait for the require plane
+	// to settle before creating the probe.
+	const nameBrowses: { response: Response; order: string }[] = [];
+	const recordNameBrowse = (response: Response) => {
+		if (!response.ok() || response.request().method() !== 'GET') return;
+		const { pathname, searchParams } = new URL(response.url());
+		const order = searchParams.get('order');
+		if (
+			(pathname.endsWith('/wp-json/wcpos/v2/products') ||
+				searchParams.get('rest_route') === '/wcpos/v2/products') &&
+			searchParams.get('orderby') === NAME_SORT_WIRE_ORDERBY &&
+			(order === 'asc' || order === 'desc') &&
+			!searchParams.get('search')
+		) {
+			nameBrowses.push({ response, order });
+		}
+	};
+	page.on('response', recordNameBrowse);
 	await navigateToPage(page, 'products');
 	const screen = page.getByTestId('screen-products').filter({ visible: true });
 	await expect(screen.getByTestId('data-table-count')).toBeVisible({
 		timeout: 60_000,
 	});
+	// The require plane is serial: a browse armed while the startup lanes still drain can
+	// queue past its 60 s window (#3798, the class #3810 fixed). The queueing itself is #3340.
+	await waitForRequirePlaneIdle(page);
 	// Put the grid on another field first, so clicking Name deterministically selects ascending.
 	const priceProductsPending = page.waitForResponse(
 		(response) => {
@@ -199,27 +223,34 @@ test('a product created on the server reaches the products grid without a search
 		throw new Error(`Products price browse failed: HTTP ${priceProducts.status()}`);
 	}
 
-	const sortedProductsPending = page.waitForResponse(
-		(response) => {
-			if (response.request().method() !== 'GET') return false;
-			const url = new URL(response.url());
-			const route = url.searchParams.get('rest_route');
-			const isProductsBrowse =
-				url.pathname.endsWith('/wp-json/wcpos/v2/products') || route === '/wcpos/v2/products';
-			return (
-				isProductsBrowse &&
-				url.searchParams.get('orderby') === NAME_SORT_WIRE_ORDERBY &&
-				url.searchParams.get('order') === 'asc'
-			);
-		},
-		{ timeout: 60_000 }
-	);
-	sortedProductsPending.catch(() => {});
+	const beforeNameClick = nameBrowses.length;
 	await screen.getByTestId('data-table-header-name').first().click();
-	const sortedProducts = await sortedProductsPending;
-	if (!sortedProducts.ok()) {
-		throw new Error(`Products name browse failed: HTTP ${sortedProducts.status()}`);
-	}
+	let sortedDirection: string;
+	await expect
+		.poll(
+			async () => {
+				if (nameBrowses.length > beforeNameClick) {
+					sortedDirection = nameBrowses[nameBrowses.length - 1].order;
+					return 'ready';
+				}
+				for (const direction of ['asc', 'desc']) {
+					if (await screen.getByTestId(`data-table-sort-name-${direction}`).first().isVisible()) {
+						const match = nameBrowses.some(({ order }) => order === direction);
+						if (!match) return `No post-click name browse or recorded ${direction} name browse`;
+						sortedDirection = direction;
+						return 'ready';
+					}
+				}
+				return 'No post-click name browse or visible name-sort indicator';
+			},
+			{ timeout: 60_000 }
+		)
+		.toBe('ready');
+	await waitForRequirePlaneIdle(page);
+	const sortedProducts = [...nameBrowses]
+		.reverse()
+		.find(({ order }) => order === sortedDirection)!.response;
+	page.off('response', recordNameBrowse);
 	const sortedUrl = new URL(sortedProducts.url());
 	const order = sortedUrl.searchParams.get('order');
 	if (order !== 'asc' && order !== 'desc') {
@@ -349,6 +380,7 @@ test('an order created on the server reaches the orders grid without a search', 
 	await navigateToPage(page, 'orders');
 	const screen = page.getByTestId('screen-orders').filter({ visible: true });
 	await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 60_000 });
+	await waitForRequirePlaneIdle(page);
 
 	/**
 	 * Land the probe in the FIRST rendered rows: put the grid on `date_created_gmt`
@@ -511,6 +543,7 @@ test('a customer created on the server reaches the customers grid without a sear
 	await navigateToPage(page, 'customers');
 	const screen = page.getByTestId('screen-customers').filter({ visible: true });
 	await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 60_000 });
+	await waitForRequirePlaneIdle(page);
 
 	const customersBrowseResponse = (orderby: string, order: string) =>
 		page.waitForResponse(
