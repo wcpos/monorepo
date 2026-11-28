@@ -18,6 +18,8 @@ import {
 	classifyEmailSendError,
 	type EmailSendFailure,
 	enqueueReceiptEmail,
+	receiptEmailAccepted,
+	receiptEmailPostRequest,
 } from '@wcpos/query/receipt-email-queue';
 
 import { useT } from '../../../contexts/translations';
@@ -35,6 +37,7 @@ const formSchema = z.object({
 
 interface Props {
 	order: EngineRecord<'orders'>;
+	templateId: string | null;
 	/** The receipt document's local-only rule: a sale the store has not heard queues as offline. */
 	localOnly?: boolean;
 }
@@ -50,10 +53,13 @@ interface Props {
  * with time — a rejected address earns the same 400 forever, and hiding it
  * behind "queued" would be a lie.
  */
-export function EmailForm({ order, localOnly = false }: Props) {
+export function EmailForm({ order, templateId, localOnly = false }: Props) {
 	const http = useRestHttpClient();
-	const { storeDB } = useAppState();
+	const { storeDB, site } = useAppState();
 	const { status } = useOnlineStatus();
+	const [legacySite, setLegacySite] = React.useState<string>();
+	const legacy = templateId === null || (legacySite !== undefined && legacySite === site?.url);
+	const selected = legacy ? undefined : (templateId ?? undefined);
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
 	const orderData = useRecordField(order, (record) => record.payload);
@@ -90,6 +96,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 						orderId: orderID,
 						orderNumber: typeof orderNumber === 'string' ? orderNumber : undefined,
 						email,
+						templateId: selected,
 						saveTo: saveEmail ? 'billing' : '',
 						...(failure ? { failure } : {}),
 					},
@@ -115,7 +122,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 				return false;
 			}
 		},
-		[orderID, orderNumber, storeDB, t]
+		[orderID, orderNumber, selected, storeDB, t]
 	);
 
 	/**
@@ -132,15 +139,24 @@ export function EmailForm({ order, localOnly = false }: Props) {
 				let queueFailed = false;
 				if (isOffline) {
 					if (await queueEmail(email, saveEmail, 'offline')) return closeDialog();
+					if (localOnly) {
+						Toast.show({ type: 'error', text1: t('receipt.email_not_sent') });
+						return;
+					}
 					queueFailed = true;
 				}
 
 				try {
-					const { data } = await http.post(`/orders/${orderID}/email`, {
-						email,
-						save_to: saveEmail ? 'billing' : '',
-					});
-					if (data && data.success) {
+					if (typeof orderID !== 'number') throw new Error(t('receipt.email_not_sent'));
+					const { data } = await http.post(
+						...receiptEmailPostRequest({
+							orderId: orderID,
+							email,
+							saveTo: saveEmail ? 'billing' : '',
+							templateId: selected,
+						})
+					);
+					if (receiptEmailAccepted(data, selected)) {
 						httpLogger.success(t('receipt.email_sent'), {
 							showToast: true,
 							context: {
@@ -154,6 +170,13 @@ export function EmailForm({ order, localOnly = false }: Props) {
 					throw new Error(data?.message || t('receipt.email_not_sent'));
 				} catch (error) {
 					const failure = classifyEmailSendError(error);
+					if (
+						selected !== undefined &&
+						failure.code === 'rest_no_route' &&
+						failure.status === 404
+					) {
+						setLegacySite(site?.url);
+					}
 					if (
 						failure.kind === 'connectivity' &&
 						!queueFailed &&
@@ -180,7 +203,7 @@ export function EmailForm({ order, localOnly = false }: Props) {
 				setLoading(false);
 			}
 		},
-		[closeDialog, http, isOffline, orderID, queueEmail, t]
+		[closeDialog, http, isOffline, localOnly, orderID, queueEmail, selected, site?.url, t]
 	);
 
 	/**
@@ -211,13 +234,23 @@ export function EmailForm({ order, localOnly = false }: Props) {
 						<FormField
 							control={form.control}
 							name="email"
-							render={({ field }) => <FormInput label={t('receipt.email_address')} {...field} />}
+							render={({ field }) => (
+								<FormInput
+									testID="receipt-email-address"
+									label={t('receipt.email_address')}
+									{...field}
+								/>
+							)}
 						/>
 						<FormField
 							control={form.control}
 							name="saveEmail"
 							render={({ field }) => (
-								<FormSwitch label={t('receipt.save_email_to_billing_address')} {...field} />
+								<FormSwitch
+									testID="receipt-email-save-billing"
+									label={t('receipt.save_email_to_billing_address')}
+									{...field}
+								/>
 							)}
 						/>
 					</VStack>
@@ -231,7 +264,11 @@ export function EmailForm({ order, localOnly = false }: Props) {
 			<DialogFooter
 				close
 				intent={{
-					label: isOffline ? t('receipt.send_when_online') : t('receipt.send'),
+					label: legacy
+						? t('receipt.email_send_order_details')
+						: isOffline
+							? t('receipt.send_when_online')
+							: t('receipt.send'),
 					testID: 'receipt-email-send',
 					onPress: () => void sendEmail(),
 					loading,

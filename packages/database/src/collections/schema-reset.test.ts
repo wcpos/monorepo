@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import * as collectionCreators from './index';
 
 // The next bump is a deliberate act, not an accidental same-version schema edit.
-const PINNED: Record<string, number> = { stores: 1 };
+const PINNED: Record<string, number> = { stores: 1, receipt_email_queue: 1 };
 
 it('pins every app collection and schema version and its migration strategies', async () => {
 	for (const collections of Object.values(collectionCreators)) {
@@ -26,7 +26,7 @@ it('pins every app collection and schema version and its migration strategies', 
 			if (schema && typeof schema === 'object' && 'version' in schema) {
 				expect({ file, version: schema.version }).toEqual({
 					file,
-					version: PINNED[file.slice(0, -3)] ?? 0,
+					version: PINNED[file.slice(0, -3).replaceAll('-', '_')] ?? 0,
 				});
 			}
 		}

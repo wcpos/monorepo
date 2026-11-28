@@ -51,6 +51,7 @@ function createFakeCollection(seed: ReceiptEmailRow[] = []) {
 	// `toMatchObject` and `Object.keys` can see.
 	const FIELD_KEYS: (keyof ReceiptEmailRow)[] = [
 		'localID',
+		'templateId',
 		'orderId',
 		'orderNumber',
 		'email',
@@ -169,6 +170,30 @@ beforeEach(() => {
 });
 
 describe('enqueueReceiptEmail', () => {
+	it('keeps each selected design and the legacy send distinct after reopening the queue', async () => {
+		const collection = createFakeCollection([pendingRow()]);
+		let next = 1;
+		for (const templateId of ['gallery-narrow', 'gallery-large', 'gallery-large']) {
+			await enqueueReceiptEmail(
+				{ collection, uuid: () => `row-${++next}` },
+				{ orderId: 42, email: 'customer@example.com', templateId }
+			);
+		}
+
+		const reopened = createFakeCollection(collection.docs.map((doc) => ({ ...doc })));
+		expect(reopened.docs.map(receiptEmailPostRequest)).toEqual([
+			['/orders/42/email', { email: 'customer@example.com', save_to: '' }],
+			[
+				'/orders/42/receipt-email',
+				{ email: 'customer@example.com', save_to: '', template_id: 'gallery-narrow' },
+			],
+			[
+				'/orders/42/receipt-email',
+				{ email: 'customer@example.com', save_to: '', template_id: 'gallery-large' },
+			],
+		]);
+	});
+
 	it('durably queues an offline send and posts nothing', async () => {
 		const collection = createFakeCollection();
 		const post = jest.fn();

@@ -36,6 +36,7 @@ export interface ReceiptEmailRow {
 	orderNumber?: string;
 	email: string;
 	saveTo?: string;
+	templateId?: string;
 	status: ReceiptEmailStatus;
 	queuedAt: string;
 	attempts: number;
@@ -77,6 +78,7 @@ export interface EnqueueReceiptEmailInput {
 	orderNumber?: string;
 	email: string;
 	saveTo?: string;
+	templateId?: string;
 	failure?: EmailSendFailure;
 }
 
@@ -155,7 +157,10 @@ async function enqueueOnce(
 
 	const pending = await deps.collection.find({ selector: { status: { $eq: 'pending' } } }).exec();
 	const duplicate = pending.find(
-		(row) => row.orderId === input.orderId && row.email === input.email
+		(row) =>
+			row.orderId === input.orderId &&
+			row.email === input.email &&
+			row.templateId === input.templateId
 	);
 	if (duplicate) {
 		// The repeat tap may ask for something the first did not: saving the
@@ -181,6 +186,7 @@ async function enqueueOnce(
 		orderId: input.orderId,
 		email: input.email,
 		saveTo,
+		...(input.templateId !== undefined ? { templateId: input.templateId } : {}),
 		status: 'pending',
 		queuedAt: iso(queuedAt),
 		attempts,
@@ -207,14 +213,24 @@ async function enqueueOnce(
 }
 
 export interface ReceiptEmailPostResponse {
-	data?: { success?: boolean; message?: string } | null;
+	data?: { success?: boolean; message?: string; template_id?: string } | null;
+}
+
+export function receiptEmailAccepted(
+	data: ReceiptEmailPostResponse['data'],
+	templateId?: string
+): boolean {
+	return data?.success === true && (templateId === undefined || data.template_id === templateId);
 }
 
 /** The receipt-email endpoint contract shared by every queue drain trigger. */
 export function receiptEmailPostRequest(
-	row: Pick<ReceiptEmailRow, 'orderId' | 'email' | 'saveTo'>
-): [string, { email: string; save_to: string }] {
-	return [`/orders/${row.orderId}/email`, { email: row.email, save_to: row.saveTo ?? '' }];
+	row: Pick<ReceiptEmailRow, 'orderId' | 'email' | 'saveTo' | 'templateId'>
+): [string, { email: string; save_to: string; template_id?: string }] {
+	const body = { email: row.email, save_to: row.saveTo ?? '' };
+	return row.templateId === undefined
+		? [`/orders/${row.orderId}/email`, body]
+		: [`/orders/${row.orderId}/receipt-email`, { ...body, template_id: row.templateId }];
 }
 
 export interface DrainLogger {
@@ -434,7 +450,7 @@ async function drainRow(
 	let failure: EmailSendFailure | undefined;
 	try {
 		const response = await deps.post(doc);
-		if (response?.data?.success !== true) {
+		if (!receiptEmailAccepted(response?.data, doc.templateId)) {
 			throw asPermanent(response?.data?.message ?? 'The server did not send the email.');
 		}
 	} catch (error) {
