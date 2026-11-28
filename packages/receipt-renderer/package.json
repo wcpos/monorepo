@@ -45,7 +45,7 @@
 	"devDependencies": {
 		"@types/mustache": "^4.2.6",
 		"jsdom": "^31.0.1",
-		"vitest": "^5.1.0"
+		"vitest": "^5.1.1"
 	},
 	"sideEffects": false
 }
