@@ -56,6 +56,8 @@ export interface SaleContext {
 	storeId?: number;
 	sessionsOn: boolean;
 	runtime: ReturnType<typeof useQueryRuntime>;
+	/** The bridge's declared coupon types; `commitSale` guards a declared line's tender. */
+	storeCalculatedTypes: ReadonlySet<string>;
 	dp: number;
 	actor?: { id: string; name: string };
 	stampCompletion: Parameters<typeof persistProvenance>[0]['stampCompletion'];

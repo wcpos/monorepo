@@ -1267,6 +1267,7 @@
 	"pos_checkout.order_refused": "Order not saved — the store refused it",
 	"pos_checkout.order_refused_no_reason": "The store gave no reason",
 	"pos_checkout.open_store_health": "Store health",
+	"pos_checkout.store_credit_empty": "This store credit has no balance left. Remove it to continue.",
 	"pos_checkout.store_not_answering": "The store isn't answering. Keep waiting, or go back to the cart.",
 	"pos_checkout.chip_save_refused": "Save refused",
 	"pos_checkout.chip_in_checkout_offline": "In checkout · offline",

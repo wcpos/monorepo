@@ -66,6 +66,7 @@ const tender = (payload: Partial<Payload>): ActionEventInput<typeof TENDER_COMMI
 		registerId: null,
 		sessionId: null,
 		conditions: { unmet: [] },
+		storeCredit: null,
 		...payload,
 	},
 });

@@ -22,6 +22,12 @@ import {
 	stampSale,
 } from './commit-sale';
 import { row } from './payments/device/fixtures.test-utils';
+import { readStoreCreditFacts } from './store-credit-facts';
+
+jest.mock('./store-credit-facts', () => {
+	const actual = jest.requireActual('./store-credit-facts');
+	return { ...actual, readStoreCreditFacts: jest.fn(actual.readStoreCreditFacts) };
+});
 
 const resolveSession = jest.fn();
 const readCatalog = jest.fn();
@@ -30,6 +36,8 @@ let openSession: { id: string; incrementalPatch: typeof patchSession } | null;
 let payload: EngineRecord<'orders'>['payload'];
 const order = { uuid: 'order', getLatest: () => ({ payload }) } as EngineRecord<'orders'>;
 const ctx: SaleCommitContext = {
+	runtime: {} as SaleCommitContext['runtime'],
+	storeCalculatedTypes: new Set<string>(),
 	actionCtx: createActionContext({
 		log: jest.fn(),
 		t: (key) => key,
@@ -48,6 +56,7 @@ const ctx: SaleCommitContext = {
 };
 const request: SaleCommitRequest = {
 	order,
+	reachable: true,
 	methodId: 'cash',
 	bindingStatus: 'bound',
 	amounts: { kind: 'whole-balance' },
@@ -113,6 +122,7 @@ it('whole-balance dispatches the slot balance as every amount, completing, mode 
 			registerId: 'register',
 			sessionId: 'session',
 			conditions: { unmet: [] },
+			storeCredit: null,
 		},
 		expect.objectContaining({ dispatchToken: expect.any(Object) })
 	);
@@ -334,6 +344,60 @@ it('reuses a held slot for a retained-captures completion without taking another
 	});
 }, 1000);
 
+describe('store credit (T3/T4)', () => {
+	it('C1 refuses without writing when a declared line needs a connection', async () => {
+		jest
+			.mocked(readStoreCreditFacts)
+			.mockResolvedValueOnce({ needsConnection: true, emptyCodes: [] });
+		await expect(commitSale(ctx, request, write)).resolves.toMatchObject({
+			deny: { reasonKey: 'pos_cart.store_credit_needs_connection' },
+		});
+		expect(write).not.toHaveBeenCalled();
+	});
+
+	it('C2 refuses with the empty codes', async () => {
+		jest
+			.mocked(readStoreCreditFacts)
+			.mockResolvedValueOnce({ needsConnection: false, emptyCodes: ['sc0'] });
+		await expect(commitSale(ctx, request, write)).resolves.toMatchObject({
+			deny: { reasonKey: 'pos_checkout.store_credit_empty', detail: { codes: ['sc0'] } },
+		});
+		expect(write).not.toHaveBeenCalled();
+	});
+
+	it('C3 checks the entry against the balance after the ack', async () => {
+		jest.mocked(readStoreCreditFacts).mockImplementationOnce(async () => {
+			payload.total = '9.00';
+			return { needsConnection: false, emptyCodes: [] };
+		});
+		const amounts: SaleAmounts = {
+			kind: 'entry',
+			expectedBalanceMinor: 600,
+			amountMinor: 600,
+			tenderedMinor: 600,
+			captureMode: 'manual',
+			reachable: true,
+		};
+		await expect(commitSale(ctx, { ...request, amounts }, write)).resolves.toEqual({
+			deny: {
+				reasonKey: 'pos_checkout.order_changed_retry',
+				detail: { balanceMinor: 600, latestBalanceMinor: 500 },
+			},
+		});
+		expect(write).not.toHaveBeenCalled();
+	});
+
+	it('C4 reads facts once per press using its reachability and writes with null facts', async () => {
+		await commitSale(ctx, request, write);
+		await commitSale(ctx, { ...request, reachable: false }, write);
+		expect(jest.mocked(readStoreCreditFacts).mock.calls).toEqual([
+			[ctx, order, true],
+			[ctx, order, false],
+		]);
+		expect(write.mock.calls.map(([sale]) => sale.storeCredit)).toEqual([null, null]);
+	});
+});
+
 describe('stampSale', () => {
 	const chained: Parameters<typeof stampSale>[0] = {
 		methodId: 'cash',
@@ -346,6 +410,7 @@ describe('stampSale', () => {
 		registerId: null,
 		sessionId: null,
 		conditions: { unmet: [] },
+		storeCredit: null,
 	};
 	const entry = (reachable: boolean): SaleAmounts => ({
 		kind: 'entry',

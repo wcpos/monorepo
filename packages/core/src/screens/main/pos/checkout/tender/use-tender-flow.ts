@@ -1271,6 +1271,7 @@ export function useTenderFlow(
 					order,
 					methodId: method?.id ?? null,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+					reachable,
 					amounts: {
 						kind: 'entry',
 						expectedBalanceMinor: balanceMinor,

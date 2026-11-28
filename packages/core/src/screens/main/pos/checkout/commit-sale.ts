@@ -12,6 +12,7 @@ import {
 import { conditionRules } from '../conditions/evaluate';
 import { countConditionsInSlot } from '../conditions/snapshot';
 import { enqueueOrderMutation, type OrderMutationContext } from '../hooks/order-mutation-queue';
+import { readStoreCreditFacts } from './store-credit-facts';
 
 import './tender/tender-guards';
 
@@ -19,7 +20,7 @@ import type { SaleContext } from './sale-completion';
 
 export type SaleCommitContext = Pick<
 	SaleContext,
-	'actionCtx' | 'actionActor' | 'storeDB' | 'sessionsOn' | 'dp'
+	'actionCtx' | 'actionActor' | 'storeDB' | 'sessionsOn' | 'dp' | 'runtime' | 'storeCalculatedTypes'
 >;
 export type SaleAmounts =
 	| { kind: 'whole-balance' }
@@ -35,6 +36,8 @@ export type SaleAmounts =
 	  };
 export interface SaleCommitRequest {
 	order: EngineRecord<'orders'>;
+	/** The store can hear this tender now (`online && !queuedOffline` as the caller saw it). */
+	reachable: boolean;
 	methodId: string | null;
 	bindingStatus: 'bound' | 'choose' | 'none';
 	amounts: SaleAmounts;
@@ -81,12 +84,13 @@ export function stampSale(
  */
 export function commitSale<R>(
 	ctx: SaleCommitContext,
-	{ order, methodId, bindingStatus, amounts }: SaleCommitRequest,
+	{ order, methodId, bindingStatus, amounts, reachable }: SaleCommitRequest,
 	write: (sale: StampedSale, queue: OrderMutationContext) => Promise<R>,
 	options?: { queue?: OrderMutationContext; source?: 'user' | 'system' }
 ): Promise<ActionRefusal | R> {
 	const run = async (queue: OrderMutationContext): Promise<ActionRefusal | R> => {
-		const record = queue.order ?? order; // the record that receives the write
+		const record = (queue.order ?? order) as EngineRecord<'orders'>; // the record that receives the write
+		const storeCredit = await readStoreCreditFacts(ctx, record, reachable);
 		const latest = record.getLatest().payload;
 		const retained = amounts.kind === 'retained-captures';
 		const balanceMinor = retained
@@ -138,6 +142,7 @@ export function commitSale<R>(
 					registerId: null,
 					sessionId: null,
 					conditions: { unmet },
+					storeCredit,
 				},
 			},
 			bottom: async ({ payload }) => {

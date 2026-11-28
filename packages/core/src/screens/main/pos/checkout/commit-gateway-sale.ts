@@ -28,7 +28,7 @@ export async function commitGatewaySale(
 	const { order, source, online } = input;
 	return commitSale(
 		ctx,
-		{ ...input, amounts: { kind: 'whole-balance' } },
+		{ ...input, reachable: online, amounts: { kind: 'whole-balance' } },
 		async ({ registerId, sessionId, completing }) => {
 			await recordSaleAttempt(ctx, {
 				order,

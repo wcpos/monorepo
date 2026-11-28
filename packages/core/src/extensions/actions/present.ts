@@ -27,6 +27,10 @@ export function refusalText(deny: ActionRefusal['deny'], t: ActionContext['t']):
 		return t('pos_cart.tax_exempt_wc_version');
 	if (deny.reasonKey === 'pos_cart.tax_exempt_inclusive_store')
 		return t('pos_cart.tax_exempt_inclusive_store');
+	if (deny.reasonKey === 'pos_cart.store_credit_needs_connection')
+		return t('pos_cart.store_credit_needs_connection');
+	if (deny.reasonKey === 'pos_checkout.store_credit_empty')
+		return t('pos_checkout.store_credit_empty');
 	return registrantText(t, deny.reasonKey, deny.params);
 }
 

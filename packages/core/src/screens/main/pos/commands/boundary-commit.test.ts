@@ -21,6 +21,7 @@ import { config } from '../../../../../jest/cart-write';
 import { createActionContext, registerActionHook } from '../../../../extensions/actions';
 import { refreshOrderRecord } from '../checkout/hooks/reconcile-completed-order';
 import { completeSale, type SaleContext } from '../checkout/sale-completion';
+import { readStoreCreditFacts } from '../checkout/store-credit-facts';
 import { enqueueOrderMutation } from '../hooks/order-mutation-queue';
 import { enqueueCartAction } from '../hooks/enqueue-cart-action';
 import { settleCartWrite } from './settle-cart-write';
@@ -43,6 +44,10 @@ jest.mock('../checkout/hooks/reconcile-completed-order', () => ({
 	refreshOrderRecord: jest.fn(async () => 'refreshed'),
 }));
 jest.mock('../checkout/provenance/provenance-gap', () => ({ reportProvenanceGap: jest.fn() }));
+jest.mock('../checkout/store-credit-facts', () => {
+	const actual = jest.requireActual('../checkout/store-credit-facts');
+	return { ...actual, readStoreCreditFacts: jest.fn(actual.readStoreCreditFacts) };
+});
 addRxPlugin(RxDBLocalDocumentsPlugin);
 let ctx: SaleContext & { closeSale: typeof closeSale };
 // The server completes a covered sale through close (ADR 0040 D2); its mirror lands the status.
@@ -284,7 +289,7 @@ describe('an answered close', () => {
 // the offline outcome is what the coordinator retries on reconnect.
 it('an offline boundary returns offline and leaves no completion attempt behind', async () => {
 	const order = orderFor();
-	closeSale.online.mockReturnValueOnce(false);
+	closeSale.online.mockReturnValueOnce(false).mockReturnValueOnce(false);
 	const complete = jest.fn();
 	const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
 		commitAtBoundary(
@@ -300,6 +305,30 @@ it('an offline boundary returns offline and leaves no completion attempt behind'
 				queue,
 				write: (changes) => write({ document: order, changes }),
 			}
+		)
+	);
+	expect(outcome).toEqual({ kind: 'offline' });
+	expect(closeSale.close).not.toHaveBeenCalled();
+	expect(complete).not.toHaveBeenCalled();
+	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+});
+
+it('B1 a store-credit connection refusal returns offline and leaves no completion attempt', async () => {
+	const order = orderFor();
+	const complete = jest.fn();
+	jest
+		.mocked(readStoreCreditFacts)
+		.mockResolvedValueOnce({ needsConnection: true, emptyCodes: [] });
+	const outcome = await enqueueOrderMutation(order.uuid, (queue) =>
+		commitAtBoundary(
+			{
+				...ctx,
+				configForOrder: () => config,
+				serverOwnsMoney: () => false,
+				bindingStatus: 'bound',
+				complete,
+			},
+			{ order, queue, write: (changes) => write({ document: order, changes }) }
 		)
 	);
 	expect(outcome).toEqual({ kind: 'offline' });

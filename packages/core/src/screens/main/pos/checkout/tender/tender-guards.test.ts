@@ -12,7 +12,7 @@ import {
 	registerActionHook,
 	resetActionRegistry,
 } from '../../../../../extensions/actions/registry';
-import { conditionsGate, registerGate, sessionGate } from './tender-guards';
+import { conditionsGate, registerGate, sessionGate, storeCreditGate } from './tender-guards';
 
 import type { ActionEventInput } from '../../../../../extensions/actions';
 
@@ -45,6 +45,7 @@ const e: ActionEventInput<'checkout.tender.commit'> = {
 		registerId: null,
 		sessionId: null,
 		conditions: { unmet: [] },
+		storeCredit: null,
 	},
 };
 const bottom = jest.fn();
@@ -100,12 +101,41 @@ it('session gate rethrows other errors', async () => {
 	await expect(sessionGate(ctx, e, bottom)).rejects.toBe(error);
 	expect(bottom).not.toHaveBeenCalled();
 });
-it('registers the three gates in order as guards', () => {
+it('registers the four gates in order as guards', () => {
 	expect(getActionHooks(e.event)).toEqual([
 		{ id: 'register.gate', tier: 'guard', order: 0, hook: registerGate },
 		{ id: 'session.gate', tier: 'guard', order: 1, hook: sessionGate },
 		{ id: 'conditions.gate', tier: 'guard', order: 2, hook: conditionsGate },
+		{ id: 'store-credit.gate', tier: 'guard', order: 3, hook: storeCreditGate },
 	]);
+});
+
+describe('store credit gate', () => {
+	it('refuses when a connection is needed, even with empty codes', async () => {
+		const storeCredit = { needsConnection: true, emptyCodes: ['sc0'] };
+		expect(
+			await storeCreditGate(ctx, { ...e, payload: { ...e.payload, storeCredit } }, bottom)
+		).toEqual({
+			deny: { reasonKey: 'pos_cart.store_credit_needs_connection', detail: { event: e.event } },
+		});
+		expect(bottom).not.toHaveBeenCalled();
+	});
+	it('refuses empty credit with the codes', async () => {
+		const storeCredit = { needsConnection: false, emptyCodes: ['sc0'] };
+		expect(
+			await storeCreditGate(ctx, { ...e, payload: { ...e.payload, storeCredit } }, bottom)
+		).toEqual({
+			deny: {
+				reasonKey: 'pos_checkout.store_credit_empty',
+				detail: { event: e.event, codes: ['sc0'] },
+			},
+		});
+		expect(bottom).not.toHaveBeenCalled();
+	});
+	it('passes null facts to the bottom', async () => {
+		expect(await storeCreditGate(ctx, e, bottom)).toBe('saved');
+		expect(bottom).toHaveBeenCalledWith(e);
+	});
 });
 
 describe('conditions gate (roadmap#62)', () => {
@@ -125,18 +155,18 @@ describe('conditions gate (roadmap#62)', () => {
 		...e,
 		payload: { ...e.payload, conditions: { unmet } },
 	});
-	const gates = [registerGate, sessionGate, conditionsGate] as const;
+	const gates = [registerGate, sessionGate, conditionsGate, storeCreditGate] as const;
 	const registerTenderGuards = (count: number) =>
 		TENDER_GUARD_IDS.slice(0, count).forEach((id, order) =>
 			registerActionHook(e.event, gates[order], { id, tier: 'guard', order })
 		);
 	beforeEach(() => {
 		resetActionRegistry();
-		registerTenderGuards(3);
+		registerTenderGuards(4);
 	});
 	afterAll(() => {
 		resetActionRegistry();
-		registerTenderGuards(3);
+		registerTenderGuards(4);
 	});
 
 	it('refuses with the first unmet line’s reason, and the writer never runs', async () => {
@@ -166,6 +196,11 @@ describe('conditions gate (roadmap#62)', () => {
 	it('a dispatch without it registered refuses as guard_missing, unguarded never', async () => {
 		resetActionRegistry();
 		registerTenderGuards(2);
+		registerActionHook(e.event, storeCreditGate, {
+			id: 'store-credit.gate',
+			tier: 'guard',
+			order: 3,
+		});
 		const result = await dispatchAction({
 			event: e.event,
 			input: withUnmet([]),
