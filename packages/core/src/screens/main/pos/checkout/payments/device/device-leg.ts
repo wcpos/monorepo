@@ -74,6 +74,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	let stopped = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let graceTimer: ReturnType<typeof setTimeout> | undefined;
+	let vetoTimer: ReturnType<typeof setTimeout> | undefined;
 	// The live-tab hold taken around collect(); released on finality as well as when collect
 	// settles, because a leg the cancel path ends may outlive a collect that never answers.
 	let collectHold: (() => void) | undefined;
@@ -98,7 +99,8 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		deps.onFinal?.(state);
 	};
 	const errorState = (error: unknown) => {
-		const body = (error as { response?: { data?: PaymentRefusalBody } })?.response?.data;
+		type Body = PaymentRefusalBody & { data: { vetoed?: boolean } };
+		const body = (error as { response?: { data?: Body } })?.response?.data;
 		const detail = body?.data?.detail as { code?: string; message?: string } | undefined;
 		set({
 			error: {
@@ -144,12 +146,30 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		}
 		return !active();
 	};
+	async function voidVetoed() {
+		if (!active() || !state.veto) return;
+		if (vetoTimer) deps.clearTimeout(vetoTimer);
+		inFlight = true;
+		try {
+			const response = await deps.post(url('void'), { reason: 'vetoed' });
+			await apply(response.data as ServerLegResponse);
+		} catch (error) {
+			if (!active()) return;
+			set({ veto: { ...state.veto, held: true } });
+			if (!isDefinitiveMoneyRefusal(moneyRefusalOf(error)))
+				vetoTimer = deps.setTimeout(() => void confirm(), RETIRE_RETRY_MS);
+		} finally {
+			inFlight = false;
+		}
+	}
 	async function confirm() {
 		if (!active() || inFlight || (state.phase === 'collecting' && !result)) return;
 		// Every command is bound to the leg's own scope (4333445290 on #2798): a reader result that
 		// lands in another one stays collecting until the service confirms it there (4343940257).
 		if (deps.outOfScope?.()) return;
+		if (state.veto) return state.veto.held ? voidVetoed() : undefined;
 		inFlight = true;
+		let capturePost = false;
 		set({
 			phase: 'confirming',
 			capturing: true,
@@ -204,6 +224,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				let response: { data: unknown };
 				const release = success ? holdLiveTab('payment') : undefined;
 				try {
+					capturePost = success;
 					response = await deps.post(
 						url(success ? 'capture' : 'void'),
 						success && result
@@ -242,6 +263,15 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				return;
 			}
 			const body = errorState(error);
+			if (capturePost && body?.data?.vetoed === true) {
+				const veto = { message: body.message ?? null, held: false };
+				if (result?.outcome === 'captured') await finish('failed', { veto, captureFailed: false });
+				else {
+					set({ veto, captureFailed: false, capturing: false, phase: 'confirming' });
+					await voidVetoed();
+				}
+				return;
+			}
 			if (body?.data?.payment) {
 				await apply({ payment: body.data.payment, order: body.data.order });
 				if (!active()) return;
@@ -403,6 +433,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		stopped = true;
 		if (timer) deps.clearTimeout(timer);
 		if (graceTimer) deps.clearTimeout(graceTimer);
+		if (vetoTimer) deps.clearTimeout(vetoTimer);
 		finality.stop();
 	}
 	return {

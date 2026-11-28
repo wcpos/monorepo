@@ -7,6 +7,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import type { OrderPaymentSummary } from '@wcpos/order-math';
 import type { ReadonlyEngineRecord } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { config } from '../../../../../jest/cart-write';
 import { createActionContext } from '../../../../extensions/actions';
@@ -26,6 +27,7 @@ const mockCommit = jest.fn<ReturnType<BoundaryCommitter>, Parameters<BoundaryCom
 	async () => ({ kind: 'closed' })
 );
 jest.mock('./use-boundary-committer', () => ({ useBoundaryCommitter: () => mockCommit }));
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 // The real boundary commit (T9) runs against the same guards boundary-commit.test.ts mocks.
 jest.mock('@wcpos/query/register-session', () => ({
 	...jest.requireActual('@wcpos/query/register-session'),
@@ -71,6 +73,40 @@ const hook = () => renderHook(() => useBoundaryCommit(localPatch as never)).resu
 beforeEach(() => {
 	jest.clearAllMocks();
 	writes.length = 0;
+});
+
+it('N2a returns the unclosed outcome and toasts the store sentence once', async () => {
+	const outcome = {
+		kind: 'unclosed',
+		close: { kind: 'order_changed', veto: { message: 'Store says no' } },
+	} as const;
+	mockCommit.mockResolvedValueOnce(outcome);
+	const order = cart();
+	expect(await hook()(order, queue)).toBe(outcome);
+	const { info } = getLogger(['test']);
+	expect(info).toHaveBeenCalledTimes(1);
+	expect(info).toHaveBeenCalledWith('Store says no', {
+		showToast: true,
+		context: { orderId: order.uuid, close: 'vetoed' },
+	});
+});
+
+it('N2b toasts the till sentence for a veto without a message, but not for a plain change', async () => {
+	mockCommit.mockResolvedValueOnce({
+		kind: 'unclosed',
+		close: { kind: 'order_changed', veto: { message: null } },
+	});
+	const commit = hook();
+	const order = cart();
+	await commit(order, queue);
+	const { info } = getLogger(['test']);
+	expect(info).toHaveBeenCalledWith('pos_checkout.payment_vetoed', {
+		showToast: true,
+		context: { orderId: order.uuid, close: 'vetoed' },
+	});
+	mockCommit.mockResolvedValueOnce({ kind: 'unclosed', close: { kind: 'order_changed' } });
+	await commit(order, queue);
+	expect(info).toHaveBeenCalledTimes(1);
 });
 
 it.each([

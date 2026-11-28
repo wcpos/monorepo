@@ -103,6 +103,102 @@ afterEach(() => {
 	jest.useRealTimers();
 });
 const tick = () => jest.advanceTimersByTimeAsync(0);
+
+const captureVeto = {
+	response: {
+		status: 409,
+		data: {
+			code: 'wcpos_payment_vetoed',
+			message: 'Store says no',
+			data: { vetoed: true, status: 409 },
+		},
+	},
+};
+const providerRefusal = {
+	response: {
+		status: 502,
+		data: {
+			code: 'wcpos_provider_error',
+			message: 'x',
+			data: { status: 502 },
+		},
+	},
+};
+
+function refusedCapture(outcome: 'authorized' | 'captured', captureError: unknown = captureVeto) {
+	const c = setup();
+	c.post.mockResolvedValueOnce({ data: { payment: row } }).mockRejectedValueOnce(captureError);
+	c.collection.resolve({ ...approved, outcome });
+	const routes = () => c.post.mock.calls.map(([url]) => url.split('/').pop());
+	return { ...c, routes };
+}
+
+it('DV1 voids a vetoed reader authorization and finishes on the answered row', async () => {
+	const c = refusedCapture('authorized');
+	await c.leg.start();
+	expect(c.routes()).toEqual(['intent', 'capture', 'void']);
+	expect(c.post).toHaveBeenLastCalledWith('orders/42/payments/leg/void', { reason: 'vetoed' });
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'final',
+		outcome: 'voided',
+		captureFailed: false,
+		veto: { message: 'Store says no', held: false },
+	});
+});
+
+it('DV2 a definitive void refusal stays held; manual confirmation retries only the void', async () => {
+	const c = refusedCapture('authorized');
+	c.post.mockRejectedValueOnce(providerRefusal);
+	await c.leg.start();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'confirming',
+		outcome: null,
+		veto: { held: true },
+		captureFailed: false,
+	});
+	await jest.advanceTimersByTimeAsync(RETIRE_RETRY_MS);
+	expect(c.routes()).toEqual(['intent', 'capture', 'void']);
+	await c.leg.capture();
+	expect(c.routes()).toEqual(['intent', 'capture', 'void', 'void']);
+});
+
+it('DV3 an unanswered void retries after the retirement cadence and finishes voided', async () => {
+	const c = refusedCapture('authorized');
+	c.post.mockRejectedValueOnce(new Error('timeout'));
+	await c.leg.start();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'confirming',
+		outcome: null,
+		veto: { held: true },
+	});
+	await jest.advanceTimersByTimeAsync(RETIRE_RETRY_MS - 1);
+	expect(c.routes()).toEqual(['intent', 'capture', 'void']);
+	await jest.advanceTimersByTimeAsync(1);
+	expect(c.routes()).toEqual(['intent', 'capture', 'void', 'void']);
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+});
+
+it('DV4 a veto after the reader captured ends failed without voiding or retrying capture', async () => {
+	const c = refusedCapture('captured');
+	await c.leg.start();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'final',
+		outcome: 'failed',
+		captureFailed: false,
+		veto: { message: 'Store says no', held: false },
+		error: { message: 'Store says no' },
+	});
+	await c.leg.capture();
+	expect(c.routes()).toEqual(['intent', 'capture']);
+});
+
+it('DV5 a non-vetoed capture refusal still offers confirmation retry and sends no void', async () => {
+	const c = refusedCapture('authorized', providerRefusal);
+	await c.leg.start();
+	expect(c.leg.getState().captureFailed).toBe(true);
+	expect(c.leg.getState().veto).toBeUndefined();
+	expect(c.routes()).toEqual(['intent', 'capture']);
+});
 it('mirrors intent before collect and sends exactly the driver context for server verification', async () => {
 	const c = setup();
 	const start = c.leg.start();

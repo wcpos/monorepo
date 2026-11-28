@@ -130,6 +130,91 @@ afterEach(() => {
 });
 const tick = (ms = 0) => jest.advanceTimersByTimeAsync(ms);
 
+function vetoedCapture(code = 'wcpos_payment_vetoed', extra = {}) {
+	const c = setup(true);
+	c.answer('status', response({ status: 'authorized' }));
+	c.fail(
+		'capture',
+		refusal(409, code, { vetoed: true, current: {}, currentRevision: '2-x', order, ...extra })
+	);
+	return c;
+}
+
+it('SV1 voids the vetoed authorization and finishes on the voided row', async () => {
+	const c = vetoedCapture();
+	c.answer('void', response({ status: 'voided' }));
+	await tick();
+	expect(c.count('capture')).toBe(1);
+	expect(c.count('void')).toBe(1);
+	expect(c.calls).toContainEqual(
+		expect.objectContaining({ route: 'void', body: { reason: 'vetoed' } })
+	);
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'final',
+		outcome: 'voided',
+		veto: { message: 'Refused', held: false },
+	});
+	expect(c.onFinal).toHaveBeenCalledTimes(1);
+});
+
+it.each([502, 422])(
+	'SV2 a refused void (%i) stays held until a status read confirms the void',
+	async (status) => {
+		const c = vetoedCapture();
+		c.fail('void', refusal(status, 'wcpos_provider_error'));
+		await tick();
+		expect(c.leg.getState()).toMatchObject({
+			phase: 'polling',
+			outcome: null,
+			veto: { held: true },
+			row: { status: 'authorized' },
+		});
+		expect(c.onFinal).not.toHaveBeenCalled();
+		c.answer('status', response({ status: 'voided' }));
+		await tick(2000);
+		expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'voided' });
+		expect(c.count('capture')).toBe(1);
+	}
+);
+
+it('SV3 an unanswered void leaves the authorization held without another capture', async () => {
+	const c = vetoedCapture();
+	c.fail('void', new Error('timeout'));
+	await tick();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'polling',
+		outcome: null,
+		veto: { held: true },
+		row: { status: 'authorized' },
+	});
+	c.answer('status', response({ status: 'authorized' }));
+	c.fail('status', refusal(404, 'wcpos_payment_not_found'));
+	await tick(600000);
+	expect(c.count('capture')).toBe(1);
+	expect(c.count('void')).toBe(1);
+	expect(c.mirror).not.toHaveBeenCalledWith(
+		expect.objectContaining({ payment: expect.objectContaining({ status: 'failed' }) })
+	);
+});
+
+it('SV4 a non-vetoed provider refusal still offers capture retry without a void', async () => {
+	const c = setup(true);
+	c.answer('status', response({ status: 'authorized' }));
+	c.fail('capture', refusal(502, 'wcpos_provider_error'));
+	await tick();
+	expect(c.leg.getState().captureFailed).toBe(true);
+	expect(c.leg.getState().veto).toBeUndefined();
+	expect(c.count('void')).toBe(0);
+});
+
+it('SV5 a veto with a resendable code voids instead of resending capture', async () => {
+	const c = vetoedCapture('wcpos_payment_locked', { retry_after: 1 });
+	c.answer('void', response({ status: 'voided' }));
+	await tick(600000);
+	expect(c.count('capture')).toBe(1);
+	expect(c.count('void')).toBe(1);
+});
+
 function setupRejoin() {
 	const get = jest.fn<Promise<{ data: unknown }>, [string]>();
 	const post = jest.fn<Promise<{ data: unknown }>, [string, unknown]>();
