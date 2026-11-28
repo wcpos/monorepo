@@ -5,7 +5,9 @@ import { of } from 'rxjs';
 import { renderHook } from '@testing-library/react';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { settleCart } from '@wcpos/order-math';
 
+import { config } from '../../../../../jest/cart-write';
 import { readCouponContext, useCouponContext } from './use-coupon-context';
 
 const engine = { active: jest.fn() };
@@ -140,6 +142,44 @@ it('provides catalog tax status on the coupon context', async () => {
 	const { result } = renderHook(() => useCouponContext());
 	const context = await result.current.getCouponContext([{ product_id: 82 }]);
 	expect(context.taxStatusFor?.({ product_id: 82 })).toBe('none');
+});
+
+describe('settling a store-calculated line', () => {
+	const cart = {
+		line_items: [{ product_id: 82, quantity: 1, subtotal: '18', total: '18' }],
+		coupon_lines: [{ code: 'credit', discount: '5' }],
+	};
+	const readContext = (storeCalculatedTypes?: ReadonlySet<string>) => {
+		engine.active().database.collections.coupons.find = () => ({
+			exec: async () => [
+				engineRecord('601', { code: 'Credit', discount_type: 'acme_credit', amount: '20' }),
+			],
+		});
+		const { result } = renderHook(() => useQueryRuntime());
+		return readCouponContext(result.current, {
+			lineItems: cart.line_items,
+			couponLines: cart.coupon_lines,
+			storeCalculatedTypes,
+		});
+	};
+
+	it('settles a cart carrying a declared store-calculated line at 0', async () => {
+		const coupons = await readContext(new Set(['acme_credit']));
+		expect(coupons.storeCalculated.get('credit')).toBe('acme_credit');
+		expect(coupons.unsupportedTypes.has('credit')).toBe(false);
+		expect(settleCart(cart, config, { coupons })).toMatchObject({
+			ok: true,
+			patch: { coupon_lines: [{ code: 'credit', discount: '0' }] },
+		});
+	});
+
+	it('without a declaration a store-calculated line is still missing_coupon', async () => {
+		const coupons = await readContext();
+		expect(settleCart(cart, config, { coupons })).toMatchObject({
+			ok: false,
+			error: { code: 'missing_coupon', missingCodes: ['credit'] },
+		});
+	});
 });
 
 it('keeps a type the POS cannot apply out of coupons and names it in unsupportedTypes', async () => {

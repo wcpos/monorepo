@@ -10,6 +10,7 @@ import { useOrderLockReaders } from './use-order-lock-readers';
 import { orderLocked } from './paid-balance-boundary';
 import { writeOrderChanges } from './write-order-changes';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useStoreCalculatedCouponTypes } from '../../hooks/use-coupon-types';
 import { useCartConfigReader } from '../hooks/use-cart-config';
 import { useActionContext } from '../hooks/use-action-context';
 import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
@@ -32,6 +33,7 @@ export function useWcVersion() {
 }
 
 export function useTaxExemptDeps(): TaxExemptDeps {
+	const storeCalculatedTypes = useStoreCalculatedCouponTypes();
 	const { localPatch } = useLocalMutation();
 	const commitAtBoundary = useBoundaryCommit(localPatch);
 	const configForOrder = useCartConfigReader();
@@ -54,6 +56,7 @@ export function useTaxExemptDeps(): TaxExemptDeps {
 				readCouponContext(runtime, {
 					lineItems: payload.line_items ?? [],
 					couponLines: payload.coupon_lines ?? [],
+					storeCalculatedTypes,
 				}),
 			references: () => waitForCouponReferences(runtime.engine),
 			readTaxStatuses: (lines) => readCatalogTaxStatuses(runtime.engine, lines),
@@ -67,6 +70,7 @@ export function useTaxExemptDeps(): TaxExemptDeps {
 			actor,
 			reportEngineWarnings,
 			runtime,
+			storeCalculatedTypes,
 			wcVersion,
 		]
 	);

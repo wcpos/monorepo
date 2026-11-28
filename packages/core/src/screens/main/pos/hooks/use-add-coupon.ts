@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type MetaDataEntry, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger, isErrorReported } from '@wcpos/utils/logger';
 import { type CouponRejection, couponValidationContext } from '@wcpos/order-math/internal';
@@ -36,6 +37,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 export const useAddCoupon = () => {
 	const command = useCartCommand('cart.coupon.apply');
 	const wcVersion = useWcVersion();
+	const { status } = useOnlineStatus();
 	const t = useT();
 	// Resolved at the press, not subscribed in render (current-order ledger 1).
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
@@ -84,11 +86,11 @@ export const useAddCoupon = () => {
 					(cl): cl is typeof cl & { code: string } => cl.code != null
 				);
 				const coupons = await getCouponContext(lineItems, appliedCouponLines);
-				const coupon = coupons.coupons.get(couponCode.toLowerCase().trim());
+				const normalisedCode = couponCode.toLowerCase().trim();
+				const coupon = coupons.coupons.get(normalisedCode);
 				if (!coupon) {
 					// A type from another plugin (store credit, gift card) is found but not applicable:
 					// say so rather than "not found", which the autocomplete just contradicted.
-					const normalisedCode = couponCode.toLowerCase().trim();
 					const type = coupons.unsupportedTypes.get(normalisedCode);
 					if (type) {
 						orderLogger.info('Coupon application rejected', {
@@ -108,6 +110,18 @@ export const useAddCoupon = () => {
 						};
 					}
 					return { success: false, error: t('pos_cart.coupon_not_found') };
+				}
+				const storeType = coupons.storeCalculated.get(normalisedCode);
+				if (storeType !== undefined && status !== 'online-website-available') {
+					orderLogger.info('Coupon application rejected', {
+						context: {
+							event: 'coupon.rejected',
+							couponCode: normalisedCode,
+							reason: 'store_calculated_offline',
+							params: { type: storeType },
+						},
+					});
+					return { success: false, error: t('pos_cart.store_credit_needs_connection') };
 				}
 				const validation = validateCoupon(
 					coupon,
@@ -165,7 +179,7 @@ export const useAddCoupon = () => {
 				orderLogger.info(t('pos_cart.coupon_applied'), {
 					context: {
 						couponCode: couponData.code,
-						discountType: couponData.discount_type,
+						discountType: storeType ?? couponData.discount_type,
 						discount: appliedCouponLine?.discount ?? '0',
 					},
 				});
@@ -194,6 +208,7 @@ export const useAddCoupon = () => {
 			couponRejectionMessage,
 			ctx,
 			wcVersion,
+			status,
 		]
 	);
 

@@ -94,7 +94,8 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
 		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
-		expect(mockGet).toHaveBeenCalledTimes(4);
+		expect(mockGet).toHaveBeenCalledWith('/coupon-types', { quietErrors: true });
+		expect(mockGet).toHaveBeenCalledTimes(5);
 	});
 
 	it('revalidates payment-method capability on a warm start', async () => {
@@ -113,7 +114,7 @@ describe('ExtraDataProvider API services', () => {
 			status: 'ran',
 		});
 
-		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledTimes(2);
 		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
 	});
 
@@ -127,7 +128,7 @@ describe('ExtraDataProvider API services', () => {
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 		await act(async () => Promise.resolve());
 
-		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledTimes(2);
 		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
 	});
 
@@ -173,7 +174,7 @@ describe('ExtraDataProvider API services', () => {
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 		await act(async () => Promise.resolve());
 
-		expect(mockExtraDataSet).toHaveBeenCalledTimes(1);
+		expect(mockExtraDataSet).toHaveBeenCalledTimes(2);
 		expect(mockExtraDataSet).toHaveBeenCalledWith('paymentMethods', expect.any(Function));
 		expect(mockExtraDataSet.mock.calls[0][1]()).toBeNull();
 	});
@@ -194,7 +195,8 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
 		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
-		expect(mockGet).toHaveBeenCalledTimes(5);
+		expect(mockGet.mock.calls.filter(([url]) => url === '/coupon-types')).toHaveLength(2);
+		expect(mockGet).toHaveBeenCalledTimes(7);
 	});
 
 	it('rebinds the event bridge to current store dependencies', async () => {
@@ -225,15 +227,44 @@ describe('ExtraDataProvider API services', () => {
 			type: 'config-changed',
 			collections: ['tax_rates'],
 		});
-		expect(previousGet).toHaveBeenCalledTimes(1);
-		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(previousGet).toHaveBeenCalledTimes(2);
+		expect(mockGet).toHaveBeenCalledTimes(2);
 
 		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
-		expect(mockGet).toHaveBeenCalledTimes(5);
+		expect(mockGet).toHaveBeenCalledTimes(7);
 		await act(async () => {
 			await Promise.resolve();
 		});
-		expect(mockExtraDataSet).toHaveBeenCalledTimes(4);
+		expect(mockExtraDataSet).toHaveBeenCalledTimes(5);
+	});
+
+	it.each([200, 404, 500])('refreshes cached coupon types on a warm start: %s', async (status) => {
+		mockExtraDataValues.couponTypes = { schema: 1, coupon_types: [] };
+		const data = {
+			schema: 1,
+			coupon_types: [{ type: 'acme_credit', calc: 'store', offline: 'none' }],
+		};
+		mockGet.mockImplementation(async (url) => {
+			if (url === '/coupon-types' && status !== 200) throw { response: { status } };
+			return { status: 200, data: url === '/coupon-types' ? data : [] };
+		});
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
+		expect(mockGet).toHaveBeenCalledWith('/coupon-types', { quietErrors: true });
+		const writes = mockExtraDataSet.mock.calls.filter(([key]) => key === 'couponTypes');
+		expect(writes.map(([, read]) => read())).toEqual(
+			status === 500 ? [] : [status === 404 ? null : data]
+		);
+	});
+
+	it('requests coupon types again when only the HTTP client changes', async () => {
+		const view = render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
+		expect(mockGet).toHaveBeenCalledWith('/coupon-types', { quietErrors: true });
+		mockHttp = { get: jest.fn().mockResolvedValue({ status: 200, data: [] }) };
+		view.rerender(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
+		expect(mockHttp.get).toHaveBeenCalledWith('/coupon-types', { quietErrors: true });
 	});
 
 	it('ignores responses superseded by a newer config refresh', async () => {

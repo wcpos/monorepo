@@ -1,6 +1,8 @@
 /**
  * @jest-environment jsdom
  */
+import * as React from 'react';
+
 import { renderHook } from '@testing-library/react';
 import { of } from 'rxjs';
 
@@ -8,8 +10,14 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { expectSettledWrites } from '../../../../../jest/cart-write';
 import { useAddCoupon } from './use-add-coupon';
+import { ExtraDataContext } from '../../contexts/extra-data/context';
 
 jest.mock('uuid', () => ({ v4: () => 'coupon-line-uuid' }));
+
+let mockStatus = 'online-website-available';
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockStatus }),
+}));
 
 const mockWcVersion = jest.fn(() => '11.3.0');
 jest.mock('../commands/use-tax-exempt', () => ({ useWcVersion: () => mockWcVersion }));
@@ -341,6 +349,83 @@ describe('useAddCoupon engine reads', () => {
 				reason: 'unsupported_type',
 				params: { type: 'pi_store_credit' },
 			},
+		});
+	});
+
+	describe('store-calculated coupons', () => {
+		const data = {
+			couponTypes: {
+				schema: 1,
+				coupon_types: [{ type: 'acme_credit', calc: 'store', offline: 'none' }],
+			},
+		};
+		const extraData = { get: jest.fn(() => data), get$: jest.fn(), $: of(data) };
+		const wrapper = ({ children }: { children: React.ReactNode }) => (
+			<ExtraDataContext.Provider value={{ extraData }}>{children}</ExtraDataContext.Provider>
+		);
+		beforeEach(() => {
+			orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+			mockEngineData([
+				engineDocument({
+					uuid: 'credit',
+					remoteId: '1',
+					payload: couponPayload('Credit', false, { discount_type: 'acme_credit', amount: '20' }),
+				}),
+			]);
+		});
+		afterEach(() => {
+			mockStatus = 'online-website-available';
+		});
+
+		it('refuses a store-calculated type when the store declares none', async () => {
+			const { result } = renderHook(() => useAddCoupon());
+			await expect(result.current.addCoupon('credit')).resolves.toEqual({
+				success: false,
+				error: expect.stringContaining('its coupon type (acme_credit) comes from another plugin'),
+			});
+			expect(recalculate).not.toHaveBeenCalled();
+			expect(localPatch).not.toHaveBeenCalled();
+		});
+
+		it('applies a declared store-calculated coupon as a 0 line when the store is reachable', async () => {
+			recalculate.mockImplementation(async (order, couponLines) => ({
+				couponLines,
+				lineItems: order.line_items,
+			}));
+			localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+			const { result } = renderHook(() => useAddCoupon(), { wrapper });
+			await expect(result.current.addCoupon(' CREDIT ')).resolves.toEqual({ success: true });
+			expect(localPatch).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({
+						coupon_lines: [expect.objectContaining({ code: 'credit', discount: '0' })],
+					}),
+				})
+			);
+			expect(mockLoggerInfo).toHaveBeenCalledWith(expect.any(String), {
+				context: { couponCode: 'Credit', discountType: 'acme_credit', discount: '0' },
+			});
+		});
+
+		const refusalCase = 'refuses a declared store-calculated coupon when %s without dispatching';
+		it.each(['offline', 'online-website-unavailable'] as const)(refusalCase, async (status) => {
+			mockStatus = status;
+			const { result } = renderHook(() => useAddCoupon(), { wrapper });
+			await expect(result.current.addCoupon(' CREDIT ')).resolves.toEqual({
+				success: false,
+				error:
+					'Store credit needs a connection to the store. Connect and try again, or take another payment.',
+			});
+			expect(recalculate).not.toHaveBeenCalled();
+			expect(localPatch).not.toHaveBeenCalled();
+			expect(mockLoggerInfo).toHaveBeenCalledWith('Coupon application rejected', {
+				context: {
+					event: 'coupon.rejected',
+					couponCode: 'credit',
+					reason: 'store_calculated_offline',
+					params: { type: 'acme_credit' },
+				},
+			});
 		});
 	});
 

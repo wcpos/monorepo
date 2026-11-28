@@ -34,6 +34,7 @@ function isMissing(value: unknown): boolean {
  * - Shipping methods
  * - Order statuses
  * - Payment methods
+ * - Coupon types
  * @TODO - we should move country codes to here too, and currency codes
  * @TODO - there must be a smarter way to only fetch data on chnages
  */
@@ -98,12 +99,29 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				// A failed persistence write leaves the cached descriptor stale, which is
 				// tolerable; an unhandled rejection at app level is not.
 				.catch(() => undefined);
+		const fetchCouponTypes = (generation: number) =>
+			void http
+				.get('/coupon-types', { quietErrors: true })
+				.then((response) => {
+					if (generation === refreshGeneration && response?.status === 200) {
+						return setExtraData(storeDB, 'couponTypes', response.data);
+					}
+					return undefined;
+				})
+				.catch((error: { response?: { status?: number } }) => {
+					if (generation === refreshGeneration && error?.response?.status === 404) {
+						return setExtraData(storeDB, 'couponTypes', null);
+					}
+					return undefined;
+				})
+				.catch(() => undefined);
 		const fetchAll = () => {
 			const generation = ++refreshGeneration;
 			fetchTaxClasses(generation);
 			fetchShippingMethods(generation);
 			fetchOrderStatuses(generation);
 			fetchPaymentMethods(generation);
+			fetchCouponTypes(generation);
 		};
 
 		const coldStartGeneration = ++refreshGeneration;
@@ -111,6 +129,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		if (isMissing(extraData.get('shippingMethods'))) fetchShippingMethods(coldStartGeneration);
 		if (isMissing(extraData.get('orderStatuses'))) fetchOrderStatuses(coldStartGeneration);
 		fetchPaymentMethods(coldStartGeneration);
+		fetchCouponTypes(coldStartGeneration);
 
 		const unsubscribeEvents = runtime.engine.events((event) => {
 			if (event.type === 'config-changed') fetchAll();
